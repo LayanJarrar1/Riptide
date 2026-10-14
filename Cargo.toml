@@ -1,0 +1,98 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/riptide-core",
+    "crates/riptide-net",
+    "crates/riptide-store",
+    "crates/riptide-ipc",
+    "crates/riptide-log",
+    "crates/riptide-cli",
+    "crates/riptide-testserver",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+repository = "https://github.com/LayanJarrar1/Riptide"
+homepage = "https://github.com/LayanJarrar1/Riptide"
+authors = ["Riptide contributors"]
+publish = false
+
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+
+[workspace.dependencies]
+# internal
+riptide-core = { path = "crates/riptide-core" }
+riptide-net = { path = "crates/riptide-net" }
+riptide-store = { path = "crates/riptide-store" }
+riptide-ipc = { path = "crates/riptide-ipc" }
+riptide-log = { path = "crates/riptide-log" }
+riptide-testserver = { path = "crates/riptide-testserver" }
+
+# async + io
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures = "0.3"
+bytes = "1"
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# errors
+thiserror = "2"
+anyhow = "1"
+
+# logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "std"] }
+tracing-appender = "0.2"
+
+# http
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "socks", "cookies", "stream", "json"] }
+axum = "0.8"
+http = "1"
+url = "2"
+
+# storage
+rusqlite = { version = "0.37", features = ["bundled"] }
+
+# cli
+clap = { version = "4", features = ["derive", "env"] }
+
+# misc
+regex = "1"
+dirs = "6"
+time = { version = "0.3", features = ["formatting", "macros"] }
+base64 = "0.22"
+md-5 = "0.10"
+sha2 = "0.10"
+sha1 = "0.10"
+flate2 = "1"
+hex = "0.4"
+
+# windows
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
+    "Win32_System_Memory",
+] }
+
+# test
+proptest = "1"
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+
+[profile.dev.package."*"]
+opt-level = 1

@@ -1,0 +1,49 @@
+# Rust
+/target/
+**/target/
+Cargo.lock.bak
+
+# Node / Angular
+node_modules/
+/apps/desktop/dist/
+/apps/desktop/.angular/
+/apps/extension/dist/
+npm-debug.log*
+coverage/
+
+# Tauri generated
+/apps/desktop/src-tauri/gen/schemas/
+/apps/desktop/src-tauri/target/
+
+# Riptide runtime data (never commit)
+*.rtpart
+/data/
+/logs/
+*.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.env
+.env.*
+
+# ---------------------------------------------------------------------------
+# Private planning material — stays on this machine only, never pushed.
+# (The product plan, roadmap, agent instructions and design docs.)
+# ---------------------------------------------------------------------------
+/ROADMAP.md
+/CLAUDE.md
+/docs/
+/.claude/
+/graphify-out/

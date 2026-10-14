@@ -1,0 +1,40 @@
+[package]
+name = "riptide-testserver"
+description = "Riptide download manager — local HTTP test server with every failure mode the engine tests need"
+license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "riptide-testserver"
+path = "src/main.rs"
+
+[dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+base64 = { workspace = true }
+md-5 = { workspace = true }
+# sha2 is a normal dependency because `expected_sha256_hex` is part of the public library API.
+sha2 = { workspace = true }
+flate2 = { workspace = true }
+hex = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,3 @@
+# Shared clippy configuration for the whole workspace.
+too-many-arguments-threshold = 8
+cognitive-complexity-threshold = 30

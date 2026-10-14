@@ -1,0 +1,24 @@
+[package]
+name = "riptide-net"
+description = "Riptide download manager — HTTP engine: probe, ranges, multi-connection, retry, auth, proxy"
+license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+riptide-core = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+riptide-testserver = { workspace = true }
+
+[lints]
+workspace = true
