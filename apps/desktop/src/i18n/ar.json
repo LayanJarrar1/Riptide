@@ -1,0 +1,16 @@
+{
+  "app.title": "ريبتايد",
+  "app.tagline": "ريبتايد — مدير تحميل",
+  "placeholder.heading": "أهلاً بك في ريبتايد",
+  "placeholder.body": "هذا هو هيكل التطبيق. ستأتي التحميلات وقوائم الانتظار وجسر المتصفح في المراحل القادمة.",
+  "placeholder.status": "المرحلة 0 — الهيكل",
+  "lang.label": "اللغة",
+  "lang.ar": "العربية",
+  "lang.en": "English",
+  "theme.label": "المظهر",
+  "theme.system": "النظام",
+  "theme.dark": "داكن",
+  "theme.light": "فاتح",
+  "footer.text": "مجاني ومفتوح المصدر · بلا تتبّع",
+  "footer.version": "الإصدار"
+}

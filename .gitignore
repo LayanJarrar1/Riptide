@@ -47,3 +47,6 @@ desktop.ini
 /docs/
 /.claude/
 /graphify-out/
+
+# Playwright MCP scratch output
+/.playwright-mcp/

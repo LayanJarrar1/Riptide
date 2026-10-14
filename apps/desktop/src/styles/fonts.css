@@ -1,0 +1,55 @@
+/*
+ * Bundled fonts (no CDN). Files live in src/assets/fonts/ next to their OFL.txt and are
+ * copied to /assets/fonts/ by the Angular build (see angular.json "assets").
+ *
+ *  - Inter 4.1 (variable), SIL OFL 1.1 — https://github.com/rsms/inter
+ *  - IBM Plex Sans Arabic 1.1.0,  SIL OFL 1.1 — https://github.com/IBM/plex
+ */
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/fonts/inter/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/fonts/inter/InterVariable-Italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("/assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("/assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("/assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("/assets/fonts/ibm-plex-sans-arabic/IBMPlexSansArabic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

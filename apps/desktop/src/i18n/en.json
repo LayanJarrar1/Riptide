@@ -1,0 +1,16 @@
+{
+  "app.title": "Riptide",
+  "app.tagline": "Riptide — a download manager",
+  "placeholder.heading": "Welcome to Riptide",
+  "placeholder.body": "This is the application shell. Downloads, queues and the browser bridge arrive in the next milestones.",
+  "placeholder.status": "Milestone 0 — skeleton",
+  "lang.label": "Language",
+  "lang.ar": "العربية",
+  "lang.en": "English",
+  "theme.label": "Theme",
+  "theme.system": "System",
+  "theme.dark": "Dark",
+  "theme.light": "Light",
+  "footer.text": "Free and open source · No telemetry",
+  "footer.version": "Version"
+}

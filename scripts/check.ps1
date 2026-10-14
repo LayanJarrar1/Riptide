@@ -49,13 +49,21 @@ function Invoke-Step {
     Write-Host "==> $Name" -ForegroundColor Cyan
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $global:LASTEXITCODE = 0
+    # Native tools (cargo, npm) print progress on stderr. Under 'Stop', PowerShell 5.1 turns a
+    # redirected stderr line into a terminating error, so the preference is relaxed while the
+    # step runs; the exit code is what decides pass/fail.
+    $savedPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         & $Body
         $code = $LASTEXITCODE
     } catch {
         Write-Host $_.Exception.Message -ForegroundColor Red
         $code = 1
+    } finally {
+        $ErrorActionPreference = $savedPreference
     }
+    if ($null -eq $code) { $code = 0 }
     if ($code -ne 0) {
         $script:Failures.Add($Name)
         Write-Host ("FAILED  {0}  (exit {1}, {2:n1}s)" -f $Name, $code, $sw.Elapsed.TotalSeconds) -ForegroundColor Red

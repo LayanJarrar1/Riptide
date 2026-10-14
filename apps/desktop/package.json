@@ -1,0 +1,58 @@
+{
+  "name": "riptide-desktop",
+  "version": "0.1.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "test": "ng test --watch=false --browsers=ChromeHeadless",
+    "lint": "ng lint",
+    "i18n:lint": "node scripts/i18n-lint.mjs",
+    "tauri": "tauri",
+    "icons": "node scripts/make-icon.mjs src-tauri/app-icon.png && tauri icon src-tauri/app-icon.png"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/common": "^20.3.0",
+    "@angular/compiler": "^20.3.0",
+    "@angular/core": "^20.3.0",
+    "@angular/forms": "^20.3.0",
+    "@angular/platform-browser": "^20.3.0",
+    "@angular/router": "^20.3.0",
+    "@tauri-apps/api": "^2.12.3",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.3.5",
+    "@angular/cli": "^20.3.5",
+    "@angular/compiler-cli": "^20.3.0",
+    "@tauri-apps/cli": "^2.12.2",
+    "@types/jasmine": "~5.1.0",
+    "angular-eslint": "20.7.0",
+    "eslint": "^9.39.1",
+    "jasmine-core": "~5.9.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.9.2",
+    "typescript-eslint": "8.46.4"
+  },
+  "description": "Riptide download manager — desktop app (Tauri v2 + Angular)",
+  "license": "GPL-3.0-or-later"
+}
