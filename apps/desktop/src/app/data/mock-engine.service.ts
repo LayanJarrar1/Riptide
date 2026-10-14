@@ -141,7 +141,7 @@ export class MockEngineService extends DownloadEngine {
       id,
       url: request.url,
       filename,
-      dir: request.dir ?? 'C:\\Users\\layan\\Downloads',
+      dir: request.dir ?? 'D:\\Downloads',
       size,
       supportsRanges: probe?.supportsRanges ?? true,
       state: request.startPaused ? 'paused' : 'queued',

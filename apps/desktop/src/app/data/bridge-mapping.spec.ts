@@ -26,7 +26,7 @@ export function bridgeDownload(overrides: Partial<Download> = {}): Download {
     url: 'https://example.com/files/report.pdf',
     final_url: null,
     filename: 'report.pdf',
-    dir: 'C:\\Users\\layan\\Downloads',
+    dir: 'C:\\Users\\Dana\\Downloads',
     size: 1_000_000,
     supports_ranges: true,
     etag: null,
@@ -129,7 +129,7 @@ describe('bridge-mapping', () => {
       expect(d.id).toBe(7);
       expect(d.url).toBe('https://example.com/files/report.pdf');
       expect(d.filename).toBe('report.pdf');
-      expect(d.dir).toBe('C:\\Users\\layan\\Downloads');
+      expect(d.dir).toBe('C:\\Users\\Dana\\Downloads');
       expect(d.size).toBe(1_000_000);
       expect(d.supportsRanges).toBeTrue();
       expect(d.state).toBe('downloading');
@@ -254,11 +254,11 @@ describe('bridge-mapping', () => {
 
   describe('finalPath', () => {
     it('joins with the separator the directory already uses', () => {
-      expect(finalPath('C:\\Users\\layan\\Downloads', 'a.zip')).toBe('C:\\Users\\layan\\Downloads\\a.zip');
-      expect(finalPath('C:\\Users\\layan\\Downloads\\', 'a.zip')).toBe('C:\\Users\\layan\\Downloads\\a.zip');
+      expect(finalPath('C:\\Users\\Dana\\Downloads', 'a.zip')).toBe('C:\\Users\\Dana\\Downloads\\a.zip');
+      expect(finalPath('C:\\Users\\Dana\\Downloads\\', 'a.zip')).toBe('C:\\Users\\Dana\\Downloads\\a.zip');
       expect(finalPath('D:', 'a.zip')).toBe('D:\\a.zip');
-      expect(finalPath('/home/layan/Downloads', 'a.zip')).toBe('/home/layan/Downloads/a.zip');
-      expect(finalPath('/home/layan/Downloads/', 'a.zip')).toBe('/home/layan/Downloads/a.zip');
+      expect(finalPath('/home/dana/Downloads', 'a.zip')).toBe('/home/dana/Downloads/a.zip');
+      expect(finalPath('/home/dana/Downloads/', 'a.zip')).toBe('/home/dana/Downloads/a.zip');
     });
   });
 });

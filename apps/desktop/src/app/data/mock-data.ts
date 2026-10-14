@@ -84,7 +84,7 @@ interface Seed {
   readonly priority?: Download['priority'];
 }
 
-const DOWNLOADS = 'C:\\Users\\layan\\Downloads';
+const DOWNLOADS = 'D:\\Downloads';
 
 const SEEDS: readonly Seed[] = [
   {

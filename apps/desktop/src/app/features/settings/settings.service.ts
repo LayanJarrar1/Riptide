@@ -38,7 +38,7 @@ export const ENGINE_SYNC_DEBOUNCE = new InjectionToken<number>('riptide.settings
 
 /** Defaults for a fresh install. */
 export const DEFAULT_SETTINGS: Settings = {
-  defaultDir: 'C:\\Users\\layan\\Downloads',
+  defaultDir: 'D:\\Downloads',
   categoryDirs: {},
   connections: 8,
   perHost: 4,
