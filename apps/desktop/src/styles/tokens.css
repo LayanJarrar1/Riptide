@@ -115,6 +115,45 @@
 
   /* ---- Direction --------------------------------------------------------------------- */
   --dir-sign: 1; /* multiply a translateX / rotate by this to mirror it in RTL */
+
+  /* ---- Layout: the app frame --------------------------------------------------------- */
+  --topbar-height: 52px;
+  --statusbar-height: 30px;
+  --sidebar-width: 224px;
+  --drawer-width: 420px;
+  --row-height: 46px;
+  --header-height: 34px;
+  --control-height: 32px;
+  --control-height-sm: 26px;
+
+  /* ---- Download states: one hue each, used with an icon and a label, never alone ----- */
+  --state-downloading: var(--color-accent);
+  --state-downloading-soft: var(--color-accent-soft);
+  --state-queued: #8fa3b5;
+  --state-queued-soft: rgb(143 163 181 / 14%);
+  --state-paused: #c9a24a;
+  --state-paused-soft: rgb(201 162 74 / 14%);
+  --state-verifying: #7fb3ff;
+  --state-verifying-soft: rgb(127 179 255 / 14%);
+  --state-completed: var(--color-success);
+  --state-completed-soft: rgb(61 220 151 / 12%);
+  --state-failed: var(--color-danger);
+  --state-failed-soft: rgb(242 102 95 / 14%);
+  --state-cancelled: #6d7b87;
+  --state-cancelled-soft: rgb(109 123 135 / 14%);
+
+  /* ---- Segment flow: the fill of a byte range on its track --------------------------- */
+  --flow-track: var(--color-surface-3);
+  --flow-fill: var(--color-accent);
+  --flow-fill-done: color-mix(in srgb, var(--color-accent) 70%, var(--color-success));
+  --flow-fill-paused: var(--state-paused);
+  --flow-fill-failed: var(--state-failed);
+  --flow-gap: 2px;
+}
+
+/* Data columns line up only with tabular figures. */
+.num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Light theme ------------------------------------------------------------------------ */
@@ -150,6 +189,20 @@
   --shadow-2: 0 4px 12px rgb(16 24 32 / 10%), 0 1px 2px rgb(16 24 32 / 6%);
   --shadow-3: 0 16px 40px rgb(16 24 32 / 14%), 0 2px 6px rgb(16 24 32 / 8%);
   --shadow-glow: 0 0 0 1px var(--color-accent-ring), 0 8px 32px rgb(15 154 140 / 12%);
+
+  --state-queued: #5f7384;
+  --state-queued-soft: rgb(95 115 132 / 12%);
+  --state-paused: #946f12;
+  --state-paused-soft: rgb(148 111 18 / 12%);
+  --state-verifying: #2f6fd1;
+  --state-verifying-soft: rgb(47 111 209 / 12%);
+  --state-completed-soft: rgb(31 157 100 / 12%);
+  --state-failed-soft: rgb(209 63 57 / 12%);
+  --state-cancelled: #7d8b96;
+  --state-cancelled-soft: rgb(125 139 150 / 12%);
+
+  --flow-track: #e3e8ec;
+  --flow-fill-done: color-mix(in srgb, var(--color-accent-dark) 70%, var(--color-success));
 }
 
 /* ---- Reduced motion: every duration collapses to zero ----------------------------------- */

@@ -1,55 +1,134 @@
-<div class="shell">
+<div class="frame">
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
       <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">
-          <path d="M12 3v10.5" />
-          <path d="M6.5 9.5 12 15l5.5-5.5" />
-          <path d="M5 19h14" />
-        </svg>
+        <app-icon name="download" [size]="18" />
       </span>
       <span class="brand-name">{{ 'app.title' | t }}</span>
-      <span class="brand-tagline">{{ 'app.tagline' | t }}</span>
+    </a>
+
+    <div class="search" [class.has-query]="store.query().length > 0">
+      <app-icon class="search-icon" name="search" [size]="16" />
+      <input
+        #search
+        class="search-input"
+        type="search"
+        [placeholder]="'search.placeholder' | t"
+        [attr.aria-label]="'search.placeholder' | t"
+        [value]="store.query()"
+        (input)="onSearch($event)"
+        (keydown.escape)="clearSearch()"
+      />
+      <kbd class="search-key" aria-hidden="true">Ctrl F</kbd>
+      @if (store.query().length > 0) {
+        <button
+          appButton
+          size="sm"
+          variant="ghost"
+          icon="close"
+          [iconOnly]="true"
+          type="button"
+          class="search-clear"
+          [attr.aria-label]="'search.clear' | t"
+          (click)="clearSearch()"
+        ></button>
+      }
     </div>
 
-    <div class="controls">
-      <app-segmented-control
-        [label]="'lang.label' | t"
-        [options]="langOptions()"
-        [optionLang]="langOptionLang"
-        [value]="i18n.lang()"
-        (valueChange)="onLang($event)"
-      />
-      <app-segmented-control
-        [label]="'theme.label' | t"
-        [options]="themeOptions()"
-        [value]="theme.theme()"
-        (valueChange)="onTheme($event)"
-      />
+    <div class="topbar-actions">
+      <button
+        appButton
+        variant="ghost"
+        icon="language"
+        type="button"
+        class="lang"
+        [attr.aria-label]="'lang.switch' | t"
+        [attr.title]="'lang.switch' | t"
+        (click)="toggleLang()"
+      >
+        <span [attr.lang]="i18n.lang() === 'ar' ? 'en' : 'ar'">{{ i18n.lang() === 'ar' ? 'English' : 'العربية' }}</span>
+      </button>
+      <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">
+        {{ 'action.add' | t }}
+      </button>
     </div>
   </header>
 
-  <main class="stage">
-    <section class="card" aria-labelledby="placeholder-heading">
-      <p class="eyebrow">
-        <span class="eyebrow-dot" aria-hidden="true"></span>
-        {{ 'placeholder.status' | t }}
-      </p>
-      <h1 id="placeholder-heading" class="heading">{{ 'placeholder.heading' | t }}</h1>
-      <p class="body">{{ 'placeholder.body' | t }}</p>
-      <div class="current" aria-hidden="true">
-        <span class="current-bar"></span>
+  <nav class="sidebar" [attr.aria-label]="'nav.label' | t">
+    <div class="nav-group">
+      <p class="nav-heading">{{ 'nav.downloads' | t }}</p>
+      @for (view of views; track view) {
+        <button
+          type="button"
+          class="nav-item"
+          [class.is-active]="store.category() === null && store.view() === view && onDownloads()"
+          [attr.aria-current]="store.category() === null && store.view() === view && onDownloads() ? 'page' : null"
+          (click)="goView(view)"
+        >
+          <app-icon [name]="viewIcons[view]" [size]="16" />
+          <span class="nav-text">{{ 'view.' + view | t }}</span>
+          <span class="nav-count num" [class.is-live]="view === 'active' && store.viewCounts().active > 0">
+            {{ format.int(store.viewCounts()[view]) }}
+          </span>
+        </button>
+      }
+    </div>
+
+    @if (visibleCategories().length > 0) {
+      <div class="nav-group">
+        <p class="nav-heading">{{ 'nav.categories' | t }}</p>
+        @for (c of visibleCategories(); track c) {
+          <button
+            type="button"
+            class="nav-item"
+            [class.is-active]="store.category() === c && onDownloads()"
+            [attr.aria-current]="store.category() === c && onDownloads() ? 'page' : null"
+            (click)="goCategory(c)"
+          >
+            <app-icon [name]="categoryIcons[c]" [size]="16" />
+            <span class="nav-text">{{ 'category.' + c | t }}</span>
+            <span class="nav-count num">{{ format.int(store.categoryCounts().get(c) ?? 0) }}</span>
+          </button>
+        }
       </div>
-    </section>
+    }
+
+    <div class="nav-group">
+      <p class="nav-heading">{{ 'nav.queues' | t }}</p>
+      <div class="nav-item is-static">
+        <app-icon name="list" [size]="16" />
+        <span class="nav-text">{{ 'queue.main' | t }}</span>
+        <span class="nav-count num">{{ format.int(store.totals().active) }}/{{ format.int(store.totals().maxActive) }}</span>
+      </div>
+    </div>
+
+    <div class="nav-foot">
+      <a class="nav-item" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page">
+        <app-icon name="settings" [size]="16" />
+        <span class="nav-text">{{ 'nav.settings' | t }}</span>
+        <kbd class="nav-key" aria-hidden="true">Ctrl ,</kbd>
+      </a>
+    </div>
+  </nav>
+
+  <main class="content">
+    <router-outlet />
   </main>
 
-  <footer class="footer">
-    <span class="footer-text">{{ 'footer.text' | t }}</span>
+  <footer class="statusbar">
+    <div class="status-speed">
+      <span class="status-dot" [class.is-live]="store.totals().active > 0" aria-hidden="true"></span>
+      <span class="status-value num">{{ format.speed(store.totals().speedBps) }}</span>
+      <app-sparkline class="status-chart" [samples]="store.totals().history" [compact]="true" />
+    </div>
+    <span class="status-text">{{ statusText() }}</span>
+    <span class="status-spacer"></span>
+    <span class="status-text num">{{ ('status.disk' | t).replace('{free}', format.bytes(freeBytes)) }}</span>
     @if (tauri.appInfo(); as info) {
-      <span class="footer-version">
-        {{ 'footer.version' | t }} <span class="mono">{{ info.version }}</span>
-        <span class="footer-build">{{ info.build }}</span>
-      </span>
+      <span class="status-version num">v{{ info.version }}</span>
     }
   </footer>
 </div>
+
+<app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+<app-toasts />

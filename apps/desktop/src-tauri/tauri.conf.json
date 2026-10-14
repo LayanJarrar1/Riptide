@@ -13,8 +13,8 @@
       {
         "label": "main",
         "title": "Riptide",
-        "width": 1100,
-        "height": 720,
+        "width": 1280,
+        "height": 780,
         "minWidth": 800,
         "minHeight": 520,
         "center": true,

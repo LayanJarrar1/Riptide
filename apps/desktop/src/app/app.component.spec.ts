@@ -1,29 +1,38 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 
 import { AppComponent } from './app.component';
+import { routes } from './app.routes';
 import {
   DARK_SCHEME_QUERY,
   MemoryPreferenceStore,
   NAVIGATOR_LANGUAGES,
   PREFERENCE_STORE,
 } from './core/preferences';
+import { DownloadsStore } from './data/downloads.store';
+import { MOCK_ENGINE_AUTOSTART } from './data/mock-engine.service';
 import { I18nService } from './i18n/i18n.service';
 
-describe('AppComponent', () => {
+describe('AppComponent (shell)', () => {
   let fixture: ComponentFixture<AppComponent>;
   let i18n: I18nService;
 
+  function el(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
   function text(selector: string): string {
-    const el = fixture.nativeElement as HTMLElement;
-    return el.querySelector(selector)?.textContent?.trim() ?? '';
+    return el().querySelector(selector)?.textContent?.trim() ?? '';
   }
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
+        provideRouter(routes),
         { provide: NAVIGATOR_LANGUAGES, useValue: ['en-US'] },
         { provide: PREFERENCE_STORE, useValue: new MemoryPreferenceStore() },
+        { provide: MOCK_ENGINE_AUTOSTART, useValue: false },
         {
           provide: DARK_SCHEME_QUERY,
           useValue: { matches: true, addEventListener: (): void => undefined },
@@ -34,6 +43,11 @@ describe('AppComponent', () => {
     fixture = TestBed.createComponent(AppComponent);
     i18n = TestBed.inject(I18nService);
     fixture.detectChanges();
+    // the router does not navigate on its own inside TestBed; activate the home route
+    await TestBed.inject(Router).navigateByUrl('/');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   afterEach(() => {
@@ -42,33 +56,50 @@ describe('AppComponent', () => {
     delete document.documentElement.dataset['theme'];
   });
 
-  it('renders the English heading, status and tagline', () => {
-    expect(text('h1')).toBe('Welcome to Riptide');
-    expect(text('.eyebrow')).toBe('Milestone 0 — skeleton');
-    expect(text('.brand-tagline')).toBe('Riptide — a download manager');
+  it('renders the frame in English: brand, search, views and the add action', () => {
+    expect(text('.brand-name')).toBe('Riptide');
+    expect(el().querySelector<HTMLInputElement>('.search-input')?.placeholder).toBe('Search downloads');
+    const items = Array.from(el().querySelectorAll('.nav-group:first-of-type .nav-text')).map((n) => n.textContent?.trim());
+    expect(items).toEqual(['All downloads', 'Active', 'Waiting', 'Completed', 'Needs attention']);
+    expect(text('.topbar-actions .v-primary')).toBe('Add download');
   });
 
-  it('renders the Arabic heading after a live switch and flips the direction', () => {
+  it('shows the seeded downloads in the (virtual) list with live counts', () => {
+    const rendered = el().querySelectorAll('app-download-row').length;
+    expect(rendered).toBeGreaterThan(5);
+    const allCount = Number(text('.nav-group:first-of-type .nav-item:first-of-type .nav-count'));
+    const store = TestBed.inject(DownloadsStore);
+    expect(allCount).toBe(store.rows().length);
+    // the viewport renders only what fits plus overscan, never more than the data
+    expect(rendered).toBeLessThanOrEqual(store.rows().length);
+  });
+
+  it('switches to Arabic live and mirrors the document', () => {
     i18n.setLang('ar');
     fixture.detectChanges();
-    expect(text('h1')).toBe('أهلاً بك في ريبتايد');
-    expect(text('.eyebrow')).toBe('المرحلة 0 — الهيكل');
     expect(document.documentElement.dir).toBe('rtl');
+    expect(text('.brand-name')).toBe('ريبتايد');
+    expect(text('.topbar-actions .v-primary')).toBe('إضافة تحميل');
   });
 
-  it('switches language through the segmented control', () => {
-    const el = fixture.nativeElement as HTMLElement;
-    const arabic = Array.from(el.querySelectorAll<HTMLButtonElement>('.segment')).find(
-      (b) => b.textContent?.trim() === 'العربية',
-    );
-    expect(arabic).withContext('Arabic segment present').toBeDefined();
-    arabic?.click();
+  it('filters the list through the search box', () => {
+    const input = el().querySelector<HTMLInputElement>('.search-input');
+    expect(input).toBeTruthy();
+    if (!input) {
+      return;
+    }
+    input.value = 'ubuntu';
+    input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    expect(i18n.lang()).toBe('ar');
-    expect(text('h1')).toBe('أهلاً بك في ريبتايد');
+    const names = Array.from(el().querySelectorAll('app-download-row .name')).map((n) => n.textContent?.trim());
+    expect(names.length).toBe(1);
+    expect(names[0]).toContain('ubuntu');
   });
 
-  it('shows no version line outside Tauri', () => {
-    expect(text('.footer-version')).toBe('');
+  it('opens the add dialog with Ctrl+N', () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true }));
+    fixture.detectChanges();
+    const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
+    expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Add download');
   });
 });

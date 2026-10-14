@@ -1,0 +1,312 @@
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+
+import { FORMAT_PIPES } from '../../core/format.pipes';
+import { I18nService } from '../../i18n/i18n.service';
+import { DownloadRow } from '../../data/downloads.store';
+import { canPause, canResume, CategoryKey } from '../../model/download';
+import { ButtonComponent } from '../../ui/button.component';
+import { IconComponent, IconName } from '../../ui/icon.component';
+import { ProgressFlowComponent } from '../../ui/progress-flow.component';
+import { StatusPillComponent } from '../../ui/status-pill.component';
+
+/** Actions a row (or the details drawer) can ask for. */
+export type RowAction = 'pause' | 'resume' | 'retry' | 'cancel' | 'remove' | 'openFile' | 'openFolder' | 'copyLink' | 'details' | 'refreshLink';
+
+/** File-type glyph per category. */
+export const CATEGORY_ICONS: Readonly<Record<CategoryKey, IconName>> = {
+  compressed: 'fileArchive',
+  documents: 'fileDoc',
+  music: 'fileMusic',
+  video: 'fileVideo',
+  programs: 'fileApp',
+  images: 'fileImage',
+  other: 'file',
+};
+
+/** Host name of a URL for the secondary line; the raw string if it does not parse. */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * One row of the downloads table. Pure presentation: the page owns selection and dispatches
+ * actions to the engine. Rendered as a grid row with the same column template as the header.
+ */
+@Component({
+  selector: 'app-download-row',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, ProgressFlowComponent, StatusPillComponent],
+  host: {
+    role: 'row',
+    '[attr.aria-selected]': 'selected()',
+    '[attr.data-state]': 'row().d.state',
+    '[class.is-selected]': 'selected()',
+    '[class.is-open]': 'open()',
+    '[class.is-done]': 'row().d.state === "completed"',
+    '[class.is-cancelled]': 'row().d.state === "cancelled"',
+    '[tabindex]': 'selected() ? 0 : -1',
+    '(click)': 'rowClick.emit($event)',
+    '(dblclick)': 'rowDblClick.emit()',
+    '(contextmenu)': 'onContext($event)',
+  },
+  template: `
+    <div class="cell c-name" role="gridcell">
+      <span class="type" [attr.data-category]="row().d.category">
+        <app-icon [name]="icon()" [size]="18" />
+      </span>
+      <span class="name-block">
+        <span class="name" dir="auto" [attr.title]="row().d.filename">{{ row().d.filename }}</span>
+        <span class="host" dir="ltr">{{ host() }}</span>
+      </span>
+    </div>
+
+    <div class="cell c-size num" role="gridcell">
+      @if (showDownloaded()) {
+        <span class="size-done">{{ row().downloaded | bytes }}</span>
+        <span class="size-sep">/</span>
+      }
+      <span>{{ row().d.size | bytes }}</span>
+    </div>
+
+    <div class="cell c-progress" role="gridcell">
+      <app-progress-flow [segments]="row().d.segments" [size]="row().d.size" [state]="row().d.state" />
+      <span class="pct num">{{ row().progress | pct }}</span>
+    </div>
+
+    <div class="cell c-speed num" role="gridcell">{{ row().d.speedBps | speed }}</div>
+
+    <div class="cell c-eta num" role="gridcell">{{ row().eta | duration }}</div>
+
+    <div class="cell c-status" role="gridcell">
+      <app-status-pill [state]="row().d.state" [failure]="row().d.failure" [compact]="true" />
+    </div>
+
+    <div class="cell c-added num" role="gridcell" [attr.title]="row().d.addedAt | dateTime">
+      {{ row().d.addedAt | relTime }}
+    </div>
+
+    <div class="cell c-actions" role="gridcell">
+      @if (canPause(row().d.state)) {
+        <button appButton size="sm" variant="ghost" icon="pause" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.pause')" (click)="act($event, 'pause')"></button>
+      } @else if (canResume(row().d.state)) {
+        <button appButton size="sm" variant="ghost" [icon]="row().d.state === 'failed' ? 'retry' : 'play'" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t(row().d.state === 'failed' ? 'action.retry' : 'action.resume')" (click)="act($event, row().d.state === 'failed' ? 'retry' : 'resume')"></button>
+      } @else if (row().d.state === 'completed') {
+        <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" (click)="act($event, 'openFolder')"></button>
+      }
+      <button appButton size="sm" variant="ghost" icon="more" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.more')" (click)="more($event)"></button>
+    </div>
+  `,
+  styles: `
+    :host {
+      display: grid;
+      grid-template-columns: var(--grid-columns);
+      align-items: center;
+      block-size: var(--row-height);
+      padding-inline: var(--space-4);
+      border-block-end: 1px solid var(--color-border);
+      color: var(--color-text);
+      font-size: var(--text-sm);
+      cursor: default;
+      transition: background-color var(--motion-fast) var(--ease-standard);
+      outline-offset: -2px;
+    }
+
+    :host(:hover) {
+      background: var(--color-surface-hover);
+    }
+
+    :host(.is-selected) {
+      background: var(--color-accent-soft);
+    }
+
+    :host(.is-open) {
+      box-shadow: inset calc(var(--dir-sign) * 3px) 0 0 var(--color-accent);
+    }
+
+    :host(.is-cancelled) .name,
+    :host(.is-cancelled) .host {
+      color: var(--color-text-muted);
+      text-decoration: line-through;
+    }
+
+    .cell {
+      min-inline-size: 0;
+      padding-inline: var(--space-2);
+    }
+
+    .c-name {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding-inline-start: 0;
+    }
+
+    .type {
+      display: grid;
+      place-items: center;
+      inline-size: 32px;
+      block-size: 32px;
+      flex-shrink: 0;
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      color: var(--color-text-secondary);
+    }
+
+    .type[data-category='video'] {
+      color: #c58cff;
+    }
+
+    .type[data-category='music'] {
+      color: #ff9ab8;
+    }
+
+    .type[data-category='images'] {
+      color: #ffb86b;
+    }
+
+    .type[data-category='documents'] {
+      color: #7fb3ff;
+    }
+
+    .type[data-category='programs'] {
+      color: #7ee0a2;
+    }
+
+    .type[data-category='compressed'] {
+      color: #e3c56a;
+    }
+
+    .name-block {
+      display: flex;
+      flex-direction: column;
+      min-inline-size: 0;
+      line-height: 1.25;
+    }
+
+    .name {
+      font-weight: var(--weight-medium);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .host {
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      text-align: start;
+    }
+
+    .c-size,
+    .c-speed,
+    .c-eta {
+      text-align: end;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+
+    .size-done {
+      color: var(--color-text);
+    }
+
+    .size-sep {
+      margin-inline: 4px;
+      color: var(--color-text-muted);
+    }
+
+    .c-progress {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .c-progress app-progress-flow {
+      flex: 1;
+    }
+
+    .pct {
+      inline-size: 3.2em;
+      text-align: end;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+    }
+
+    :host(.is-done) .pct {
+      color: var(--color-success);
+    }
+
+    .c-added {
+      color: var(--color-text-muted);
+      white-space: nowrap;
+    }
+
+    .c-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity var(--motion-fast) var(--ease-standard);
+    }
+
+    :host(:hover) .c-actions,
+    :host(:focus-within) .c-actions,
+    :host(.is-selected) .c-actions {
+      opacity: 1;
+    }
+
+    /* Mirrors the header's container query in the page: same breakpoint, same columns. */
+    @container grid (max-width: 1040px) {
+      :host {
+        grid-template-columns: var(--grid-columns-compact);
+      }
+
+      .c-eta,
+      .c-added {
+        display: none;
+      }
+    }
+  `,
+})
+export class DownloadRowComponent {
+  protected readonly i18n = inject(I18nService);
+  protected readonly canPause = canPause;
+  protected readonly canResume = canResume;
+
+  readonly row = input.required<DownloadRow>();
+  readonly selected = input(false);
+  /** Shown in the details drawer. */
+  readonly open = input(false);
+
+  readonly rowClick = output<MouseEvent>();
+  readonly rowDblClick = output<void>();
+  readonly rowContext = output<MouseEvent>();
+  readonly action = output<RowAction>();
+
+  protected readonly icon = computed(() => CATEGORY_ICONS[this.row().d.category]);
+  protected readonly host = computed(() => hostOf(this.row().d.url));
+  protected readonly showDownloaded = computed(() => {
+    const s = this.row().d.state;
+    return s === 'downloading' || s === 'paused' || s === 'verifying' || s === 'failed';
+  });
+
+  protected act(event: Event, action: RowAction): void {
+    event.stopPropagation();
+    this.action.emit(action);
+  }
+
+  protected more(event: MouseEvent): void {
+    event.stopPropagation();
+    this.rowContext.emit(event);
+  }
+
+  protected onContext(event: MouseEvent): void {
+    event.preventDefault();
+    this.rowContext.emit(event);
+  }
+}
