@@ -18,11 +18,15 @@ pub const MIN_SEGMENT_BYTES: u64 = 1024 * 1024;
 pub const MIN_SPLIT_REMAINDER_BYTES: u64 = 2 * 1024 * 1024;
 
 /// Half-open byte range `[start, end)`.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ByteRange {
     /// First byte, inclusive.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub start: u64,
     /// One past the last byte.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub end: u64,
 }
 
@@ -49,6 +53,8 @@ impl ByteRange {
 }
 
 /// Lifecycle of one segment.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SegmentState {
@@ -89,6 +95,8 @@ impl SegmentState {
 ///
 /// `written` counts bytes already on disk from `start`; the engine resumes at
 /// `start + written`. `end` is exclusive.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Segment {
     /// Owning download.
@@ -96,10 +104,13 @@ pub struct Segment {
     /// Position in the download's segment list (0-based, unique per download).
     pub index: u32,
     /// First byte, inclusive.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub start: u64,
     /// One past the last byte.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub end: u64,
     /// Bytes already on disk from `start`.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub written: u64,
     /// State.
     pub state: SegmentState,

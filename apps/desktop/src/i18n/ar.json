@@ -185,6 +185,7 @@
   "toast.copied": "نُسخ الرابط",
   "toast.copyFailed": "تعذّر نسخ الرابط",
   "toast.openSoon": "فتح الملفات يأتي مع المرحلة القادمة.",
+  "toast.engineError": "تعذّر على ريبتايد تنفيذ ذلك: {error}",
   "toast.browserOn": "تكامل المتصفح مفعّل",
   "toast.browserOff": "تكامل المتصفح معطّل",
   "toast.upToDate": "ريبتايد محدّث إلى آخر إصدار",

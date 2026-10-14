@@ -8,6 +8,8 @@ use crate::state::DownloadState;
 
 /// Something happened to a download. Progress events are coalesced by the engine to at most ten
 /// per second per download (see [`crate::Throttle`]); every other variant is emitted as it happens.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
@@ -21,6 +23,7 @@ pub enum Event {
         /// Download.
         id: DownloadId,
         /// Total size if the server told us.
+        #[cfg_attr(feature = "ts", ts(type = "number | null"))]
         size: Option<u64>,
         /// Whether `Range` requests are honoured.
         supports_ranges: bool,
@@ -43,12 +46,16 @@ pub enum Event {
         /// Download.
         id: DownloadId,
         /// Bytes on disk.
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
         downloaded: u64,
         /// Total bytes if known.
+        #[cfg_attr(feature = "ts", ts(type = "number | null"))]
         total: Option<u64>,
         /// Smoothed speed in bytes per second.
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
         speed_bps: u64,
         /// Estimated seconds remaining, if computable.
+        #[cfg_attr(feature = "ts", ts(type = "number | null"))]
         eta_secs: Option<u64>,
         /// Active connections right now.
         connections: u32,
@@ -60,8 +67,10 @@ pub enum Event {
         /// Segment index.
         index: u32,
         /// Bytes written from the segment start.
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
         written: u64,
         /// Segment length.
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
         len: u64,
     },
     /// The file is complete, verified and renamed to its final name.

@@ -1,9 +1,11 @@
-import { effect, inject, Injectable, signal } from '@angular/core';
+import { DestroyRef, effect, inject, Injectable, InjectionToken, signal } from '@angular/core';
 
 import { PREFERENCE_STORE } from '../../core/preferences';
 import { CategoryKey } from '../../model/download';
+import type { EngineSettings } from '../../tauri/bridge/EngineSettings';
+import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 
-/** User settings. Persisted as JSON; the engine reads the same values over IPC in M1. */
+/** User settings. Persisted as JSON; the engine-side subset is mirrored over IPC under Tauri. */
 export interface Settings {
   readonly defaultDir: string;
   readonly categoryDirs: Readonly<Partial<Record<CategoryKey, string>>>;
@@ -28,6 +30,12 @@ export interface Settings {
 /** `localStorage` key. */
 export const SETTINGS_STORAGE_KEY = 'riptide.settings';
 
+/** How long after the last change the engine is told (slider drags produce many changes). */
+export const ENGINE_SYNC_DEBOUNCE = new InjectionToken<number>('riptide.settings.engineSyncDebounce', {
+  providedIn: 'root',
+  factory: () => 300,
+});
+
 /** Defaults for a fresh install. */
 export const DEFAULT_SETTINGS: Settings = {
   defaultDir: 'C:\\Users\\layan\\Downloads',
@@ -47,17 +55,48 @@ export const DEFAULT_SETTINGS: Settings = {
   channel: 'stable',
 };
 
-/** Settings as a signal, persisted on every change. */
+/**
+ * Settings as a signal, persisted on every change.
+ *
+ * Inside Tauri the three values the engine owns (`default_dir`, `connections`, `per_host`) are
+ * read from `get_engine_settings` at start-up and written back with `set_engine_settings`
+ * (debounced) whenever they change; `max_active` is passed through as the engine reported it
+ * and `user_agent` stays `null`. In a plain browser nothing talks to an engine.
+ */
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   private readonly store = inject(PREFERENCE_STORE);
+  private readonly tauri = inject(TAURI_AVAILABLE);
+  private readonly invoke = inject(TAURI_INVOKE);
+  private readonly debounceMs = inject(ENGINE_SYNC_DEBOUNCE);
+
+  /** What the engine last confirmed; `null` until `get_engine_settings` answered (browser: never). */
+  private engine: EngineSettings | null = null;
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
+  private syncing: Promise<void> = Promise.resolve();
 
   readonly settings = signal<Settings>(this.load());
+
+  /** Resolves once the engine's values are merged in (at once in a plain browser). */
+  readonly engineLoaded: Promise<void>;
 
   constructor() {
     effect(() => {
       this.store.set(SETTINGS_STORAGE_KEY, JSON.stringify(this.settings()));
     });
+    this.engineLoaded = this.tauri ? this.loadEngineSettings() : Promise.resolve();
+    if (this.tauri) {
+      effect(() => {
+        const { defaultDir, connections, perHost } = this.settings();
+        this.scheduleSync(defaultDir, connections, perHost);
+      });
+      inject(DestroyRef).onDestroy(() => {
+        if (this.syncTimer !== null) {
+          clearTimeout(this.syncTimer);
+          this.syncTimer = null;
+        }
+      });
+    }
   }
 
   /** Applies a partial change. */
@@ -88,6 +127,11 @@ export class SettingsService {
     this.settings.set(DEFAULT_SETTINGS);
   }
 
+  /** Resolves when the pending (debounced) engine write, if any, has been sent. Specs use it. */
+  whenSynced(): Promise<void> {
+    return this.syncing;
+  }
+
   private load(): Settings {
     try {
       const raw = this.store.get(SETTINGS_STORAGE_KEY);
@@ -101,6 +145,55 @@ export class SettingsService {
       return { ...DEFAULT_SETTINGS, ...(parsed as Partial<Settings>) };
     } catch {
       return DEFAULT_SETTINGS;
+    }
+  }
+
+  private async loadEngineSettings(): Promise<void> {
+    try {
+      const engine = await this.invoke<EngineSettings>('get_engine_settings');
+      this.engine = engine;
+      this.settings.update((s) => ({
+        ...s,
+        defaultDir: engine.default_dir,
+        connections: engine.connections,
+        perHost: engine.per_host,
+      }));
+    } catch (error: unknown) {
+      console.warn('[settings] get_engine_settings failed', error);
+    }
+  }
+
+  private scheduleSync(defaultDir: string, connections: number, perHost: number): void {
+    if (this.syncTimer !== null) {
+      clearTimeout(this.syncTimer);
+    }
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      this.syncing = this.pushEngineSettings(defaultDir, connections, perHost);
+    }, this.debounceMs);
+  }
+
+  private async pushEngineSettings(defaultDir: string, connections: number, perHost: number): Promise<void> {
+    const known = this.engine;
+    // not loaded yet: the load merges the engine's values and the effect runs again
+    if (known === null) {
+      return;
+    }
+    if (known.default_dir === defaultDir && known.connections === connections && known.per_host === perHost) {
+      return;
+    }
+    const settings: EngineSettings = {
+      default_dir: defaultDir,
+      connections,
+      per_host: perHost,
+      max_active: known.max_active,
+      user_agent: null,
+    };
+    try {
+      await this.invoke<void>('set_engine_settings', { settings });
+      this.engine = settings;
+    } catch (error: unknown) {
+      console.warn('[settings] set_engine_settings failed', error);
     }
   }
 }

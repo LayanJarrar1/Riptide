@@ -1,7 +1,11 @@
 # Riptide
 
 A download manager for Windows, written in Rust (engine) and Tauri v2 + Angular (desktop app).
-Arabic and English. Work in progress — nothing is usable yet.
+Arabic and English. Work in progress.
+
+Crates: `riptide-core` (model), `riptide-net` (HTTP engine), `riptide-store` (SQLite),
+`riptide-engine` (queue + runtime shared by the app and the CLI), `riptide-ipc`, `riptide-log`,
+`riptide-cli` (`riptide fetch` / `riptide bench`), `riptide-testserver` (dev only).
 
 ## Build
 

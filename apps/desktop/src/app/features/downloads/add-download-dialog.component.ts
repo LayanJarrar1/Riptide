@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 
 import { FORMAT_PIPES } from '../../core/format.pipes';
-import { MockEngineService } from '../../data/mock-engine.service';
+import { DownloadEngine } from '../../data/download-engine';
 import { I18nService } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey, DownloadRequest, isHttpUrl, ProbeResult } from '../../model/download';
+import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
@@ -365,7 +366,9 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 })
 export class AddDownloadDialogComponent {
   protected readonly i18n = inject(I18nService);
-  private readonly engine = inject(MockEngineService);
+  private readonly engine = inject(DownloadEngine);
+  private readonly tauriAvailable = inject(TAURI_AVAILABLE);
+  private readonly invoke = inject(TAURI_INVOKE);
   private readonly toasts = inject(ToastService);
   private readonly settingsService = inject(SettingsService);
 
@@ -391,6 +394,8 @@ export class AddDownloadDialogComponent {
   protected readonly username = signal('');
   protected readonly password = signal('');
   protected readonly headers = signal('');
+  /** `true` while the engine is accepting the request (guards a double submit). */
+  protected readonly submitting = signal(false);
 
   private probeToken = 0;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -400,7 +405,7 @@ export class AddDownloadDialogComponent {
     const hex = this.checksum().trim();
     return hex.length > 0 && ![32, 40, 64].includes(hex.length);
   });
-  protected readonly canSubmit = computed(() => isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError());
+  protected readonly canSubmit = computed(() => isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError() && !this.submitting());
 
   constructor() {
     effect(() => {
@@ -436,16 +441,26 @@ export class AddDownloadDialogComponent {
     this.advancedOpen.set((event.target as HTMLDetailsElement).open);
   }
 
+  /** The native folder picker (Rust side) inside Tauri; a note in a plain browser. */
   protected browse(): void {
-    // the native folder picker comes with the Tauri dialog plugin (M1 lane B)
-    this.toasts.show('info', this.i18n.t('add.browseSoon'));
+    if (!this.tauriAvailable) {
+      this.toasts.show('info', this.i18n.t('add.browseSoon'));
+      return;
+    }
+    this.invoke<string | null>('pick_folder')
+      .then((dir) => {
+        if (dir !== null && dir.length > 0) {
+          this.dir.set(dir);
+        }
+      })
+      .catch((error: unknown) => this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error))));
   }
 
   protected close(): void {
     this.closed.emit();
   }
 
-  protected submit(event?: Event): void {
+  protected async submit(event?: Event): Promise<void> {
     event?.preventDefault();
     if (!this.canSubmit()) {
       return;
@@ -461,10 +476,17 @@ export class AddDownloadDialogComponent {
       startPaused: this.startPaused(),
       checksum: hex.length > 0 ? { algo, hex } : undefined,
     };
-    const id = this.engine.add(request, this.result() ?? undefined);
-    this.toasts.show('success', this.i18n.t(this.startPaused() ? 'toast.addedLater' : 'toast.added').replace('{name}', request.filename ?? this.result()?.filename ?? request.url));
-    this.added.emit(id);
-    this.closed.emit();
+    this.submitting.set(true);
+    try {
+      const id = await this.engine.add(request, this.result() ?? undefined);
+      this.toasts.show('success', this.i18n.t(this.startPaused() ? 'toast.addedLater' : 'toast.added').replace('{name}', request.filename ?? this.result()?.filename ?? request.url));
+      this.added.emit(id);
+      this.closed.emit();
+    } catch (error: unknown) {
+      this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error)));
+    } finally {
+      this.submitting.set(false);
+    }
   }
 
   private setUrl(raw: string): void {
@@ -516,5 +538,6 @@ export class AddDownloadDialogComponent {
     this.username.set('');
     this.password.set('');
     this.headers.set('');
+    this.submitting.set(false);
   }
 }

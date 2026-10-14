@@ -10,6 +10,7 @@ import {
   PREFERENCE_STORE,
 } from './core/preferences';
 import { DownloadsStore } from './data/downloads.store';
+import { provideDownloadEngine } from './data/engine.provider';
 import { MOCK_ENGINE_AUTOSTART } from './data/mock-engine.service';
 import { I18nService } from './i18n/i18n.service';
 
@@ -30,6 +31,7 @@ describe('AppComponent (shell)', () => {
       imports: [AppComponent],
       providers: [
         provideRouter(routes),
+        provideDownloadEngine(),
         { provide: NAVIGATOR_LANGUAGES, useValue: ['en-US'] },
         { provide: PREFERENCE_STORE, useValue: new MemoryPreferenceStore() },
         { provide: MOCK_ENGINE_AUTOSTART, useValue: false },

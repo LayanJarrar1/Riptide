@@ -126,6 +126,19 @@ if ($SkipRust) {
     # graph, then the desktop crate on its own.
     Invoke-Step 'rust: cargo test (engine crates)' { cargo test --workspace --exclude riptide-desktop }
     Invoke-Step 'rust: cargo test (desktop)' { cargo test -p riptide-desktop }
+    # The webview's TypeScript types are generated from the Rust types (ts-rs). Regenerate and
+    # fail if the committed bindings differ: the schema exists once, in Rust.
+    Invoke-Step 'rust: ts bindings up to date' {
+        $env:TS_RS_EXPORT_DIR = Join-Path $RepoRoot 'apps\desktop\src\app\tauri\bridge'
+        cargo test -p riptide-core -p riptide-engine --features riptide-core/ts,riptide-engine/ts export_bindings
+        if ($LASTEXITCODE -ne 0) { return }
+        git diff --quiet --exit-code -- apps/desktop/src/app/tauri/bridge
+        if ($LASTEXITCODE -ne 0) {
+            git --no-pager diff --stat -- apps/desktop/src/app/tauri/bridge
+            Write-Host 'Generated TypeScript bindings differ from the committed ones; commit the regenerated files.' -ForegroundColor Red
+            cmd /c exit 1
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------

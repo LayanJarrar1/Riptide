@@ -6,6 +6,7 @@ members = [
     "crates/riptide-store",
     "crates/riptide-ipc",
     "crates/riptide-log",
+    "crates/riptide-engine",
     "crates/riptide-cli",
     "crates/riptide-testserver",
     "apps/desktop/src-tauri",
@@ -33,7 +34,11 @@ riptide-net = { path = "crates/riptide-net" }
 riptide-store = { path = "crates/riptide-store" }
 riptide-ipc = { path = "crates/riptide-ipc" }
 riptide-log = { path = "crates/riptide-log" }
+riptide-engine = { path = "crates/riptide-engine" }
 riptide-testserver = { path = "crates/riptide-testserver" }
+
+# typescript bindings (behind the `ts` feature of the crates that export them)
+ts-rs = { version = "11", features = ["serde-compat", "no-serde-warnings"] }
 
 # async + io
 tokio = { version = "1", features = ["full"] }

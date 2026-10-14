@@ -13,6 +13,12 @@ publish.workspace = true
 serde = { workspace = true }
 thiserror = { workspace = true }
 unicode-normalization = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+# `cargo test -p riptide-core --features ts` writes the TypeScript bindings the desktop app uses
+# (see scripts/check.ps1, which also fails if the committed bindings are stale).
+ts = ["dep:ts-rs"]
 
 [dev-dependencies]
 proptest = { workspace = true }

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
 import { DownloadsStore } from './downloads.store';
+import { provideDownloadEngine } from './engine.provider';
 import { MOCK_ENGINE_AUTOSTART, MockEngineService } from './mock-engine.service';
 
 describe('DownloadsStore', () => {
@@ -8,7 +9,7 @@ describe('DownloadsStore', () => {
   let engine: MockEngineService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [{ provide: MOCK_ENGINE_AUTOSTART, useValue: false }] });
+    TestBed.configureTestingModule({ providers: [provideDownloadEngine(), { provide: MOCK_ENGINE_AUTOSTART, useValue: false }] });
     store = TestBed.inject(DownloadsStore);
     engine = TestBed.inject(MockEngineService);
   });
@@ -94,6 +95,6 @@ describe('DownloadsStore', () => {
     expect(t.active).toBe(engine.active().length);
     expect(t.speedBps).toBe(engine.totalSpeedBps());
     expect(t.history.length).toBe(60);
-    expect(t.maxActive).toBeGreaterThan(0);
+    expect(t.maxActive).toBe(engine.maxActive());
   });
 });

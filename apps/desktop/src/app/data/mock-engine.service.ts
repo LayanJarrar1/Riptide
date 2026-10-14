@@ -10,6 +10,7 @@ import {
   ProbeResult,
   Segment,
 } from '../model/download';
+import { DownloadEngine } from './download-engine';
 import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
 
 /** Whether the simulated engine advances on its own (tests turn it off). */
@@ -22,7 +23,7 @@ export const MOCK_ENGINE_AUTOSTART = new InjectionToken<boolean>('riptide.mockEn
 const TICK_MS = 250;
 /** How often a speed sample is appended to the history (one per second, like the engine). */
 const SAMPLE_MS = 1000;
-/** Active downloads at once in the Main queue (a per-queue setting in M3). */
+/** Active downloads at once in the simulated Main queue (the real engine reports its own). */
 export const MAX_ACTIVE = 4;
 /** Segment with writable fields, used only while the simulation advances one tick. */
 type MutableSegment = { -readonly [K in keyof Segment]: Segment[K] };
@@ -31,17 +32,17 @@ type MutableSegment = { -readonly [K in keyof Segment]: Segment[K] };
 const MIN_SPLIT = 2 * MB;
 
 /**
- * Stand-in for `riptide-net` + `riptide-store` until the IPC bridge lands (M1). It owns the list
- * of downloads as a signal and advances active ones on a timer: segments fill at a jittered
- * per-download speed, finished connections steal work from the largest remaining segment,
- * completed files go through `verifying`, and the queue starts the next item when a slot frees.
+ * Simulated engine for the plain browser (`ng serve`) and Karma, where there is no Tauri bridge.
+ * It owns the list of downloads as a signal and advances active ones on a timer: segments fill
+ * at a jittered per-download speed, finished connections steal work from the largest remaining
+ * segment, completed files go through `verifying`, and the queue starts the next item when a
+ * slot frees.
  *
- * The public surface (`downloads`, `add`, `pause`, `resume`, `cancel`, `remove`, `retry`,
- * `probe`) is exactly what the real bridge will expose, so the UI does not change when it
- * arrives.
+ * It implements the same `DownloadEngine` surface as `TauriEngineService`; every command does
+ * its work synchronously and resolves at once, so specs can assert right after calling.
  */
 @Injectable({ providedIn: 'root' })
-export class MockEngineService {
+export class MockEngineService extends DownloadEngine {
   private readonly rng = mulberry32(42);
   private readonly list = signal<readonly Download[]>(seedDownloads(Date.now()));
   private nextId = this.list().length + 1;
@@ -60,7 +61,11 @@ export class MockEngineService {
   /** Last 60 global speed samples. */
   readonly totalSpeedHistory = signal<readonly number[]>(new Array<number>(60).fill(0));
 
+  /** Queue slots in the simulation. */
+  readonly maxActive = signal(MAX_ACTIVE);
+
   constructor() {
+    super();
     if (inject(MOCK_ENGINE_AUTOSTART)) {
       this.start();
     }
@@ -125,8 +130,8 @@ export class MockEngineService {
     });
   }
 
-  /** Adds a download and returns its id. It starts when the queue has a free slot. */
-  add(request: DownloadRequest, probe?: ProbeResult): number {
+  /** Adds a download and resolves with its id. It starts when the queue has a free slot. */
+  add(request: DownloadRequest, probe?: ProbeResult): Promise<number> {
     const id = this.nextId++;
     const filename = request.filename ?? probe?.filename ?? filenameFromUrl(request.url);
     const size = probe?.size ?? null;
@@ -154,11 +159,11 @@ export class MockEngineService {
       checksum: request.checksum ?? null,
     };
     this.list.update((all) => [...all, d]);
-    return id;
+    return Promise.resolve(id);
   }
 
   /** Pauses a queued or running download. */
-  pause(id: number): void {
+  pause(id: number): Promise<void> {
     this.update(id, (d) =>
       d.state === 'queued' || d.state === 'probing' || d.state === 'downloading'
         ? {
@@ -169,10 +174,11 @@ export class MockEngineService {
           }
         : d,
     );
+    return Promise.resolve();
   }
 
   /** Resumes a paused download or retries a failed one; it re-enters the queue. */
-  resume(id: number): void {
+  resume(id: number): Promise<void> {
     this.update(id, (d) =>
       d.state === 'paused' || d.state === 'failed'
         ? {
@@ -184,42 +190,48 @@ export class MockEngineService {
           }
         : d,
     );
+    return Promise.resolve();
   }
 
   /** Alias of [`resume`] for failed items (same transition, clearer call sites). */
-  retry(id: number): void {
-    this.resume(id);
+  retry(id: number): Promise<void> {
+    return this.resume(id);
   }
 
   /** Cancels a non-terminal download; the row stays in the list. */
-  cancel(id: number): void {
+  cancel(id: number): Promise<void> {
     this.update(id, (d) =>
       d.state === 'completed' || d.state === 'cancelled' ? d : { ...d, state: 'cancelled', speedBps: 0 },
     );
+    return Promise.resolve();
   }
 
-  /** Removes a download from the list. */
-  remove(id: number): void {
+  /** Removes a download from the list (the simulation has no file to delete). */
+  remove(id: number): Promise<void> {
     this.list.update((all) => all.filter((d) => d.id !== id));
+    return Promise.resolve();
   }
 
   /** Pauses every queued or running download. */
-  pauseAll(): void {
+  pauseAll(): Promise<void> {
     for (const d of this.list()) {
-      this.pause(d.id);
+      void this.pause(d.id);
     }
+    return Promise.resolve();
   }
 
   /** Resumes every paused or failed download. */
-  resumeAll(): void {
+  resumeAll(): Promise<void> {
     for (const d of this.list()) {
-      this.resume(d.id);
+      void this.resume(d.id);
     }
+    return Promise.resolve();
   }
 
   /** Gives an expired download a fresh address. */
-  refresh(id: number, url: string): void {
+  refresh(id: number, url: string): Promise<void> {
     this.update(id, (d) => ({ ...d, url, state: 'queued', failure: null }));
+    return Promise.resolve();
   }
 
   /**
@@ -237,7 +249,7 @@ export class MockEngineService {
       const next = all.map((d) => {
         switch (d.state) {
           case 'queued':
-            if (activeCount < MAX_ACTIVE) {
+            if (activeCount < this.maxActive()) {
               activeCount++;
               return { ...d, state: 'probing' as const, startedAt: d.startedAt ?? now };
             }

@@ -18,12 +18,16 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
 serde = { workspace = true }
-tracing = { workspace = true }
-riptide-log = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+dirs = { workspace = true }
+riptide-core = { workspace = true }
+riptide-engine = { workspace = true }
+riptide-log = { workspace = true }
 
 [lints]
 workspace = true

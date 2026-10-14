@@ -9,7 +9,7 @@ import {
   isActive,
   progressOf,
 } from '../model/download';
-import { MAX_ACTIVE, MockEngineService } from './mock-engine.service';
+import { DownloadEngine } from './download-engine';
 
 /** Sidebar views: which states a list shows. */
 export type ListView = 'all' | 'active' | 'queued' | 'completed' | 'failed';
@@ -57,7 +57,7 @@ const STATE_ORDER: Readonly<Record<DownloadState, number>> = {
  */
 @Injectable({ providedIn: 'root' })
 export class DownloadsStore {
-  private readonly engine = inject(MockEngineService);
+  private readonly engine = inject(DownloadEngine);
 
   readonly view = signal<ListView>('all');
   readonly category = signal<CategoryKey | null>(null);
@@ -131,7 +131,7 @@ export class DownloadsStore {
       speedBps: this.engine.totalSpeedBps(),
       history: this.engine.totalSpeedHistory(),
       queued: all.filter((d) => d.state === "queued").length,
-      maxActive: MAX_ACTIVE,
+      maxActive: this.engine.maxActive(),
     };
   });
 

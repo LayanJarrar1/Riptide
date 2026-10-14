@@ -185,6 +185,7 @@
   "toast.copied": "Link copied",
   "toast.copyFailed": "Could not copy the link",
   "toast.openSoon": "Opening files arrives with the next milestone.",
+  "toast.engineError": "Riptide could not do that: {error}",
   "toast.browserOn": "Browser integration is on",
   "toast.browserOff": "Browser integration is off",
   "toast.upToDate": "Riptide is up to date",

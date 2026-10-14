@@ -18,6 +18,7 @@ describe('MockEngineService', () => {
     expect(states.has('completed')).toBeTrue();
     expect(states.has('failed')).toBeTrue();
     expect(engine.active().length).toBeLessThanOrEqual(MAX_ACTIVE);
+    expect(engine.maxActive()).toBe(MAX_ACTIVE);
   });
 
   it('advances active downloads on tick and never writes past a segment end', () => {
@@ -39,8 +40,8 @@ describe('MockEngineService', () => {
     expect(after?.speedBps).toBeGreaterThan(0);
   });
 
-  it('starts a queued download when a slot is free and walks it to completed', () => {
-    const id = engine.add({ url: 'https://example.com/tiny.bin', connections: 2 }, {
+  it('starts a queued download when a slot is free and walks it to completed', async () => {
+    const id = await engine.add({ url: 'https://example.com/tiny.bin', connections: 2 }, {
       finalUrl: 'https://example.com/tiny.bin',
       filename: 'tiny.bin',
       size: 3 * 1024 * 1024,

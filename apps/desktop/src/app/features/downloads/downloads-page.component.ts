@@ -11,10 +11,12 @@ import {
 } from '@angular/core';
 
 import { FormatService } from '../../core/format.service';
+import { finalPath } from '../../data/bridge-mapping';
+import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow, DownloadsStore, SortKey } from '../../data/downloads.store';
-import { MockEngineService } from '../../data/mock-engine.service';
 import { I18nService } from '../../i18n/i18n.service';
-import { canPause, canResume } from '../../model/download';
+import { canPause, canResume, Download } from '../../model/download';
+import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { EmptyStateComponent } from '../../ui/empty-state.component';
@@ -334,7 +336,9 @@ export class DownloadsPageComponent {
   protected readonly format = inject(FormatService);
   protected readonly store = inject(DownloadsStore);
   protected readonly ui = inject(UiState);
-  private readonly engine = inject(MockEngineService);
+  private readonly engine = inject(DownloadEngine);
+  private readonly tauriAvailable = inject(TAURI_AVAILABLE);
+  private readonly invoke = inject(TAURI_INVOKE);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
@@ -473,17 +477,17 @@ export class DownloadsPageComponent {
     const d = row.d;
     switch (action) {
       case 'pause':
-        this.engine.pause(d.id);
+        this.run(this.engine.pause(d.id));
         break;
       case 'resume':
-        this.engine.resume(d.id);
+        this.run(this.engine.resume(d.id));
         break;
       case 'retry':
-        this.engine.retry(d.id);
+        this.run(this.engine.retry(d.id));
         this.toasts.show('info', this.i18n.t('toast.retrying').replace('{name}', d.filename));
         break;
       case 'cancel':
-        this.engine.cancel(d.id);
+        this.run(this.engine.cancel(d.id));
         break;
       case 'remove':
         this.askRemove([row]);
@@ -495,8 +499,10 @@ export class DownloadsPageComponent {
         void this.copy(d.url);
         break;
       case 'openFile':
+        this.openPath('open_file', d);
+        break;
       case 'openFolder':
-        this.toasts.show('info', this.i18n.t('toast.openSoon'));
+        this.openPath('show_in_folder', d);
         break;
       case 'refreshLink':
         this.ui.openAdd(d.url);
@@ -507,20 +513,20 @@ export class DownloadsPageComponent {
   protected bulkAction(action: 'pause' | 'resume'): void {
     for (const row of this.store.selectedRows()) {
       if (action === 'pause' && canPause(row.d.state)) {
-        this.engine.pause(row.d.id);
+        this.run(this.engine.pause(row.d.id));
       } else if (action === 'resume' && canResume(row.d.state)) {
-        this.engine.resume(row.d.id);
+        this.run(this.engine.resume(row.d.id));
       }
     }
   }
 
   protected pauseAll(): void {
-    this.engine.pauseAll();
+    this.run(this.engine.pauseAll());
     this.toasts.show('info', this.i18n.t('toast.pausedAll'));
   }
 
   protected resumeAll(): void {
-    this.engine.resumeAll();
+    this.run(this.engine.resumeAll());
     this.toasts.show('info', this.i18n.t('toast.resumedAll'));
   }
 
@@ -535,8 +541,9 @@ export class DownloadsPageComponent {
       return;
     }
     const removed = rows.map((r) => r.d);
+    const deleteFile = this.deleteFile();
     for (const d of removed) {
-      this.engine.remove(d.id);
+      this.run(this.engine.remove(d.id, deleteFile));
     }
     this.store.clearSelection();
     if (removed.some((d) => d.id === this.store.detailsId())) {
@@ -574,9 +581,9 @@ export class DownloadsPageComponent {
         if (first) {
           event.preventDefault();
           if (canPause(first.d.state)) {
-            this.engine.pause(first.d.id);
+            this.run(this.engine.pause(first.d.id));
           } else if (canResume(first.d.state)) {
-            this.engine.resume(first.d.id);
+            this.run(this.engine.resume(first.d.id));
           }
         }
         break;
@@ -623,5 +630,27 @@ export class DownloadsPageComponent {
     } catch {
       this.toasts.show('danger', this.i18n.t('toast.copyFailed'));
     }
+  }
+
+  /**
+   * Opens the finished file or reveals it in its folder through the Rust side. In a plain
+   * browser there is no shell to ask, so the "coming soon" note stays.
+   */
+  private openPath(command: 'open_file' | 'show_in_folder', d: Download): void {
+    if (!this.tauriAvailable) {
+      this.toasts.show('info', this.i18n.t('toast.openSoon'));
+      return;
+    }
+    this.run(this.invoke<void>(command, { path: finalPath(d.dir, d.filename) }));
+  }
+
+  /**
+   * Engine commands resolve when accepted and the list follows the engine's events, so nothing
+   * waits on them; a refusal is the one thing worth telling the user.
+   */
+  private run(command: Promise<void>): void {
+    command.catch((error: unknown) => {
+      this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error)));
+    });
   }
 }

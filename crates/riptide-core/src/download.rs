@@ -16,14 +16,18 @@ pub const DEFAULT_CONNECTIONS: u32 = 8;
 pub const MAX_CONNECTIONS: u32 = 32;
 
 /// Row id of a download. Assigned by the store.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct DownloadId(pub i64);
+pub struct DownloadId(#[cfg_attr(feature = "ts", ts(type = "number"))] pub i64);
 
 /// Row id of a queue. Queue `1` is the built-in *Main* queue.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct QueueId(pub i64);
+pub struct QueueId(#[cfg_attr(feature = "ts", ts(type = "number"))] pub i64);
 
 impl QueueId {
     /// The built-in *Main* queue that every install has.
@@ -31,11 +35,15 @@ impl QueueId {
 }
 
 /// Row id of a category (Compressed, Documents, …).
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct CategoryId(pub i64);
+pub struct CategoryId(#[cfg_attr(feature = "ts", ts(type = "number"))] pub i64);
 
 /// Hash algorithm for post-completion verification.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChecksumAlgo {
@@ -84,6 +92,8 @@ impl fmt::Display for ChecksumAlgo {
 }
 
 /// An expected or computed digest, lower-case hex.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Checksum {
     /// Algorithm.
@@ -116,6 +126,8 @@ impl Checksum {
 }
 
 /// Scheduling priority inside a queue.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default,
 )]
@@ -153,6 +165,8 @@ impl Priority {
 
 /// One download as persisted in the `downloads` table. Secrets are **not** here — see
 /// [`Secrets`], which lives in its own table and is wiped on completion or removal.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Download {
     /// Row id.
@@ -167,6 +181,7 @@ pub struct Download {
     /// Destination directory.
     pub dir: PathBuf,
     /// Total size in bytes if the server told us.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub size: Option<u64>,
     /// Whether the server honours `Range` (learned by the probe).
     pub supports_ranges: bool,
@@ -185,6 +200,7 @@ pub struct Download {
     /// Priority within the queue.
     pub priority: Priority,
     /// Per-download speed cap in bytes per second, `None` for unlimited.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub speed_limit: Option<u64>,
     /// Maximum simultaneous connections for this download (1..=[`MAX_CONNECTIONS`]).
     pub connections: u32,
@@ -195,10 +211,13 @@ pub struct Download {
     /// Human-readable error for `Failed`.
     pub error: Option<String>,
     /// When the item was added.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub added_at: UnixMillis,
     /// First time it left `Queued`.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub started_at: Option<UnixMillis>,
     /// When it reached `Completed`.
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub completed_at: Option<UnixMillis>,
 }
 
@@ -265,6 +284,8 @@ impl Download {
 
 /// What a caller (UI, CLI, browser extension) provides to create a download. Everything but the
 /// URL is optional and falls back to settings / probe results.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct DownloadRequest {
     /// The URL to fetch.
@@ -289,6 +310,7 @@ pub struct DownloadRequest {
     pub connections: Option<u32>,
     /// Speed cap in bytes/s.
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub speed_limit: Option<u64>,
     /// Expected digest.
     #[serde(default)]
@@ -318,6 +340,8 @@ impl DownloadRequest {
 }
 
 /// Username / password for HTTP Basic or Digest auth.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Credentials {
     /// User name.
@@ -337,6 +361,8 @@ impl fmt::Debug for Credentials {
 
 /// Per-download secrets: lives in the `secrets` table, deleted on completion/removal, never logged
 /// (the `Debug` impl redacts every value) and only ever sent to the origin they were captured for.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Secrets {
     /// Raw `Cookie` header value.

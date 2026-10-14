@@ -22,6 +22,8 @@ use std::fmt;
 use crate::error::Error;
 
 /// Lifecycle state of a [`crate::Download`].
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum DownloadState {
