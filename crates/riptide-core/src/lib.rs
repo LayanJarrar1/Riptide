@@ -14,6 +14,7 @@
 pub mod download;
 pub mod error;
 pub mod event;
+pub mod filename;
 pub mod segment;
 pub mod state;
 pub mod throttle;
@@ -24,6 +25,7 @@ pub use download::{
 };
 pub use error::Error;
 pub use event::Event;
+pub use filename::{sanitize_filename, split_extension, unique_path, MAX_FILENAME_BYTES};
 pub use segment::{
     plan_segments, split_segment, ByteRange, Segment, SegmentState, MIN_SEGMENT_BYTES,
     MIN_SPLIT_REMAINDER_BYTES,

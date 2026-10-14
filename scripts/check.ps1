@@ -119,7 +119,13 @@ if ($SkipRust) {
         Invoke-Step 'rust: cargo build --release' { cargo build --release --workspace }
     }
     Invoke-Step 'rust: cargo clippy -D warnings' { cargo clippy --workspace --all-targets -- -D warnings }
-    Invoke-Step 'rust: cargo test' { cargo test --workspace }
+    # Doctests of a --workspace run inherit every native link-search dir in the workspace, and
+    # tauri-build drops a stub msvcrt.lib (static VC runtime for the app binary) into its own
+    # out dir; that stub shadows the real CRT for every other crate's doctest binary (LNK2001
+    # __CxxFrameHandler3 / memcmp). Test the engine crates without the desktop crate in the
+    # graph, then the desktop crate on its own.
+    Invoke-Step 'rust: cargo test (engine crates)' { cargo test --workspace --exclude riptide-desktop }
+    Invoke-Step 'rust: cargo test (desktop)' { cargo test -p riptide-desktop }
 }
 
 # ---------------------------------------------------------------------------

@@ -77,6 +77,12 @@ impl ChecksumAlgo {
     }
 }
 
+impl fmt::Display for ChecksumAlgo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// An expected or computed digest, lower-case hex.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Checksum {

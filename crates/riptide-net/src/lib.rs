@@ -1,19 +1,50 @@
-//! HTTP engine for Riptide.
+//! HTTP engine for Riptide: probe a URL, then fetch it over many connections into a
+//! preallocated `.rtpart` file with byte-exact resume (hard rules 1–4).
 //!
-//! M0 ships only the shared client configuration; probing, segmented downloads, resume, retry and
-//! auth land in M1 (lane A). Everything here is UI-agnostic (hard rule 9).
+//! * [`probe`] — `HEAD`/ranged `GET`: size, range support, validators, type, file name.
+//! * [`transfer`] — the multi-connection transfer with work stealing, retries, checkpoints,
+//!   restart on a changed file, verification and atomic rename.
+//! * [`RequestContext`] — cookies, headers, credentials, referrer, user agent, applied only to
+//!   the download's own origin.
+//! * [`HostLimiter`] — per-host connection cap shared by every transfer.
+//!
+//! Everything here is UI-agnostic (hard rule 9): the owner of a download drives it, receives
+//! [`TransferEvent`]s and persists the [`TransferEvent::Checkpoint`]s.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
-#![forbid(unsafe_code)]
+// `deny`, not `forbid`: one `cfg(windows)` module (`file::sparse`) needs a single Win32 call.
+#![deny(unsafe_code)]
 
 use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_ENCODING, USER_AGENT};
 
+pub mod context;
+pub mod digest;
+pub mod disposition;
+pub mod error;
+pub mod file;
+pub mod http;
+pub mod limiter;
+pub mod probe;
+pub mod redirect;
+pub mod retry;
+pub mod speed;
+pub mod transfer;
+pub mod verify;
+
+pub use context::RequestContext;
+pub use error::{Error, Result};
+pub use file::{part_path_for, PartFile, PART_EXTENSION};
+pub use limiter::HostLimiter;
+pub use probe::{probe, Probe};
+pub use redirect::{parse_http_url, strip_query, Origin, MAX_REDIRECTS};
+pub use retry::RetryPolicy;
+pub use speed::SpeedMeter;
+pub use transfer::{transfer, Outcome, TransferConfig, TransferEvent, TransferPlan};
+pub use verify::{checksum_of, verify_file};
+
 /// Default `User-Agent`: `Riptide/<version>`.
 pub const DEFAULT_USER_AGENT: &str = concat!("Riptide/", env!("CARGO_PKG_VERSION"));
-
-/// Hard cap on redirects followed for one request (hard rule 3).
-pub const MAX_REDIRECTS: usize = 20;
 
 /// Time to establish a TCP/TLS connection before giving up.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -21,12 +52,14 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 /// Idle time on a body stream before the segment is retried.
 pub const READ_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Errors from building the client. Request-level errors arrive in M1.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    /// `reqwest` refused the configuration (bad proxy, TLS backend, …).
-    #[error("cannot build HTTP client: {0}")]
-    Build(#[source] reqwest::Error),
+/// How the shared client is built.
+#[derive(Debug, Clone, Default)]
+pub struct ClientOptions {
+    /// `User-Agent` override (a browser's, when the link came from the extension).
+    pub user_agent: Option<String>,
+    /// Skip TLS certificate verification for this client. Never a default; the UI shows a
+    /// warning when it is on (hard rule 3).
+    pub accept_invalid_certs: bool,
 }
 
 /// Headers every request carries. `Accept-Encoding: identity` so `Content-Length` and `Range`
@@ -45,11 +78,11 @@ pub fn default_headers(user_agent: Option<&str>) -> HeaderMap {
 /// Builds the shared `reqwest::Client`: rustls, HTTP/2 allowed, system proxy respected,
 /// redirects **not** followed automatically (the engine follows them itself so it can drop
 /// `Authorization` / `Cookie` on cross-origin hops and cap the chain at [`MAX_REDIRECTS`]),
-/// no automatic decompression, cookies off (the engine sends captured cookies explicitly and only
-/// to their origin).
-pub fn build_client(user_agent: Option<&str>) -> Result<reqwest::Client, Error> {
+/// no automatic decompression, no cookie jar (the engine sends captured cookies explicitly and
+/// only to their origin).
+pub fn build_client(options: &ClientOptions) -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .default_headers(default_headers(user_agent))
+        .default_headers(default_headers(options.user_agent.as_deref()))
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(CONNECT_TIMEOUT)
         .read_timeout(READ_TIMEOUT)
@@ -58,8 +91,9 @@ pub fn build_client(user_agent: Option<&str>) -> Result<reqwest::Client, Error> 
         .no_deflate()
         .no_zstd()
         .use_rustls_tls()
+        .danger_accept_invalid_certs(options.accept_invalid_certs)
         .build()
-        .map_err(Error::Build)
+        .map_err(Error::from)
 }
 
 #[cfg(test)]
@@ -87,6 +121,11 @@ mod tests {
 
     #[test]
     fn client_builds() {
-        build_client(None).unwrap();
+        build_client(&ClientOptions::default()).unwrap();
+        build_client(&ClientOptions {
+            user_agent: Some("x".into()),
+            accept_invalid_certs: true,
+        })
+        .unwrap();
     }
 }

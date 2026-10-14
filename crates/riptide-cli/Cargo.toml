@@ -16,13 +16,22 @@ path = "src/main.rs"
 [dependencies]
 riptide-core = { workspace = true }
 riptide-net = { workspace = true }
+riptide-store = { workspace = true }
 riptide-log = { workspace = true }
 riptide-ipc = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 tracing = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+url = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+riptide-testserver = { workspace = true }
+rand = { workspace = true }
 
 [lints]
 workspace = true

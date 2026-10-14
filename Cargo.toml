@@ -37,7 +37,10 @@ riptide-testserver = { path = "crates/riptide-testserver" }
 
 # async + io
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["io"] }
+tokio-util = { version = "0.7", features = ["io", "rt"] }
+unicode-normalization = "0.1"
+percent-encoding = "2"
+rand = "0.9"
 futures = "0.3"
 bytes = "1"
 
@@ -84,6 +87,8 @@ windows-sys = { version = "0.59", features = [
     "Win32_Security_Authorization",
     "Win32_System_Threading",
     "Win32_System_Memory",
+    "Win32_System_Ioctl",
+    "Win32_System_IO",
 ] }
 
 # test
