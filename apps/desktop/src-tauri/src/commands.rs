@@ -2,9 +2,29 @@
 //! become strings (already redacted), and nothing received here is used as a path except the
 //! folder the user picked in the app's own dialogs (hard rule 5 is about the browser bridge).
 //!
+//! | Command | Arguments | Answer |
+//! |---|---|---|
+//! | `app_info` | – | name, version, milestone |
+//! | `list_downloads` | – | every `Download` |
+//! | `get_download` | `id` | one `Download` or `null` |
+//! | `get_segments` | `id` | the download's `Segment`s |
+//! | `add_download` | `request: DownloadRequest` | new id |
+//! | `probe_url` | `url`, `referrer?` | `ProbeInfo` |
+//! | `find_duplicate` | `url`, `filename?`, `dir?` | the matching `Download` or `null` |
+//! | `pause_download` / `resume_download` / `cancel_download` | `id` | – |
+//! | `restart_download` | `id` | – (starts over from byte zero) |
+//! | `remove_download` | `id`, `deleteFile` | – |
+//! | `pause_all` / `resume_all` | – | – |
+//! | `get_engine_settings` / `set_engine_settings` | – / `settings` | `EngineSettings` / – |
+//! | `disk_free` | `path` | free bytes on that folder's volume |
+//! | `open_file` / `show_in_folder` | `path` | – |
+//! | `pick_folder` | – | the chosen folder or `null` |
+//!
 //! Commands live in their own module (not at the crate root) because Tauri's command macro
 //! both `#[macro_export]`s a helper macro and re-exports it with the function's visibility;
 //! a `pub` command at the crate root therefore defines the same name twice (E0255).
+
+use std::path::{Path, PathBuf};
 
 use riptide_core::{Download, DownloadId, DownloadRequest, Segment};
 use riptide_engine::{Engine, EngineSettings, ProbeInfo};
@@ -82,10 +102,48 @@ pub async fn probe_url(
         .map_err(err)
 }
 
+/// A download that would be a duplicate of `url` (fragment ignored) or of `filename` in `dir`;
+/// `null` when there is none. The add dialog asks before adding.
+#[tauri::command]
+pub async fn find_duplicate(
+    engine: State<'_, Engine>,
+    url: String,
+    filename: Option<String>,
+    dir: Option<String>,
+) -> CmdResult<Option<Download>> {
+    let parsed = riptide_engine::parse_http_url(&url).map_err(err)?;
+    engine
+        .find_duplicate(
+            &parsed,
+            filename.as_deref().filter(|f| !f.trim().is_empty()),
+            dir.as_deref()
+                .filter(|d| !d.trim().is_empty())
+                .map(Path::new),
+        )
+        .await
+        .map_err(err)
+}
+
 /// Pauses a download.
 #[tauri::command]
 pub async fn pause_download(engine: State<'_, Engine>, id: i64) -> CmdResult<()> {
     engine.pause(DownloadId(id)).await.map_err(err)
+}
+
+/// Starts a download over from byte zero (progress and the part file are discarded).
+#[tauri::command]
+pub async fn restart_download(engine: State<'_, Engine>, id: i64) -> CmdResult<()> {
+    engine.restart(DownloadId(id)).await.map_err(err)
+}
+
+/// Free bytes on the volume that holds `path` (the folder need not exist yet).
+#[tauri::command]
+pub async fn disk_free(path: String) -> CmdResult<u64> {
+    let path = PathBuf::from(path);
+    tauri::async_runtime::spawn_blocking(move || riptide_engine::free_space(&path))
+        .await
+        .map_err(err)?
+        .map_err(err)
 }
 
 /// Resumes or retries a download.

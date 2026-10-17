@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
+import { DiskSpaceService } from './core/disk-space.service';
 import { FormatService } from './core/format.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
@@ -25,9 +26,6 @@ const VIEW_ICONS: Readonly<Record<ListView, IconName>> = {
   completed: 'check',
   failed: 'alert',
 };
-
-/** Free space shown in the status bar until the engine reports the real figure (M1). */
-const DEMO_FREE_BYTES = 142 * 1024 * 1024 * 1024;
 
 /**
  * The application frame: top bar (brand, search, add), sidebar (views, categories, queues,
@@ -66,7 +64,8 @@ export class AppComponent implements OnInit {
   protected readonly viewIcons = VIEW_ICONS;
   protected readonly categories = CATEGORY_KEYS;
   protected readonly categoryIcons = CATEGORY_ICONS;
-  protected readonly freeBytes = DEMO_FREE_BYTES;
+  /** Real free space under Tauri (polled), the demo figure in a plain browser. */
+  protected readonly disk = inject(DiskSpaceService);
 
   private readonly url = signal(this.router.url);
 

@@ -1,7 +1,7 @@
 import { DestroyRef, effect, inject, Injectable, InjectionToken, signal } from '@angular/core';
 
 import { PREFERENCE_STORE } from '../../core/preferences';
-import { CategoryKey } from '../../model/download';
+import { CATEGORY_KEYS, CategoryKey } from '../../model/download';
 import type { EngineSettings } from '../../tauri/bridge/EngineSettings';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 
@@ -87,8 +87,8 @@ export class SettingsService {
     this.engineLoaded = this.tauri ? this.loadEngineSettings() : Promise.resolve();
     if (this.tauri) {
       effect(() => {
-        const { defaultDir, connections, perHost } = this.settings();
-        this.scheduleSync(defaultDir, connections, perHost);
+        const { defaultDir, connections, perHost, categoryDirs } = this.settings();
+        this.scheduleSync(defaultDir, connections, perHost, categoryDirs);
       });
       inject(DestroyRef).onDestroy(() => {
         if (this.syncTimer !== null) {
@@ -152,34 +152,54 @@ export class SettingsService {
     try {
       const engine = await this.invoke<EngineSettings>('get_engine_settings');
       this.engine = engine;
+      const categoryDirs: Partial<Record<CategoryKey, string>> = { ...this.settings().categoryDirs };
+      for (const key of CATEGORY_KEYS) {
+        const dir = engine.category_dirs?.[key];
+        if (typeof dir === 'string' && dir.trim().length > 0) {
+          categoryDirs[key] = dir;
+        }
+      }
       this.settings.update((s) => ({
         ...s,
         defaultDir: engine.default_dir,
         connections: engine.connections,
         perHost: engine.per_host,
+        categoryDirs,
       }));
     } catch (error: unknown) {
       console.warn('[settings] get_engine_settings failed', error);
     }
   }
 
-  private scheduleSync(defaultDir: string, connections: number, perHost: number): void {
+  private scheduleSync(defaultDir: string, connections: number, perHost: number, categoryDirs: Settings['categoryDirs']): void {
     if (this.syncTimer !== null) {
       clearTimeout(this.syncTimer);
     }
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
-      this.syncing = this.pushEngineSettings(defaultDir, connections, perHost);
+      this.syncing = this.pushEngineSettings(defaultDir, connections, perHost, categoryDirs);
     }, this.debounceMs);
   }
 
-  private async pushEngineSettings(defaultDir: string, connections: number, perHost: number): Promise<void> {
+  private async pushEngineSettings(defaultDir: string, connections: number, perHost: number, categoryDirs: Settings['categoryDirs']): Promise<void> {
     const known = this.engine;
     // not loaded yet: the load merges the engine's values and the effect runs again
     if (known === null) {
       return;
     }
-    if (known.default_dir === defaultDir && known.connections === connections && known.per_host === perHost) {
+    // the engine keeps the same keys (`CategoryKey` === `riptide_core::Category::key`); blanks are "use the default"
+    const category_dirs: EngineSettings['category_dirs'] = {};
+    for (const [key, dir] of Object.entries(categoryDirs)) {
+      if (typeof dir === 'string' && dir.trim().length > 0) {
+        category_dirs[key] = dir;
+      }
+    }
+    if (
+      known.default_dir === defaultDir &&
+      known.connections === connections &&
+      known.per_host === perHost &&
+      JSON.stringify(known.category_dirs ?? {}) === JSON.stringify(category_dirs)
+    ) {
       return;
     }
     const settings: EngineSettings = {
@@ -188,6 +208,7 @@ export class SettingsService {
       per_host: perHost,
       max_active: known.max_active,
       user_agent: null,
+      category_dirs,
     };
     try {
       await this.invoke<void>('set_engine_settings', { settings });

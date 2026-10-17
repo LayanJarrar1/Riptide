@@ -26,6 +26,7 @@ import { ToastService } from '../../ui/toast.service';
 import { UiState } from '../shell/ui-state.service';
 import { DownloadDetailsComponent } from './download-details.component';
 import { DownloadRowComponent, RowAction } from './download-row.component';
+import { RestartDialogComponent } from './restart-dialog.component';
 
 /** Table columns in order; `grow` ones share the leftover width. */
 interface Column {
@@ -64,6 +65,7 @@ const OVERSCAN = 6;
     EmptyStateComponent,
     IconComponent,
     MenuComponent,
+    RestartDialogComponent,
   ],
   host: {
     '[class.has-details]': 'store.details() !== null',
@@ -163,6 +165,8 @@ const OVERSCAN = 6;
         <button appButton variant="danger" icon="trash" type="button" (click)="confirmRemove()">{{ i18n.t('action.remove') }}</button>
       </ng-container>
     </app-dialog>
+
+    <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
   `,
   styles: `
     :host {
@@ -351,6 +355,8 @@ export class DownloadsPageComponent {
   protected readonly menu = signal<{ open: boolean; x: number; y: number; row: DownloadRow | null }>({ open: false, x: 0, y: 0, row: null });
   protected readonly removal = signal<readonly DownloadRow[] | null>(null);
   protected readonly deleteFile = signal(false);
+  /** Download awaiting the "restart from the beginning" confirmation. */
+  protected readonly restartTarget = signal<Download | null>(null);
 
   protected readonly title = computed(() => {
     const category = this.store.category();
@@ -410,8 +416,12 @@ export class DownloadsPageComponent {
     items.push({ id: 'openFolder', label: t('action.openFolder'), icon: 'folderOpen' });
     items.push({ id: 'details', label: t('action.details'), icon: 'info', shortcut: 'Enter', separator: true });
     items.push({ id: 'copyLink', label: t('action.copyLink'), icon: 'copy' });
+    // starting over only means something once bytes exist or the download has ended
+    if (row.downloaded > 0 || s === 'completed' || s === 'failed' || s === 'cancelled') {
+      items.push({ id: 'restart', label: t('action.restart'), icon: 'retry', separator: true });
+    }
     if (s !== 'completed' && s !== 'cancelled') {
-      items.push({ id: 'cancel', label: t('action.cancel'), icon: 'stop', separator: true });
+      items.push({ id: 'cancel', label: t('action.cancel'), icon: 'stop', separator: !(row.downloaded > 0 || s === 'failed') });
     }
     items.push({ id: 'remove', label: t('action.remove'), icon: 'trash', danger: true, shortcut: 'Del', separator: s === 'completed' || s === 'cancelled' });
     return items;
@@ -492,6 +502,9 @@ export class DownloadsPageComponent {
       case 'remove':
         this.askRemove([row]);
         break;
+      case 'restart':
+        this.restartTarget.set(d);
+        break;
       case 'details':
         this.store.openDetails(d.id);
         break;
@@ -552,6 +565,17 @@ export class DownloadsPageComponent {
     this.removal.set(null);
     const text = removed.length === 1 ? this.i18n.t('toast.removed').replace('{name}', removed[0].filename) : this.i18n.t('toast.removedMany').replace('{n}', this.format.int(removed.length));
     this.toasts.show('info', text);
+  }
+
+  /** The user confirmed: the engine throws the progress away and the row follows its events. */
+  protected confirmRestart(): void {
+    const d = this.restartTarget();
+    if (d === null) {
+      return;
+    }
+    this.restartTarget.set(null);
+    this.run(this.engine.restart(d.id));
+    this.toasts.show('info', this.i18n.t('toast.restarted').replace('{name}', d.filename));
   }
 
   protected onKey(event: KeyboardEvent): void {
