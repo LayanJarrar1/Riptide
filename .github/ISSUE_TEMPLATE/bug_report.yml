@@ -1,0 +1,63 @@
+name: Bug report
+description: Something does not work the way it should
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Riptide is in early development, so bugs are expected; a good
+        reproduction is the fastest way to a fix. Security problems go through
+        [SECURITY.md](../blob/main/SECURITY.md), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+      placeholder: |
+        1. Added https://example.com/file.zip with 8 connections
+        2. Paused at 40 %, resumed
+        3. Expected it to continue; it restarted from zero
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Link (if you can share it)
+      description: The download URL, or a description of the server if the link is private.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Desktop app
+        - Command line (riptide fetch)
+        - Website
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: Commit hash or what `riptide --version` / the app's About shows.
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: dropdown
+    id: lang
+    attributes:
+      label: Interface language
+      options:
+        - English
+        - العربية
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: |
+        Relevant lines from `%LOCALAPPDATA%\Riptide\logs`. Logs never contain cookies, credentials
+        or query strings, but please read them before pasting.
+      render: text
