@@ -76,7 +76,7 @@ CREATE TABLE segments (
 ) WITHOUT ROWID;
 
 -- Secrets live apart from `downloads` so they can be wiped on completion/removal and excluded
--- from exports and logs (hard rule 4).
+-- from exports and logs.
 CREATE TABLE secrets (
     download_id INTEGER PRIMARY KEY REFERENCES downloads(id) ON DELETE CASCADE,
     cookies     TEXT,

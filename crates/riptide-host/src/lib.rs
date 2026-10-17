@@ -1,5 +1,5 @@
 //! The Native Messaging host `app.riptide.host`: the only door from the browser extension into
-//! the Riptide app (hard rule 5, "the browser can only ask").
+//! the Riptide app ("the browser can only ask").
 //!
 //! The browser starts `riptide-host` with the caller's identity on the command line and talks to
 //! it over stdio; the host checks the caller, checks every message and forwards the survivors to

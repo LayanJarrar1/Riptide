@@ -9,8 +9,8 @@
 //! ```
 //!
 //! The exhaustive table lives in [`DownloadState::can_transition_to`]; everything not listed there
-//! is [`Error::IllegalTransition`]. Two refinements over the sketch, both documented in
-//! `docs/architecture.md`:
+//! is [`Error::IllegalTransition`]. Two refinements, both documented in
+//! `ARCHITECTURE.md`:
 //!
 //! * a retry leaves `Failed` for **`Queued`**, not straight into `Downloading`, because every start
 //!   must re-probe the server (validators, `If-Range`) and respect queue limits;

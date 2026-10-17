@@ -1,7 +1,7 @@
 //! Local IPC for Riptide: length-prefixed JSON over a named pipe (Windows) or a Unix socket.
 //!
 //! Used by the desktop app (server), the CLI and the Native Messaging host (clients). The wire
-//! format is documented in `docs/ipc-protocol.md`:
+//! format:
 //!
 //! * one connection carries any number of [`Request`] / [`Response`] frames;
 //! * a frame is a 4-byte little-endian length followed by that many bytes of UTF-8 JSON;

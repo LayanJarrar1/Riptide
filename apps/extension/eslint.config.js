@@ -18,7 +18,7 @@ export default tseslint.config(
       globals: { ...globals.browser, ...globals.webextensions },
     },
     rules: {
-      // Project rules (CLAUDE.md): strict TypeScript, no `any`, no remote code.
+      // Project rules: strict TypeScript, no `any`, no remote code.
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
       '@typescript-eslint/consistent-type-imports': 'error',

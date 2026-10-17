@@ -24,7 +24,7 @@ export class TauriService {
   /** Result of `app_info`, or `null` until it answers / when not running under Tauri. */
   readonly appInfo = signal<AppInfo | null>(null);
 
-  /** Asks the backend for name/version/milestone. Resolves without throwing in all cases. */
+  /** Asks the backend for name/version/build label. Resolves without throwing in all cases. */
   async loadAppInfo(): Promise<void> {
     if (!this.available) {
       return;

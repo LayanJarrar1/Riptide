@@ -1,6 +1,6 @@
 //! The download manager runtime: one [`Engine`] owns the SQLite store, a queue scheduler, the
 //! running transfers and an event broadcast. The desktop app wraps it in Tauri commands; the
-//! CLI's `--standalone` mode (M4) drives it in-process. Nothing here knows about a UI.
+//! CLI's `--standalone` mode drives it in-process. Nothing here knows about a UI.
 //!
 //! ```text
 //!  add / pause / resume / cancel / remove ──► Engine ──► Store (every change is a transaction)
@@ -10,7 +10,7 @@
 //! ```
 //!
 //! Crash recovery: on `open`, downloads left in an active state by a previous process are put
-//! back in the queue along legal arrows and resume from their checkpoints (hard rule 2).
+//! back in the queue along legal arrows and resume from their checkpoints.
 //!
 //! # Files: categories, duplicates, restart, disk space
 //!
@@ -96,7 +96,7 @@ pub struct EngineSettings {
     pub connections: u32,
     /// Simultaneous connections per host across all downloads.
     pub per_host: u32,
-    /// Downloads running at once (the Main queue's limit; per-queue limits arrive in M3).
+    /// Downloads running at once (the Main queue's limit; per-queue limits come later).
     pub max_active: u32,
     /// `User-Agent` for requests that do not carry a browser's.
     pub user_agent: Option<String>,
@@ -693,7 +693,7 @@ impl Engine {
     /// A running transfer is paused first and queued again afterwards; a failed one is retried;
     /// a paused one stays paused. The record keeps its validator (`ETag` / `Last-Modified`), so
     /// the resume still goes through `If-Range` and restarts from zero if the new URL serves a
-    /// different file (hard rule 1). New `secrets` replace the stored ones (the stored
+    /// different file (never splice two versions). New `secrets` replace the stored ones (the stored
     /// `User-Agent` header is carried over when the new set has none); `referrer` replaces the
     /// stored `Referer` header. Emits [`Event::Added`] (or the state change) so listeners
     /// re-read the record.

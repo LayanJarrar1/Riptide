@@ -1,6 +1,6 @@
 //! `riptide` — the command-line face of the engine.
 //!
-//! `fetch` and `bench` run the standalone engine (M1); `paths` and `ping` are M0 utilities.
+//! `fetch` and `bench` run the standalone engine; `paths` and `ping` are utilities.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
 

@@ -1,4 +1,4 @@
-//! Browser integration without elevation (hard rule 7): registers the Native Messaging host
+//! Browser integration without elevation: registers the Native Messaging host
 //! `app.riptide.host` for Chrome, Edge and Firefox, per user.
 //!
 //! * Two host manifests are written to `<data>\native-messaging\` (`%LOCALAPPDATA%\Riptide` when

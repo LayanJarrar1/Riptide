@@ -1,5 +1,5 @@
 //! Per-download request context: referrer, user agent, cookies, extra headers and credentials,
-//! applied to every request of that download and **only** to its own origin (hard rule 4).
+//! applied to every request of that download and **only** to its own origin.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;

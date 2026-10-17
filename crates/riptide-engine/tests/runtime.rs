@@ -427,7 +427,7 @@ async fn failures_probe_and_settings() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// files lane: category folders, duplicates, restart from zero, checksum / sanitizer evidence,
+// files: category folders, duplicates, restart from zero, checksum / sanitizer evidence,
 // disk space
 // ---------------------------------------------------------------------------------------------
 

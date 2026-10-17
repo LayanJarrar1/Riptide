@@ -7,7 +7,7 @@
     Runs, in order:
       desktop   : npm ci (if needed), i18n lint, ng lint, ng build (production), ng test (once, headless)
       rust      : cargo fmt --check, cargo build --release, cargo clippy --all-targets -D warnings, cargo doc -D warnings, cargo test
-      extension : tsc --noEmit + eslint (M2)
+      extension : tsc --noEmit + eslint
     The Angular build runs before cargo because tauri-build requires the frontend bundle to exist.
     Parts that do not exist yet are reported as SKIPPED, loudly, never silently.
 
@@ -87,7 +87,7 @@ $desktop = Join-Path $RepoRoot 'apps\desktop'
 if ($SkipWeb) {
     Skip-Step 'desktop' '-SkipWeb'
 } elseif (-not (Test-Path (Join-Path $desktop 'package.json'))) {
-    Skip-Step 'desktop' 'apps/desktop/package.json does not exist yet (M0 desktop shell)'
+    Skip-Step 'desktop' 'apps/desktop/package.json does not exist'
 } else {
     Push-Location $desktop
     try {
@@ -146,13 +146,13 @@ if ($SkipRust) {
 }
 
 # ---------------------------------------------------------------------------
-# Browser extension (M2)
+# Browser extension
 # ---------------------------------------------------------------------------
 $extension = Join-Path $RepoRoot 'apps\extension'
 if ($SkipWeb) {
     Skip-Step 'extension' '-SkipWeb'
 } elseif (-not (Test-Path (Join-Path $extension 'package.json'))) {
-    Skip-Step 'extension' 'apps/extension/package.json does not exist yet (M2)'
+    Skip-Step 'extension' 'apps/extension/package.json does not exist'
 } else {
     Push-Location $extension
     try {

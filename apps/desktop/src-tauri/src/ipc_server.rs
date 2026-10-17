@@ -9,7 +9,7 @@
 //! | `add` | [`Engine::add`] | `added`; the window comes to the front |
 //! | `list` / `get` | [`Engine::list`] / [`Engine::get`] | `downloads` / `download` |
 //! | `refresh` | [`Engine::refresh_url`] | `ok`, or `not_found` when there is no such download |
-//! | anything else | – | `unsupported` (CLI control arrives in M4) |
+//! | anything else | – | `unsupported` (full CLI control comes later) |
 //!
 //! Error messages are redacted (no query strings, no credentials) before they leave the app.
 

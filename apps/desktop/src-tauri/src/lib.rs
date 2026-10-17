@@ -19,7 +19,7 @@ pub mod commands;
 pub mod integration;
 pub mod ipc_server;
 
-pub use commands::{AppInfo, BUILD_MILESTONE, PRODUCT_NAME};
+pub use commands::{AppInfo, BUILD_LABEL, PRODUCT_NAME};
 
 /// Label of the main window (see `tauri.conf.json`).
 pub const MAIN_WINDOW: &str = "main";
@@ -116,7 +116,7 @@ fn engine_config() -> Result<EngineConfig, riptide_log::Error> {
 pub fn run() {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
-        build = BUILD_MILESTONE,
+        build = BUILD_LABEL,
         "starting Riptide desktop"
     );
     tauri::Builder::default()
@@ -182,7 +182,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 // stop transfers at a checkpoint; their records stay Downloading and resume on
-                // the next start (hard rule 2). Close-to-tray arrives in M2.
+                // the next start (crash-safe resume). Close-to-tray comes later.
                 if let Some(engine) = window.try_state::<Engine>() {
                     let engine = engine.inner().clone();
                     tauri::async_runtime::block_on(engine.shutdown());

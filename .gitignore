@@ -41,8 +41,7 @@ desktop.ini
 .env.*
 
 # ---------------------------------------------------------------------------
-# Private planning material — stays on this machine only, never pushed.
-# (The product plan, roadmap, agent instructions and design docs.)
+# Local working notes; never committed.
 # ---------------------------------------------------------------------------
 /ROADMAP.md
 /CLAUDE.md

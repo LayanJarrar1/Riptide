@@ -4,7 +4,7 @@
 //! in it is a plain value or a pure function so that the engine (`riptide-net`), the store
 //! (`riptide-store`), the IPC layer and the UI can all share one vocabulary.
 //!
-//! * [`Download`] / [`Segment`] — the persisted model (see `docs/architecture.md`).
+//! * [`Download`] / [`Segment`] — the persisted model (see `ARCHITECTURE.md`).
 //! * [`DownloadState`] — the state machine with its exhaustive transition table.
 //! * [`segment::plan_segments`] / [`segment::split_segment`] — the segment planner.
 //! * [`Event`] — what the engine emits to whoever is listening.

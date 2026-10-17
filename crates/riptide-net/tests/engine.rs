@@ -1,5 +1,5 @@
-//! The engine against `riptide-testserver`: every failure mode in `CLAUDE.md` that M1 lane A
-//! owns, each checked by comparing the SHA-256 of the file on disk with the server's seed.
+//! The engine against `riptide-testserver`: every HTTP failure mode the transfer
+//! engine handles, each checked by comparing the SHA-256 of the file on disk with the server's seed.
 #![allow(clippy::unwrap_used)]
 
 use std::path::PathBuf;

@@ -448,7 +448,7 @@ export class DownloadDetailsComponent {
       .replace('{total}', this.format.int(segs.length));
   });
 
-  /** A readable timeline reconstructed from the record (the engine's real log arrives in M1). */
+  /** A readable timeline reconstructed from the record. */
   protected readonly log = computed<readonly LogLine[]>(() => {
     const d = this.d();
     const t = (key: string, vars: Record<string, string> = {}): string =>
