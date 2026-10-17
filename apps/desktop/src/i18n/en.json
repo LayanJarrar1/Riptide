@@ -252,5 +252,46 @@
   "settings.checkUpdates": "Check for updates",
   "settings.reset": "Reset settings",
   "settings.resetDesc": "Puts every setting back to its default. Downloads are not touched.",
-  "settings.resetAction": "Reset"
+  "settings.resetAction": "Reset",
+
+  "add.submitting": "Adding…",
+
+  "loading.list": "Loading your downloads…",
+
+  "empty.steps.title": "How to start",
+  "empty.step1.title": "Paste a link",
+  "empty.step1.body": "Press Ctrl+N, or use Add download.",
+  "empty.step2.title": "Pick a folder and the connections",
+  "empty.step2.body": "Riptide checks the link and fills in the name and category.",
+  "empty.step3.title": "Watch the stripes fill",
+  "empty.step3.body": "Each stripe is one connection fetching its part of the file.",
+
+  "sort.asc": "Sorted ascending — click to flip",
+  "sort.desc": "Sorted descending — click to flip",
+  "sort.by": "Sort by {column}",
+
+  "toast.completed": "{name} is complete",
+  "toast.openFile": "Open",
+  "toast.openFolder": "Show in folder",
+
+  "shortcuts.title": "Keyboard shortcuts",
+  "shortcuts.general": "Anywhere",
+  "shortcuts.list": "In the list",
+  "shortcuts.add": "Add a download",
+  "shortcuts.search": "Search",
+  "shortcuts.settings": "Open settings",
+  "shortcuts.help": "Show this list",
+  "shortcuts.move": "Move the selection",
+  "shortcuts.details": "Open details",
+  "shortcuts.toggle": "Pause or resume",
+  "shortcuts.remove": "Remove",
+  "shortcuts.escape": "Close, or clear the selection",
+  "shortcuts.multi": "Select several",
+  "shortcuts.range": "Select a range",
+  "shortcuts.context": "Row actions",
+  "shortcuts.hint": "Press ? anywhere to see this list again.",
+  "key.space": "Space",
+  "key.click": "click",
+  "key.dblclick": "Double-click",
+  "key.rightclick": "Right-click"
 }

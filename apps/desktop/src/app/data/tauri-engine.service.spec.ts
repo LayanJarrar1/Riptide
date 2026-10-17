@@ -139,6 +139,30 @@ describe('TauriEngineService', () => {
     expect(engine.maxActive()).toBe(3);
   });
 
+  it('reports loaded only once the initial list is in, even if list_downloads fails', async () => {
+    engine = TestBed.inject(TauriEngineService);
+    expect(engine.loaded()).toBeFalse();
+    await engine.ready;
+    expect(engine.loaded()).toBeTrue();
+
+    TestBed.resetTestingModule();
+    const broken = new FakeBridge();
+    broken.handle = <T>(cmd: string): Promise<T> =>
+      cmd === 'list_downloads' ? Promise.reject(new Error('db locked')) : Promise.resolve(undefined as unknown as T);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: TAURI_INVOKE, useValue: broken.invoke },
+        { provide: TAURI_LISTEN, useValue: broken.listen },
+      ],
+    });
+    const warn = spyOn(console, 'warn');
+    const second = TestBed.inject(TauriEngineService);
+    await second.ready;
+    expect(second.loaded()).toBeTrue();
+    expect(second.downloads()).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+  });
+
   it('queues events that arrive before the list is in and replays them after', async () => {
     engine = TestBed.inject(TauriEngineService);
     // the subscription is attached first; the list is still loading

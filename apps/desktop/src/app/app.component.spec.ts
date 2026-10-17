@@ -12,11 +12,13 @@ import {
 import { DownloadsStore } from './data/downloads.store';
 import { provideDownloadEngine } from './data/engine.provider';
 import { MOCK_ENGINE_AUTOSTART } from './data/mock-engine.service';
+import { UiState } from './features/shell/ui-state.service';
 import { I18nService } from './i18n/i18n.service';
 
 describe('AppComponent (shell)', () => {
   let fixture: ComponentFixture<AppComponent>;
   let i18n: I18nService;
+  let ui: UiState;
 
   function el(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
@@ -44,6 +46,7 @@ describe('AppComponent (shell)', () => {
 
     fixture = TestBed.createComponent(AppComponent);
     i18n = TestBed.inject(I18nService);
+    ui = TestBed.inject(UiState);
     fixture.detectChanges();
     // the router does not navigate on its own inside TestBed; activate the home route
     await TestBed.inject(Router).navigateByUrl('/');
@@ -103,5 +106,32 @@ describe('AppComponent (shell)', () => {
     fixture.detectChanges();
     const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
     expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Add download');
+  });
+
+  it('opens the keyboard shortcuts with ? and Ctrl+/, but not while typing in the search box', () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    fixture.detectChanges();
+    expect(ui.shortcutsOpen()).toBeTrue();
+    const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
+    expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Keyboard shortcuts');
+    expect(dialog?.querySelectorAll('.row').length).toBe(12);
+
+    el().querySelector<HTMLInputElement>('.search-input')?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    expect(ui.shortcutsOpen()).toBeTrue();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', ctrlKey: true, bubbles: true }));
+    fixture.detectChanges();
+    expect(ui.shortcutsOpen()).toBeFalse();
+    expect(dialog?.open).toBeFalse();
+  });
+
+  it('shows the frame as booting at first, then settles so later rows enter the ordinary way', () => {
+    expect(el().querySelector('.frame')?.classList).toContain('is-booting');
+    expect(el().querySelectorAll('app-download-row.is-staggered').length).toBeGreaterThan(0);
+    ui.markBooted();
+    fixture.detectChanges();
+    expect(el().querySelector('.frame')?.classList).not.toContain('is-booting');
+    expect(el().querySelectorAll('app-download-row.is-staggered').length).toBe(0);
+    expect(el().querySelector('.status-help')?.getAttribute('title')).toBe('Keyboard shortcuts');
   });
 });

@@ -69,10 +69,11 @@ const DIRECTIONAL = new Set<IconName>(['chevronEnd', 'chevronStart', 'external',
       [attr.width]="size()"
       [attr.height]="size()"
       [class.icon-directional]="directional()"
+      [class.is-drawing]="draw()"
       aria-hidden="true"
       focusable="false"
     >
-      <path [attr.d]="path()" />
+      <path [attr.d]="path()" pathLength="1" />
     </svg>
   `,
   styles: `
@@ -90,6 +91,19 @@ const DIRECTIONAL = new Set<IconName>(['chevronEnd', 'chevronStart', 'external',
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+
+    /* The stroke draws itself from start to end (pathLength="1" normalises every glyph). */
+    svg.is-drawing path {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      animation: icon-draw var(--dur-4) var(--ease-emphasized-out) forwards;
+    }
+
+    @keyframes icon-draw {
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
   `,
 })
 export class IconComponent {
@@ -98,6 +112,9 @@ export class IconComponent {
 
   /** Rendered size in CSS pixels. */
   readonly size = input(18);
+
+  /** Plays the stroke draw-in once when set (the status pill uses it for the check mark). */
+  readonly draw = input(false);
 
   protected readonly path = computed(() => PATHS[this.name()] ?? PATHS['file']);
 
