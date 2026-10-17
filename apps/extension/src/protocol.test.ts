@@ -48,7 +48,8 @@ test('enum tags mirror message.rs', () => {
   );
   assert.deepEqual([...RESPONSE_TYPES], ['pong', 'probed', 'added', 'downloads', 'download', 'ok', 'event', 'error']);
   assert.deepEqual([...ERROR_CODES], ['bad_request', 'not_found', 'illegal_transition', 'unsupported', 'internal']);
-  assert.deepEqual([...BROWSER_REQUEST_TYPES], ['ping', 'probe', 'add', 'refresh']);
+  // must match BROWSER_REQUEST_TYPES in crates/riptide-host/src/lib.rs
+  assert.deepEqual([...BROWSER_REQUEST_TYPES], ['ping', 'probe', 'add', 'refresh', 'list']);
 });
 
 for (const f of requests) {

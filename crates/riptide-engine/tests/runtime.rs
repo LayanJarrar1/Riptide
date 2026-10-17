@@ -825,3 +825,50 @@ fn free_space_answers_for_the_default_folder_before_it_exists() {
     let free = riptide_engine::free_space(&dir.path().join("downloads")).unwrap();
     assert!(free > 0);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn refresh_url_swaps_the_link_of_a_running_download_and_finishes_byte_exact() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let size = 8 * MIB;
+    let id = engine
+        .add(w.request(&format!("/slow?bps=2097152&size={size}")))
+        .await
+        .unwrap();
+    wait_for(
+        &mut rx,
+        Duration::from_secs(10),
+        |e| matches!(e, Event::Progress { id: i, downloaded, .. } if *i == id && *downloaded > 0),
+    )
+    .await;
+
+    let fresh = w.server.url(&format!("/ok?size={size}"));
+    engine
+        .refresh_url(id, &fresh, Some("https://example.test/page"), None)
+        .await
+        .unwrap();
+    assert_eq!(engine.get(id).await.unwrap().unwrap().url, fresh);
+    let path = wait_completed(&mut rx, id).await;
+    assert_eq!(
+        checksum_of(path, ChecksumAlgo::Sha256).await.unwrap(),
+        expected_sha256_hex(DEFAULT_SEED, size)
+    );
+
+    // a finished download has nothing to refresh; an unknown one is not found; only http(s)
+    assert!(matches!(
+        engine.refresh_url(id, &fresh, None, None).await,
+        Err(riptide_engine::Error::Core(_))
+    ));
+    assert!(matches!(
+        engine
+            .refresh_url(DownloadId(999), &fresh, None, None)
+            .await,
+        Err(riptide_engine::Error::NotFound(_))
+    ));
+    assert!(engine
+        .refresh_url(id, "file:///etc/passwd", None, None)
+        .await
+        .is_err());
+    engine.shutdown().await;
+}

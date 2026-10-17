@@ -523,7 +523,7 @@ async function refreshRecent(): Promise<RecentItem[]> {
       listAvailable = true;
       await setSession('recent', recent);
     } else if (res.type === 'error') {
-      listAvailable = false; // the host forwards only ping/probe/add/refresh
+      listAvailable = false; // an older host forwarded only ping/probe/add/refresh
     }
     await setSession('listAvailable', listAvailable);
   } catch {

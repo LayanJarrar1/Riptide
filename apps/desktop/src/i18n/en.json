@@ -200,6 +200,7 @@
   "toast.engineError": "Riptide could not do that: {error}",
   "toast.browserOn": "Browser integration is on",
   "toast.browserOff": "Browser integration is off",
+  "toast.browserFailed": "Could not change the browser integration. Details are in the log.",
   "toast.upToDate": "Riptide is up to date",
   "toast.settingsReset": "Settings restored to defaults",
 
@@ -236,6 +237,7 @@
   "settings.browserDesc": "Catch downloads from Chrome, Edge and Firefox. No admin rights needed.",
   "settings.browserOn": "Connected",
   "settings.browserOff": "Not installed",
+  "settings.browserNoHost": "Browser bridge missing; reinstall Riptide",
   "settings.browserInstall": "Set up",
   "settings.browserRemove": "Turn off",
   "settings.proxy": "Proxy",

@@ -8,6 +8,7 @@ members = [
     "crates/riptide-log",
     "crates/riptide-engine",
     "crates/riptide-cli",
+    "crates/riptide-host",
     "crates/riptide-testserver",
     "apps/desktop/src-tauri",
 ]
@@ -35,6 +36,7 @@ riptide-store = { path = "crates/riptide-store" }
 riptide-ipc = { path = "crates/riptide-ipc" }
 riptide-log = { path = "crates/riptide-log" }
 riptide-engine = { path = "crates/riptide-engine" }
+riptide-host = { path = "crates/riptide-host" }
 riptide-testserver = { path = "crates/riptide-testserver" }
 
 # typescript bindings (behind the `ts` feature of the crates that export them)

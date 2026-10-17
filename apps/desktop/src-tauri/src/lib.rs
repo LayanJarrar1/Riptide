@@ -4,6 +4,10 @@
 //! the scheduler and the transfers) and the webview. The engine never sees a Tauri type (Hard
 //! rule 9); everything the UI can ask for is a `#[tauri::command]` in [`commands`], and every
 //! engine event is forwarded to the webview as the `riptide://event` Tauri event.
+//!
+//! The same engine also answers the local IPC endpoint ([`ipc_server`]), which is how the
+//! browser extension (through the `riptide-host` Native Messaging host) and the CLI reach it;
+//! [`integration`] registers that host with the browsers, per user.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 use std::path::PathBuf;
@@ -12,8 +16,23 @@ use riptide_engine::{Engine, EngineConfig};
 use tauri::{Emitter, Manager};
 
 pub mod commands;
+pub mod integration;
+pub mod ipc_server;
 
 pub use commands::{AppInfo, BUILD_MILESTONE, PRODUCT_NAME};
+
+/// Label of the main window (see `tauri.conf.json`).
+pub const MAIN_WINDOW: &str = "main";
+
+/// Brings the main window to the front: restored, shown and focused. Used when a second
+/// launch hands over and when the browser adds a download.
+pub fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
 
 /// Name of the Tauri event that carries every `riptide_core::Event`.
 pub const EVENT_NAME: &str = "riptide://event";
@@ -76,9 +95,9 @@ pub fn start_logging(filter: &str) -> Option<riptide_log::LogGuard> {
 
 /// Where the engine keeps its database and where downloads go by default: the user's
 /// Downloads folder, or `<data>/downloads` when the OS does not report one.
-fn engine_config() -> Result<EngineConfig, String> {
-    let paths = riptide_log::Paths::resolve().map_err(|e| e.to_string())?;
-    paths.ensure_dirs().map_err(|e| e.to_string())?;
+fn engine_config() -> Result<EngineConfig, riptide_log::Error> {
+    let paths = riptide_log::Paths::resolve()?;
+    paths.ensure_dirs()?;
     let default_dir: PathBuf =
         dirs::download_dir().unwrap_or_else(|| paths.data_dir.join("downloads"));
     Ok(EngineConfig {
@@ -100,15 +119,46 @@ pub fn run() {
         build = BUILD_MILESTONE,
         "starting Riptide desktop"
     );
-    let config = engine_config().expect("riptide: cannot resolve the data directory");
-    let engine = tauri::async_runtime::block_on(Engine::open(config))
-        .expect("riptide: cannot open the download database");
-
     tauri::Builder::default()
+        // first: a second launch hands over to the running instance and exits before it opens
+        // the database (its crash recovery would otherwise re-queue the live transfers)
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(engine.clone())
         .setup(move |app| {
+            let config = engine_config()?;
+            let engine = tauri::async_runtime::block_on(Engine::open(config))?;
+            app.manage(engine.clone());
+
+            // browser host / CLI → engine over the per-user pipe; an add brings the window up
+            let handle = app.handle().clone();
+            let ipc_engine = engine.clone();
+            tauri::async_runtime::spawn(async move {
+                let endpoint = match riptide_ipc::default_endpoint() {
+                    Ok(e) => e,
+                    Err(e) => {
+                        tracing::error!(error = %e, "no IPC endpoint; the browser cannot reach the app");
+                        return;
+                    }
+                };
+                let on_added = move || show_main_window(&handle);
+                if let Err(e) = ipc_server::serve(&endpoint, ipc_engine, on_added).await {
+                    tracing::error!(error = %e, "IPC endpoint stopped");
+                }
+            });
+
+            // register the browser host (idempotent; skipped once the user turned it off)
+            tauri::async_runtime::spawn_blocking(|| {
+                if let (Some(mut registry), Ok(layout)) = (
+                    integration::platform_registry(),
+                    integration::Layout::for_this_app(),
+                ) {
+                    integration::register_on_start(&layout, registry.as_mut());
+                }
+            });
+
             // engine → webview: one Tauri event per engine event, dropped if the webview lags
             let handle = app.handle().clone();
             let mut rx = engine.subscribe();
@@ -133,8 +183,10 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 // stop transfers at a checkpoint; their records stay Downloading and resume on
                 // the next start (hard rule 2). Close-to-tray arrives in M2.
-                let engine = window.state::<Engine>().inner().clone();
-                tauri::async_runtime::block_on(engine.shutdown());
+                if let Some(engine) = window.try_state::<Engine>() {
+                    let engine = engine.inner().clone();
+                    tauri::async_runtime::block_on(engine.shutdown());
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -158,6 +210,9 @@ pub fn run() {
             commands::open_file,
             commands::show_in_folder,
             commands::pick_folder,
+            commands::integration_status,
+            commands::register_browser_host,
+            commands::unregister_browser_host,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Riptide desktop application");

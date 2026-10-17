@@ -14,6 +14,8 @@ coverage/
 # Tauri generated
 /apps/desktop/src-tauri/gen/schemas/
 /apps/desktop/src-tauri/target/
+# staged by apps/desktop/scripts/stage-host.mjs for `npm run bundle`
+/apps/desktop/src-tauri/binaries/
 
 # Riptide runtime data (never commit)
 *.rtpart

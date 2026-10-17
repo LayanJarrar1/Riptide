@@ -687,6 +687,105 @@ impl Engine {
         Ok(())
     }
 
+    /// Gives an existing download a fresh URL (an expired signed link) and, optionally, fresh
+    /// secrets and referrer: the browser extension's `refresh`.
+    ///
+    /// A running transfer is paused first and queued again afterwards; a failed one is retried;
+    /// a paused one stays paused. The record keeps its validator (`ETag` / `Last-Modified`), so
+    /// the resume still goes through `If-Range` and restarts from zero if the new URL serves a
+    /// different file (hard rule 1). New `secrets` replace the stored ones (the stored
+    /// `User-Agent` header is carried over when the new set has none); `referrer` replaces the
+    /// stored `Referer` header. Emits [`Event::Added`] (or the state change) so listeners
+    /// re-read the record.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NotFound`] for an unknown id, [`Error::Net`] for a URL that is not `http(s)`,
+    /// [`Error::Core`] (`Invalid`) for a completed or cancelled download.
+    pub async fn refresh_url(
+        &self,
+        id: DownloadId,
+        url: &str,
+        referrer: Option<&str>,
+        secrets: Option<Secrets>,
+    ) -> Result<()> {
+        riptide_net::parse_http_url(url)?;
+        let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        if matches!(
+            before.state,
+            DownloadState::Completed | DownloadState::Cancelled
+        ) {
+            return Err(Error::Core(riptide_core::Error::Invalid(format!(
+                "download {} is {}; there is nothing to refresh",
+                id.0, before.state
+            ))));
+        }
+        let was_running = match self.take_running(id, StopReason::Pause) {
+            Some(running) => {
+                running.stop.cancel();
+                let _ = running.task.await;
+                true
+            }
+            None => false,
+        };
+
+        let mut fresh = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        fresh.url = url.to_string();
+        fresh.final_url = None;
+        fresh.error = None;
+        let referrer = referrer.map(str::to_string);
+        db(&self.inner.store, move |s| {
+            let changed = secrets.is_some() || referrer.is_some();
+            let old = s.secrets(id)?.unwrap_or_default();
+            let mut next = match secrets {
+                Some(mut new) => {
+                    let has_ua = new
+                        .headers
+                        .iter()
+                        .any(|(k, _)| k.eq_ignore_ascii_case("user-agent"));
+                    if !has_ua {
+                        new.headers.extend(
+                            old.headers
+                                .iter()
+                                .filter(|(k, _)| k.eq_ignore_ascii_case("user-agent"))
+                                .cloned(),
+                        );
+                    }
+                    new
+                }
+                None => old,
+            };
+            if let Some(r) = referrer {
+                next.headers
+                    .retain(|(k, _)| !k.eq_ignore_ascii_case("referer"));
+                next.headers.push(("Referer".into(), r));
+            }
+            s.update_download(&fresh)?;
+            if changed {
+                if next.is_empty() {
+                    s.delete_secrets(id)?;
+                } else {
+                    s.set_secrets(id, &next)?;
+                }
+            }
+            Ok(())
+        })
+        .await?;
+
+        let now = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        match now.state {
+            DownloadState::Failed { .. } => {
+                self.transition(id, DownloadState::Queued, None).await?;
+            }
+            DownloadState::Paused if was_running => {
+                self.transition(id, DownloadState::Queued, None).await?;
+            }
+            _ => self.emit(Event::Added { id }),
+        }
+        self.inner.wake.notify_one();
+        Ok(())
+    }
+
     /// Pauses every queued or running download.
     pub async fn pause_all(&self) -> Result<()> {
         for d in self.list().await? {

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 
+import { BrowserIntegrationService } from '../../core/browser-integration.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
 import { I18nService, Lang, LANGS } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey } from '../../model/download';
@@ -135,9 +136,9 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
             <span class="setting-desc">{{ i18n.t('settings.browserDesc') }}</span>
           </div>
           <div class="browser-row">
-            <span class="dot" [class.is-on]="s().browserIntegration"></span>
-            <span class="browser-state">{{ i18n.t(s().browserIntegration ? 'settings.browserOn' : 'settings.browserOff') }}</span>
-            <button appButton variant="secondary" type="button" (click)="toggleBrowser()">{{ i18n.t(s().browserIntegration ? 'settings.browserRemove' : 'settings.browserInstall') }}</button>
+            <span class="dot" [class.is-on]="browser.connected()"></span>
+            <span class="browser-state">{{ i18n.t(browserStateKey()) }}</span>
+            <button appButton variant="secondary" type="button" [disabled]="browser.busy()" (click)="toggleBrowser()">{{ i18n.t(browser.connected() ? 'settings.browserRemove' : 'settings.browserInstall') }}</button>
           </div>
         </div>
         <div class="setting">
@@ -444,8 +445,21 @@ export class SettingsPageComponent {
   protected readonly tauri = inject(TauriService);
   protected readonly settings = inject(SettingsService);
   private readonly toasts = inject(ToastService);
+  protected readonly browser = inject(BrowserIntegrationService);
 
   protected readonly s = this.settings.settings;
+
+  /** Connected / not installed / host missing (a broken install). */
+  protected readonly browserStateKey = computed(() => {
+    if (this.browser.connected()) {
+      return 'settings.browserOn';
+    }
+    return this.browser.hostMissing() ? 'settings.browserNoHost' : 'settings.browserOff';
+  });
+
+  constructor() {
+    void this.browser.refresh();
+  }
   protected readonly categories = CATEGORY_KEYS;
   protected readonly icons = CATEGORY_ICONS;
   protected readonly speedLimits = SPEED_LIMITS;
@@ -491,10 +505,13 @@ export class SettingsPageComponent {
     this.settings.patch({ [key]: (event.target as HTMLInputElement).checked });
   }
 
-  protected toggleBrowser(): void {
-    const on = !this.s().browserIntegration;
-    this.settings.patch({ browserIntegration: on });
-    this.toasts.show('info', this.i18n.t(on ? 'toast.browserOn' : 'toast.browserOff'));
+  protected async toggleBrowser(): Promise<void> {
+    const on = !this.browser.connected();
+    if (await this.browser.setEnabled(on)) {
+      this.toasts.show('info', this.i18n.t(on ? 'toast.browserOn' : 'toast.browserOff'));
+    } else {
+      this.toasts.show('danger', this.i18n.t('toast.browserFailed'));
+    }
   }
 
   protected checkUpdates(): void {

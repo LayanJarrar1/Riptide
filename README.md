@@ -207,6 +207,7 @@ crates/
   riptide-ipc/         local pipe transport and message schema
   riptide-log/         logging with secret redaction, portable and installed paths
   riptide-cli/         command-line client
+  riptide-host/        Native Messaging host: the browser extension's only way into the app
   riptide-testserver/  local HTTP server with every failure mode the tests need (dev only)
 apps/
   desktop/             Tauri v2 shell (src-tauri) and the Angular UI (src)

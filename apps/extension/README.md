@@ -3,8 +3,9 @@
 Manifest V3 extension for Chrome, Edge and Firefox that hands downloads to the Riptide desktop
 app. One TypeScript codebase, three builds (`dist/chrome`, `dist/edge`, `dist/firefox`).
 
-The extension can only **ask**: it sends `ping`, `probe`, `add` and `refresh` messages to the
-Native Messaging host `app.riptide.host`, which forwards them to the app over its local pipe.
+The extension can only **ask**: it sends `ping`, `probe`, `add`, `refresh` and the read-only
+`list` to the Native Messaging host `app.riptide.host` (`crates/riptide-host`), which forwards
+them to the app over its local pipe.
 Nothing coming from a page is ever executed, shelled or used as a path.
 
 ## What it does
@@ -60,18 +61,47 @@ exists, the locales share one key set and both extension ids are documented here
 | Firefox | `riptide@riptide.app` | `browser_specific_settings.gecko.id` in `manifest/firefox.json` |
 
 Store-published builds get ids from the stores (Chrome Web Store keeps this one only if the
-same key is uploaded; the Edge Add-ons store assigns its own). *Settings → Integration* in the
-app should therefore accept extra ids.
+same key is uploaded; the Edge Add-ons store assigns its own). Extra ids go into
+`extra_extension_ids` of `%LOCALAPPDATA%\Riptide\integration.json`; the app adds them to the
+manifests on its next registration and the host accepts them (there is no UI for this yet).
 
-## Native Messaging host registration
+## Native Messaging host
 
-The desktop app registers the host from *Settings → Integration*, per user, no elevation:
+The host is `riptide-host.exe` (`crates/riptide-host`), shipped next to `riptide-desktop.exe`
+in the installer and the portable zip. The browser starts it per port; it
+
+- checks the caller: Chrome/Edge pass `chrome-extension://<id>/` as the first argument,
+  Firefox passes the manifest path and then the extension id; only the ids above (plus the
+  extras in `integration.json`) are served, anyone else gets one `error` frame and the host
+  exits;
+- reads 4-byte little-endian length + UTF-8 JSON frames (1 MB limit; a larger one gets an
+  `error` and ends the session), accepts only `ping`, `probe`, `add`, `refresh` and `list`
+  that parse against the schema, answers everything else with `error` (`bad_request`), and
+  forwards the rest to the app's pipe `\\.\pipe\riptide.<user-sid>` (current user only);
+- answers with an `error` (`internal`, "the Riptide app is not running") when the pipe is
+  down and keeps the session open. On a `ping` it first starts `riptide-desktop.exe` from its
+  own folder (or `%LOCALAPPDATA%\Riptide`) and waits up to 10 s for the pipe, so *Open Riptide*
+  works; a second app launch only focuses the running window.
+
+Nothing coming from the browser is executed or used as a path. The app answers `probe`, `add`
+(the new download appears in the list and the window comes to the front), `list`, `get` and
+`refresh` (new URL and secrets for an existing download; `not_found` otherwise).
+
+### Registration
+
+The app registers the host per user, no elevation: automatically on every start (idempotent;
+it also repairs the paths after the app moved) until the user presses *Turn off* in
+*Settings → Integration → Browser extension*, and again with *Set up*. The choice is stored as
+`browser_host` in `integration.json`.
 
 | Browser | Registry value (`HKCU`) | Manifest file it points to |
 |---|---|---|
-| Chrome | `HKCU\Software\Google\Chrome\NativeMessagingHosts\app.riptide.host` (default value = path) | `%LOCALAPPDATA%\Riptide\host\app.riptide.host.chromium.json` |
+| Chrome | `HKCU\Software\Google\Chrome\NativeMessagingHosts\app.riptide.host` (default value = path) | `%LOCALAPPDATA%\Riptide\native-messaging\app.riptide.host.chromium.json` |
 | Edge | `HKCU\Software\Microsoft\Edge\NativeMessagingHosts\app.riptide.host` | same Chromium manifest |
-| Firefox | `HKCU\Software\Mozilla\NativeMessagingHosts\app.riptide.host` | `%LOCALAPPDATA%\Riptide\host\app.riptide.host.firefox.json` |
+| Firefox | `HKCU\Software\Mozilla\NativeMessagingHosts\app.riptide.host` | `%LOCALAPPDATA%\Riptide\native-messaging\app.riptide.host.firefox.json` |
+
+The portable build keeps the manifests in `data\native-messaging\` next to the executable (the
+registry values are per user either way).
 
 Chromium manifest (`allowed_origins` is required; the trailing slash matters):
 
@@ -110,10 +140,11 @@ extension derives its status from what happens:
 | port disconnect "host not found / forbidden / no such native application" | host not installed |
 | any other disconnect or timeout | app not running |
 
-*Open Riptide* (popup, notification button) sends a plain `ping`; whether to launch the app on
-it is the host's decision. The popup tries `list` to show live states; if the host answers with
-an `error` (it forwards only `ping`/`probe`/`add`/`refresh`), the popup shows "sent" and says
-live state is unavailable.
+*Open Riptide* (popup, notification button) sends a plain `ping`; the host starts the app when
+it is not running (see above). Because the extension also pings on browser start-up, the app
+starts with the browser while the integration is on. The popup sends `list` to show live
+states; if the host answers with an `error` (an older host forwarded only
+`ping`/`probe`/`add`/`refresh`), the popup shows "sent" and says live state is unavailable.
 
 ## Permissions
 
