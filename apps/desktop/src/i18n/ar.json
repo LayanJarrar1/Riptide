@@ -240,5 +240,46 @@
   "settings.checkUpdates": "التحقق من التحديثات",
   "settings.reset": "إعادة ضبط الإعدادات",
   "settings.resetDesc": "يعيد كل إعداد إلى قيمته الافتراضية. لا يمس التحميلات.",
-  "settings.resetAction": "إعادة الضبط"
+  "settings.resetAction": "إعادة الضبط",
+
+  "add.submitting": "جارٍ الإضافة…",
+
+  "loading.list": "جارٍ تحميل قائمتك…",
+
+  "empty.steps.title": "كيف تبدأ",
+  "empty.step1.title": "الصق رابطًا",
+  "empty.step1.body": "اضغط Ctrl+N أو استخدم «إضافة تحميل».",
+  "empty.step2.title": "اختر المجلد وعدد الاتصالات",
+  "empty.step2.body": "يفحص ريبتايد الرابط ويملأ الاسم والتصنيف.",
+  "empty.step3.title": "راقب الأشرطة وهي تمتلئ",
+  "empty.step3.body": "كل شريط هو اتصال يجلب جزءه من الملف.",
+
+  "sort.asc": "مرتّب تصاعديًا — انقر للعكس",
+  "sort.desc": "مرتّب تنازليًا — انقر للعكس",
+  "sort.by": "ترتيب حسب {column}",
+
+  "toast.completed": "اكتمل {name}",
+  "toast.openFile": "فتح",
+  "toast.openFolder": "إظهار في المجلد",
+
+  "shortcuts.title": "اختصارات لوحة المفاتيح",
+  "shortcuts.general": "في كل مكان",
+  "shortcuts.list": "في القائمة",
+  "shortcuts.add": "إضافة تحميل",
+  "shortcuts.search": "بحث",
+  "shortcuts.settings": "فتح الإعدادات",
+  "shortcuts.help": "عرض هذه القائمة",
+  "shortcuts.move": "تحريك التحديد",
+  "shortcuts.details": "فتح التفاصيل",
+  "shortcuts.toggle": "إيقاف مؤقت أو استئناف",
+  "shortcuts.remove": "إزالة",
+  "shortcuts.escape": "إغلاق، أو إلغاء التحديد",
+  "shortcuts.multi": "تحديد عدة عناصر",
+  "shortcuts.range": "تحديد نطاق",
+  "shortcuts.context": "إجراءات الصف",
+  "shortcuts.hint": "اضغط ? في أي مكان لعرض هذه القائمة مجددًا.",
+  "key.space": "مسافة",
+  "key.click": "نقر",
+  "key.dblclick": "نقر مزدوج",
+  "key.rightclick": "نقر بالزر الأيمن"
 }

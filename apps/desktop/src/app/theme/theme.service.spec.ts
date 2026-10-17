@@ -43,13 +43,16 @@ describe('ThemeService', () => {
     delete document.documentElement.dataset['theme'];
   });
 
-  it('starts on "system" and resolves it from the OS preference', () => {
+  it('starts on "light" whatever the OS prefers; "system" follows the OS once chosen', () => {
     const dark = setup(true);
-    expect(dark.service.theme()).toBe('system');
+    expect(dark.service.theme()).toBe('light');
+    expect(dark.service.resolved()).toBe('light');
+    dark.service.setTheme('system');
     expect(dark.service.resolved()).toBe('dark');
 
     TestBed.resetTestingModule();
     const light = setup(false);
+    expect(light.service.theme()).toBe('light');
     expect(light.service.resolved()).toBe('light');
   });
 
@@ -60,8 +63,9 @@ describe('ThemeService', () => {
   });
 
   it('ignores an invalid saved value', () => {
-    const { service } = setup(false, { [THEME_STORAGE_KEY]: 'neon' });
-    expect(service.theme()).toBe('system');
+    const { service } = setup(true, { [THEME_STORAGE_KEY]: 'neon' });
+    expect(service.theme()).toBe('light');
+    expect(service.resolved()).toBe('light');
   });
 
   it('setTheme persists and applies data-theme on <html>', () => {
@@ -78,6 +82,7 @@ describe('ThemeService', () => {
 
   it('follows the OS while on "system" and ignores it otherwise', () => {
     const { service, query } = setup(false);
+    service.setTheme('system');
     expect(service.resolved()).toBe('light');
     query.flip(true);
     expect(service.resolved()).toBe('dark');

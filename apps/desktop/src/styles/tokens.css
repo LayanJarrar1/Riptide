@@ -1,9 +1,11 @@
 /*
  * Riptide design tokens.
  *
- * Dark-first. Every component reads these custom properties; nothing hard-codes a colour,
- * a size or a duration. The light theme only overrides what changes. RTL helpers live at
- * the bottom: prefer logical properties (margin-inline-start, inset-inline-end, ...) and use
+ * Two themes, light by default (ThemeService), dark one switch away. Every component reads
+ * these custom properties; nothing hard-codes a colour, a size or a duration. The base block
+ * holds the dark values and the light block overrides what changes. Surfaces are flat: crisp
+ * borders, subtle shadows, one teal accent, no gradients or glows. RTL helpers live at the
+ * bottom: prefer logical properties (margin-inline-start, inset-inline-end, ...) and use
  * --dir-sign for the rare transform that must mirror.
  */
 
@@ -90,20 +92,40 @@
   --radius-xl: 20px;
   --radius-full: 999px;
 
-  /* ---- Shadows (soft, low contrast — dark surfaces rely on borders more) ------------- */
+  /* ---- Shadows (soft, low contrast; no glows — surfaces are flat and rely on borders) -- */
   --shadow-1: 0 1px 2px rgb(0 0 0 / 30%);
   --shadow-2: 0 4px 12px rgb(0 0 0 / 35%), 0 1px 2px rgb(0 0 0 / 30%);
   --shadow-3: 0 16px 40px rgb(0 0 0 / 45%), 0 2px 6px rgb(0 0 0 / 30%);
-  --shadow-glow: 0 0 0 1px var(--color-accent-ring), 0 8px 32px rgb(25 198 181 / 10%);
 
-  /* ---- Motion ------------------------------------------------------------------------ */
-  --motion-fast: 120ms;
-  --motion-base: 200ms;
-  --motion-slow: 360ms;
-  --motion-ambient: 2400ms;
+  /* ---- Motion ------------------------------------------------------------------------
+   * Four durations and four easings; nothing else. Animate only transform, opacity and
+   * clip-path (compositor properties) so lists stay at 60 fps.
+   *   --dur-1  micro: hover, press, colour, a label crossfade
+   *   --dur-2  enter/leave of a row, a pill morph, a tooltip
+   *   --dur-3  a drawer, a dialog, a stat tile
+   *   --dur-4  one-off reveals: a completed bar filling, a path drawing in
+   * Ambient loops (sheen, shimmer, pulse) use --dur-ambient and stop under reduced motion.
+   */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 600ms;
+  --dur-ambient: 2400ms;
+  /* Opacity-only fades keep this length under reduced motion (never more than 100 ms). */
+  --dur-fade: 80ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-emphasized-out: cubic-bezier(0.05, 0.7, 0.1, 1);  /* things arriving   */
+  --ease-emphasized-in: cubic-bezier(0.3, 0, 0.8, 0.15);   /* things leaving    */
+  --ease-overshoot: cubic-bezier(0.3, 1.12, 0.5, 1);       /* a barely-there settle; the pill only */
+  /* Legacy aliases (older rules); new code uses --dur-* and the easings above. */
+  --motion-fast: var(--dur-1);
+  --motion-base: var(--dur-2);
+  --motion-slow: var(--dur-3);
+  --motion-ambient: var(--dur-ambient);
+  --ease-emphasized: var(--ease-emphasized-out);
+  --ease-out: var(--ease-emphasized-out);
+  /* Orchestrated first paint: shell parts and the first rows arrive this far apart. */
+  --stagger-step: 20ms;
 
   /* ---- Z-index ----------------------------------------------------------------------- */
   --z-base: 0;
@@ -188,7 +210,6 @@
   --shadow-1: 0 1px 2px rgb(16 24 32 / 8%);
   --shadow-2: 0 4px 12px rgb(16 24 32 / 10%), 0 1px 2px rgb(16 24 32 / 6%);
   --shadow-3: 0 16px 40px rgb(16 24 32 / 14%), 0 2px 6px rgb(16 24 32 / 8%);
-  --shadow-glow: 0 0 0 1px var(--color-accent-ring), 0 8px 32px rgb(15 154 140 / 12%);
 
   --state-queued: #5f7384;
   --state-queued-soft: rgb(95 115 132 / 12%);
@@ -205,13 +226,25 @@
   --flow-fill-done: color-mix(in srgb, var(--color-accent-dark) 70%, var(--color-success));
 }
 
-/* ---- Reduced motion: every duration collapses to zero ----------------------------------- */
+/* ---- Reduced motion ---------------------------------------------------------------------
+ * Every movement collapses to zero: slides, scales, draws and staggers become instant.
+ * Opacity-only fades keep --dur-fade (80 ms) so state changes are still perceivable without
+ * anything travelling across the screen. Ambient loops are switched off in their components.
+ */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --motion-fast: 0ms;
-    --motion-base: 0ms;
-    --motion-slow: 0ms;
-    --motion-ambient: 0ms;
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-4: 0ms;
+    --dur-ambient: 0ms;
+    --stagger-step: 0ms;
+  }
+
+  .motion-ambient,
+  .motion-ambient::before,
+  .motion-ambient::after {
+    animation: none !important;
   }
 }
 
