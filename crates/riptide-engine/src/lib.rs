@@ -11,15 +11,36 @@
 //!
 //! Crash recovery: on `open`, downloads left in an active state by a previous process are put
 //! back in the queue along legal arrows and resume from their checkpoints (hard rule 2).
+//!
+//! # Files: categories, duplicates, restart, disk space
+//!
+//! * **Category folders.** Every download gets a [`riptide_core::Category`] from its file name
+//!   (`category_id` on the record). A request without a `dir` lands in
+//!   [`EngineSettings::category_dirs`]`[category]` when the user set one, else in
+//!   `default_dir`; the folder is re-resolved once after the probe, because the server's
+//!   `Content-Disposition` name may change the category. A request *with* a `dir` is never
+//!   moved.
+//! * **Duplicates.** [`Engine::find_duplicate`] finds a record with the same URL (fragment
+//!   ignored) or the same name in the same folder, so a UI can ask before adding twice. Adding
+//!   anyway is allowed: the on-disk name is made unique (`name (1).ext`).
+//! * **Restart from zero.** [`Engine::restart`] stops the transfer, deletes the part file (and
+//!   a finished file the engine wrote), forgets validators, size and segments, and puts the
+//!   record back in the queue (or leaves it paused). A record that had reached a terminal
+//!   state is reborn in place and announced with [`Event::Added`] again.
+//! * **Disk space.** [`free_space`] reports the bytes available on the volume of a folder,
+//!   even one that does not exist yet.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
-#![forbid(unsafe_code)]
+// `deny`, not `forbid`: `disk::sys` on Windows is one documented Win32 call.
+#![deny(unsafe_code)]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
-use riptide_core::{Download, DownloadId, DownloadRequest, DownloadState, Event, Secrets, Segment};
+use riptide_core::{
+    Category, Download, DownloadId, DownloadRequest, DownloadState, Event, Secrets, Segment,
+};
 use riptide_net::{
     build_client, part_path_for, probe, transfer, ClientOptions, HostLimiter, Outcome,
     RequestContext, TransferConfig, TransferEvent, TransferPlan,
@@ -29,6 +50,12 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, Notify};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use url::Url;
+
+pub mod disk;
+
+pub use disk::free_space;
+pub use riptide_net::parse_http_url;
 
 /// Errors from the runtime.
 #[derive(Debug, thiserror::Error)]
@@ -73,6 +100,11 @@ pub struct EngineSettings {
     pub max_active: u32,
     /// `User-Agent` for requests that do not carry a browser's.
     pub user_agent: Option<String>,
+    /// Folder per category key (`"video"`, `"documents"`, … — see
+    /// [`riptide_core::Category::key`]). A missing or empty entry means `default_dir`.
+    /// Only absolute paths under known keys survive [`Engine::set_settings`].
+    #[serde(default)]
+    pub category_dirs: BTreeMap<String, String>,
 }
 
 impl EngineSettings {
@@ -87,10 +119,33 @@ impl EngineSettings {
         }
     }
 
+    /// Where a download of `category` goes when the request names no folder: the category's
+    /// folder if one is set, else `default_dir`.
+    pub fn dir_for(&self, category: Category) -> PathBuf {
+        self.category_dirs
+            .get(category.key())
+            .filter(|d| !d.trim().is_empty())
+            .map(|d| PathBuf::from(d.trim()))
+            .unwrap_or_else(|| PathBuf::from(&self.default_dir))
+    }
+
     fn sanitized(mut self) -> Self {
         self.connections = self.connections.clamp(1, riptide_core::MAX_CONNECTIONS);
         self.per_host = self.per_host.clamp(1, 64);
         self.max_active = self.max_active.clamp(1, 32);
+        // unknown keys, blanks and relative paths are dropped: a category folder is either a
+        // real absolute folder or "use the default"
+        self.category_dirs = self
+            .category_dirs
+            .into_iter()
+            .filter_map(|(key, dir)| {
+                let dir = dir.trim();
+                (Category::from_key(&key).is_some()
+                    && !dir.is_empty()
+                    && Path::new(dir).is_absolute())
+                .then(|| (key, dir.to_owned()))
+            })
+            .collect();
         self
     }
 }
@@ -103,6 +158,7 @@ impl Default for EngineSettings {
             per_host: 8,
             max_active: 3,
             user_agent: None,
+            category_dirs: BTreeMap::new(),
         }
     }
 }
@@ -143,7 +199,21 @@ enum StopReason {
     Cancel,
     Remove,
     Shutdown,
+    /// `restart` takes over once the task has stopped; the task itself leaves the state alone.
+    Restart,
 }
+
+/// Per-download flags kept in the `settings` table (the record has no columns for them).
+fn flag_key(id: DownloadId, flag: &str) -> String {
+    format!("download.{}.{flag}", id.0)
+}
+
+/// The user chose the file name; the probe must not override it.
+const FLAG_EXPLICIT_NAME: &str = "explicit_name";
+/// The category came from the file name, not the request; it follows the probed name.
+const FLAG_AUTO_CATEGORY: &str = "auto_category";
+/// The folder came from the category, not the request; it follows the category.
+const FLAG_AUTO_DIR: &str = "auto_dir";
 
 struct Running {
     stop: CancellationToken,
@@ -188,6 +258,25 @@ fn now_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+/// Row id of `category` in the store's `categories` table (`None` if the seed lacks it).
+fn category_row_id(
+    store: &Store,
+    category: Category,
+) -> riptide_store::Result<Option<riptide_core::CategoryId>> {
+    Ok(store
+        .categories()?
+        .into_iter()
+        .find(|c| c.key == category.key())
+        .map(|c| c.id))
+}
+
+/// `url` without its fragment, for duplicate comparison; `None` if it does not parse.
+fn comparable_url(url: &str) -> Option<String> {
+    let mut parsed = Url::parse(url).ok()?;
+    parsed.set_fragment(None);
+    Some(parsed.into())
 }
 
 impl Engine {
@@ -339,10 +428,15 @@ impl Engine {
             .unwrap_or_else(|| {
                 riptide_core::sanitize_filename(&riptide_net::probe::filename_from_url(&url))
             });
+        // folder: the request's, else the category's (by extension), else the default; the
+        // folder of an explicit category is resolved below, where its key can be looked up
+        let category = Category::from_filename(&filename);
+        let auto_dir = request.dir.is_none();
+        let auto_category = request.category_id.is_none();
         let dir = request
             .dir
             .clone()
-            .unwrap_or_else(|| PathBuf::from(&settings.default_dir));
+            .unwrap_or_else(|| settings.dir_for(category));
         let mut d = Download::new(
             DownloadId(0),
             request.url.clone(),
@@ -374,13 +468,30 @@ impl Engine {
         let explicit_name = request.filename.is_some();
 
         let id = db(&self.inner.store, move |s| {
+            match d.category_id {
+                None => d.category_id = category_row_id(s, category)?,
+                Some(explicit) if auto_dir => {
+                    let row = s.categories()?.into_iter().find(|c| c.id == explicit);
+                    if let Some(c) = row.and_then(|c| Category::from_key(&c.key)) {
+                        d.dir = settings.dir_for(c);
+                    }
+                }
+                Some(_) => {}
+            }
             let id = s.insert_download(&d)?;
             if !secrets.is_empty() {
                 s.set_secrets(id, &secrets)?;
             }
-            // remember whether the user chose the name, so the probe does not override it
-            if explicit_name {
-                s.set_setting(&format!("download.{}.explicit_name", id.0), "1")?;
+            // what the request left to the engine is remembered, so the probe (which may
+            // rename the file) can re-decide it; what the user chose is never overridden
+            for (flag, set) in [
+                (FLAG_EXPLICIT_NAME, explicit_name),
+                (FLAG_AUTO_CATEGORY, auto_category),
+                (FLAG_AUTO_DIR, auto_dir),
+            ] {
+                if set {
+                    s.set_setting(&flag_key(id, flag), "1")?;
+                }
             }
             Ok(id)
         })
@@ -442,11 +553,136 @@ impl Engine {
         }
         db(&self.inner.store, move |s| {
             s.remove_download(id)?;
-            s.set_setting(&format!("download.{}.explicit_name", id.0), "")?;
+            for flag in [FLAG_EXPLICIT_NAME, FLAG_AUTO_CATEGORY, FLAG_AUTO_DIR] {
+                s.set_setting(&flag_key(id, flag), "")?;
+            }
             Ok(())
         })
         .await?;
         self.emit(Event::Removed { id });
+        self.inner.wake.notify_one();
+        Ok(())
+    }
+
+    /// A record that would be a duplicate of a new request: same URL (fragment ignored, the
+    /// original or the final one), or the same file name in the same folder. `filename` and
+    /// `dir` default to what [`Engine::add`] would choose. The most recently added match wins;
+    /// `None` when the list has nothing like it.
+    pub async fn find_duplicate(
+        &self,
+        url: &Url,
+        filename: Option<&str>,
+        dir: Option<&Path>,
+    ) -> Result<Option<Download>> {
+        let mut wanted = url.clone();
+        wanted.set_fragment(None);
+        let wanted: String = wanted.into();
+        let filename = filename
+            .map(riptide_core::sanitize_filename)
+            .unwrap_or_else(|| {
+                riptide_core::sanitize_filename(&riptide_net::probe::filename_from_url(url))
+            });
+        let dir = dir
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.settings().dir_for(Category::from_filename(&filename)));
+        let all = self.list().await?;
+        Ok(all.into_iter().rev().find(|d| {
+            comparable_url(&d.url).as_deref() == Some(wanted.as_str())
+                || d.final_url.as_deref().and_then(comparable_url).as_deref()
+                    == Some(wanted.as_str())
+                || (d.filename == filename && d.dir == dir)
+        }))
+    }
+
+    /// Starts a download over from byte zero: stops it if it is running, deletes the part
+    /// file (and the finished file when the record is `Completed` / `Failed` and the file is
+    /// the one the engine wrote), forgets validators, size, checksum and segments, and puts
+    /// the record in `Queued` — or leaves it `Paused` if it was paused.
+    ///
+    /// Events: the real transitions (`Paused`, `Queued`) as [`Event::StateChanged`]; when the
+    /// state does not change (it was `Paused` or `Queued`) or the record is reborn from a
+    /// terminal state, [`Event::Added`] is emitted again so listeners re-read the record.
+    pub async fn restart(&self, id: DownloadId) -> Result<()> {
+        if let Some(running) = self.take_running(id, StopReason::Restart) {
+            running.stop.cancel();
+            let _ = running.task.await;
+        }
+        let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        let was_paused = before.state == DownloadState::Paused;
+
+        // 1. leave the active states along legal arrows (the task has already stopped)
+        match before.state {
+            DownloadState::Probing | DownloadState::Downloading => {
+                self.transition(id, DownloadState::Paused, None).await?;
+            }
+            DownloadState::Verifying => {
+                self.transition(
+                    id,
+                    DownloadState::Failed { retryable: true },
+                    Some("restarted while verifying".into()),
+                )
+                .await?;
+            }
+            _ => {}
+        }
+
+        // 2. the record: nothing learned from the server survives; segments go. This lands
+        //    before the files are touched: a crash in between leaves a stale part file that
+        //    the next start truncates, never segments that claim bytes a deleted file had.
+        let mut fresh = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        let reborn = fresh.state.is_terminal();
+        fresh.final_url = None;
+        fresh.size = None;
+        fresh.supports_ranges = false;
+        fresh.etag = None;
+        fresh.last_modified = None;
+        fresh.content_type = None;
+        fresh.checksum_actual = None;
+        fresh.error = None;
+        fresh.started_at = None;
+        fresh.completed_at = None;
+        if reborn {
+            fresh.state = if was_paused {
+                DownloadState::Paused
+            } else {
+                DownloadState::Queued
+            };
+        }
+        let to_save = fresh.clone();
+        db(&self.inner.store, move |s| {
+            s.update_download(&to_save)?;
+            s.replace_segments(id, &[])
+        })
+        .await?;
+
+        // 3. the files: the part file always; the finished file only if it is ours (the
+        //    engine renamed it there and, when the size is known, it still has that size)
+        let final_path = before.final_path();
+        let _ = std::fs::remove_file(part_path_for(&final_path));
+        let ours = matches!(
+            before.state,
+            DownloadState::Completed | DownloadState::Failed { .. }
+        ) && match std::fs::metadata(&final_path) {
+            Ok(meta) => {
+                before.size.is_none_or(|s| s == meta.len())
+                    && (before.state == DownloadState::Completed || before.size.is_some())
+            }
+            Err(_) => false,
+        };
+        if ours {
+            std::fs::remove_file(&final_path)?;
+        }
+
+        // 4. back in the queue (unless it was paused)
+        match fresh.state {
+            DownloadState::Paused if !was_paused => {
+                self.transition(id, DownloadState::Queued, None).await?;
+            }
+            DownloadState::Failed { .. } => {
+                self.transition(id, DownloadState::Queued, None).await?;
+            }
+            _ => self.emit(Event::Added { id }),
+        }
         self.inner.wake.notify_one();
         Ok(())
     }
@@ -648,11 +884,17 @@ impl Engine {
     ) -> Result<()> {
         let store = &self.inner.store;
         let secrets = db(store, move |s| s.secrets(id)).await?.unwrap_or_default();
-        let explicit_name = db(store, move |s| {
-            s.setting(&format!("download.{}.explicit_name", id.0))
+        let (explicit_name, auto_category, auto_dir) = db(store, move |s| {
+            let flag = |name: &str| -> riptide_store::Result<bool> {
+                Ok(s.setting(&flag_key(id, name))?.is_some_and(|v| v == "1"))
+            };
+            Ok((
+                flag(FLAG_EXPLICIT_NAME)?,
+                flag(FLAG_AUTO_CATEGORY)?,
+                flag(FLAG_AUTO_DIR)?,
+            ))
         })
-        .await?
-        .is_some_and(|v| v == "1");
+        .await?;
 
         self.transition(id, DownloadState::Probing, None).await?;
         // read the record *after* the transition: `update_download` below writes every column,
@@ -683,6 +925,17 @@ impl Engine {
         record.content_type = probed.content_type.clone();
         if !explicit_name && segments.is_empty() {
             record.filename = probed.filename.clone();
+            // the server's name decides the category; a category-chosen folder follows it
+            if auto_category {
+                let category = Category::from_filename(&record.filename);
+                let category_id = db(store, move |s| category_row_id(s, category)).await?;
+                if category_id.is_some() {
+                    record.category_id = category_id;
+                }
+                if auto_dir {
+                    record.dir = self.settings().dir_for(category);
+                }
+            }
         }
         if segments.is_empty() {
             // a fresh start must not clobber a file that is already there
@@ -843,8 +1096,9 @@ impl Engine {
                     self.transition(id, DownloadState::Cancelled, None).await?;
                 }
             }
-            // the record is removed by `remove`, or left as-is for the next start
-            StopReason::Remove | StopReason::Shutdown => {}
+            // the record is removed by `remove`, reset by `restart`, or left as-is for the
+            // next start
+            StopReason::Remove | StopReason::Shutdown | StopReason::Restart => {}
         }
         Ok(())
     }
