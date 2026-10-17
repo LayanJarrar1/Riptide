@@ -8,9 +8,11 @@
 //! * [`DownloadState`] — the state machine with its exhaustive transition table.
 //! * [`segment::plan_segments`] / [`segment::split_segment`] — the segment planner.
 //! * [`Event`] — what the engine emits to whoever is listening.
+//! * [`Category`] — file categories by extension, shared with the store seed and the UI.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
 
+pub mod category;
 pub mod download;
 pub mod error;
 pub mod event;
@@ -19,6 +21,7 @@ pub mod segment;
 pub mod state;
 pub mod throttle;
 
+pub use category::Category;
 pub use download::{
     CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadRequest,
     Priority, QueueId, Secrets, UnixMillis, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,

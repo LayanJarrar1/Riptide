@@ -753,6 +753,11 @@ mod tests {
         );
         assert!(cats[0].extensions.contains(&"zip".to_string()));
         assert!(cats[6].extensions.is_empty());
+        // the seed and `riptide_core::Category` are the same table (see category.rs)
+        for (row, category) in cats.iter().zip(riptide_core::Category::ALL) {
+            assert_eq!(row.key, category.key());
+            assert_eq!(row.extensions, category.extensions(), "{}", category.key());
+        }
     }
 
     #[test]
