@@ -19,9 +19,13 @@ export function isTheme(value: unknown): value is Theme {
   return value === 'system' || value === 'dark' || value === 'light';
 }
 
+/** What a fresh install gets: the light theme (`system` and `dark` remain a Settings choice). */
+export const DEFAULT_THEME: Theme = 'light';
+
 /**
  * Theme preference with live OS tracking. Writes `data-theme="dark|light"` on `<html>`,
- * which is the only selector tokens.css switches on.
+ * which is the only selector tokens.css switches on. Light by default; `system` follows the
+ * OS only when the user picks it.
  */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
@@ -58,6 +62,6 @@ export class ThemeService {
 
   private readSaved(): Theme {
     const saved = this.store.get(THEME_STORAGE_KEY);
-    return isTheme(saved) ? saved : 'system';
+    return isTheme(saved) ? saved : DEFAULT_THEME;
   }
 }

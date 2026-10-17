@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, signal, untracked } from '@angular/core';
 
 import { DownloadState, Segment } from '../model/download';
 
@@ -21,7 +21,9 @@ interface Piece {
  * component shows exactly the engine's segments rather than one averaged bar.
  *
  * Unknown size (no `Content-Length`) renders an indeterminate stream; paused and failed
- * downloads keep their fills but change hue; completed collapses to one full bar.
+ * downloads keep their fills but change hue; completed collapses to one full bar, which wipes
+ * in once with an ease the moment the download completes (not when a completed row is merely
+ * scrolled into view). Active pieces carry a slow sheen.
  */
 @Component({
   selector: 'app-progress-flow',
@@ -33,6 +35,8 @@ interface Piece {
     '[class.s-done]': 'state() === "completed" || state() === "verifying"',
     '[class.is-indeterminate]': 'indeterminate()',
     '[class.is-large]': 'large()',
+    '[class.is-completing]': 'completing()',
+    '(animationend)': 'completing.set(false)',
     role: 'progressbar',
     '[attr.aria-valuemin]': '0',
     '[attr.aria-valuemax]': '100',
@@ -40,7 +44,7 @@ interface Piece {
   },
   template: `
     @if (indeterminate()) {
-      <span class="track stream"><span class="pulse"></span></span>
+      <span class="track stream"><span class="pulse motion-ambient"></span></span>
     } @else {
       <span class="track">
         @for (p of pieces(); track p.key) {
@@ -52,7 +56,7 @@ interface Piece {
             [style.inset-inline-start.%]="p.left"
             [style.inline-size.%]="p.width"
           >
-            <span class="fill" [style.transform]="'scaleX(' + p.fill + ')'"></span>
+            <span class="fill motion-ambient" [style.transform]="'scaleX(' + p.fill + ')'"></span>
           </span>
         }
       </span>
@@ -95,7 +99,7 @@ interface Piece {
       background: var(--flow-fill);
       transform-origin: var(--origin, left center);
       /* progress only ever grows; the transition smooths the 250 ms engine ticks */
-      transition: transform 260ms linear, background-color var(--motion-base) var(--ease-standard);
+      transition: transform 260ms linear, background-color var(--dur-2) var(--ease-standard);
     }
 
     :host-context([dir='rtl']) .fill {
@@ -119,7 +123,8 @@ interface Piece {
       background: var(--state-completed);
     }
 
-    /* The current: a highlight drifting along active pieces, the only ambient motion in a row. */
+    /* The current: a faint highlight drifting slowly along each active piece — the one ambient
+       motion in a row, and the only sign besides the hue that this stripe is receiving bytes. */
     :host(.s-active) .p-active .fill::after {
       content: '';
       position: absolute;
@@ -127,15 +132,13 @@ interface Piece {
       background: linear-gradient(
         90deg,
         transparent 0%,
-        rgb(255 255 255 / 28%) 50%,
+        rgb(255 255 255 / 6%) 35%,
+        rgb(255 255 255 / 18%) 50%,
+        rgb(255 255 255 / 6%) 65%,
         transparent 100%
       );
       background-size: 200% 100%;
-      animation: current 1800ms linear infinite;
-    }
-
-    :host(.s-active) .p-active {
-      position: absolute;
+      animation: current var(--dur-ambient) linear infinite;
     }
 
     :host(.s-active) .p-active .fill {
@@ -150,6 +153,31 @@ interface Piece {
 
       to {
         background-position: calc(var(--dir-sign) * -200%) 0;
+      }
+    }
+
+    /* Completed: the single full bar wipes in once, start to end (mirrored in RTL). */
+    .piece {
+      --wipe-right: 100%;
+      --wipe-left: 0%;
+    }
+
+    :host-context([dir='rtl']) .piece {
+      --wipe-right: 0%;
+      --wipe-left: 100%;
+    }
+
+    :host(.is-completing) .piece {
+      animation: complete-wipe var(--dur-4) var(--ease-emphasized-out) both;
+    }
+
+    @keyframes complete-wipe {
+      from {
+        clip-path: inset(0 var(--wipe-right) 0 var(--wipe-left));
+      }
+
+      to {
+        clip-path: inset(0 0% 0 0%);
       }
     }
 
@@ -202,6 +230,11 @@ export class ProgressFlowComponent {
   /** 14px tall variant for the details drawer. */
   readonly large = input(false);
 
+  /** `true` while the completion wipe plays (only after a real transition to `completed`). */
+  protected readonly completing = signal(false);
+
+  private previousState: DownloadState | null = null;
+
   protected readonly indeterminate = computed(() => {
     const s = this.state();
     return (this.size() === null || this.size() === 0) && s !== 'completed';
@@ -245,4 +278,15 @@ export class ProgressFlowComponent {
     }
     return Math.round((written / size) * 100);
   });
+
+  constructor() {
+    effect(() => {
+      const state = this.state();
+      const previous = this.previousState;
+      this.previousState = state;
+      if (previous !== null && previous !== 'completed' && state === 'completed') {
+        untracked(() => this.completing.set(true));
+      }
+    });
+  }
 }

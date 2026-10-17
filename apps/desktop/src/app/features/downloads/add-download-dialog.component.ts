@@ -22,8 +22,8 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
 /**
  * Add a download. Paste a link and the preview fills in (name, size, resumable, category) while
- * you choose where it goes; the primary action reads "Add" until the probe answers, then
- * "Download" because now the app knows what it will fetch.
+ * you choose where it goes. The primary button shows a spinner and "Adding…" while the engine
+ * accepts the request, so a slow engine never looks like a dead button.
  */
 @Component({
   selector: 'app-add-download-dialog',
@@ -150,8 +150,8 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
       <ng-container dialogActions>
         <button appButton variant="ghost" type="button" (click)="close()">{{ i18n.t('action.cancel') }}</button>
-        <button appButton variant="primary" icon="download" type="button" [disabled]="!canSubmit()" (click)="submit()">
-          {{ i18n.t(startPaused() ? 'add.submitLater' : 'add.submit') }}
+        <button appButton variant="primary" icon="download" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
+          {{ i18n.t(submitting() ? 'add.submitting' : startPaused() ? 'add.submitLater' : 'add.submit') }}
         </button>
       </ng-container>
     </app-dialog>
@@ -295,12 +295,38 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       color: var(--color-danger);
     }
 
+    /* The probe's answer (and an error) reveals itself rather than popping into place. */
+    .help.is-error,
+    .help.preview {
+      animation: help-in var(--dur-2) var(--ease-emphasized-out) both;
+    }
+
+    @keyframes help-in {
+      from {
+        opacity: 0;
+        transform: translateY(-3px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
     .help.is-warning {
       color: var(--color-warning);
     }
 
     .preview {
       color: var(--color-text-secondary);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .help.is-error,
+      .help.preview {
+        animation-duration: var(--dur-fade);
+        transform: none;
+      }
     }
 
     .preview .ok {

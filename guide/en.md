@@ -3,8 +3,8 @@
 [العربية](ar.md)
 
 Riptide is a free, open-source download manager for Windows. This guide covers the current
-development build. There are no releases yet; to try it you build it from source (see
-[CONTRIBUTING.md](../CONTRIBUTING.md)).
+development build. Get the alpha preview (installer or portable zip) from
+[Releases](https://github.com/LayanJarrar1/Riptide/releases), or build it from source (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## Table of contents
 
@@ -154,9 +154,10 @@ Riptide needs no administrator rights for anything and writes nothing outside th
 
 ## Portable mode
 
-Create an empty folder named `data` next to `riptide-desktop.exe` (or `riptide.exe`). Riptide
-then keeps the database and logs there instead of `%LOCALAPPDATA%`, so the whole thing can live
-on a USB drive.
+The portable zip comes ready: it contains a file named `portable.txt` next to `Riptide.exe`.
+While that file is there, Riptide keeps the database and logs in a `data` folder next to the
+executable instead of `%LOCALAPPDATA%`, so the whole thing can live on a USB drive. Delete
+`portable.txt` to switch back to the installed location.
 
 ## Command line
 

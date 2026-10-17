@@ -1,4 +1,4 @@
-<div class="frame">
+<div class="frame" [class.is-booting]="ui.booting()">
   <header class="topbar">
     <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
       <span class="brand-mark" aria-hidden="true">
@@ -30,6 +30,7 @@
           type="button"
           class="search-clear"
           [attr.aria-label]="'search.clear' | t"
+          [attr.title]="'search.clear' | t"
           (click)="clearSearch()"
         ></button>
       }
@@ -67,9 +68,12 @@
         >
           <app-icon [name]="viewIcons[view]" [size]="16" />
           <span class="nav-text">{{ 'view.' + view | t }}</span>
-          <span class="nav-count num" [class.is-live]="view === 'active' && store.viewCounts().active > 0">
-            {{ format.int(store.viewCounts()[view]) }}
-          </span>
+          <span
+            class="nav-count num"
+            [class.is-live]="view === 'active' && store.viewCounts().active > 0"
+            [appTicker]="store.viewCounts()[view]"
+            [tickerFormat]="intFormat"
+          ></span>
         </button>
       }
     </div>
@@ -87,7 +91,7 @@
           >
             <app-icon [name]="categoryIcons[c]" [size]="16" />
             <span class="nav-text">{{ 'category.' + c | t }}</span>
-            <span class="nav-count num">{{ format.int(store.categoryCounts().get(c) ?? 0) }}</span>
+            <span class="nav-count num" [appTicker]="store.categoryCounts().get(c) ?? 0" [tickerFormat]="intFormat"></span>
           </button>
         }
       </div>
@@ -98,7 +102,7 @@
       <div class="nav-item is-static">
         <app-icon name="list" [size]="16" />
         <span class="nav-text">{{ 'queue.main' | t }}</span>
-        <span class="nav-count num">{{ format.int(store.totals().active) }}/{{ format.int(store.totals().maxActive) }}</span>
+        <span class="nav-count num"><span [appTicker]="store.totals().active" [tickerFormat]="intFormat"></span>/{{ format.int(store.totals().maxActive) }}</span>
       </div>
     </div>
 
@@ -117,8 +121,8 @@
 
   <footer class="statusbar">
     <div class="status-speed">
-      <span class="status-dot" [class.is-live]="store.totals().active > 0" aria-hidden="true"></span>
-      <span class="status-value num">{{ format.speed(store.totals().speedBps) }}</span>
+      <span class="status-dot motion-ambient" [class.is-live]="store.totals().active > 0" aria-hidden="true"></span>
+      <span class="status-value num" [appTicker]="store.totals().speedBps" [tickerFormat]="speedFormat"></span>
       <app-sparkline class="status-chart" [samples]="store.totals().history" [compact]="true" />
     </div>
     <span class="status-text">{{ statusText() }}</span>
@@ -127,8 +131,19 @@
     @if (tauri.appInfo(); as info) {
       <span class="status-version num">v{{ info.version }}</span>
     }
+    <button
+      type="button"
+      class="status-help"
+      [attr.aria-label]="'shortcuts.title' | t"
+      [attr.title]="'shortcuts.title' | t"
+      (click)="ui.toggleShortcuts()"
+    >
+      <app-icon name="keyboard" [size]="14" />
+      <kbd class="status-help-key" aria-hidden="true">?</kbd>
+    </button>
   </footer>
 </div>
 
 <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+<app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
 <app-toasts />

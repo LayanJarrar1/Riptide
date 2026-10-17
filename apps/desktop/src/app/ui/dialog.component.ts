@@ -17,7 +17,7 @@ import { ButtonComponent } from './button.component';
 /**
  * Modal dialog on the native `<dialog>` element: the browser gives us the top layer, focus
  * containment, Escape handling and an inert background for free. The panel scales in from
- * 97% on open; a click on the backdrop closes it.
+ * 96% with a fade on open; a click on the backdrop closes it.
  */
 @Component({
   selector: 'app-dialog',
@@ -61,27 +61,33 @@ import { ButtonComponent } from './button.component';
     }
 
     .dialog::backdrop {
-      background: rgb(4 8 10 / 55%);
-      backdrop-filter: blur(2px);
+      background: rgb(4 8 10 / 45%);
     }
 
     .dialog[open] {
-      animation: dialog-in var(--motion-slow) var(--ease-emphasized) both;
+      animation: dialog-in var(--dur-3) var(--ease-emphasized-out) both;
     }
 
     .dialog[open]::backdrop {
-      animation: backdrop-in var(--motion-base) var(--ease-standard) both;
+      animation: backdrop-in var(--dur-2) var(--ease-standard) both;
     }
 
     @keyframes dialog-in {
       from {
         opacity: 0;
-        transform: translateY(6px) scale(0.97);
+        transform: translateY(4px) scale(0.96);
       }
 
       to {
         opacity: 1;
         transform: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dialog[open] {
+        animation-duration: var(--dur-fade);
+        animation-name: backdrop-in;
       }
     }
 

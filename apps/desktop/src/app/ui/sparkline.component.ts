@@ -33,8 +33,8 @@ import { I18nService } from '../i18n/i18n.service';
           <stop offset="1" stop-color="var(--color-accent)" stop-opacity="0" />
         </linearGradient>
       </defs>
-      <path class="area" [attr.d]="areaPath()" [attr.fill]="'url(#' + gradientId + ')'" />
-      <path class="line" [attr.d]="linePath()" />
+      <path class="area" [class.is-drawing]="draw()" [attr.d]="areaPath()" [attr.fill]="'url(#' + gradientId + ')'" />
+      <path class="line" [class.is-drawing]="draw()" pathLength="1" [attr.d]="linePath()" />
       @if (hover(); as h) {
         <line class="crosshair" [attr.x1]="h.x" [attr.x2]="h.x" y1="0" [attr.y2]="height()" />
         <circle class="dot" [attr.cx]="h.x" [attr.cy]="h.y" r="3.5" />
@@ -75,6 +75,42 @@ import { I18nService } from '../i18n/i18n.service';
       stroke-linejoin: round;
       stroke-linecap: round;
       vector-effect: non-scaling-stroke;
+    }
+
+    /* The detail chart draws its line from the oldest sample to the newest, once, on open.
+       pathLength="1" normalises the dash so no measuring is needed; the path element persists
+       while samples roll in, so the animation never replays. */
+    .line.is-drawing {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      animation: line-draw var(--dur-4) var(--ease-standard) 100ms forwards;
+    }
+
+    .area.is-drawing {
+      animation: area-in var(--dur-4) var(--ease-standard) 300ms both;
+    }
+
+    @keyframes line-draw {
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+
+    @keyframes area-in {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .area.is-drawing {
+        animation-duration: var(--dur-fade);
+        animation-delay: 0ms;
+      }
     }
 
     .crosshair {
@@ -134,6 +170,9 @@ export class SparklineComponent {
 
   /** Status-bar size, no tooltip. */
   readonly compact = input(false);
+
+  /** Draws the line in once when the chart first appears (the details drawer sets it). */
+  readonly draw = input(false);
 
   protected readonly width = 240;
   protected readonly height = computed(() => (this.compact() ? 24 : 72));

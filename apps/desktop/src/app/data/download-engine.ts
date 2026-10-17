@@ -1,4 +1,4 @@
-import { Signal } from '@angular/core';
+import { Signal, signal } from '@angular/core';
 
 import { Download, DownloadRequest, ProbeResult } from '../model/download';
 
@@ -26,6 +26,12 @@ export abstract class DownloadEngine {
 
   /** How many downloads run at once (the Main queue's limit). */
   abstract readonly maxActive: Signal<number>;
+
+  /**
+   * `false` until the initial list is in; the page shows skeleton rows meanwhile so an empty
+   * state never flashes at start. Engines that have their list synchronously keep the default.
+   */
+  readonly loaded: Signal<boolean> = signal(true);
 
   /** One download by id. */
   abstract get(id: number): Download | undefined;
