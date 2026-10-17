@@ -1,0 +1,204 @@
+/* Riptide options page. Dark-first, logical properties so RTL needs no overrides. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0f12;
+  --surface-1: #10161b;
+  --surface-2: #161e25;
+  --surface-3: #1d272f;
+  --text: #e9eef2;
+  --text-2: #a9b5bf;
+  --muted: #6d7b87;
+  --border: rgb(255 255 255 / 8%);
+  --border-strong: rgb(255 255 255 / 14%);
+  --accent: #19c6b5;
+  --accent-light: #5ae0d1;
+  --on-accent: #06201d;
+  --success: #3ddc97;
+  --font: "Inter", "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--font);
+}
+
+:lang(ar) body,
+:lang(ar) input,
+:lang(ar) select,
+:lang(ar) textarea {
+  font-family: "IBM Plex Sans Arabic", "Inter", system-ui, "Segoe UI", sans-serif;
+}
+
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block-end: 24px;
+}
+
+.head h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.saved {
+  color: var(--success);
+  font-size: 13px;
+  opacity: 0;
+}
+
+.saved.show {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .saved {
+    transition: opacity 200ms ease;
+  }
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-block-end: 16px;
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+}
+
+.row {
+  display: block;
+  padding: 8px 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.field > label,
+.types legend {
+  display: block;
+  font-weight: 600;
+  margin-block-end: 6px;
+}
+
+.types {
+  border: 0;
+  margin: 0;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 16px;
+}
+
+.types legend {
+  padding: 0;
+  grid-column: 1 / -1;
+}
+
+.types .check {
+  padding: 4px 0;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+}
+
+.inline input {
+  width: 120px;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.inline select {
+  width: auto;
+}
+
+textarea {
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 1px;
+}
+
+.hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.about p {
+  margin: 4px 0;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-2);
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}

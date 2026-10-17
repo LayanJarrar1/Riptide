@@ -1,0 +1,11 @@
+{
+  "extName": { "message": "Riptide — مدير التنزيلات", "description": "Extension name" },
+  "extDescription": {
+    "message": "يسلّم تنزيلاتك إلى Riptide، مدير التنزيلات المجاني، تلقائيًا أو بنقرة واحدة.",
+    "description": "Extension description"
+  },
+  "actionTitle": { "message": "Riptide", "description": "Toolbar button title" },
+  "menuLink": { "message": "تنزيل عبر Riptide", "description": "Context menu on links and media" },
+  "menuAll": { "message": "تنزيل كل روابط هذه الصفحة عبر Riptide", "description": "Context menu on the page" },
+  "menuSelection": { "message": "تنزيل الروابط المحددة عبر Riptide", "description": "Context menu on a selection" }
+}
