@@ -36,7 +36,7 @@ export interface StatusReply {
   recent: RecentItem[];
   paused: boolean;
   rulesEnabled: boolean;
-  /** `false` when the host refused `list` (it forwards only ping/probe/add/refresh). */
+  /** `false` when the host refused `list` (an older host forwarded only ping/probe/add/refresh). */
   listAvailable: boolean;
 }
 

@@ -9,6 +9,8 @@
     "lint": "ng lint",
     "i18n:lint": "node scripts/i18n-lint.mjs",
     "tauri": "tauri",
+    "bundle": "tauri build --config src-tauri/tauri.bundle.conf.json",
+    "bundle:portable": "tauri build --no-bundle --config src-tauri/tauri.bundle.conf.json && node scripts/portable.mjs",
     "icons": "node scripts/make-icon.mjs src-tauri/app-icon.png && tauri icon src-tauri/app-icon.png"
   },
   "prettier": {

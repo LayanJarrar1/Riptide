@@ -28,8 +28,9 @@ impl Request {
     }
 }
 
-/// Request payloads. The first four (`ping`, `probe`, `add`, `refresh`) are the only ones the
-/// Native Messaging host forwards from the browser (hard rule 5); the rest are for the CLI.
+/// Request payloads. The first four (`ping`, `probe`, `add`, `refresh`) and the read-only `list`
+/// are the only ones the Native Messaging host (`riptide-host`) forwards from the browser (hard
+/// rule 5); the rest are for the CLI.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RequestBody {

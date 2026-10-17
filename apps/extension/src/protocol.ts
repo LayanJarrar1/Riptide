@@ -167,9 +167,9 @@ export type Event =
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Request payloads. The host forwards only `ping`, `probe`, `add` and `refresh` from the browser
- * (hard rule 5: the browser can only ask). The rest exist for the CLI; the extension may try
- * `list` and must cope with an `error` answer.
+ * Request payloads. The host forwards only `ping`, `probe`, `add`, `refresh` and the read-only
+ * `list` from the browser (hard rule 5: the browser can only ask). The rest exist for the CLI;
+ * the extension must still cope with an `error` answer to `list` (an older host).
  */
 export type RequestBody =
   | { type: 'ping' }
@@ -214,7 +214,7 @@ export const REQUEST_TYPES = [
 ] as const;
 
 /** The request types a browser is allowed to send through the Native Messaging host. */
-export const BROWSER_REQUEST_TYPES = ['ping', 'probe', 'add', 'refresh'] as const;
+export const BROWSER_REQUEST_TYPES = ['ping', 'probe', 'add', 'refresh', 'list'] as const;
 
 /** Client → server, with the correlation id flattened next to the body. */
 export type Request = { id: number } & RequestBody;

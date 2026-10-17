@@ -19,6 +19,7 @@
 //! | `disk_free` | `path` | free bytes on that folder's volume |
 //! | `open_file` / `show_in_folder` | `path` | – |
 //! | `pick_folder` | – | the chosen folder or `null` |
+//! | `integration_status` / `register_browser_host` / `unregister_browser_host` | – | `IntegrationStatus` |
 //!
 //! Commands live in their own module (not at the crate root) because Tauri's command macro
 //! both `#[macro_export]`s a helper macro and re-exports it with the function's visibility;
@@ -30,6 +31,8 @@ use riptide_core::{Download, DownloadId, DownloadRequest, Segment};
 use riptide_engine::{Engine, EngineSettings, ProbeInfo};
 use serde::Serialize;
 use tauri::State;
+
+use crate::integration::{self, platform_registry, IntegrationStatus, Layout, Registry};
 
 /// Milestone label embedded in the binary.
 pub const BUILD_MILESTONE: &str = "M1";
@@ -221,6 +224,41 @@ pub async fn pick_folder(app: tauri::AppHandle) -> CmdResult<Option<String>> {
             .await
             .map_err(err)?;
     Ok(picked.map(|p| p.to_string()))
+}
+
+/// Runs `op` on the registry of this platform off the async runtime; the "unsupported" status
+/// where there is none.
+async fn with_integration<F>(op: F) -> CmdResult<IntegrationStatus>
+where
+    F: FnOnce(&Layout, &mut dyn Registry) -> CmdResult<IntegrationStatus> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(mut registry) = platform_registry() else {
+            return Ok(IntegrationStatus::unsupported());
+        };
+        let layout = Layout::for_this_app()?;
+        op(&layout, registry.as_mut())
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Whether the browser host is registered (Settings → Integration).
+#[tauri::command]
+pub async fn integration_status() -> CmdResult<IntegrationStatus> {
+    with_integration(|layout, registry| Ok(integration::status(layout, registry))).await
+}
+
+/// Registers the Native Messaging host for Chrome, Edge and Firefox (per user, no elevation).
+#[tauri::command]
+pub async fn register_browser_host() -> CmdResult<IntegrationStatus> {
+    with_integration(integration::register).await
+}
+
+/// Removes the Native Messaging host registration and remembers that the user turned it off.
+#[tauri::command]
+pub async fn unregister_browser_host() -> CmdResult<IntegrationStatus> {
+    with_integration(integration::unregister).await
 }
 
 #[cfg(test)]

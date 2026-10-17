@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -27,7 +28,17 @@ tokio = { workspace = true }
 dirs = { workspace = true }
 riptide-core = { workspace = true }
 riptide-engine = { workspace = true }
+riptide-host = { workspace = true }
+riptide-ipc = { workspace = true }
 riptide-log = { workspace = true }
+riptide-net = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+# HKCU Native Messaging keys; a safe wrapper over the registry API (no `unsafe` in this crate)
+winreg = "0.56"
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

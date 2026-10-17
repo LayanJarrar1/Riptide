@@ -200,6 +200,7 @@
   "toast.engineError": "تعذّر على ريبتايد تنفيذ ذلك: {error}",
   "toast.browserOn": "تكامل المتصفح مفعّل",
   "toast.browserOff": "تكامل المتصفح معطّل",
+  "toast.browserFailed": "تعذّر تغيير تكامل المتصفح. التفاصيل في السجل.",
   "toast.upToDate": "ريبتايد محدّث إلى آخر إصدار",
   "toast.settingsReset": "أُعيدت الإعدادات إلى الوضع الافتراضي",
 
@@ -236,6 +237,7 @@
   "settings.browserDesc": "التقط التحميلات من كروم وإيدج وفايرفوكس. لا تحتاج صلاحيات مدير.",
   "settings.browserOn": "متصلة",
   "settings.browserOff": "غير مثبّتة",
+  "settings.browserNoHost": "جسر المتصفح مفقود؛ أعد تثبيت ريبتايد",
   "settings.browserInstall": "إعداد",
   "settings.browserRemove": "إيقاف",
   "settings.proxy": "الوكيل (Proxy)",

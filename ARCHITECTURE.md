@@ -41,8 +41,9 @@ contains download logic.
 | `riptide-ipc` | Length-prefixed JSON over a per-user named pipe (Windows) or Unix socket; message schema. | – |
 | `riptide-log` | `tracing` setup, daily rotating files, redaction layer, installed vs portable paths. | – |
 | `riptide-cli` | `riptide fetch`, `bench`, `ping`, `paths`. Bilingual help. | engine, net, log |
+| `riptide-host` | Native Messaging host `app.riptide.host` (`riptide-host.exe`): checks the calling extension id, accepts only `ping`/`probe`/`add`/`refresh`/`list`, forwards them to the app's pipe, starts the app on `ping`. | ipc, log |
 | `riptide-testserver` | An `axum` server with deterministic bytes and every failure mode the tests need. Dev only. | – |
-| `apps/desktop/src-tauri` | Tauri shell: hosts the engine, exposes commands, forwards events. | engine, log |
+| `apps/desktop/src-tauri` | Tauri shell: hosts the engine, exposes commands, forwards events, serves the IPC pipe, registers the browser host under `HKCU`. | engine, ipc, host, log |
 | `apps/desktop/src` | Angular UI. Knows nothing about HTTP or SQLite. | the Tauri bridge |
 | `apps/website` | The public site. Static, bilingual, built by a dependency-free Node script. | – |
 
