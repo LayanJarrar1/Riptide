@@ -56,8 +56,9 @@ the real engine. Opening <http://localhost:4200> in an ordinary browser also wor
 runs on a built-in simulation of the engine, which is handy for UI work and is what the unit
 tests use.
 
-The app keeps its data in `%LOCALAPPDATA%\Riptide` (database, logs). If a folder called `data`
-exists next to the executable, the app runs in portable mode and uses that instead.
+The app keeps its data in `%LOCALAPPDATA%\Riptide` (database, logs). If a file called
+`portable.txt` sits next to the executable, the app runs in portable mode and keeps everything in
+a `data` folder next to it instead.
 
 ## The gate: `scripts/check.ps1`
 

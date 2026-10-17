@@ -141,7 +141,7 @@ strings).
 | Finished file | `<folder>\<name>` (atomic rename; `name (1).ext` on conflict) |
 | Database | `%LOCALAPPDATA%\Riptide\riptide.sqlite` (+ `-wal`, `-shm`) |
 | Logs | `%LOCALAPPDATA%\Riptide\logs\riptide.<date>.log`, rotated daily |
-| Portable mode | a `data` folder next to the executable replaces `%LOCALAPPDATA%\Riptide` |
+| Portable mode | a `portable.txt` file next to the executable switches everything to `data\` next to it |
 
 ## Persistence
 
