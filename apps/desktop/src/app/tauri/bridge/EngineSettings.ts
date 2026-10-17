@@ -24,4 +24,10 @@ max_active: number,
 /**
  * `User-Agent` for requests that do not carry a browser's.
  */
-user_agent: string | null, };
+user_agent: string | null, 
+/**
+ * Folder per category key (`"video"`, `"documents"`, … — see
+ * [`riptide_core::Category::key`]). A missing or empty entry means `default_dir`.
+ * Only absolute paths under known keys survive [`Engine::set_settings`].
+ */
+category_dirs: { [key in string]?: string }, };

@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('SettingsService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1' };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' } };
   let calls: Call[];
 
   function configure(tauri: boolean): SettingsService {
@@ -56,6 +56,7 @@ describe('SettingsService', () => {
     expect(service.settings().defaultDir).toBe('D:\\Engine');
     expect(service.settings().connections).toBe(12);
     expect(service.settings().perHost).toBe(6);
+    expect(service.settings().categoryDirs).toEqual({ video: 'D:\\Engine\\Video' });
     expect(service.settings().closeToTray).toBe(DEFAULT_SETTINGS.closeToTray);
     await wait(20);
     await service.whenSynced();
@@ -75,7 +76,7 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect(writes[0].args).toEqual({
-      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: null },
+      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: null, category_dirs: { video: 'D:\\Engine\\Video' } },
     });
     // a UI-only change does not reach the engine
     service.patch({ closeToTray: false });
@@ -83,5 +84,14 @@ describe('SettingsService', () => {
     await wait(20);
     await service.whenSynced();
     expect(calls.filter((c) => c.cmd === 'set_engine_settings').length).toBe(1);
+    // a category folder is engine-owned too; clearing one drops its key
+    service.setCategoryDir('images', 'D:\\Pics');
+    service.setCategoryDir('video', null);
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const again = calls.filter((c) => c.cmd === 'set_engine_settings');
+    expect(again.length).toBe(2);
+    expect((again[1].args?.['settings'] as EngineSettings).category_dirs).toEqual({ images: 'D:\\Pics' });
   });
 });
