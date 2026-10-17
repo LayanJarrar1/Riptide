@@ -23,9 +23,9 @@ const DIST = join(here, 'dist');
 const REPO_URL = 'https://github.com/LayanJarrar1/Riptide';
 const REPO_SLUG = 'LayanJarrar1/Riptide';
 // The current pre-release. Bump these when a new build is published.
-const RELEASE_TAG = 'v0.1.0-alpha.1';
-const INSTALLER_FILE = 'Riptide_0.1.0_x64-setup.exe';
-const PORTABLE_FILE = 'riptide-0.1.0-alpha.1-windows-x64-portable.zip';
+const RELEASE_TAG = 'v0.1.0-alpha.2';
+const INSTALLER_FILE = 'Riptide_0.1.0-alpha.2_x64-setup.exe';
+const PORTABLE_FILE = 'riptide-0.1.0-alpha.2-windows-x64-portable.zip';
 const RELEASES_URL = `${REPO_URL}/releases`;
 const INSTALLER_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${INSTALLER_FILE}`;
 const PORTABLE_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${PORTABLE_FILE}`;
