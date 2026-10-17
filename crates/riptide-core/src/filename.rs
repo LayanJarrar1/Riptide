@@ -1,4 +1,4 @@
-//! File name sanitising (hard rule 3): nothing a server sends is ever used as a path.
+//! File name sanitising: nothing a server sends is ever used as a path.
 //!
 //! [`sanitize_filename`] turns any string into a name that is safe on Windows, macOS and Linux:
 //! last path component only, no control characters or reserved punctuation, no reserved device

@@ -1,9 +1,9 @@
 //! SQLite persistence for Riptide.
 //!
 //! One file, WAL journal, `busy_timeout`, foreign keys on. Every write is a transaction, so killing
-//! the process at any instant leaves a consistent database (hard rule 2). The schema is versioned
+//! the process at any instant leaves a consistent database. The schema is versioned
 //! and migrated forward by [`migrate`]; secrets live in their own table and are wiped when a
-//! download reaches a terminal state or is removed (hard rule 4).
+//! download reaches a terminal state or is removed.
 //!
 //! The crate is synchronous on purpose: callers on an async runtime wrap calls in
 //! `spawn_blocking` or own a dedicated thread.

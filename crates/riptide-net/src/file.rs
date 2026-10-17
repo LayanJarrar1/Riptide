@@ -1,5 +1,5 @@
 //! The `.rtpart` file: preallocated to the final size, written in place at segment offsets,
-//! renamed atomically when complete (hard rule 2).
+//! renamed atomically when complete.
 
 use std::fs::{File, OpenOptions};
 use std::io;

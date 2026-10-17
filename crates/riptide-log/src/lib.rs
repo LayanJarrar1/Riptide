@@ -3,7 +3,7 @@
 //! * [`init`] installs a `tracing` subscriber that writes daily-rotated files into the logs
 //!   directory and, optionally, to stderr. Every line passes through the redaction layer
 //!   ([`redact`]) so cookies, auth headers, tokens, passwords and URL query strings never reach
-//!   disk (hard rule 4).
+//!   disk.
 //! * [`Paths`] resolves where Riptide keeps its data: `%LOCALAPPDATA%\Riptide` (or the XDG data
 //!   dir), or `data/` next to the executable when a `portable.txt` marker exists.
 #![cfg_attr(test, allow(clippy::unwrap_used))]

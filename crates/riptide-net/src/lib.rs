@@ -1,5 +1,5 @@
 //! HTTP engine for Riptide: probe a URL, then fetch it over many connections into a
-//! preallocated `.rtpart` file with byte-exact resume (hard rules 1–4).
+//! preallocated `.rtpart` file with byte-exact resume.
 //!
 //! * [`probe()`] — `HEAD`/ranged `GET`: size, range support, validators, type, file name.
 //! * [`transfer()`] — the multi-connection transfer with work stealing, retries, checkpoints,
@@ -8,7 +8,7 @@
 //!   the download's own origin.
 //! * [`HostLimiter`] — per-host connection cap shared by every transfer.
 //!
-//! Everything here is UI-agnostic (hard rule 9): the owner of a download drives it, receives
+//! Everything here is UI-agnostic: the owner of a download drives it, receives
 //! [`TransferEvent`]s and persists the [`TransferEvent::Checkpoint`]s.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 // `deny`, not `forbid`: one `cfg(windows)` module (`file::sparse`) needs a single Win32 call.
@@ -58,12 +58,12 @@ pub struct ClientOptions {
     /// `User-Agent` override (a browser's, when the link came from the extension).
     pub user_agent: Option<String>,
     /// Skip TLS certificate verification for this client. Never a default; the UI shows a
-    /// warning when it is on (hard rule 3).
+    /// warning when it is on.
     pub accept_invalid_certs: bool,
 }
 
 /// Headers every request carries. `Accept-Encoding: identity` so `Content-Length` and `Range`
-/// mean bytes on disk (hard rule 3).
+/// mean bytes on disk.
 pub fn default_headers(user_agent: Option<&str>) -> HeaderMap {
     let mut h = HeaderMap::new();
     h.insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));

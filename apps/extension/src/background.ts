@@ -5,7 +5,7 @@
  * Native Messaging host, and degrades to the browser's own download on any failure. Also owns
  * the context menus, the toolbar badge, notifications and the internal message bus.
  *
- * Hard rule 5: nothing that comes from a page is executed or used as a path. The only things
+ * The browser can only ask: nothing that comes from a page is executed or used as a path. The only things
  * sent to the host are URLs, a suggested filename, the referrer, the user agent and the cookies
  * of that URL, inside the `add` schema.
  */

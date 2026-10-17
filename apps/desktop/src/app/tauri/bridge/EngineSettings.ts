@@ -18,7 +18,7 @@ connections: number,
  */
 per_host: number, 
 /**
- * Downloads running at once (the Main queue's limit; per-queue limits arrive in M3).
+ * Downloads running at once (the Main queue's limit; per-queue limits come later).
  */
 max_active: number, 
 /**

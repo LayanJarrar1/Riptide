@@ -337,7 +337,7 @@ pub async fn fetch(
         tx,
         stop.clone(),
         // public servers reset or throttle beyond ~8 parallel streams from one address
-        // (measured against a CDN test file, see docs/benchmarks.md); the setting arrives in M3
+        // (measured against a CDN test file); a setting comes later
         HostLimiter::new(8),
     )
     .await;

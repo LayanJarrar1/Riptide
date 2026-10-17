@@ -1,6 +1,6 @@
 /**
  * UI-side model of a download. Mirrors `riptide_core::Download` / `Segment` (camelCase here,
- * snake_case on the wire); the IPC mapping lands in M1 lane B. Until the engine is wired the
+ * snake_case on the wire); the IPC mapping lives in data/bridge-mapping.ts. Until the engine is wired the
  * `MockEngineService` produces these.
  */
 

@@ -19,7 +19,7 @@ module.exports = tseslint.config(
     ],
     processor: angular.processInlineTemplates,
     rules: {
-      // Project rules (CLAUDE.md): strict TypeScript, no `any`, standalone + OnPush everywhere.
+      // Project rules: strict TypeScript, no `any`, standalone + OnPush everywhere.
       "@typescript-eslint/no-explicit-any": "error",
       "@angular-eslint/prefer-standalone": "error",
       "@angular-eslint/prefer-on-push-component-change-detection": "error",

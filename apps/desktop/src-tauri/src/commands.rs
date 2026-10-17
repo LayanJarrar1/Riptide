@@ -1,10 +1,10 @@
 //! `#[tauri::command]`s the webview may invoke. Thin: every command is one engine call, errors
 //! become strings (already redacted), and nothing received here is used as a path except the
-//! folder the user picked in the app's own dialogs (hard rule 5 is about the browser bridge).
+//! folder the user picked in the app's own dialogs (the browser bridge has its own, stricter rules).
 //!
 //! | Command | Arguments | Answer |
 //! |---|---|---|
-//! | `app_info` | – | name, version, milestone |
+//! | `app_info` | – | name, version, build label |
 //! | `list_downloads` | – | every `Download` |
 //! | `get_download` | `id` | one `Download` or `null` |
 //! | `get_segments` | `id` | the download's `Segment`s |
@@ -34,8 +34,8 @@ use tauri::State;
 
 use crate::integration::{self, platform_registry, IntegrationStatus, Layout, Registry};
 
-/// Milestone label embedded in the binary.
-pub const BUILD_MILESTONE: &str = "M1";
+/// Build label embedded in the binary (`dev` for local builds).
+pub const BUILD_LABEL: &str = "dev";
 
 /// Product name shown in the window title and the About screen.
 pub const PRODUCT_NAME: &str = "Riptide";
@@ -54,17 +54,17 @@ pub struct AppInfo {
     pub name: &'static str,
     /// Crate version (`CARGO_PKG_VERSION`), inherited from the workspace.
     pub version: &'static str,
-    /// Milestone the binary was built from.
+    /// Build label of the binary.
     pub build: &'static str,
 }
 
-/// Returns the application's name, version and milestone.
+/// Returns the application's name, version and build label.
 #[tauri::command]
 pub fn app_info() -> AppInfo {
     AppInfo {
         name: PRODUCT_NAME,
         version: env!("CARGO_PKG_VERSION"),
-        build: BUILD_MILESTONE,
+        build: BUILD_LABEL,
     }
 }
 
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(info.name, "Riptide");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
         assert!(!info.version.is_empty());
-        assert_eq!(info.build, "M1");
+        assert_eq!(info.build, BUILD_LABEL);
     }
 
     #[test]
@@ -279,7 +279,7 @@ mod tests {
         let json = serde_json::to_value(app_info()).unwrap();
         assert_eq!(json["name"], "Riptide");
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(json["build"], "M1");
+        assert_eq!(json["build"], BUILD_LABEL);
         assert_eq!(json.as_object().unwrap().len(), 3);
     }
 }

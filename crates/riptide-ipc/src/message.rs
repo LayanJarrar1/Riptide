@@ -204,7 +204,7 @@ pub enum ErrorCode {
     NotFound,
     /// The state machine forbids it (for example resuming a completed download).
     IllegalTransition,
-    /// Not implemented in this build / milestone.
+    /// Not implemented in this build.
     Unsupported,
     /// Anything else; see `message`.
     Internal,

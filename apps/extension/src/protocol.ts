@@ -168,7 +168,7 @@ export type Event =
 
 /**
  * Request payloads. The host forwards only `ping`, `probe`, `add`, `refresh` and the read-only
- * `list` from the browser (hard rule 5: the browser can only ask). The rest exist for the CLI;
+ * `list` from the browser (the browser can only ask). The rest exist for the CLI;
  * the extension must still cope with an `error` answer to `list` (an older host).
  */
 export type RequestBody =

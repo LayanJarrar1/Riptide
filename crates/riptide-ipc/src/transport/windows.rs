@@ -275,7 +275,7 @@ impl Drop for SecurityDescriptor {
     }
 }
 
-/// The SDDL string used for the pipe DACL. Exposed for tests and `docs/ipc-protocol.md`.
+/// The SDDL string used for the pipe DACL. Exposed for tests.
 pub fn sddl_for_sid(sid: &str) -> String {
     format!("D:P(A;;GA;;;{sid})")
 }

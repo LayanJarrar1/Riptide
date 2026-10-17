@@ -1,4 +1,4 @@
-//! Redirect rules the engine follows by hand (hard rule 3): a hard cap, `303` turns into
+//! Redirect rules the engine follows by hand: a hard cap, `303` turns into
 //! `GET`, and credentials never cross an origin boundary.
 
 use reqwest::Method;
@@ -96,7 +96,7 @@ pub fn parse_http_url(raw: &str) -> Result<Url> {
     Ok(url)
 }
 
-/// URL without its query string, for logs and error messages (hard rule 4).
+/// URL without its query string, for logs and error messages.
 pub fn strip_query(raw: &str) -> String {
     match raw.find(['?', '#']) {
         Some(i) => format!("{}?[stripped]", &raw[..i]),

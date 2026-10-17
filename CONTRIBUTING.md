@@ -149,9 +149,8 @@ and keep the Arabic natural rather than literal.
   `area/short-description`, for example `net/digest-auth`, `desktop/details-drawer`,
   `site/faq`.
 - Commit messages follow `area(scope): what changed`, in the imperative, under 72 characters:
-  `net(transfer): split the largest remaining segment when a connection finishes`. The
-  maintainers' own commits carry an internal lane tag instead of an area (`m1b(desktop): …`);
-  either form is fine.
+  `net(transfer): split the largest remaining segment when a connection finishes`. Short
+  area tags such as `desktop(ui): …` are fine too.
 - Open a pull request against `main`. The template asks for three things: what changed, why,
   and how you verified it (the gate result, and a manual test note when a screen changed).
   Screenshots in both languages are expected for UI changes.

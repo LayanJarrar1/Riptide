@@ -1,4 +1,4 @@
-//! Arabic / English strings for the CLI (hard rule 8). Two tables with identical keys; a test
+//! Arabic / English strings for the CLI. Two tables with identical keys; a test
 //! keeps them in sync.
 
 /// Supported languages.
