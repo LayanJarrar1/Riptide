@@ -16,6 +16,57 @@
   color: var(--color-text);
 }
 
+/* ---- First paint: the frame assembles once, part by part, --stagger-step apart ---------- */
+.frame.is-booting .topbar {
+  animation: boot-down var(--dur-3) var(--ease-emphasized-out) both;
+}
+
+.frame.is-booting .sidebar {
+  animation: boot-start var(--dur-3) var(--ease-emphasized-out) both;
+  animation-delay: calc(1 * var(--stagger-step));
+}
+
+.frame.is-booting .statusbar {
+  animation: boot-up var(--dur-3) var(--ease-emphasized-out) both;
+  animation-delay: calc(3 * var(--stagger-step));
+}
+
+@keyframes boot-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes boot-start {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--dir-sign) * -8px));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes boot-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---- Top bar ------------------------------------------------------------------------- */
 .topbar {
   grid-area: topbar;
@@ -68,6 +119,11 @@
   inset-inline-start: 10px;
   color: var(--color-text-muted);
   pointer-events: none;
+  transition: color var(--dur-1) var(--ease-standard);
+}
+
+.search:focus-within .search-icon {
+  color: var(--color-accent-fg);
 }
 
 .search-input {
@@ -81,8 +137,8 @@
   font: inherit;
   font-size: var(--text-sm);
   transition:
-    border-color var(--motion-fast) var(--ease-standard),
-    box-shadow var(--motion-fast) var(--ease-standard);
+    border-color var(--dur-1) var(--ease-standard),
+    box-shadow var(--dur-2) var(--ease-standard);
 }
 
 .search-input::placeholder {
@@ -168,8 +224,8 @@
   text-decoration: none;
   cursor: pointer;
   transition:
-    background-color var(--motion-fast) var(--ease-standard),
-    color var(--motion-fast) var(--ease-standard);
+    background-color var(--dur-1) var(--ease-standard),
+    color var(--dur-1) var(--ease-standard);
 }
 
 .nav-item:hover:not(.is-static) {
@@ -205,6 +261,9 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   text-align: center;
+  transition:
+    background-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard);
 }
 
 .nav-count.is-live {
@@ -265,16 +324,39 @@
 }
 
 .status-dot {
+  position: relative;
   inline-size: 7px;
   block-size: 7px;
   border-radius: var(--radius-full);
   background: var(--color-text-muted);
-  transition: background-color var(--motion-base) var(--ease-standard);
+  transition: background-color var(--dur-2) var(--ease-standard);
 }
 
 .status-dot.is-live {
   background: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* A thin ring leaves the live dot every few seconds: bytes are moving. */
+.status-dot.is-live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--color-accent);
+  animation: ping var(--dur-ambient) var(--ease-standard) infinite;
+}
+
+@keyframes ping {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+
+  60%,
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
 }
 
 .status-value {
@@ -296,6 +378,36 @@
   color: var(--color-text-muted);
 }
 
+.status-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  block-size: 22px;
+  padding-inline: 6px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-standard),
+    color var(--dur-1) var(--ease-standard);
+}
+
+.status-help:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.status-help-key {
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 /* ---- Narrow windows: the sidebar collapses to icons ----------------------------------- */
 @media (max-width: 900px) {
   .frame,
@@ -308,7 +420,8 @@
   .nav-text,
   .nav-count,
   .nav-key,
-  .search-key {
+  .search-key,
+  .status-help-key {
     display: none;
   }
 
@@ -320,5 +433,29 @@
   .brand {
     justify-content: center;
     padding-inline: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame.is-booting .topbar,
+  .frame.is-booting .sidebar,
+  .frame.is-booting .statusbar {
+    animation-name: boot-fade;
+    animation-duration: var(--dur-fade);
+    animation-delay: 0ms;
+  }
+
+  @keyframes boot-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  .status-dot.is-live::after {
+    animation: none;
   }
 }

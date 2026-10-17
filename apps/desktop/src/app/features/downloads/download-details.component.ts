@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 
 import { FORMAT_PIPES } from '../../core/format.pipes';
 import { FormatService } from '../../core/format.service';
+import { TickerDirective } from '../../core/ticker.directive';
 import { DownloadRow } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
 import { canPause, canResume } from '../../model/download';
@@ -22,6 +23,10 @@ interface LogLine {
  * The details drawer: what is happening to one file, right now. Numbers first (downloaded,
  * speed, time left, connections), then the segment map and the speed line, then the facts
  * about the source and the destination, then the event log.
+ *
+ * On open the stat tiles arrive one after another, the sparkline draws its line in and every
+ * segment stripe grows to its width; the numbers tick rather than jump. Switching rows while
+ * the drawer is open keeps the instance, so none of that replays.
  */
 @Component({
   selector: 'app-download-details',
@@ -34,6 +39,7 @@ interface LogLine {
     SegmentMapComponent,
     SparklineComponent,
     StatusPillComponent,
+    TickerDirective,
   ],
   host: { role: 'complementary', '[attr.aria-label]': 'i18n.t("details.title")' },
   template: `
@@ -50,31 +56,32 @@ interface LogLine {
         [iconOnly]="true"
         type="button"
         [attr.aria-label]="i18n.t('action.close')"
+        [attr.title]="i18n.t('action.close')"
         (click)="closed.emit()"
       ></button>
     </header>
 
     <div class="scroll">
       <section class="numbers" [attr.aria-label]="i18n.t('details.progress')">
-        <div class="stat">
-          <span class="stat-value num">{{ row().downloaded | bytes }}</span>
+        <div class="stat" style="--i: 0">
+          <span class="stat-value num" [appTicker]="row().downloaded" [tickerFormat]="bytesFormat"></span>
           <span class="stat-label">{{ i18n.t('details.of') }} {{ d().size | bytes }}</span>
         </div>
-        <div class="stat">
-          <span class="stat-value num">{{ d().speedBps | speed }}</span>
+        <div class="stat" style="--i: 1">
+          <span class="stat-value num" [appTicker]="d().speedBps" [tickerFormat]="speedFormat"></span>
           <span class="stat-label">{{ i18n.t('column.speed') }}</span>
         </div>
-        <div class="stat">
+        <div class="stat" style="--i: 2">
           <span class="stat-value num">{{ row().eta | duration }}</span>
           <span class="stat-label">{{ i18n.t('column.eta') }}</span>
         </div>
-        <div class="stat">
+        <div class="stat" style="--i: 3">
           <span class="stat-value num">{{ activeConnections() }}<span class="stat-dim">/{{ d().connections }}</span></span>
           <span class="stat-label">{{ i18n.t('details.connections') }}</span>
         </div>
       </section>
 
-      <section class="block">
+      <section class="block" style="--i: 4">
         <div class="block-head">
           <h3 class="block-title">{{ i18n.t('details.segments') }}</h3>
           <span class="block-meta num">{{ segmentSummary() }}</span>
@@ -86,28 +93,28 @@ interface LogLine {
         <p class="hint">{{ i18n.t(d().supportsRanges ? 'details.rangesYes' : 'details.rangesNo') }}</p>
       </section>
 
-      <section class="block">
+      <section class="block" style="--i: 5">
         <div class="block-head">
           <h3 class="block-title">{{ i18n.t('details.speedChart') }}</h3>
           <span class="block-meta num">{{ i18n.t('details.peak') }} {{ peak() | speed }}</span>
         </div>
-        <app-sparkline [samples]="d().speedHistory" />
+        <app-sparkline [samples]="d().speedHistory" [draw]="true" />
       </section>
 
-      <section class="block facts">
+      <section class="block facts" style="--i: 6">
         <h3 class="block-title">{{ i18n.t('details.source') }}</h3>
         <dl class="fact-list">
           <dt>{{ i18n.t('details.url') }}</dt>
           <dd class="fact-url">
             <span dir="ltr" class="truncate" [attr.title]="d().url">{{ d().url }}</span>
-            <button appButton size="sm" variant="ghost" icon="copy" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.copyLink')" (click)="action.emit('copyLink')"></button>
+            <button appButton size="sm" variant="ghost" icon="copy" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.copyLink')" [attr.title]="i18n.t('action.copyLink')" (click)="action.emit('copyLink')"></button>
           </dd>
           <dt>{{ i18n.t('details.server') }}</dt>
           <dd dir="ltr">{{ host() }}</dd>
           <dt>{{ i18n.t('details.saveTo') }}</dt>
           <dd class="fact-url">
             <span dir="ltr" class="truncate" [attr.title]="d().dir">{{ d().dir }}</span>
-            <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" (click)="action.emit('openFolder')"></button>
+            <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" [attr.title]="i18n.t('action.openFolder')" (click)="action.emit('openFolder')"></button>
           </dd>
           <dt>{{ i18n.t('details.checksum') }}</dt>
           <dd>
@@ -129,7 +136,7 @@ interface LogLine {
         </dl>
       </section>
 
-      <section class="block">
+      <section class="block" style="--i: 7">
         <h3 class="block-title">{{ i18n.t('details.log') }}</h3>
         <ol class="log">
           @for (line of log(); track line.at + line.text) {
@@ -225,6 +232,25 @@ interface LogLine {
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
       background: var(--color-surface-2);
+    }
+
+    /* Open: tiles, then the blocks below, each a beat after the previous one. */
+    .stat,
+    .block {
+      animation: tile-in var(--dur-3) var(--ease-emphasized-out) both;
+      animation-delay: calc(80ms + var(--i, 0) * 45ms);
+    }
+
+    @keyframes tile-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
     }
 
     .stat-value {
@@ -372,6 +398,25 @@ interface LogLine {
     .spacer {
       flex: 1;
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stat,
+      .block {
+        animation-duration: var(--dur-fade);
+        animation-delay: 0ms;
+        animation-name: tile-fade;
+      }
+
+      @keyframes tile-fade {
+        from {
+          opacity: 0;
+        }
+
+        to {
+          opacity: 1;
+        }
+      }
+    }
   `,
 })
 export class DownloadDetailsComponent {
@@ -389,6 +434,10 @@ export class DownloadDetailsComponent {
   protected readonly host = computed(() => hostOf(this.d().url));
   protected readonly activeConnections = computed(() => this.d().segments.filter((s) => s.state === 'active').length);
   protected readonly peak = computed(() => Math.max(0, ...this.d().speedHistory));
+
+  /** Stable formatters for the tickers (they follow the language through the service). */
+  protected readonly bytesFormat = (n: number): string => this.format.bytes(n);
+  protected readonly speedFormat = (n: number): string => this.format.speed(n);
 
   protected readonly segmentSummary = computed(() => {
     const segs = this.d().segments;

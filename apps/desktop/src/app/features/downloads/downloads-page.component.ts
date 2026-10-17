@@ -4,13 +4,16 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 
 import { FormatService } from '../../core/format.service';
+import { DUR, MotionService } from '../../core/motion.service';
 import { finalPath } from '../../data/bridge-mapping';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow, DownloadsStore, SortKey } from '../../data/downloads.store';
@@ -19,7 +22,7 @@ import { canPause, canResume, Download } from '../../model/download';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
-import { EmptyStateComponent } from '../../ui/empty-state.component';
+import { EmptyStateComponent, EmptyStep } from '../../ui/empty-state.component';
 import { IconComponent } from '../../ui/icon.component';
 import { MenuComponent, MenuItem } from '../../ui/menu.component';
 import { ToastService } from '../../ui/toast.service';
@@ -47,11 +50,22 @@ const COLUMNS: readonly Column[] = [
 const ROW_HEIGHT = 46;
 /** Rows rendered above and below the viewport so fast scrolling never shows a gap. */
 const OVERSCAN = 6;
+/** How many rows take part in the first-paint cascade. */
+const STAGGER_ROWS = 12;
+/** Skeleton rows shown while the engine's list is still loading. */
+const SKELETON_ROWS = [0, 1, 2, 3, 4, 5] as const;
+/** A row added during the session counts as "fresh" (slides in) for this long. */
+const FRESH_MS = 600;
 
 /**
  * The main screen: toolbar, sortable header, a virtual-scrolled grid of rows, the details
  * drawer, the row context menu and the confirmation for removal. Keyboard: ↑/↓ move the
  * selection, Enter opens details, Space pauses/resumes, Delete removes, Escape clears.
+ *
+ * Loading: while the engine has not delivered its list, six skeleton rows shimmer in place of
+ * the table, so "Nothing here yet" never flashes at start. Motion: the first rows cascade in
+ * once on boot; a changed view, filter, search or sort crossfades the list; rows removed by
+ * the user fade and collapse before the engine is asked to drop them.
  */
 @Component({
   selector: 'app-downloads-page',
@@ -71,7 +85,7 @@ const OVERSCAN = 6;
   },
   template: `
     <section class="list" [attr.aria-label]="i18n.t('view.' + store.view())">
-      <div class="toolbar">
+      <div class="toolbar" [class.boot]="ui.booting()">
         <div class="toolbar-title">
           <h1 class="title">{{ title() }}</h1>
           <span class="count num">{{ format.int(store.rows().length) }}</span>
@@ -83,7 +97,7 @@ const OVERSCAN = 6;
             <button appButton size="sm" variant="secondary" icon="pause" type="button" [disabled]="!bulk().pause" (click)="bulkAction('pause')">{{ i18n.t('action.pause') }}</button>
             <button appButton size="sm" variant="secondary" icon="play" type="button" [disabled]="!bulk().resume" (click)="bulkAction('resume')">{{ i18n.t('action.resume') }}</button>
             <button appButton size="sm" variant="ghost" icon="trash" type="button" (click)="askRemove(store.selectedRows())">{{ i18n.t('action.remove') }}</button>
-            <button appButton size="sm" variant="ghost" icon="close" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('toolbar.clearSelection')" (click)="store.clearSelection()"></button>
+            <button appButton size="sm" variant="ghost" icon="close" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('toolbar.clearSelection')" [attr.title]="i18n.t('toolbar.clearSelection')" (click)="store.clearSelection()"></button>
           </div>
         } @else {
           <div class="bulk">
@@ -94,7 +108,7 @@ const OVERSCAN = 6;
       </div>
 
       <div class="grid" role="grid" [attr.aria-rowcount]="store.rows().length" [attr.aria-multiselectable]="true">
-        <div class="header" role="row">
+        <div class="header" role="row" [class.boot]="ui.booting()">
           @for (c of columns; track c.key) {
             <button
               type="button"
@@ -103,19 +117,42 @@ const OVERSCAN = 6;
               [class.is-end]="c.align === 'end'"
               [class.is-sorted]="store.sortKey() === c.key"
               [attr.aria-sort]="store.sortKey() === c.key ? (store.sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'"
+              [attr.title]="store.sortKey() === c.key ? i18n.t(store.sortDir() === 'asc' ? 'sort.asc' : 'sort.desc') : i18n.t('sort.by').replace('{column}', i18n.t(c.labelKey))"
               (click)="store.sortBy(c.key)"
             >
               <span>{{ i18n.t(c.labelKey) }}</span>
-              @if (store.sortKey() === c.key) {
-                <app-icon [name]="store.sortDir() === 'asc' ? 'arrowUp' : 'arrowDown'" [size]="12" />
-              }
+              <app-icon class="sort-icon" name="arrowDown" [size]="12" [class.is-asc]="store.sortDir() === 'asc'" />
             </button>
           }
           <span class="th th-actions" role="columnheader"></span>
         </div>
 
-        @if (store.rows().length === 0) {
-          <app-empty-state [icon]="emptyIcon()" [heading]="i18n.t('empty.' + emptyKind() + '.heading')" [body]="i18n.t('empty.' + emptyKind() + '.body')">
+        @if (!engine.loaded()) {
+          <div class="skeleton" role="status" aria-busy="true" [attr.aria-label]="i18n.t('loading.list')">
+            @for (n of skeletonRows; track n) {
+              <div class="sk-row" [style.--i]="n" aria-hidden="true">
+                <span class="sk-cell sk-name">
+                  <span class="sk-type bone"></span>
+                  <span class="sk-lines"><span class="bone sk-line"></span><span class="bone sk-line is-short"></span></span>
+                </span>
+                <span class="sk-cell sk-size"><span class="bone sk-num"></span></span>
+                <span class="sk-cell sk-progress"><span class="bone sk-bar"></span></span>
+                <span class="sk-cell sk-speed"><span class="bone sk-num"></span></span>
+                <span class="sk-cell sk-eta"><span class="bone sk-num is-short"></span></span>
+                <span class="sk-cell sk-status"><span class="bone sk-pill"></span></span>
+                <span class="sk-cell sk-added"><span class="bone sk-num is-short"></span></span>
+              </div>
+            }
+          </div>
+        } @else if (store.rows().length === 0) {
+          <app-empty-state
+            [icon]="emptyIcon()"
+            [illustration]="emptyKind() === 'all' ? 'segments' : null"
+            [heading]="i18n.t('empty.' + emptyKind() + '.heading')"
+            [body]="i18n.t('empty.' + emptyKind() + '.body')"
+            [steps]="emptyKind() === 'all' ? steps() : []"
+            [stepsLabel]="i18n.t('empty.steps.title')"
+          >
             @if (emptyKind() === 'all') {
               <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">{{ i18n.t('action.add') }}</button>
             } @else if (emptyKind() === 'search') {
@@ -125,11 +162,14 @@ const OVERSCAN = 6;
         } @else {
           <div #viewport class="viewport" (scroll)="onScroll()" tabindex="0" [attr.aria-label]="i18n.t('view.' + store.view())">
             <div class="spacer" [style.block-size.px]="window().top"></div>
-            @for (row of window().rows; track row.d.id) {
+            @for (row of window().rows; track row.d.id; let i = $index) {
               <app-download-row
                 [row]="row"
                 [selected]="store.selected().has(row.d.id)"
                 [open]="store.detailsId() === row.d.id"
+                [staggerIndex]="ui.booting() && window().top === 0 && i < staggerRows ? i : null"
+                [fresh]="freshIds().has(row.d.id)"
+                [leaving]="leavingIds().has(row.d.id)"
                 (rowClick)="onRowClick(row, $event)"
                 (rowDblClick)="store.openDetails(row.d.id)"
                 (rowContext)="onContext(row, $event)"
@@ -170,7 +210,7 @@ const OVERSCAN = 6;
       grid-template-columns: minmax(0, 1fr) 0;
       block-size: 100%;
       min-block-size: 0;
-      transition: grid-template-columns var(--motion-slow) var(--ease-emphasized);
+      transition: grid-template-columns var(--dur-3) var(--ease-emphasized-out);
     }
 
     :host(.has-details) {
@@ -191,6 +231,29 @@ const OVERSCAN = 6;
       gap: var(--space-4);
       block-size: 56px;
       padding-inline: var(--space-5);
+    }
+
+    /* First paint: toolbar and header arrive right after the shell, before the rows. */
+    .toolbar.boot {
+      animation: boot-in var(--dur-3) var(--ease-emphasized-out) both;
+      animation-delay: calc(1 * var(--stagger-step));
+    }
+
+    .header.boot {
+      animation: boot-in var(--dur-3) var(--ease-emphasized-out) both;
+      animation-delay: calc(2 * var(--stagger-step));
+    }
+
+    @keyframes boot-in {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
     }
 
     .toolbar-title {
@@ -214,6 +277,19 @@ const OVERSCAN = 6;
       display: flex;
       align-items: center;
       gap: var(--space-1);
+      animation: bulk-in var(--dur-2) var(--ease-emphasized-out) both;
+    }
+
+    @keyframes bulk-in {
+      from {
+        opacity: 0;
+        transform: translateY(-3px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
     }
 
     .bulk-count {
@@ -227,9 +303,13 @@ const OVERSCAN = 6;
       grid-template-rows: auto minmax(0, 1fr);
       min-block-size: 0;
       /* rows and header share these; the row component reads them through inheritance and
-         switches to the compact set in the same container query (see download-row) */
-      --grid-columns: minmax(220px, 2.2fr) 150px minmax(160px, 1.6fr) 100px 90px 172px 104px 64px;
+         switches to the compact set in the same container query (see download-row). The full
+         set needs 1034px plus the scrollbar gutter, so it fits a 1280px window with the sidebar
+         open; --grid-break is where it stops fitting. */
+      --grid-columns: minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 84px 172px 104px 64px;
       --grid-columns-compact: minmax(180px, 2fr) 128px minmax(120px, 1.4fr) 92px 150px 60px;
+      --grid-columns-narrow: minmax(160px, 2fr) 110px minmax(100px, 1.4fr) 140px 52px;
+      --grid-columns-tiny: minmax(140px, 1fr) minmax(90px, 1fr) 44px;
       container-type: inline-size;
       container-name: grid;
     }
@@ -239,9 +319,12 @@ const OVERSCAN = 6;
       grid-template-columns: var(--grid-columns);
       align-items: center;
       block-size: var(--header-height);
-      padding-inline: var(--space-4);
+      padding-inline: var(--space-3);
       border-block: 1px solid var(--color-border);
       background: var(--color-surface-1);
+      /* the same gutter the viewport reserves, so labels sit exactly over their cells */
+      overflow: hidden;
+      scrollbar-gutter: stable;
     }
 
     .th {
@@ -258,6 +341,7 @@ const OVERSCAN = 6;
       text-align: start;
       cursor: pointer;
       white-space: nowrap;
+      transition: color var(--dur-1) var(--ease-standard);
     }
 
     .th:first-child {
@@ -276,18 +360,72 @@ const OVERSCAN = 6;
       color: var(--color-text);
     }
 
+    /* The sort arrow lives in every header; it only shows (in the accent) on the sorted one,
+       and turns over rather than swapping glyphs when the direction flips. */
+    .sort-icon {
+      color: var(--color-accent-fg);
+      opacity: 0;
+      transform: translateY(2px);
+      transition:
+        opacity var(--dur-2) var(--ease-standard),
+        transform var(--dur-3) var(--ease-emphasized-out);
+    }
+
+    .th:hover .sort-icon {
+      opacity: 0.45;
+    }
+
+    .th.is-sorted .sort-icon {
+      opacity: 1;
+      transform: none;
+    }
+
+    .th.is-sorted .sort-icon.is-asc {
+      transform: rotate(180deg);
+    }
+
     .th-actions {
       cursor: default;
     }
 
-    /* Narrow list (details drawer open, small window): drop the two least useful columns. */
-    @container grid (max-width: 1040px) {
-      .header {
+    /* Narrower lists (details drawer open, small window) drop columns in order of usefulness:
+       time left and added, then speed, then size and status (which the drawer still shows). */
+    @container grid (max-width: 1050px) {
+      .header,
+      .sk-row {
         grid-template-columns: var(--grid-columns-compact);
       }
 
       .th-eta,
-      .th-added {
+      .th-added,
+      .sk-eta,
+      .sk-added {
+        display: none;
+      }
+    }
+
+    @container grid (max-width: 780px) {
+      .header,
+      .sk-row {
+        grid-template-columns: var(--grid-columns-narrow);
+      }
+
+      .th-speed,
+      .sk-speed {
+        display: none;
+      }
+    }
+
+    @container grid (max-width: 600px) {
+      .header,
+      .sk-row {
+        grid-template-columns: var(--grid-columns-tiny);
+      }
+
+      .th-size,
+      .th-status,
+      .sk-size,
+      .sk-status {
         display: none;
       }
     }
@@ -299,15 +437,128 @@ const OVERSCAN = 6;
       scrollbar-gutter: stable;
     }
 
+    /* ---- Skeleton: the table's silhouette; the bones breathe (flat, no sweep) ------------ */
+    .skeleton {
+      overflow: hidden;
+    }
+
+    .sk-row {
+      display: grid;
+      grid-template-columns: var(--grid-columns);
+      align-items: center;
+      block-size: var(--row-height);
+      padding-inline: var(--space-3);
+      border-block-end: 1px solid var(--color-border);
+      animation: sk-in var(--dur-3) var(--ease-standard) both;
+      animation-delay: calc(var(--i) * 40ms);
+    }
+
+    @keyframes sk-in {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .sk-cell {
+      display: flex;
+      align-items: center;
+      min-inline-size: 0;
+      padding-inline: var(--space-2);
+    }
+
+    .sk-name {
+      gap: var(--space-3);
+      padding-inline-start: 0;
+    }
+
+    .sk-size,
+    .sk-speed,
+    .sk-eta,
+    .sk-added {
+      justify-content: flex-end;
+    }
+
+    .bone {
+      display: block;
+      block-size: 10px;
+      border-radius: var(--radius-full);
+      background: var(--color-surface-3);
+      animation: breathe 1600ms var(--ease-standard) infinite alternate;
+      animation-delay: calc(var(--i) * 90ms);
+    }
+
+    @keyframes breathe {
+      from {
+        opacity: 0.55;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .sk-type {
+      flex-shrink: 0;
+      inline-size: 32px;
+      block-size: 32px;
+      border-radius: var(--radius-sm);
+    }
+
+    .sk-lines {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 6px;
+      min-inline-size: 0;
+    }
+
+    .sk-line {
+      inline-size: 70%;
+    }
+
+    .sk-line.is-short {
+      inline-size: 40%;
+      block-size: 8px;
+    }
+
+    .sk-num {
+      inline-size: 60%;
+    }
+
+    .sk-num.is-short {
+      inline-size: 40%;
+    }
+
+    .sk-bar {
+      block-size: 6px;
+      inline-size: 80%;
+    }
+
+    .sk-pill {
+      inline-size: 80px;
+      block-size: 20px;
+    }
+
     .drawer {
       min-inline-size: 0;
       overflow: hidden;
-      opacity: 0;
-      transition: opacity var(--motion-base) var(--ease-standard);
+      animation: drawer-in var(--dur-3) var(--ease-emphasized-out) both;
     }
 
-    :host(.has-details) .drawer {
-      opacity: 1;
+    @keyframes drawer-in {
+      from {
+        opacity: 0;
+        transform: translateX(calc(var(--dir-sign) * 32px));
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
     }
 
     .remove-text {
@@ -329,6 +580,34 @@ const OVERSCAN = 6;
     .remove-check input {
       accent-color: var(--color-accent);
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      :host {
+        transition: none;
+      }
+
+      .bone {
+        animation: none;
+        opacity: 0.8;
+      }
+
+      .sk-row {
+        animation-delay: 0ms;
+      }
+
+      .toolbar.boot,
+      .header.boot,
+      .bulk,
+      .drawer {
+        animation-duration: var(--dur-fade);
+        animation-delay: 0ms;
+        animation-name: sk-in;
+      }
+
+      .sort-icon {
+        transition: none;
+      }
+    }
   `,
 })
 export class DownloadsPageComponent {
@@ -336,7 +615,8 @@ export class DownloadsPageComponent {
   protected readonly format = inject(FormatService);
   protected readonly store = inject(DownloadsStore);
   protected readonly ui = inject(UiState);
-  private readonly engine = inject(DownloadEngine);
+  protected readonly engine = inject(DownloadEngine);
+  private readonly motion = inject(MotionService);
   private readonly tauriAvailable = inject(TAURI_AVAILABLE);
   private readonly invoke = inject(TAURI_INVOKE);
   private readonly toasts = inject(ToastService);
@@ -344,6 +624,8 @@ export class DownloadsPageComponent {
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
 
   protected readonly columns = COLUMNS;
+  protected readonly skeletonRows = SKELETON_ROWS;
+  protected readonly staggerRows = STAGGER_ROWS;
 
   private readonly scrollTop = signal(0);
   private readonly viewportHeight = signal(600);
@@ -351,6 +633,25 @@ export class DownloadsPageComponent {
   protected readonly menu = signal<{ open: boolean; x: number; y: number; row: DownloadRow | null }>({ open: false, x: 0, y: 0, row: null });
   protected readonly removal = signal<readonly DownloadRow[] | null>(null);
   protected readonly deleteFile = signal(false);
+
+  /** Ids the user is removing; their rows play the leave animation before the engine drops them. */
+  protected readonly leavingIds = signal<ReadonlySet<number>>(new Set());
+
+  /** Ids seen since the list first arrived; a download outside this set is new and slides in. */
+  private readonly seenIds = signal<ReadonlySet<number> | null>(null);
+
+  protected readonly freshIds = computed<ReadonlySet<number>>(() => {
+    const seen = this.seenIds();
+    const fresh = new Set<number>();
+    if (seen !== null) {
+      for (const d of this.engine.downloads()) {
+        if (!seen.has(d.id)) {
+          fresh.add(d.id);
+        }
+      }
+    }
+    return fresh;
+  });
 
   protected readonly title = computed(() => {
     const category = this.store.category();
@@ -379,6 +680,11 @@ export class DownloadsPageComponent {
   });
 
   protected readonly emptyIcon = computed(() => (this.emptyKind() === 'search' ? 'search' : this.emptyKind() === 'all' ? 'download' : 'inbox'));
+
+  /** "How to start", for a list with nothing in it at all. */
+  protected readonly steps = computed<readonly EmptyStep[]>(() =>
+    ([1, 2, 3] as const).map((n) => ({ title: this.i18n.t(`empty.step${n}.title`), body: this.i18n.t(`empty.step${n}.body`) })),
+  );
 
   protected readonly bulk = computed(() => {
     const rows = this.store.selectedRows();
@@ -417,8 +723,42 @@ export class DownloadsPageComponent {
     return items;
   });
 
+  /** What the list is showing; a change of any part crossfades the viewport. */
+  private readonly listKey = computed(
+    () => `${this.store.view()}|${this.store.category() ?? ''}|${this.store.query().trim().toLowerCase()}|${this.store.sortKey()}|${this.store.sortDir()}`,
+  );
+  private lastListKey: string | null = null;
+
   constructor() {
     afterNextRender(() => this.observeViewport());
+
+    // the first list to arrive is the baseline: nothing in it is "new"
+    effect(() => {
+      const loaded = this.engine.loaded();
+      const ids = this.engine.downloads().map((d) => d.id);
+      untracked(() => {
+        if (loaded && this.seenIds() === null) {
+          this.seenIds.set(new Set(ids));
+        }
+      });
+    });
+
+    // a fresh row has slid in after FRESH_MS; from then on it is an ordinary row
+    effect((onCleanup) => {
+      const fresh = this.freshIds();
+      if (fresh.size === 0) {
+        return;
+      }
+      const handle = setTimeout(() => {
+        this.seenIds.update((seen) => new Set([...(seen ?? []), ...fresh]));
+      }, FRESH_MS);
+      onCleanup(() => clearTimeout(handle));
+    });
+
+    effect(() => {
+      const key = this.listKey();
+      untracked(() => this.onListChanged(key));
+    });
   }
 
   private observeViewport(): void {
@@ -430,6 +770,34 @@ export class DownloadsPageComponent {
     ro.observe(el);
     this.viewportHeight.set(el.clientHeight);
     this.destroyRef.onDestroy(() => ro.disconnect());
+  }
+
+  /** View, filter, search or sort changed: back to the top, and the list crossfades. */
+  private onListChanged(key: string): void {
+    if (this.lastListKey === null) {
+      this.lastListKey = key;
+      return;
+    }
+    if (key === this.lastListKey) {
+      return;
+    }
+    this.lastListKey = key;
+    this.scrollTop.set(0);
+    const el = this.viewportRef()?.nativeElement;
+    if (!el || typeof el.animate !== 'function') {
+      return;
+    }
+    el.scrollTop = 0;
+    const reduced = this.motion.reduced();
+    el.animate(
+      reduced
+        ? [{ opacity: 0.4 }, { opacity: 1 }]
+        : [
+            { opacity: 0.3, transform: 'translateY(4px)' },
+            { opacity: 1, transform: 'none' },
+          ],
+      { duration: reduced ? 80 : DUR.d2, easing: 'cubic-bezier(0.05, 0.7, 0.1, 1)' },
+    );
   }
 
   protected onScroll(): void {
@@ -535,6 +903,11 @@ export class DownloadsPageComponent {
     this.removal.set(rows);
   }
 
+  /**
+   * Removal in two beats: the rows fade and collapse (the toast and the closed drawer are
+   * immediate), then the engine is asked to drop them. Under reduced motion the second beat
+   * follows at once.
+   */
   protected confirmRemove(): void {
     const rows = this.removal();
     if (rows === null) {
@@ -542,9 +915,6 @@ export class DownloadsPageComponent {
     }
     const removed = rows.map((r) => r.d);
     const deleteFile = this.deleteFile();
-    for (const d of removed) {
-      this.run(this.engine.remove(d.id, deleteFile));
-    }
     this.store.clearSelection();
     if (removed.some((d) => d.id === this.store.detailsId())) {
       this.store.closeDetails();
@@ -552,6 +922,27 @@ export class DownloadsPageComponent {
     this.removal.set(null);
     const text = removed.length === 1 ? this.i18n.t('toast.removed').replace('{name}', removed[0].filename) : this.i18n.t('toast.removedMany').replace('{n}', this.format.int(removed.length));
     this.toasts.show('info', text);
+
+    const ids = removed.map((d) => d.id);
+    this.leavingIds.update((s) => new Set([...s, ...ids]));
+    const drop = (): void => {
+      for (const d of removed) {
+        this.run(this.engine.remove(d.id, deleteFile));
+      }
+      this.leavingIds.update((s) => {
+        const next = new Set(s);
+        for (const id of ids) {
+          next.delete(id);
+        }
+        return next;
+      });
+    };
+    if (this.motion.reduced()) {
+      drop();
+    } else {
+      const handle = setTimeout(drop, DUR.d2);
+      this.destroyRef.onDestroy(() => clearTimeout(handle));
+    }
   }
 
   protected onKey(event: KeyboardEvent): void {

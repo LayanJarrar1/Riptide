@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
 import { FORMAT_PIPES } from '../../core/format.pipes';
+import { FormatService } from '../../core/format.service';
+import { TickerDirective } from '../../core/ticker.directive';
 import { I18nService } from '../../i18n/i18n.service';
 import { DownloadRow } from '../../data/downloads.store';
 import { canPause, canResume, CategoryKey } from '../../model/download';
@@ -35,11 +37,17 @@ export function hostOf(url: string): string {
 /**
  * One row of the downloads table. Pure presentation: the page owns selection and dispatches
  * actions to the engine. Rendered as a grid row with the same column template as the header.
+ *
+ * Motion: a row added during the session slides in from the inline-start side; on the first
+ * paint the page hands the first rows a `staggerIndex` so they arrive one after another; a row
+ * being removed fades and collapses before it leaves the DOM. A row that merely scrolls into
+ * view does nothing. The speed cell is a number ticker. A failed row explains itself under
+ * the name and offers the fix inline.
  */
 @Component({
   selector: 'app-download-row',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, ProgressFlowComponent, StatusPillComponent],
+  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, ProgressFlowComponent, StatusPillComponent, TickerDirective],
   host: {
     role: 'row',
     '[attr.aria-selected]': 'selected()',
@@ -48,6 +56,11 @@ export function hostOf(url: string): string {
     '[class.is-open]': 'open()',
     '[class.is-done]': 'row().d.state === "completed"',
     '[class.is-cancelled]': 'row().d.state === "cancelled"',
+    '[class.is-failed]': 'row().d.state === "failed"',
+    '[class.is-entering]': 'fresh()',
+    '[class.is-staggered]': 'staggerIndex() !== null',
+    '[class.is-leaving]': 'leaving()',
+    '[style.--i]': 'staggerIndex()',
     '[tabindex]': 'selected() ? 0 : -1',
     '(click)': 'rowClick.emit($event)',
     '(dblclick)': 'rowDblClick.emit()',
@@ -60,7 +73,18 @@ export function hostOf(url: string): string {
       </span>
       <span class="name-block">
         <span class="name" dir="auto" [attr.title]="row().d.filename">{{ row().d.filename }}</span>
-        <span class="host" dir="ltr">{{ host() }}</span>
+        @if (row().d.state === 'failed') {
+          <span class="reason">
+            <app-icon name="alert" [size]="12" />
+            <span class="reason-text" [attr.title]="failureLabel()">{{ failureLabel() }}</span>
+            <span class="reason-sep" aria-hidden="true">·</span>
+            <button type="button" class="reason-action" (click)="act($event, failedAction())">
+              {{ i18n.t(failedAction() === 'refreshLink' ? 'action.refreshLink' : 'action.retry') }}
+            </button>
+          </span>
+        } @else {
+          <span class="host" dir="ltr">{{ host() }}</span>
+        }
       </span>
     </div>
 
@@ -77,7 +101,7 @@ export function hostOf(url: string): string {
       <span class="pct num">{{ row().progress | pct }}</span>
     </div>
 
-    <div class="cell c-speed num" role="gridcell">{{ row().d.speedBps | speed }}</div>
+    <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat"></span>
 
     <div class="cell c-eta num" role="gridcell">{{ row().eta | duration }}</div>
 
@@ -91,13 +115,13 @@ export function hostOf(url: string): string {
 
     <div class="cell c-actions" role="gridcell">
       @if (canPause(row().d.state)) {
-        <button appButton size="sm" variant="ghost" icon="pause" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.pause')" (click)="act($event, 'pause')"></button>
+        <button appButton size="sm" variant="ghost" icon="pause" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.pause')" [attr.title]="i18n.t('action.pause')" (click)="act($event, 'pause')"></button>
       } @else if (canResume(row().d.state)) {
-        <button appButton size="sm" variant="ghost" [icon]="row().d.state === 'failed' ? 'retry' : 'play'" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t(row().d.state === 'failed' ? 'action.retry' : 'action.resume')" (click)="act($event, row().d.state === 'failed' ? 'retry' : 'resume')"></button>
+        <button appButton size="sm" variant="ghost" [icon]="row().d.state === 'failed' ? 'retry' : 'play'" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t(row().d.state === 'failed' ? 'action.retry' : 'action.resume')" [attr.title]="i18n.t(row().d.state === 'failed' ? 'action.retry' : 'action.resume')" (click)="act($event, row().d.state === 'failed' ? 'retry' : 'resume')"></button>
       } @else if (row().d.state === 'completed') {
-        <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" (click)="act($event, 'openFolder')"></button>
+        <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" [attr.title]="i18n.t('action.openFolder')" (click)="act($event, 'openFolder')"></button>
       }
-      <button appButton size="sm" variant="ghost" icon="more" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.more')" (click)="more($event)"></button>
+      <button appButton size="sm" variant="ghost" icon="more" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.more')" [attr.title]="i18n.t('action.more')" (click)="more($event)"></button>
     </div>
   `,
   styles: `
@@ -106,12 +130,12 @@ export function hostOf(url: string): string {
       grid-template-columns: var(--grid-columns);
       align-items: center;
       block-size: var(--row-height);
-      padding-inline: var(--space-4);
+      padding-inline: var(--space-3);
       border-block-end: 1px solid var(--color-border);
       color: var(--color-text);
       font-size: var(--text-sm);
       cursor: default;
-      transition: background-color var(--motion-fast) var(--ease-standard);
+      transition: background-color var(--dur-1) var(--ease-standard);
       outline-offset: -2px;
     }
 
@@ -125,6 +149,45 @@ export function hostOf(url: string): string {
 
     :host(.is-open) {
       box-shadow: inset calc(var(--dir-sign) * 3px) 0 0 var(--color-accent);
+    }
+
+    /* ---- Enter / leave: transform and opacity only ------------------------------------- */
+    :host(.is-entering) {
+      animation: row-in var(--dur-2) var(--ease-emphasized-out) both;
+    }
+
+    :host(.is-staggered) {
+      animation: row-in var(--dur-1) var(--ease-emphasized-out) both;
+      animation-delay: calc(2 * var(--stagger-step) + var(--i, 0) * var(--stagger-step));
+    }
+
+    :host(.is-leaving) {
+      animation: row-out var(--dur-2) var(--ease-emphasized-in) both;
+      pointer-events: none;
+    }
+
+    @keyframes row-in {
+      from {
+        opacity: 0;
+        transform: translateX(calc(var(--dir-sign) * -8px));
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @keyframes row-out {
+      from {
+        opacity: 1;
+        transform: none;
+      }
+
+      to {
+        opacity: 0;
+        transform: translateX(calc(var(--dir-sign) * 16px)) scaleY(0.6);
+      }
     }
 
     :host(.is-cancelled) .name,
@@ -203,12 +266,73 @@ export function hostOf(url: string): string {
       text-align: start;
     }
 
+    /* The reason line of a failed row: what went wrong, and the fix, right where you look. */
+    .reason {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-inline-size: 0;
+      color: var(--color-danger);
+      font-size: var(--text-xs);
+      white-space: nowrap;
+      animation: reason-in var(--dur-2) var(--ease-emphasized-out) both;
+    }
+
+    @keyframes reason-in {
+      from {
+        opacity: 0;
+        transform: translateY(-2px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .reason-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .reason-sep {
+      color: var(--color-text-muted);
+    }
+
+    .reason-action {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--color-accent-fg);
+      font: inherit;
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      text-underline-offset: 2px;
+      transition: text-decoration-color var(--dur-1) var(--ease-standard);
+    }
+
+    .reason-action:hover,
+    .reason-action:focus-visible {
+      text-decoration-color: currentcolor;
+    }
+
     .c-size,
     .c-speed,
     .c-eta {
       text-align: end;
       color: var(--color-text-secondary);
       white-space: nowrap;
+    }
+
+    .c-speed {
+      display: block;
+    }
+
+    :host([data-state='downloading']) .c-speed {
+      color: var(--color-text);
     }
 
     .size-done {
@@ -251,7 +375,7 @@ export function hostOf(url: string): string {
       justify-content: flex-end;
       gap: 2px;
       opacity: 0;
-      transition: opacity var(--motion-fast) var(--ease-standard);
+      transition: opacity var(--dur-1) var(--ease-standard);
     }
 
     :host(:hover) .c-actions,
@@ -260,8 +384,8 @@ export function hostOf(url: string): string {
       opacity: 1;
     }
 
-    /* Mirrors the header's container query in the page: same breakpoint, same columns. */
-    @container grid (max-width: 1040px) {
+    /* Mirrors the header's container queries in the page: same breakpoints, same columns. */
+    @container grid (max-width: 1050px) {
       :host {
         grid-template-columns: var(--grid-columns-compact);
       }
@@ -271,10 +395,57 @@ export function hostOf(url: string): string {
         display: none;
       }
     }
+
+    @container grid (max-width: 780px) {
+      :host {
+        grid-template-columns: var(--grid-columns-narrow);
+      }
+
+      .c-speed {
+        display: none;
+      }
+    }
+
+    @container grid (max-width: 600px) {
+      :host {
+        grid-template-columns: var(--grid-columns-tiny);
+      }
+
+      .c-size,
+      .c-status {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :host(.is-entering),
+      :host(.is-staggered),
+      :host(.is-leaving),
+      .reason {
+        animation-duration: var(--dur-fade);
+        animation-delay: 0ms;
+        animation-name: row-fade;
+      }
+
+      :host(.is-leaving) {
+        animation-direction: reverse;
+      }
+
+      @keyframes row-fade {
+        from {
+          opacity: 0;
+        }
+
+        to {
+          opacity: 1;
+        }
+      }
+    }
   `,
 })
 export class DownloadRowComponent {
   protected readonly i18n = inject(I18nService);
+  private readonly format = inject(FormatService);
   protected readonly canPause = canPause;
   protected readonly canResume = canResume;
 
@@ -282,6 +453,12 @@ export class DownloadRowComponent {
   readonly selected = input(false);
   /** Shown in the details drawer. */
   readonly open = input(false);
+  /** Position in the first-paint cascade; `null` outside the first paint. */
+  readonly staggerIndex = input<number | null>(null);
+  /** Added during this session: slides in. */
+  readonly fresh = input(false);
+  /** About to be removed: fades and collapses. */
+  readonly leaving = input(false);
 
   readonly rowClick = output<MouseEvent>();
   readonly rowDblClick = output<void>();
@@ -294,6 +471,18 @@ export class DownloadRowComponent {
     const s = this.row().d.state;
     return s === 'downloading' || s === 'paused' || s === 'verifying' || s === 'failed';
   });
+
+  /** Why it failed, from the failure kind (the engine's raw error text is not in the model). */
+  protected readonly failureLabel = computed(() => {
+    const failure = this.row().d.failure;
+    return failure === null ? this.i18n.t('state.failed') : this.i18n.t(`failure.${failure}`);
+  });
+
+  /** The fix for a failed row: a fresh link for an expired one, a retry otherwise. */
+  protected readonly failedAction = computed<RowAction>(() => (this.row().d.failure === 'expired' ? 'refreshLink' : 'retry'));
+
+  /** Stable formatter for the speed ticker (follows the language through the service). */
+  protected readonly speedFormat = (bps: number): string => this.format.speed(bps);
 
   protected act(event: Event, action: RowAction): void {
     event.stopPropagation();
