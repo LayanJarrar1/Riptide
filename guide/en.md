@@ -1,0 +1,190 @@
+# Riptide user guide
+
+[العربية](ar.md)
+
+Riptide is a free, open-source download manager for Windows. This guide covers the current
+development build. There are no releases yet; to try it you build it from source (see
+[CONTRIBUTING.md](../CONTRIBUTING.md)).
+
+## Table of contents
+
+- [The window](#the-window)
+- [Adding a download](#adding-a-download)
+- [While it downloads](#while-it-downloads)
+- [Pause, resume, retry](#pause-resume-retry)
+- [Finished files](#finished-files)
+- [Removing downloads](#removing-downloads)
+- [Details](#details)
+- [Settings](#settings)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Language and theme](#language-and-theme)
+- [Where things are stored](#where-things-are-stored)
+- [Portable mode](#portable-mode)
+- [Command line](#command-line)
+- [Troubleshooting](#troubleshooting)
+
+## The window
+
+Three areas:
+
+- **Sidebar** (start side): views (All, Active, Waiting, Completed, Needs attention), categories
+  (Archives, Documents, Music, Video, Programs, Images, Other) and queues, each with a live count.
+  Settings sits at the bottom.
+- **Header**: search, the language switch and **Add download**.
+- **List**: one row per download with name and server, size, a segmented progress bar, speed,
+  time left, status and when it was added. Click a column header to sort; click again to flip the
+  direction.
+- **Status bar**: total speed with a small chart, how many downloads are active or waiting, and
+  free space on the download drive.
+
+## Adding a download
+
+Click **Add download** or press `Ctrl+N`, then paste a link. Riptide checks the link while you
+type and shows the file name, the size and whether the server allows resuming
+("resumable, multiple connections"). Then:
+
+- **Save as**: the file name, pre-filled from the server. Change it if you like.
+- **Category**: picked from the extension; you can override it.
+- **Save to**: the folder. **Browse** opens the Windows folder picker.
+- **Connections**: how many parallel connections to use (1, 4, 8, 16 or 32). 8 suits most
+  servers; some servers limit you to fewer.
+- **Start**: **Now** starts immediately; **Later** adds it paused so you can start it when you
+  want.
+- **Checksum, login and headers**: an expected MD5, SHA-1 or SHA-256 checksum (the download is
+  marked failed if the finished file does not match), a username and password for servers that
+  ask for one, and extra request headers, one per line as `Name: value`.
+
+Press **Download**. The item appears at the top of the list.
+
+If a link is not resumable, Riptide uses a single connection and tells you so in the dialog.
+
+## While it downloads
+
+The progress bar is made of **stripes**: each stripe is one connection working on one part of
+the file. Stripes fill independently and the bar turns solid green when every part is in. The
+speed column shows a smoothed speed; time left is estimated from it.
+
+Riptide saves its progress every second. If the app is closed, the computer loses power or the
+process is killed, the download simply continues from where it was the next time the app starts.
+
+## Pause, resume, retry
+
+- **Pause** stops the connections and keeps everything on disk. **Resume** continues from the
+  same point, as long as the server still serves the same file. If the file changed on the server,
+  Riptide starts over rather than mixing two versions.
+- **Pause all** and **Resume all** in the toolbar act on every download.
+- A download that failed shows why in its status (connection lost, link expired, checksum
+  mismatch, server error, disk full). **Retry** tries again from the saved progress.
+- **Cancel** stops a download and marks it cancelled; the partial file is removed.
+
+## Finished files
+
+A finished download shows **Completed**. Hover a row for **Show in folder**; the row menu also
+has **Open file** and **Copy link**. If a file with the same name already exists in the folder,
+the new one is saved as `name (1).ext`.
+
+When you gave a checksum, Riptide reads the finished file back and compares it; a mismatch shows
+as **Checksum mismatch** and the file is not treated as complete.
+
+## Removing downloads
+
+**Remove** (from the row menu, or `Delete` with rows selected) takes a download out of the list.
+The confirmation offers **Also delete the files from disk**; leave it unchecked to keep the file.
+
+Select several rows with `Ctrl`+click or `Shift`+click to act on them together.
+
+## Details
+
+Press `Enter` on a row or choose **Details** to open the drawer. It shows:
+
+- **Stat tiles**: bytes done of total, speed, time left, active connections.
+- **Segments**: one block per part of the file, filling as it arrives.
+- **Speed, last minute**: a live chart with the peak.
+- **Source and destination**: the link (with a copy button), the server, the folder, the expected
+  checksum, when it was added and completed.
+- **Timeline**: what happened to this download, in order.
+
+The drawer's own buttons pause, cancel or remove the download. `Esc` closes it.
+
+## Settings
+
+Open with the sidebar's **Settings** or `Ctrl+,`. Changes apply immediately.
+
+- **Appearance**: language (Arabic / English) and theme (follow Windows, dark, light).
+- **Downloads**: the default folder, a folder per category (empty = default), connections per
+  download, connections per server (a cap across all downloads to the same host), and a speed
+  limit.
+- **Behaviour**: notify when a download finishes, ask before closing while downloads are active,
+  keep running in the tray, start with Windows, clipboard watching.
+- **Integration**: browser extension and proxy settings.
+- **About**: update channel, check for updates, reset settings.
+
+Some switches describe behaviour that is still being wired to the engine in this development
+build; the interface marks them as such where it matters.
+
+## Keyboard shortcuts
+
+| Keys | Action |
+|---|---|
+| `Ctrl+N` | Add download |
+| `Ctrl+F` | Search |
+| `Ctrl+,` | Settings |
+| `↑` / `↓` | Move the selection |
+| `Enter` | Open details |
+| `Space` | Pause or resume the selected download |
+| `Delete` | Remove the selected downloads |
+| `Esc` | Clear the selection, close a dialog or the details drawer |
+
+## Language and theme
+
+The interface follows Windows on first start and can be switched at any time from the header or
+Settings. Switching to Arabic mirrors the whole layout right-to-left, including icons that imply
+a direction. The dark theme is the default; **Light** and **System** are in Settings.
+
+## Where things are stored
+
+| What | Where |
+|---|---|
+| Downloads | the folder you chose (default: your Downloads folder) |
+| Partial files | `<name>.rtpart` next to the final file until it completes |
+| Database (the list and progress) | `%LOCALAPPDATA%\Riptide\riptide.sqlite` |
+| Logs | `%LOCALAPPDATA%\Riptide\logs` (daily files; no cookies, credentials or query strings) |
+
+Riptide needs no administrator rights for anything and writes nothing outside these places.
+
+## Portable mode
+
+Create an empty folder named `data` next to `riptide-desktop.exe` (or `riptide.exe`). Riptide
+then keeps the database and logs there instead of `%LOCALAPPDATA%`, so the whole thing can live
+on a USB drive.
+
+## Command line
+
+The engine also runs on its own:
+
+```powershell
+riptide fetch https://example.com/file.zip -o D:\Downloads
+riptide fetch https://example.com/file.zip --connections 16 --checksum <sha256>
+riptide bench https://example.com/big.bin      # 1 vs 8 vs 32 connections
+riptide paths                                   # where data and logs live
+riptide --lang ar fetch --help                  # help in Arabic
+```
+
+Run the same `fetch` again to resume an interrupted download.
+
+## Troubleshooting
+
+- **"single connection, the server does not support ranges"**: the server ignores range
+  requests, so there is nothing to parallelise and a resume starts from the beginning. Nothing is
+  wrong on your side.
+- **The download restarted from zero after a resume**: the file on the server changed (its
+  validator no longer matches). Riptide refuses to combine bytes from two versions.
+- **Link expired**: the server's signed link stopped working (common with file hosts). Get a
+  fresh link from the page and add it again; **Get a new link** in the row menu opens the add
+  dialog pre-filled.
+- **Checksum mismatch**: the finished file does not match the checksum you entered. Check the
+  checksum you were given; if it is right, the server sent a corrupted file.
+- **Too many connections**: some servers answer `429` when you open too many connections. Lower
+  **Connections per server** in Settings.
+- **Still stuck**: look at today's file in `%LOCALAPPDATA%\Riptide\logs` and open a bug report
+  with the relevant lines.
