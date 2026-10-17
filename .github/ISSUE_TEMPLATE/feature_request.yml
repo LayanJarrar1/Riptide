@@ -1,0 +1,34 @@
+name: Feature request
+description: Something Riptide should do
+title: "[idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Describe the behaviour, not the implementation, unless you have one in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Engine (speed, resume, servers)
+        - Desktop app
+        - Command line
+        - Website or documentation
+        - Translations
+        - Not sure

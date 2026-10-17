@@ -1,8 +1,8 @@
 //! HTTP engine for Riptide: probe a URL, then fetch it over many connections into a
 //! preallocated `.rtpart` file with byte-exact resume (hard rules 1–4).
 //!
-//! * [`probe`] — `HEAD`/ranged `GET`: size, range support, validators, type, file name.
-//! * [`transfer`] — the multi-connection transfer with work stealing, retries, checkpoints,
+//! * [`probe()`] — `HEAD`/ranged `GET`: size, range support, validators, type, file name.
+//! * [`transfer()`] — the multi-connection transfer with work stealing, retries, checkpoints,
 //!   restart on a changed file, verification and atomic rename.
 //! * [`RequestContext`] — cookies, headers, credentials, referrer, user agent, applied only to
 //!   the download's own origin.

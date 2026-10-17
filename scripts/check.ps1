@@ -6,7 +6,7 @@
 .DESCRIPTION
     Runs, in order:
       desktop   : npm ci (if needed), i18n lint, ng lint, ng build (production), ng test (once, headless)
-      rust      : cargo fmt --check, cargo build --release, cargo clippy --all-targets -D warnings, cargo test
+      rust      : cargo fmt --check, cargo build --release, cargo clippy --all-targets -D warnings, cargo doc -D warnings, cargo test
       extension : tsc --noEmit + eslint (M2)
     The Angular build runs before cargo because tauri-build requires the frontend bundle to exist.
     Parts that do not exist yet are reported as SKIPPED, loudly, never silently.
@@ -119,6 +119,10 @@ if ($SkipRust) {
         Invoke-Step 'rust: cargo build --release' { cargo build --release --workspace }
     }
     Invoke-Step 'rust: cargo clippy -D warnings' { cargo clippy --workspace --all-targets -- -D warnings }
+    Invoke-Step 'rust: cargo doc -D warnings' {
+        $env:RUSTDOCFLAGS = '-D warnings'
+        try { cargo doc --workspace --no-deps --exclude riptide-desktop } finally { Remove-Item Env:RUSTDOCFLAGS -ErrorAction SilentlyContinue }
+    }
     # Doctests of a --workspace run inherit every native link-search dir in the workspace, and
     # tauri-build drops a stub msvcrt.lib (static VC runtime for the app binary) into its own
     # out dir; that stub shadows the real CRT for every other crate's doctest binary (LNK2001
