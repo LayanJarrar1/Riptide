@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Riptide</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="head">
+      <svg class="logo" viewBox="0 0 100 100" aria-hidden="true">
+        <rect width="100" height="100" rx="22" fill="#19C6B5" />
+        <g fill="#06201D">
+          <rect x="30" y="22" width="12" height="56" />
+          <path d="M30 22 H47 A15.5 15.5 0 0 1 47 53 H30 V43 H47 A5.5 5.5 0 0 0 47 32 H30 Z" />
+          <path d="M38 56 L50 48 L72 72 L72 78 L60 78 Z" />
+        </g>
+      </svg>
+      <h1 data-i18n="app.name">Riptide</h1>
+      <span id="version" class="version"></span>
+    </header>
+
+    <section id="status" class="status" data-status="unknown">
+      <span class="dot" aria-hidden="true"></span>
+      <div class="status-text">
+        <strong id="status-label" data-i18n="popup.status.unknown">Checking…</strong>
+        <span id="status-hint" class="hint"></span>
+      </div>
+      <button id="refresh" class="icon-btn" type="button" data-i18n-title="popup.refresh" aria-label="Refresh">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </section>
+
+    <section id="grant" class="grant" hidden>
+      <p data-i18n="popup.grant.hint"></p>
+      <button id="grant-btn" class="btn" type="button" data-i18n="popup.grant"></button>
+    </section>
+
+    <section class="capture">
+      <span id="capture-label" class="capture-label"></span>
+      <button id="pause" class="btn ghost" type="button"></button>
+    </section>
+
+    <section class="actions">
+      <button id="open" class="btn primary" type="button" data-i18n="popup.open"></button>
+      <button id="options" class="btn" type="button" data-i18n="popup.options"></button>
+    </section>
+
+    <section class="recent">
+      <h2 data-i18n="popup.recent.title"></h2>
+      <p id="recent-note" class="hint" hidden data-i18n="popup.recent.unavailable"></p>
+      <ul id="recent-list" class="list"></ul>
+      <p id="recent-empty" class="empty" data-i18n="popup.recent.empty"></p>
+    </section>
+
+    <footer class="foot">
+      <span id="captured"></span>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

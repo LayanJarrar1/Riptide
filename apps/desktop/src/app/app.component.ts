@@ -15,6 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 
+import { DiskSpaceService } from './core/disk-space.service';
 import { FormatService } from './core/format.service';
 import { TickerDirective } from './core/ticker.directive';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
@@ -40,9 +41,6 @@ const VIEW_ICONS: Readonly<Record<ListView, IconName>> = {
   completed: 'check',
   failed: 'alert',
 };
-
-/** Free space shown in the status bar until the engine reports the real figure (M1). */
-const DEMO_FREE_BYTES = 142 * 1024 * 1024 * 1024;
 
 /**
  * How long the first-paint orchestration stays armed: shell parts and the first rows that
@@ -89,7 +87,8 @@ export class AppComponent implements OnInit {
   protected readonly viewIcons = VIEW_ICONS;
   protected readonly categories = CATEGORY_KEYS;
   protected readonly categoryIcons = CATEGORY_ICONS;
-  protected readonly freeBytes = DEMO_FREE_BYTES;
+  /** Real free space under Tauri (polled), the demo figure in a plain browser. */
+  protected readonly disk = inject(DiskSpaceService);
 
   /** Stable formatters for the number tickers (they follow the language through the service). */
   protected readonly intFormat = (n: number): string => this.format.int(n);

@@ -23,7 +23,9 @@ class FakeBridge {
   readonly records = new Map<number, BridgeDownload>();
   readonly segments = new Map<number, BridgeSegment[]>();
   readonly calls: Call[] = [];
-  settings: EngineSettings = { default_dir: 'C:\\dl', connections: 8, per_host: 4, max_active: 3, user_agent: null };
+  settings: EngineSettings = { default_dir: 'C:\\dl', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {} };
+  /** What `find_duplicate` answers; `null` = nothing like it. */
+  duplicate: BridgeDownload | null = null;
   probeAnswer: ProbeInfo = { final_url: 'https://x/final.iso', filename: 'final.iso', size: 10, supports_ranges: true, content_type: null, resumable: true };
   nextId = 100;
   listenCalls: string[] = [];
@@ -47,6 +49,8 @@ class FakeBridge {
         return Promise.resolve(this.settings as unknown as T);
       case 'probe_url':
         return Promise.resolve(this.probeAnswer as unknown as T);
+      case 'find_duplicate':
+        return Promise.resolve(this.duplicate as unknown as T);
       case 'add_download': {
         const newId = this.nextId++;
         this.records.set(newId, bridgeDownload({ id: newId, state: { state: 'queued' }, url: String((args?.['request'] as { url: string }).url) }));
@@ -353,6 +357,36 @@ describe('TauriEngineService', () => {
     expect(after[0].args).toEqual({ id: 1 });
     expect(after[1].args).toEqual({ id: 2 });
     expect(after[3].args).toEqual({ id: 1 });
+  });
+
+  it('restart: maps to restart_download and leaves the row to the engine events', async () => {
+    await start();
+    await engine.restart(1);
+    expect(bridge.commands('restart_download')[0].args).toEqual({ id: 1 });
+    expect(engine.get(1)?.state).toBe('downloading');
+    bridge.records.set(1, bridgeDownload({ id: 1, filename: 'one.zip', size: null, state: { state: 'queued' } }));
+    bridge.segments.set(1, []);
+    bridge.emit({ type: 'added', id: 1 });
+    await settle();
+    expect(engine.get(1)?.state).toBe('queued');
+    expect(engine.get(1)?.size).toBeNull();
+    expect(engine.downloads().length).toBe(2);
+  });
+
+  it('findDuplicate: asks find_duplicate with nulls for the optionals and maps the answer', async () => {
+    await start();
+    expect(await engine.findDuplicate('https://x/a')).toBeUndefined();
+    expect(bridge.commands('find_duplicate')[0].args).toEqual({ url: 'https://x/a', filename: null, dir: null });
+    // a known row comes back as the live object; an unknown one is mapped with its segments
+    bridge.duplicate = bridgeDownload({ id: 2, filename: 'two.mp4', state: { state: 'paused' } });
+    expect((await engine.findDuplicate('https://x/a', 'two.mp4', 'C:\\dl'))?.id).toBe(2);
+    expect(bridge.commands('find_duplicate')[1].args).toEqual({ url: 'https://x/a', filename: 'two.mp4', dir: 'C:\\dl' });
+    bridge.duplicate = bridgeDownload({ id: 7, filename: 'old.iso', state: { state: 'completed' } });
+    bridge.segments.set(7, [bridgeSegment({ download_id: 7, written: 1_000_000, state: 'done' })]);
+    const seven = await engine.findDuplicate('https://x/old.iso');
+    expect(seven?.filename).toBe('old.iso');
+    expect(seven?.category).toBe('compressed');
+    expect(seven?.segments[0].written).toBe(1_000_000);
   });
 
   it('remove: sends deleteFile and drops the row without waiting for the event', async () => {

@@ -74,6 +74,7 @@
   "action.copyLink": "Copy link",
   "action.details": "Details",
   "action.refreshLink": "Get a new link",
+  "action.restart": "Restart from the beginning",
   "action.close": "Close",
   "action.dismiss": "Dismiss",
   "action.more": "More actions",
@@ -96,6 +97,15 @@
   "remove.many": "{n} downloads will be removed from the list.",
   "remove.deleteFile": "Also delete the files from disk",
 
+  "restart.title": "Restart from the beginning?",
+  "restart.body": "{name} will be downloaded again from zero. Everything received so far is discarded.",
+  "restart.confirm": "Restart",
+
+  "duplicate.title": "Already in the list",
+  "duplicate.body": "{name} is already in your downloads, with the same link or the same name in the same folder.",
+  "duplicate.show": "Show existing",
+  "duplicate.addAnyway": "Add anyway",
+
   "add.title": "Add download",
   "add.url": "Link",
   "add.urlPlaceholder": "https://example.com/file.zip",
@@ -104,6 +114,7 @@
   "add.probing": "Checking the link…",
   "add.resumable": "resumable, multiple connections",
   "add.notResumable": "single connection, the server does not support ranges",
+  "add.noSpace": "Not enough space in this folder: {free} free",
   "add.filename": "Save as",
   "add.filenameHint": "Taken from the link",
   "add.category": "Category",
@@ -162,7 +173,7 @@
   "status.active": "{n} active",
   "status.queued": "{n} waiting",
   "status.separator": ", ",
-  "status.disk": "{free} free on C:",
+  "status.disk": "{free} free on {drive}",
 
   "unit.B": "B",
   "unit.KB": "KB",
@@ -180,6 +191,7 @@
   "toast.removed": "Removed {name}",
   "toast.removedMany": "Removed {n} downloads",
   "toast.retrying": "Retrying {name}",
+  "toast.restarted": "Restarting {name} from the beginning",
   "toast.pausedAll": "Paused every download",
   "toast.resumedAll": "Resumed every download",
   "toast.copied": "Link copied",

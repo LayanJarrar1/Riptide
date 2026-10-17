@@ -164,8 +164,12 @@ export interface ProbeResult {
   readonly category: CategoryKey;
 }
 
-/** Extension → category, the same table the store seeds. */
-const EXTENSIONS: Readonly<Record<CategoryKey, readonly string[]>> = {
+/**
+ * Extension → category. Must stay identical to `Category::extensions()` in
+ * `crates/riptide-core/src/category.rs` (the engine classifies with that table and its
+ * `extension_table_is_pinned` test fails when it changes); `category.spec.ts` pins this copy.
+ */
+export const CATEGORY_EXTENSIONS: Readonly<Record<CategoryKey, readonly string[]>> = {
   compressed: ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'iso', 'cab'],
   documents: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'txt', 'rtf', 'epub', 'mobi', 'csv'],
   music: ['mp3', 'flac', 'wav', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'aiff'],
@@ -183,7 +187,7 @@ export function categoryOf(filename: string): CategoryKey {
   }
   const ext = filename.slice(dot + 1).toLowerCase();
   for (const key of CATEGORY_KEYS) {
-    if (EXTENSIONS[key].includes(ext)) {
+    if (CATEGORY_EXTENSIONS[key].includes(ext)) {
       return key;
     }
   }

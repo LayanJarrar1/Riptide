@@ -42,6 +42,16 @@ export abstract class DownloadEngine {
   /** Adds a download and resolves with its id. `probe` lets a simulation skip its own probe. */
   abstract add(request: DownloadRequest, probe?: ProbeResult): Promise<number>;
 
+  /**
+   * A download that would duplicate a new one: the same link (fragment ignored) or the same file
+   * name in the same folder; `undefined` when there is none. `filename` and `dir` default to what
+   * `add` would choose.
+   */
+  abstract findDuplicate(url: string, filename?: string, dir?: string): Promise<Download | undefined>;
+
+  /** Starts a download over from byte zero; everything downloaded so far is discarded. */
+  abstract restart(id: number): Promise<void>;
+
   /** Pauses a queued or running download. */
   abstract pause(id: number): Promise<void>;
 

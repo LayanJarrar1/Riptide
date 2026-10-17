@@ -1,0 +1,112 @@
+{
+  "$comment": "Exact JSON frames as serde emits/accepts them (see the tests in crates/riptide-ipc/src/message.rs). Byte-for-byte: key order matters for the `json` strings.",
+  "requests": [
+    { "name": "ping", "id": 7, "body": { "type": "ping" }, "json": "{\"id\":7,\"type\":\"ping\"}" },
+    {
+      "name": "add (minimal)",
+      "id": 8,
+      "body": { "type": "add", "request": { "url": "https://a/b" } },
+      "json": "{\"id\":8,\"type\":\"add\",\"request\":{\"url\":\"https://a/b\"}}"
+    },
+    {
+      "name": "add (browser hand-off)",
+      "id": 10,
+      "body": {
+        "type": "add",
+        "request": {
+          "url": "https://example.com/files/report.zip?token=abc",
+          "filename": "report.zip",
+          "referrer": "https://example.com/files/",
+          "user_agent": "Mozilla/5.0",
+          "secrets": { "cookies": "session=1; theme=dark", "headers": [["X-Requested-With", "Riptide"]] }
+        }
+      },
+      "json": "{\"id\":10,\"type\":\"add\",\"request\":{\"url\":\"https://example.com/files/report.zip?token=abc\",\"filename\":\"report.zip\",\"referrer\":\"https://example.com/files/\",\"user_agent\":\"Mozilla/5.0\",\"secrets\":{\"cookies\":\"session=1; theme=dark\",\"headers\":[[\"X-Requested-With\",\"Riptide\"]]}}}"
+    },
+    {
+      "name": "probe",
+      "id": 11,
+      "body": { "type": "probe", "url": "https://x/y", "referrer": "https://x/" },
+      "json": "{\"id\":11,\"type\":\"probe\",\"url\":\"https://x/y\",\"referrer\":\"https://x/\"}"
+    },
+    {
+      "name": "refresh",
+      "id": 12,
+      "body": { "type": "refresh", "download_id": 3, "url": "https://x/y?sig=2" },
+      "json": "{\"id\":12,\"type\":\"refresh\",\"download_id\":3,\"url\":\"https://x/y?sig=2\"}"
+    },
+    { "name": "list", "id": 13, "body": { "type": "list" }, "json": "{\"id\":13,\"type\":\"list\"}" },
+    {
+      "name": "pause (request id and download id never collide)",
+      "id": 9,
+      "body": { "type": "pause", "download_id": 3 },
+      "json": "{\"id\":9,\"type\":\"pause\",\"download_id\":3}"
+    },
+    {
+      "name": "remove",
+      "id": 14,
+      "body": { "type": "remove", "download_id": 2, "delete_file": true },
+      "json": "{\"id\":14,\"type\":\"remove\",\"download_id\":2,\"delete_file\":true}"
+    }
+  ],
+  "responses": [
+    {
+      "name": "pong",
+      "json": "{\"id\":7,\"type\":\"pong\",\"version\":\"0.1.0\",\"protocol\":1}",
+      "expect": { "id": 7, "type": "pong", "version": "0.1.0", "protocol": 1 }
+    },
+    {
+      "name": "added",
+      "json": "{\"id\":8,\"type\":\"added\",\"download_id\":5}",
+      "expect": { "id": 8, "type": "added", "download_id": 5 }
+    },
+    {
+      "name": "error",
+      "json": "{\"id\":3,\"type\":\"error\",\"code\":\"not_found\",\"message\":\"no download 9\"}",
+      "expect": { "id": 3, "type": "error", "code": "not_found", "message": "no download 9" }
+    },
+    {
+      "name": "ok",
+      "json": "{\"id\":12,\"type\":\"ok\"}",
+      "expect": { "id": 12, "type": "ok" }
+    },
+    {
+      "name": "probed",
+      "json": "{\"id\":11,\"type\":\"probed\",\"result\":{\"final_url\":\"https://cdn/x/y\",\"filename\":\"y.bin\",\"size\":1048576,\"supports_ranges\":true,\"content_type\":\"application/octet-stream\"}}",
+      "expect": {
+        "id": 11,
+        "type": "probed",
+        "result": {
+          "final_url": "https://cdn/x/y",
+          "filename": "y.bin",
+          "size": 1048576,
+          "supports_ranges": true,
+          "content_type": "application/octet-stream"
+        }
+      }
+    },
+    {
+      "name": "downloads (two states, one failed)",
+      "json": "{\"id\":13,\"type\":\"downloads\",\"downloads\":[{\"id\":1,\"url\":\"https://a/b.zip\",\"final_url\":\"https://a/b.zip\",\"filename\":\"b.zip\",\"dir\":\"C:\\\\Users\\\\u\\\\Downloads\",\"size\":2048,\"supports_ranges\":true,\"etag\":\"\\\"abc\\\"\",\"last_modified\":null,\"content_type\":\"application/zip\",\"state\":{\"state\":\"downloading\"},\"category_id\":null,\"queue_id\":1,\"priority\":\"normal\",\"speed_limit\":null,\"connections\":8,\"checksum_expected\":null,\"checksum_actual\":null,\"error\":null,\"added_at\":1700000000000,\"started_at\":1700000001000,\"completed_at\":null},{\"id\":2,\"url\":\"https://a/c.iso\",\"final_url\":null,\"filename\":\"c.iso\",\"dir\":\"C:\\\\Users\\\\u\\\\Downloads\",\"size\":null,\"supports_ranges\":false,\"etag\":null,\"last_modified\":null,\"content_type\":null,\"state\":{\"state\":\"failed\",\"retryable\":true},\"category_id\":2,\"queue_id\":1,\"priority\":\"high\",\"speed_limit\":500000,\"connections\":1,\"checksum_expected\":{\"algo\":\"sha256\",\"hex\":\"00\"},\"checksum_actual\":null,\"error\":\"connection reset\",\"added_at\":1700000002000,\"started_at\":null,\"completed_at\":null}]}",
+      "expectStates": [{ "state": "downloading" }, { "state": "failed", "retryable": true }]
+    },
+    {
+      "name": "event (unsolicited, id 0)",
+      "json": "{\"id\":0,\"type\":\"event\",\"event\":{\"type\":\"removed\",\"id\":4}}",
+      "expect": { "id": 0, "type": "event", "event": { "type": "removed", "id": 4 } }
+    },
+    {
+      "name": "unknown fields are tolerated",
+      "json": "{\"id\":8,\"type\":\"added\",\"download_id\":5,\"future_field\":true}",
+      "expect": { "id": 8, "type": "added", "download_id": 5 }
+    }
+  ],
+  "rejected": [
+    { "name": "unknown type", "json": "{\"id\":1,\"type\":\"exec\",\"cmd\":\"calc\"}" },
+    { "name": "missing id", "json": "{\"type\":\"ok\"}" },
+    { "name": "unknown error code", "json": "{\"id\":1,\"type\":\"error\",\"code\":\"boom\",\"message\":\"x\"}" },
+    { "name": "failed state without retryable", "json": "{\"id\":1,\"type\":\"downloads\",\"downloads\":[{\"id\":1,\"url\":\"u\",\"filename\":\"f\",\"state\":{\"state\":\"failed\"}}]}" },
+    { "name": "not an object", "json": "[]" },
+    { "name": "not json", "json": "{" }
+  ]
+}

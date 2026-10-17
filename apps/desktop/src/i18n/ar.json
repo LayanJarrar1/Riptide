@@ -74,6 +74,7 @@
   "action.copyLink": "نسخ الرابط",
   "action.details": "التفاصيل",
   "action.refreshLink": "الحصول على رابط جديد",
+  "action.restart": "إعادة التحميل من البداية",
   "action.close": "إغلاق",
   "action.dismiss": "تجاهل",
   "action.more": "إجراءات أخرى",
@@ -96,6 +97,15 @@
   "remove.many": "سيُزال {n} من التحميلات من القائمة.",
   "remove.deleteFile": "احذف الملفات من القرص أيضًا",
 
+  "restart.title": "إعادة التحميل من البداية؟",
+  "restart.body": "سيُحمَّل {name} من جديد من الصفر. كل ما وصل حتى الآن سيُحذف.",
+  "restart.confirm": "إعادة التحميل",
+
+  "duplicate.title": "موجود في القائمة",
+  "duplicate.body": "{name} موجود في تحميلاتك، بالرابط نفسه أو بالاسم نفسه في المجلد نفسه.",
+  "duplicate.show": "إظهار الموجود",
+  "duplicate.addAnyway": "إضافة على أي حال",
+
   "add.title": "إضافة تحميل",
   "add.url": "الرابط",
   "add.urlPlaceholder": "https://example.com/file.zip",
@@ -104,6 +114,7 @@
   "add.probing": "جارٍ فحص الرابط…",
   "add.resumable": "قابل للاستئناف، اتصالات متعددة",
   "add.notResumable": "اتصال واحد، الخادم لا يدعم النطاقات",
+  "add.noSpace": "لا توجد مساحة كافية في هذا المجلد: {free} متاحة",
   "add.filename": "حفظ باسم",
   "add.filenameHint": "يؤخذ من الرابط",
   "add.category": "التصنيف",
@@ -162,7 +173,7 @@
   "status.active": "{n} جارية",
   "status.queued": "{n} بالانتظار",
   "status.separator": "، ",
-  "status.disk": "{free} متاحة على C:",
+  "status.disk": "{free} متاحة على {drive}",
 
   "unit.B": "بايت",
   "unit.KB": "ك.ب",
@@ -180,6 +191,7 @@
   "toast.removed": "أُزيل {name}",
   "toast.removedMany": "أُزيل {n} من التحميلات",
   "toast.retrying": "تجري إعادة محاولة {name}",
+  "toast.restarted": "تجري إعادة تحميل {name} من البداية",
   "toast.pausedAll": "أُوقفت كل التحميلات",
   "toast.resumedAll": "استُؤنفت كل التحميلات",
   "toast.copied": "نُسخ الرابط",
