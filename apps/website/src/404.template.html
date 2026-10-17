@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{en.notFound.title}} · Riptide</title>
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="{{base}}assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{base}}css/site.css?v={{v}}">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('riptide-theme');
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : (dark ? 'dark' : 'light');
+      } catch (e) { /* stay light */ }
+    })();
+  </script>
+</head>
+<body class="not-found">
+  <main class="container not-found-main">
+    <a class="brand" href="{{base}}">
+      {{{svg mark}}}
+      <span class="brand-name">Riptide</span>
+    </a>
+    <section class="not-found-block font-latin" lang="en" dir="ltr">
+      <h1>{{en.notFound.title}}</h1>
+      <p>{{en.notFound.text}}</p>
+      <a class="btn btn-primary" href="{{base}}">{{en.notFound.home}}</a>
+    </section>
+    <section class="not-found-block font-arabic" lang="ar" dir="rtl">
+      <h1>{{ar.notFound.title}}</h1>
+      <p>{{ar.notFound.text}}</p>
+      <a class="btn btn-primary" href="{{base}}ar/">{{ar.notFound.home}}</a>
+    </section>
+  </main>
+</body>
+</html>
