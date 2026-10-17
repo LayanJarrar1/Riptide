@@ -62,6 +62,8 @@ export class TauriEngineService extends DownloadEngine {
   readonly totalSpeedBps = computed(() => this.active().reduce((n, d) => n + d.speedBps, 0));
   readonly totalSpeedHistory = signal<readonly number[]>(emptyHistory());
   readonly maxActive = signal(DEFAULT_MAX_ACTIVE);
+  /** Flips to `true` when `ready` resolves, whether or not `list_downloads` succeeded. */
+  override readonly loaded = signal(false);
 
   /** Resolves once the event stream is attached and the initial list is in (never rejects). */
   readonly ready: Promise<void>;
@@ -155,6 +157,7 @@ export class TauriEngineService extends DownloadEngine {
     for (const e of queued) {
       this.onEvent(e);
     }
+    this.loaded.set(true);
   }
 
   private async loadSettings(): Promise<void> {

@@ -17,13 +17,16 @@ interface Cell {
  * The details-drawer view of the segments: the same geometry as the flow bar, taller, with a
  * tooltip per segment (`#3 · 120 MB of 256 MB · active`) and a connections readout. It is the
  * one place the product explains itself: every stripe is a live connection.
+ *
+ * On open each stripe grows to its width in turn; a stripe that appears later (work stealing
+ * split a segment) grows in the same way, which is exactly the event it represents.
  */
 @Component({
   selector: 'app-segment-map',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="map" role="list" [attr.aria-label]="i18n.t('details.segments')">
-      @for (c of cells(); track c.key) {
+      @for (c of cells(); track c.key; let i = $index) {
         <div
           role="listitem"
           class="cell"
@@ -32,6 +35,7 @@ interface Cell {
           [class.c-failed]="c.state === 'failed'"
           [style.inset-inline-start.%]="c.left"
           [style.inline-size.%]="c.width"
+          [style.--i]="i"
           [attr.title]="c.title"
         >
           <span class="cell-fill" [style.transform]="'scaleX(' + c.fill + ')'"></span>
@@ -58,6 +62,21 @@ interface Cell {
       inset-block: 0;
       padding-inline-end: var(--flow-gap);
       box-sizing: border-box;
+      transform-origin: var(--origin, left center);
+      animation: cell-grow var(--dur-4) var(--ease-emphasized-out) both;
+      animation-delay: min(calc(var(--i, 0) * 28ms), 320ms);
+    }
+
+    @keyframes cell-grow {
+      from {
+        transform: scaleX(0);
+        opacity: 0.4;
+      }
+
+      to {
+        transform: scaleX(1);
+        opacity: 1;
+      }
     }
 
     .cell-fill {
@@ -70,6 +89,7 @@ interface Cell {
       opacity: 0.9;
     }
 
+    :host-context([dir='rtl']) .cell,
     :host-context([dir='rtl']) .cell-fill {
       --origin: right center;
     }
@@ -88,6 +108,10 @@ interface Cell {
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .cell {
+        animation: none;
+      }
+
       .cell-fill {
         transition: none;
       }
