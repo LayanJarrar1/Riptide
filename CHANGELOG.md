@@ -4,7 +4,7 @@ All notable changes to Riptide are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-There are no releases yet. Everything below is on `main` and changes often.
+Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/releases). Everything below is on `main` and changes often.
 
 ## [Unreleased]
 
@@ -27,7 +27,7 @@ There are no releases yet. Everything below is on `main` and changes often.
   including Arabic.
 - SQLite (WAL) persistence with migrations, per-second checkpoints and crash recovery on open.
 - A runtime with a queue (`max_active`), scheduler, settings, and an event stream.
-- Logging with daily rotation and secret redaction; portable mode (`data` next to the executable).
+- Logging with daily rotation and secret redaction; portable mode (`portable.txt` next to the executable keeps data in `data\`).
 
 **Desktop app (Windows)**
 

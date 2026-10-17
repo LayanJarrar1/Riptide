@@ -26,9 +26,9 @@
 </p>
 
 > [!WARNING]
-> **Riptide is in early development and is not ready to use yet.**
-> There are no releases, no installer and no stability promises. Everything on this page comes from a
-> work-in-progress build that changes daily. Star or watch the repository to follow along.
+> **Riptide is in early development.** The first alpha preview is out for testing, not for important
+> downloads: [download it from Releases](https://github.com/LayanJarrar1/Riptide/releases). Expect rough edges and frequent changes.
+> Star or watch the repository to follow along.
 
 ## Overview
 
@@ -55,7 +55,7 @@ platforms can follow.
 | Desktop app | Real engine inside the app. List, details, add dialog, settings, Arabic/English, dark/light. |
 | Command line | `riptide fetch` (standalone download with resume), `bench`, `ping`, `paths`. |
 | Browser integration, media, torrents | Part of the product's direction; nothing to install today. |
-| Installer and releases | None yet. |
+| Installer and releases | [0.1.0 alpha 1](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.1): per-user installer and portable zip. Not signed yet. |
 
 The full list of what exists is in the [changelog](CHANGELOG.md).
 
