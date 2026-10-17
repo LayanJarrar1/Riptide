@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 
+import { DiskSpaceService } from '../../core/disk-space.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
+import { FormatService } from '../../core/format.service';
 import { DownloadEngine } from '../../data/download-engine';
+import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
-import { CATEGORY_KEYS, CategoryKey, DownloadRequest, isHttpUrl, ProbeResult } from '../../model/download';
+import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, ProbeResult } from '../../model/download';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -11,6 +14,7 @@ import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
 import { SettingsService } from '../settings/settings.service';
 import { CATEGORY_ICONS } from './download-row.component';
+import { DuplicateChoice, DuplicateDialogComponent } from './duplicate-dialog.component';
 
 type ProbeState = 'idle' | 'probing' | 'ok' | 'invalid';
 
@@ -24,7 +28,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 @Component({
   selector: 'app-add-download-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, DialogComponent, IconComponent],
+  imports: [...FORMAT_PIPES, ButtonComponent, DialogComponent, DuplicateDialogComponent, IconComponent],
   template: `
     <app-dialog [open]="open()" [title]="i18n.t('add.title')" [wide]="true" (closed)="close()">
       <form class="form" (submit)="submit($event)">
@@ -53,6 +57,11 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             <span class="help is-error">{{ i18n.t('add.urlInvalid') }}</span>
           } @else if (probe() === 'probing') {
             <span class="help">{{ i18n.t('add.probing') }}</span>
+          } @else if (lowSpace()) {
+            <span class="help is-warning">
+              <app-icon name="alert" [size]="14" />
+              {{ i18n.t('add.noSpace').replace('{free}', format.bytes(freeBytes())) }}
+            </span>
           } @else if (result(); as r) {
             <span class="help preview">
               <app-icon [name]="r.supportsRanges ? 'bolt' : 'info'" [size]="14" [class.ok]="r.supportsRanges" />
@@ -146,6 +155,8 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
         </button>
       </ng-container>
     </app-dialog>
+
+    <app-duplicate-dialog [existing]="duplicate()" (chosen)="onDuplicate($event)" />
   `,
   styles: `
     .form {
@@ -284,6 +295,10 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       color: var(--color-danger);
     }
 
+    .help.is-warning {
+      color: var(--color-warning);
+    }
+
     .preview {
       color: var(--color-text-secondary);
     }
@@ -371,6 +386,9 @@ export class AddDownloadDialogComponent {
   private readonly invoke = inject(TAURI_INVOKE);
   private readonly toasts = inject(ToastService);
   private readonly settingsService = inject(SettingsService);
+  private readonly disk = inject(DiskSpaceService);
+  private readonly store = inject(DownloadsStore);
+  protected readonly format = inject(FormatService);
 
   readonly open = input.required<boolean>();
   /** Optional link to pre-fill (clipboard, deep link). */
@@ -396,14 +414,27 @@ export class AddDownloadDialogComponent {
   protected readonly headers = signal('');
   /** `true` while the engine is accepting the request (guards a double submit). */
   protected readonly submitting = signal(false);
+  /** Free bytes on the chosen folder's volume; `null` while unknown. */
+  protected readonly freeBytes = signal<number | null>(null);
+  /** A record the engine says this request would duplicate; the prompt shows while set. */
+  protected readonly duplicate = signal<Download | null>(null);
 
   private probeToken = 0;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  private diskToken = 0;
+  /** The request waiting for the duplicate prompt's answer. */
+  private pending: DownloadRequest | null = null;
 
   protected readonly categoryIcon = computed(() => CATEGORY_ICONS[this.category()]);
   protected readonly checksumError = computed(() => {
     const hex = this.checksum().trim();
     return hex.length > 0 && ![32, 40, 64].includes(hex.length);
+  });
+  /** The probe knows the size and the folder's volume cannot hold it. */
+  protected readonly lowSpace = computed(() => {
+    const size = this.result()?.size ?? null;
+    const free = this.freeBytes();
+    return size !== null && free !== null && size > free;
   });
   protected readonly canSubmit = computed(() => isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError() && !this.submitting());
 
@@ -416,6 +447,16 @@ export class AddDownloadDialogComponent {
           this.setUrl(initial);
         }
       }
+    });
+    // free space follows the folder the user picks (or the category picks for them)
+    effect(() => {
+      const dir = this.dir().trim();
+      const token = ++this.diskToken;
+      void this.disk.freeFor(dir).then((free) => {
+        if (token === this.diskToken) {
+          this.freeBytes.set(free);
+        }
+      });
     });
   }
 
@@ -476,6 +517,38 @@ export class AddDownloadDialogComponent {
       startPaused: this.startPaused(),
       checksum: hex.length > 0 ? { algo, hex } : undefined,
     };
+    this.submitting.set(true);
+    try {
+      // the same link, or the same name in the same folder, already in the list: ask first
+      const existing = await this.engine.findDuplicate(request.url, request.filename ?? this.result()?.filename, request.dir);
+      if (existing !== undefined) {
+        this.pending = request;
+        this.duplicate.set(existing);
+        return;
+      }
+    } catch (error: unknown) {
+      console.warn('[add] find_duplicate failed', error);
+    } finally {
+      this.submitting.set(false);
+    }
+    await this.send(request);
+  }
+
+  /** The duplicate prompt's answer: show the existing row, add anyway, or back to the form. */
+  protected onDuplicate(choice: DuplicateChoice): void {
+    const existing = this.duplicate();
+    const request = this.pending;
+    this.duplicate.set(null);
+    this.pending = null;
+    if (choice === 'add' && request !== null) {
+      void this.send(request);
+    } else if (choice === 'show' && existing !== null) {
+      this.closed.emit();
+      this.store.openDetails(existing.id);
+    }
+  }
+
+  private async send(request: DownloadRequest): Promise<void> {
     this.submitting.set(true);
     try {
       const id = await this.engine.add(request, this.result() ?? undefined);
@@ -539,5 +612,7 @@ export class AddDownloadDialogComponent {
     this.password.set('');
     this.headers.set('');
     this.submitting.set(false);
+    this.duplicate.set(null);
+    this.pending = null;
   }
 }

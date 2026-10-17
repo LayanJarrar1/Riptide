@@ -162,6 +162,30 @@ export class MockEngineService extends DownloadEngine {
     return Promise.resolve(id);
   }
 
+  /** Scans the list like the engine would: same link without its fragment, or same name in the same folder. */
+  findDuplicate(url: string, filename?: string, dir?: string): Promise<Download | undefined> {
+    const wanted = stripFragment(url);
+    const name = filename ?? filenameFromUrl(url);
+    const folder = dir ?? 'D:\\Downloads';
+    const match = [...this.list()].reverse().find((d) => stripFragment(d.url) === wanted || (d.filename === name && d.dir === folder));
+    return Promise.resolve(match);
+  }
+
+  /** Resets the simulation of one download: progress gone, back to queued (or paused if it was). */
+  restart(id: number): Promise<void> {
+    this.update(id, (d) => ({
+      ...d,
+      state: d.state === 'paused' ? 'paused' : 'queued',
+      segments: d.size === null ? [{ index: 0, start: 0, end: 0, written: 0, state: 'pending' }] : planSegments(d.size, d.connections),
+      speedBps: 0,
+      speedHistory: new Array<number>(60).fill(0),
+      startedAt: null,
+      completedAt: null,
+      failure: null,
+    }));
+    return Promise.resolve();
+  }
+
   /** Pauses a queued or running download. */
   pause(id: number): Promise<void> {
     this.update(id, (d) =>
@@ -345,6 +369,17 @@ export class MockEngineService extends DownloadEngine {
       active++;
     }
     return segments;
+  }
+}
+
+/** `url` without its `#fragment`; the raw string when it does not parse. */
+function stripFragment(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return url;
   }
 }
 

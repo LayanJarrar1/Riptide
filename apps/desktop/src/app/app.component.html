@@ -123,7 +123,7 @@
     </div>
     <span class="status-text">{{ statusText() }}</span>
     <span class="status-spacer"></span>
-    <span class="status-text num">{{ ('status.disk' | t).replace('{free}', format.bytes(freeBytes)) }}</span>
+    <span class="status-text num">{{ ('status.disk' | t).replace('{free}', format.bytes(disk.freeBytes())).replace('{drive}', disk.volume()) }}</span>
     @if (tauri.appInfo(); as info) {
       <span class="status-version num">v{{ info.version }}</span>
     }

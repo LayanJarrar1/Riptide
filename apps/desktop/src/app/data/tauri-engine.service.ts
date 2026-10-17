@@ -99,8 +99,22 @@ export class TauriEngineService extends DownloadEngine {
     return id;
   }
 
+  /** Asks `find_duplicate`; the answer is mapped with the segments the list already holds, if any. */
+  async findDuplicate(url: string, filename?: string, dir?: string): Promise<Download | undefined> {
+    const record = await this.invoke<BridgeDownload | null>('find_duplicate', { url, filename: filename ?? null, dir: dir ?? null });
+    if (record === null || record === undefined) {
+      return undefined;
+    }
+    return this.get(record.id) ?? toUiDownload(record, await this.segmentsOf(record.id));
+  }
+
   pause(id: number): Promise<void> {
     return this.invoke<void>('pause_download', { id });
+  }
+
+  /** `restart_download`; the row follows the engine's events (paused → queued, or added again). */
+  restart(id: number): Promise<void> {
+    return this.invoke<void>('restart_download', { id });
   }
 
   resume(id: number): Promise<void> {
