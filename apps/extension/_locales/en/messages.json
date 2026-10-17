@@ -1,0 +1,11 @@
+{
+  "extName": { "message": "Riptide Download Manager", "description": "Extension name" },
+  "extDescription": {
+    "message": "Hands your downloads to Riptide, the free download manager, automatically or with one click.",
+    "description": "Extension description"
+  },
+  "actionTitle": { "message": "Riptide", "description": "Toolbar button title" },
+  "menuLink": { "message": "Download with Riptide", "description": "Context menu on links and media" },
+  "menuAll": { "message": "Download all links on this page with Riptide", "description": "Context menu on the page" },
+  "menuSelection": { "message": "Download selected links with Riptide", "description": "Context menu on a selection" }
+}
