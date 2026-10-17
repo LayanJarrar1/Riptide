@@ -50,3 +50,6 @@ desktop.ini
 
 # Playwright MCP scratch output
 /.playwright-mcp/
+
+# Website build output (node apps/website/build.mjs)
+/apps/website/dist/
