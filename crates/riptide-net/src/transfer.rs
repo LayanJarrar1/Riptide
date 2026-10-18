@@ -730,6 +730,17 @@ impl SegmentTask {
             match result {
                 Ok(end) => return Ok(end),
                 Err(e) => {
+                    if matches!(
+                        e,
+                        Error::Status {
+                            status: 429 | 503,
+                            ..
+                        }
+                    ) {
+                        if let Some(cap) = self.limiter.report_throttled(&host) {
+                            tracing::info!(host = %host, cap, "server is throttling: fewer connections");
+                        }
+                    }
                     let progressed = lock(&self.state).segments[self.index].written > before;
                     if progressed {
                         attempt = 0;
