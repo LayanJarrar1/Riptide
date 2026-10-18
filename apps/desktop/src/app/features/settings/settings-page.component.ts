@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 
 import { BrowserIntegrationService } from '../../core/browser-integration.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
+import { UpdateService } from '../../core/update.service';
 import { I18nService, Lang, LANGS } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey } from '../../model/download';
 import { TauriService } from '../../tauri/tauri.service';
@@ -167,9 +168,32 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
           </div>
           <div class="about-actions">
             <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="s().channel" (valueChange)="patch({ channel: $event })" />
-            <button appButton variant="secondary" icon="retry" type="button" (click)="checkUpdates()">{{ i18n.t('settings.checkUpdates') }}</button>
+            <button appButton variant="secondary" icon="retry" type="button" [disabled]="updates.status() === 'checking' || updates.status() === 'installing'" (click)="checkUpdates()">{{ i18n.t(updates.status() === 'checking' ? 'settings.checkingUpdates' : 'settings.checkUpdates') }}</button>
           </div>
         </div>
+        @if (updates.available(); as update) {
+          <div class="setting column update-card" role="status">
+            <div class="setting-text">
+              <span class="setting-name">{{ updateTitle(update.version) }}</span>
+              @if (update.notes) {
+                <span class="setting-desc update-notes" dir="auto">{{ update.notes }}</span>
+              }
+            </div>
+            <div>
+              <button appButton variant="primary" type="button" [disabled]="updates.status() === 'installing'" (click)="installUpdate()">{{ i18n.t(updates.status() === 'installing' ? 'settings.updateInstalling' : 'settings.updateRestart') }}</button>
+            </div>
+          </div>
+        }
+        <label class="setting">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.autoUpdate') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.autoUpdateDesc') }}</span>
+          </div>
+          <span class="switch" [class.is-on]="s().checkUpdates">
+            <input type="checkbox" role="switch" [checked]="s().checkUpdates" (change)="patch({ checkUpdates: checked($event) })" />
+            <span class="knob"></span>
+          </span>
+        </label>
         <div class="setting">
           <div class="setting-text">
             <span class="setting-name">{{ i18n.t('settings.reset') }}</span>
@@ -437,6 +461,16 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
       align-items: center;
       gap: var(--space-3);
     }
+
+    .update-card .setting-name {
+      color: var(--color-accent);
+    }
+
+    .update-notes {
+      white-space: pre-line;
+      max-block-size: 12rem;
+      overflow: auto;
+    }
   `,
 })
 export class SettingsPageComponent {
@@ -446,6 +480,7 @@ export class SettingsPageComponent {
   protected readonly settings = inject(SettingsService);
   private readonly toasts = inject(ToastService);
   protected readonly browser = inject(BrowserIntegrationService);
+  protected readonly updates = inject(UpdateService);
 
   protected readonly s = this.settings.settings;
 
@@ -514,8 +549,27 @@ export class SettingsPageComponent {
     }
   }
 
-  protected checkUpdates(): void {
-    this.toasts.show('success', this.i18n.t('toast.upToDate'));
+  protected checked(event: Event): boolean {
+    return (event.target as HTMLInputElement).checked;
+  }
+
+  protected updateTitle(version: string): string {
+    return this.i18n.t('settings.updateAvailable').replace('{version}', version);
+  }
+
+  protected async checkUpdates(): Promise<void> {
+    try {
+      const update = await this.updates.check(this.s().channel);
+      if (update === null) {
+        this.toasts.show('success', this.i18n.t('toast.upToDate'));
+      }
+    } catch {
+      this.toasts.show('danger', this.i18n.t('toast.updateCheckFailed'));
+    }
+  }
+
+  protected installUpdate(): void {
+    void this.updates.installOrToast();
   }
 
   protected reset(): void {

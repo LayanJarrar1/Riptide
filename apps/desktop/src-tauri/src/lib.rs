@@ -22,6 +22,7 @@ pub mod ipc_server;
 pub mod notify;
 pub mod shell;
 pub mod tray;
+pub mod updater;
 
 pub use commands::{AppInfo, BUILD_LABEL, PRODUCT_NAME};
 
@@ -131,6 +132,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updater::PendingUpdate::default())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_autostart::init(
@@ -240,6 +243,8 @@ pub fn run() {
             commands::integration_status,
             commands::register_browser_host,
             commands::unregister_browser_host,
+            updater::check_update,
+            updater::install_update,
             shell::set_shell_prefs,
             shell::autostart_enabled,
             shell::set_autostart,

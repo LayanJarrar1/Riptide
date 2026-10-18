@@ -18,6 +18,7 @@ import { filter } from 'rxjs';
 import { DiskSpaceService } from './core/disk-space.service';
 import { FormatService } from './core/format.service';
 import { TickerDirective } from './core/ticker.directive';
+import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
 import { CompletionToastService } from './features/downloads/completion-toast.service';
@@ -82,6 +83,7 @@ export class AppComponent implements OnInit {
   protected readonly ui = inject(UiState);
   protected readonly format = inject(FormatService);
   private readonly router = inject(Router);
+  private readonly updates = inject(UpdateService);
   private readonly searchRef = viewChild<ElementRef<HTMLInputElement>>('search');
 
   protected readonly views = LIST_VIEWS;
@@ -146,6 +148,8 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     void this.tauri.loadAppInfo();
+    // at most once a day and only while enabled in Settings (the one non-download call)
+    void this.updates.startupCheck();
   }
 
   protected onSearch(event: Event): void {
