@@ -101,6 +101,16 @@ export abstract class DownloadEngine {
    */
   abstract setSpeedLimit(id: number, bps: number | null): Promise<void>;
 
+  /** Moves downloads to the end of another queue; they show their new queue at once. */
+  abstract moveToQueue(ids: readonly number[], queueId: number): Promise<void>;
+
+  /**
+   * Puts the downloads of one queue in this order (ids of that queue; any it does not list
+   * follow in their current order). The new order shows at once and is restored if the engine
+   * refuses it.
+   */
+  abstract reorderQueue(queueId: number, ids: readonly number[]): Promise<void>;
+
   /** Gives an expired download a fresh address. */
   abstract refresh(id: number, url: string): Promise<void>;
 }

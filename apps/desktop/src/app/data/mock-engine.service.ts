@@ -17,6 +17,7 @@ import {
   MediaProbe,
 } from '../model/download';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
+import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
 import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
 
@@ -320,6 +321,18 @@ export class MockEngineService extends DownloadEngine {
     for (const d of this.list()) {
       void this.resume(d.id);
     }
+    return Promise.resolve();
+  }
+
+  /** Moves downloads to the end of another queue (the simulation has no per-queue limits). */
+  moveToQueue(ids: readonly number[], queueId: number): Promise<void> {
+    this.list.update((all) => withMovedToQueue(all, ids, queueId));
+    return Promise.resolve();
+  }
+
+  /** Renumbers the queue's downloads in the given order. */
+  reorderQueue(queueId: number, ids: readonly number[]): Promise<void> {
+    this.list.update((all) => withQueueOrder(all, queueId, ids));
     return Promise.resolve();
   }
 

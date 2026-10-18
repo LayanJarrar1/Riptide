@@ -457,4 +457,86 @@ describe('TauriEngineService', () => {
     bridge.handle = (): Promise<never> => Promise.reject(new Error('illegal transition'));
     await expectAsync(engine.pause(1)).toBeRejectedWithError('illegal transition');
   });
+
+  describe('queues', () => {
+    /** Answers `queue_items` from a table and records every other command like the base fake. */
+    function answerQueueItems(members: BridgeDownload[]): void {
+      const handle = bridge.handle;
+      bridge.handle = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+        if (cmd === 'queue_items') {
+          bridge.calls.push({ cmd, args });
+          return Promise.resolve(members as unknown as T);
+        }
+        return handle<T>(cmd, args);
+      };
+    }
+
+    it('download_moved re-reads the record, so the row shows its new queue', async () => {
+      await start();
+      expect(engine.get(1)?.queueId).toBe(1);
+      bridge.records.set(1, bridgeDownload({ id: 1, filename: 'one.zip', queue_id: 5, queue_position: 0 }));
+      bridge.emit({ type: 'download_moved', id: 1, from: 1, to: 5 });
+      await settle();
+      expect(engine.get(1)?.queueId).toBe(5);
+    });
+
+    it('queue_order_changed reads the queue again and applies the new places', async () => {
+      await start();
+      answerQueueItems([bridgeDownload({ id: 2, queue_id: 1, queue_position: 0 }), bridgeDownload({ id: 1, queue_id: 1, queue_position: 1 })]);
+      bridge.emit({ type: 'queue_order_changed', queue_id: 1 });
+      await settle();
+      expect(bridge.commands('queue_items')[0].args).toEqual({ id: 1 });
+      expect(engine.get(2)?.queuePosition).toBe(0);
+      expect(engine.get(1)?.queuePosition).toBe(1);
+    });
+
+    it('moveToQueue shows the move at once, at the end of the target, and sends one command per download', async () => {
+      await start();
+      const pending = engine.moveToQueue([1, 2], 9);
+      expect(engine.get(1)?.queueId).toBe(9);
+      expect(engine.get(2)?.queueId).toBe(9);
+      expect([engine.get(1)?.queuePosition, engine.get(2)?.queuePosition]).toEqual([0, 1]);
+      await pending;
+      expect(bridge.commands('move_to_queue').map((c) => c.args)).toEqual([
+        { id: 1, queue: 9 },
+        { id: 2, queue: 9 },
+      ]);
+    });
+
+    it('moveToQueue puts the engine\'s answer back when the move is refused', async () => {
+      await start();
+      const handle = bridge.handle;
+      bridge.handle = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> =>
+        cmd === 'move_to_queue' ? Promise.reject(new Error('queue not found')) : handle<T>(cmd, args);
+      await expectAsync(engine.moveToQueue([1], 42)).toBeRejectedWithError('queue not found');
+      await settle();
+      expect(engine.get(1)?.queueId).toBe(1);
+    });
+
+    it('reorderQueue shows the new order at once and sends reorder_queue_items', async () => {
+      await start();
+      bridge.records.set(1, bridgeDownload({ id: 1, queue_position: 0 }));
+      bridge.records.set(2, bridgeDownload({ id: 2, queue_position: 1 }));
+      await engine.reorderQueue(1, [2, 1]);
+      expect(engine.get(2)?.queuePosition).toBe(0);
+      expect(engine.get(1)?.queuePosition).toBe(1);
+      expect(bridge.commands('reorder_queue_items')[0].args).toEqual({ queue: 1, order: [2, 1] });
+    });
+
+    it('reorderQueue restores the engine\'s order when it refuses', async () => {
+      await start();
+      const handle = bridge.handle;
+      bridge.handle = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+        if (cmd === 'reorder_queue_items') {
+          return Promise.reject(new Error('not in this queue'));
+        }
+        return handle<T>(cmd, args);
+      };
+      answerQueueItems([bridgeDownload({ id: 1, queue_id: 1, queue_position: 0 }), bridgeDownload({ id: 2, queue_id: 1, queue_position: 1 })]);
+      await expectAsync(engine.reorderQueue(1, [2, 1])).toBeRejectedWithError('not in this queue');
+      await settle();
+      expect(engine.get(1)?.queuePosition).toBe(0);
+      expect(engine.get(2)?.queuePosition).toBe(1);
+    });
+  });
 });

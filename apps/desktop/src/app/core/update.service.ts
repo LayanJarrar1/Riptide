@@ -4,6 +4,7 @@ import { Settings, SettingsService } from '../features/settings/settings.service
 import { I18nService } from '../i18n/i18n.service';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../tauri/tauri-bridge';
 import { ToastService } from '../ui/toast.service';
+import { NOW } from './clock';
 import { PREFERENCE_STORE } from './preferences';
 
 /** An available update, as `check_update` reports it (`src-tauri/src/updater.rs`). */
@@ -38,11 +39,7 @@ export const WINDOW_FOCUSED = new InjectionToken<() => boolean>('riptide.window.
   factory: () => () => typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus(),
 });
 
-/** The clock; specs provide a fixed one. */
-export const NOW = new InjectionToken<() => number>('riptide.now', {
-  providedIn: 'root',
-  factory: () => () => Date.now(),
-});
+export { NOW } from './clock';
 
 /**
  * Self-update. The only network call that is not a download (privacy): nothing happens unless

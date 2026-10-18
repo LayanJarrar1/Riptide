@@ -13,6 +13,7 @@ import type { BatchOutcome } from '../tauri/bridge/BatchOutcome';
 import type { UrlList } from '../tauri/bridge/UrlList';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { emptyHistory, toBridgeRequest, toUiDownload, toUiMedia, toUiProbe, toUiSize } from './bridge-mapping';
+import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
 
 /** The Tauri event every engine notification arrives on; its payload is the generated `Event`. */
@@ -40,6 +41,8 @@ type SegmentProgressEvent = Extract<EngineEvent, { type: 'segment_progress' }>;
  * - `completed`: refresh the record (`completedAt`, final segments).
  * - `failed`: refresh the record (`failure` kind derived from the error text).
  * - `removed`: drop the row.
+ * - `download_moved`: refresh the record (its queue and place changed).
+ * - `queue_order_changed`: re-read that queue's members (`queue_items`) for their new places.
  *
  * Events that arrive before the initial list is in are queued and replayed after it, so nothing
  * is lost or overwritten at startup. Refreshes of the same id are sequenced: a slow answer never
@@ -197,6 +200,33 @@ export class TauriEngineService extends DownloadEngine {
   }
 
   /**
+   * `move_to_queue` per download. The rows show their new queue at once; if the engine refuses
+   * (or the call fails), the records are re-read so the list shows the engine's truth.
+   */
+  async moveToQueue(ids: readonly number[], queueId: number): Promise<void> {
+    this.list.update((all) => withMovedToQueue(all, ids, queueId));
+    try {
+      for (const id of ids) {
+        await this.invoke<void>('move_to_queue', { id, queue: queueId });
+      }
+    } catch (error: unknown) {
+      await Promise.all(ids.map((id) => this.refreshRecord(id)));
+      throw error;
+    }
+  }
+
+  /** `reorder_queue_items`; the new order shows at once and the queue is re-read on failure. */
+  async reorderQueue(queueId: number, ids: readonly number[]): Promise<void> {
+    this.list.update((all) => withQueueOrder(all, queueId, ids));
+    try {
+      await this.invoke<void>('reorder_queue_items', { queue: queueId, order: ids });
+    } catch (error: unknown) {
+      await this.reloadQueue(queueId);
+      throw error;
+    }
+  }
+
+  /**
    * Not an engine command yet. The downloads page does not call this: for an expired link it
    * opens the add dialog pre-filled with the URL instead.
    */
@@ -258,6 +288,28 @@ export class TauriEngineService extends DownloadEngine {
       case 'removed':
         this.drop(e.id);
         break;
+      case 'download_moved':
+        void this.refreshRecord(e.id);
+        break;
+      case 'queue_order_changed':
+        void this.reloadQueue(e.queue_id);
+        break;
+    }
+  }
+
+  /** Re-reads the members of one queue (their order changed) and applies queue and position. */
+  private async reloadQueue(queueId: number): Promise<void> {
+    try {
+      const members = await this.invoke<BridgeDownload[]>('queue_items', { id: queueId });
+      const placed = new Map(members.map((m) => [m.id, m]));
+      this.list.update((all) =>
+        all.map((d) => {
+          const m = placed.get(d.id);
+          return m === undefined ? d : { ...d, queueId: m.queue_id, queuePosition: m.queue_position };
+        }),
+      );
+    } catch (error: unknown) {
+      console.warn('[engine] queue_items failed', error);
     }
   }
 
