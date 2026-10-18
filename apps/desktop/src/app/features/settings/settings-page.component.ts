@@ -5,6 +5,7 @@ import { FORMAT_PIPES } from '../../core/format.pipes';
 import { UpdateService } from '../../core/update.service';
 import { I18nService, Lang, LANGS } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey } from '../../model/download';
+import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { TauriService } from '../../tauri/tauri.service';
 import { Theme, THEMES, ThemeService } from '../../theme/theme.service';
 import { ButtonComponent } from '../../ui/button.component';
@@ -14,6 +15,13 @@ import { SpeedLimitControlComponent } from '../../ui/speed-limit-control.compone
 import { ToastService } from '../../ui/toast.service';
 import { CATEGORY_ICONS } from '../downloads/download-row.component';
 import { Settings, SettingsService } from './settings.service';
+
+/** What `media_tools_info` reports (`src-tauri/src/media.rs`). */
+export interface MediaToolsInfo {
+  readonly available: boolean;
+  readonly version: string | null;
+  readonly ffmpeg: boolean;
+}
 
 /** `http://`, `https://` or `socks5(h)://` + host[:port], optional `user:pass@`, nothing after. */
 export function isValidProxyUrl(raw: string): boolean {
@@ -191,6 +199,15 @@ export function isValidProxyUrl(raw: string): boolean {
           <div class="about-actions">
             <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="s().channel" (valueChange)="patch({ channel: $event })" />
             <button appButton variant="secondary" icon="retry" type="button" [disabled]="updates.status() === 'checking' || updates.status() === 'installing'" (click)="checkUpdates()">{{ i18n.t(updates.status() === 'checking' ? 'settings.checkingUpdates' : 'settings.checkUpdates') }}</button>
+          </div>
+        </div>
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.video') }}</span>
+            <span class="setting-desc">{{ videoStatus() }}</span>
+          </div>
+          <div class="about-actions">
+            <button appButton variant="secondary" icon="retry" type="button" [busy]="videoBusy()" [disabled]="!tauriAvailable || videoBusy()" (click)="updateVideo()">{{ i18n.t(videoBusy() ? 'settings.videoUpdating' : 'settings.videoUpdate') }}</button>
           </div>
         </div>
         @if (updates.available(); as update) {
@@ -512,6 +529,27 @@ export class SettingsPageComponent {
   private readonly toasts = inject(ToastService);
   protected readonly browser = inject(BrowserIntegrationService);
   protected readonly updates = inject(UpdateService);
+  protected readonly tauriAvailable = inject(TAURI_AVAILABLE);
+  private readonly invoke = inject(TAURI_INVOKE);
+
+  /** What `media_tools_info` said; `null` while loading or in the browser preview. */
+  protected readonly videoInfo = signal<MediaToolsInfo | null>(null);
+  protected readonly videoBusy = signal(false);
+  protected readonly videoStatus = computed(() => {
+    if (!this.tauriAvailable) {
+      return this.i18n.t('settings.videoPreview');
+    }
+    const info = this.videoInfo();
+    if (info === null) {
+      return this.i18n.t('settings.videoChecking');
+    }
+    if (!info.available) {
+      return this.i18n.t('settings.videoMissing');
+    }
+    return this.i18n
+      .t(info.ffmpeg ? 'settings.videoReady' : 'settings.videoNoFfmpeg')
+      .replace('{version}', info.version ?? '?');
+  });
 
   protected readonly s = this.settings.settings;
 
@@ -525,6 +563,34 @@ export class SettingsPageComponent {
 
   constructor() {
     void this.browser.refresh();
+    void this.loadVideoInfo();
+  }
+
+  private async loadVideoInfo(): Promise<void> {
+    if (!this.tauriAvailable) {
+      return;
+    }
+    try {
+      this.videoInfo.set(await this.invoke<MediaToolsInfo>('media_tools_info'));
+    } catch {
+      this.videoInfo.set({ available: false, version: null, ffmpeg: false });
+    }
+  }
+
+  protected async updateVideo(): Promise<void> {
+    if (this.videoBusy()) {
+      return;
+    }
+    this.videoBusy.set(true);
+    try {
+      const version = await this.invoke<string>('update_media_tools');
+      this.toasts.show('success', this.i18n.t('toast.videoUpdated').replace('{version}', version));
+      await this.loadVideoInfo();
+    } catch {
+      this.toasts.show('danger', this.i18n.t('toast.videoUpdateFailed'));
+    } finally {
+      this.videoBusy.set(false);
+    }
   }
   protected readonly categories = CATEGORY_KEYS;
   protected readonly icons = CATEGORY_ICONS;

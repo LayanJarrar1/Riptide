@@ -94,6 +94,68 @@ export interface Download {
   readonly speedLimitBps?: number | null;
   /** Expected digest, if the user gave one. */
   readonly checksum: { readonly algo: 'md5' | 'sha1' | 'sha256'; readonly hex: string } | null;
+  /** `media` = a video page fetched by yt-dlp (no segments); absent or `http` = a plain file. */
+  readonly kind?: DownloadKind;
+}
+
+/** Which engine moves the bytes. */
+export type DownloadKind = 'http' | 'media';
+
+/** One entry of a video page's quality menu. Mirrors `riptide_core::MediaChoice`. */
+export interface MediaChoice {
+  /** Sent back as `mediaFormat`: `best`, `h720`, `audio-m4a`, `audio-mp3`. */
+  readonly key: string;
+  readonly kind: 'best' | 'video' | 'audio';
+  readonly height: number | null;
+  readonly ext: string;
+  readonly approxSize: number | null;
+}
+
+/** What a video page offers. */
+export interface MediaProbe {
+  readonly title: string;
+  readonly uploader: string | null;
+  readonly thumbnail: string | null;
+  readonly duration: number | null;
+  readonly choices: readonly MediaChoice[];
+}
+
+/**
+ * Sites the add dialog treats as video pages straight away. Must match `MEDIA_HOSTS` in
+ * `crates/riptide-core/src/media.rs`; other pages still get a media probe when the plain probe
+ * finds HTML.
+ */
+export const MEDIA_HOSTS: readonly string[] = [
+  'youtube.com',
+  'youtu.be',
+  'youtube-nocookie.com',
+  'vimeo.com',
+  'dailymotion.com',
+  'dai.ly',
+  'twitch.tv',
+  'soundcloud.com',
+  'bilibili.com',
+  'streamable.com',
+  'ted.com',
+  'tiktok.com',
+  'instagram.com',
+  'facebook.com',
+  'fb.watch',
+  'x.com',
+  'twitter.com',
+  'reddit.com',
+  'rumble.com',
+  'odysee.com',
+];
+
+/** `true` when `url` is on one of the [`MEDIA_HOSTS`] (or a subdomain). */
+export function isMediaUrl(url: string): boolean {
+  try {
+    const host = new URL(url.trim()).hostname.toLowerCase().replace(/\.$/, '');
+    return MEDIA_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
 }
 
 /** Bytes on disk across all segments. */
@@ -154,6 +216,9 @@ export interface DownloadRequest {
   readonly connections?: number;
   readonly startPaused?: boolean;
   readonly checksum?: Download['checksum'];
+  /** `media` for a video page; `mediaFormat` is then a [`MediaChoice`] key. */
+  readonly kind?: DownloadKind;
+  readonly mediaFormat?: string;
 }
 
 /** Result of probing a URL before adding it. */
