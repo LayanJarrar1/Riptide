@@ -3,8 +3,8 @@
 Manifest V3 extension for Chrome, Edge and Firefox that hands downloads to the Riptide desktop
 app. One TypeScript codebase, three builds (`dist/chrome`, `dist/edge`, `dist/firefox`).
 
-The extension can only **ask**: it sends `ping`, `probe`, `add`, `refresh` and the read-only
-`list` to the Native Messaging host `app.riptide.host` (`crates/riptide-host`), which forwards
+The extension can only **ask**: it sends `ping`, `probe`, `probe_media`, `add`, `refresh` and the
+read-only `list` to the Native Messaging host `app.riptide.host` (`crates/riptide-host`), which forwards
 them to the app over its local pipe.
 Nothing coming from a page is ever executed, shelled or used as a path.
 
@@ -152,6 +152,33 @@ starts with the browser while the integration is on. The popup sends `list` to s
 states; if the host answers with an `error` (an older host forwarded only
 `ping`/`probe`/`add`/`refresh`), the popup shows "sent" and says live state is unavailable.
 
+## Video pages ("Download this video")
+
+- **Detection** (`src/media.ts`, pure, unit-tested). A page counts as a video page when it is a
+  watch page of a site in `MEDIA_HOSTS` (mirrors `riptide-core`), or when it holds a `<video>`
+  of at least 200x112 px. On Firefox the same `webRequest` permission the capture already uses
+  also *observes* (never blocks) responses with a `video/*` or `audio/*` MIME, an HLS/DASH
+  manifest (`.m3u8`, `.mpd`) or a progressive `mp4`/`webm`. Chrome and Edge have no such
+  permission in this extension, so they rely on the DOM check and the known hosts; adding
+  `webRequest` there would be a new permission and is listed as a follow-up. A detected video
+  puts a counter on the toolbar badge of that tab (cyan `#00D5E8`).
+- **Floating button.** A small pill in the content script's closed shadow root, at the corner
+  of the video (or the viewport corner), RTL-aware, reachable with the keyboard (`Tab`, arrow
+  keys in the menu, `Esc` closes). `x` hides it until the next page; *Never show on this site*
+  stores the host in `settings.videoNeverSites` (editable in Options, switch
+  `settings.videoButton`).
+- **Quality menu.** Clicking asks the app through the host (`probe_media`) and lists the
+  qualities it returns (best, `1080p`, ..., audio-only M4A/MP3) with approximate sizes.
+  Choosing one sends `add` with `kind: "media"` and `media_format` set to the menu's key
+  (`best`, `h<N>`, `audio-m4a`, `audio-mp3`). The host refuses any other value. If the app is
+  not running or video support is missing, the message the app/host returned is shown.
+- **Context menu.** *Download this video with Riptide* on pages and links that belong to a
+  known video site (`documentUrlPatterns` / `targetUrlPatterns` built from `MEDIA_HOSTS`); it
+  opens the same menu on the page.
+- **Cookies** for a video are the cookies of the page's own origin only, sent together with a
+  `cookie_origin` claim that `riptide-host` checks against the URL and drops on mismatch. Extra
+  headers and credentials never travel with a media request. Nothing is logged.
+
 ## Permissions
 
 | Permission | Why |
@@ -162,7 +189,8 @@ states; if the host answers with an `error` (an older host forwarded only
 | `storage` | rules and language (`local`), session counters (`session`) |
 | `notifications` | "Riptide not running — open it?" and "Sent to Riptide" |
 | `cookies` | send the cookies of the downloaded URL (only that URL) so logged-in downloads work in Riptide; stored in the app's `secrets` table and wiped on completion |
-| `webRequest`, `webRequestBlocking` (Firefox only) | Firefox has no `onDeterminingFilename`; the response headers are the only way to catch a download before it starts |
+| `webRequest`, `webRequestBlocking` (Firefox only) | Firefox has no `onDeterminingFilename`; the response headers are the only way to catch a download before it starts. Also used, without blocking, to notice media responses for the video badge (only the `Content-Type` and URL are looked at, nothing is stored) |
+| *(no new permission for video support)* | the floating button needs only the content script and `cookies` already listed; the extra context-menu items need only `contextMenus` |
 | host permissions `<all_urls>` | the content script (hover badge, link panel), reading cookies/referrers and, on Firefox, inspecting response headers on any site the user downloads from. Firefox treats it as optional and the popup asks for it. |
 
 ## Privacy

@@ -19,13 +19,17 @@ import type { HandoffManyReply, HandoffReply, Message } from '../messages';
 import { extensionOf, hostOf, isDirectFileLink } from '../rules';
 import { DEFAULT_SETTINGS, normaliseSettings } from '../settings';
 import type { Settings } from '../settings';
+import { initVideo } from './video';
+import type { VideoUi } from './video';
 
 let settings: Settings = DEFAULT_SETTINGS;
 let lang: Lang = 'en';
+let video: VideoUi | null = null;
 
 function applySettings(raw: unknown): void {
   settings = normaliseSettings(raw);
   lang = resolveLang(settings.language, browser.i18n.getUILanguage());
+  video?.refresh();
 }
 
 void browser.storage.local.get('settings').then((got) => applySettings(got['settings']));
@@ -396,7 +400,18 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && panelScrim) closePanel();
 });
 
+video = initVideo({
+  root,
+  settings: () => settings,
+  lang: () => lang,
+  tr,
+  send,
+});
+
 browser.runtime.onMessage.addListener((message: unknown) => {
-  if (isMessage(message) && message.kind === 'show-panel') showPanel(message.selectionOnly);
+  if (!isMessage(message)) return undefined;
+  if (message.kind === 'show-panel') showPanel(message.selectionOnly);
+  else if (message.kind === 'show-video') video?.show(message.url);
+  else if (message.kind === 'media-hint') video?.hint();
   return undefined;
 });

@@ -6,6 +6,7 @@
   },
   "actionTitle": { "message": "Riptide", "description": "Toolbar button title" },
   "menuLink": { "message": "Download with Riptide", "description": "Context menu on links and media" },
+  "menuVideo": { "message": "Download this video with Riptide", "description": "Context menu on video pages and links to video sites" },
   "menuAll": { "message": "Download all links on this page with Riptide", "description": "Context menu on the page" },
   "menuSelection": { "message": "Download selected links with Riptide", "description": "Context menu on a selection" }
 }
