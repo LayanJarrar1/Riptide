@@ -22,6 +22,8 @@ use url::Url;
 
 /// Longest URL accepted (bytes).
 pub const MAX_URL_LEN: usize = 2048;
+/// Longest URL accepted for a plain file `add` (signed download links are often long).
+pub const MAX_FILE_URL_LEN: usize = 8192;
 /// Longest `Cookie` header accepted for one media request (bytes).
 pub const MAX_COOKIE_LEN: usize = 16 * 1024;
 /// Longest suggested file name (bytes).
@@ -85,6 +87,18 @@ pub fn check_media(request: &mut Request, frame: &Value) -> Result<(), Response>
             if add.kind != DownloadKind::Media {
                 if add.media_format.is_some() {
                     return Err(refuse(id, "media_format is only valid with kind media"));
+                }
+                // A browser may only ask for plain http(s) URLs; "download all links" sends one
+                // `add` per link, so each one is held to the same bar.
+                if add.url.len() > MAX_FILE_URL_LEN {
+                    return Err(refuse(id, "url is too long"));
+                }
+                if add.url.chars().any(char::is_control) {
+                    return Err(refuse(id, "url contains control characters"));
+                }
+                let url = Url::parse(&add.url).map_err(|_| refuse(id, "url is not valid"))?;
+                if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+                    return Err(refuse(id, "only http and https urls are accepted"));
                 }
                 return Ok(());
             }
@@ -202,6 +216,26 @@ mod tests {
         }
         let long = format!("https://example.com/{}", "a".repeat(MAX_URL_LEN));
         message(&run(add(json!({"url": long}))).unwrap_err());
+    }
+
+    #[test]
+    fn plain_adds_must_be_http_urls_of_sane_length() {
+        let plain = |url: &str| json!({"id": 5, "type": "add", "request": {"url": url}});
+        run(plain("https://example.com/a.zip?sig=abc")).unwrap();
+        let long_ok = format!("https://example.com/{}", "a".repeat(MAX_FILE_URL_LEN - 21));
+        run(plain(&long_ok)).unwrap();
+        let too_long = format!("https://example.com/{}", "a".repeat(MAX_FILE_URL_LEN));
+        for bad in [
+            "file:///etc/passwd",
+            "ftp://example.com/x",
+            "not a url",
+            "https://example.com/\u{7}",
+            too_long.as_str(),
+        ] {
+            let e = run(plain(bad)).unwrap_err();
+            assert_eq!(e.id, 5);
+            message(&e);
+        }
     }
 
     #[test]

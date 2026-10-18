@@ -16,7 +16,7 @@ Needed to see a download as it starts so it can be handed to the Riptide app whe
 The extension's only connection: it sends the download request (address, suggested file name, referrer) to the Riptide desktop app on the same computer through the Native Messaging host "app.riptide.host". The extension has no other network access.
 
 **contextMenus**
-Adds "Download with Riptide" to the right-click menu on links, images, video and audio, and "Download all links on this page" / "Download selected links" on pages and selections.
+Adds "Download with Riptide" to the right-click menu on links, images, video and audio, and "Download all links on this page" / "Download selected links" / "Download all images" on pages and selections.
 
 **storage**
 Saves the user's capture rules (file types, minimum size, site lists) and language choice locally, and keeps a per-session counter and the list of recent hand-offs shown in the popup. Nothing is synced or sent anywhere.

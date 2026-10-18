@@ -1,6 +1,5 @@
 {
   "app.name": "Riptide",
-
   "popup.status.connected": "Connected to Riptide",
   "popup.status.app_not_running": "Riptide is not running",
   "popup.status.host_missing": "Riptide host not installed",
@@ -21,7 +20,6 @@
   "popup.captured": "{n} this session",
   "popup.grant": "Allow access to all sites",
   "popup.grant.hint": "Firefox needs site access to see downloads and links on every page.",
-
   "state.sent": "Sent",
   "state.queued": "Queued",
   "state.probing": "Checking",
@@ -31,13 +29,11 @@
   "state.completed": "Completed",
   "state.failed": "Failed",
   "state.cancelled": "Cancelled",
-
   "badge.title.connected": "Riptide — connected",
   "badge.title.app_not_running": "Riptide — app not running",
   "badge.title.host_missing": "Riptide — host not installed",
   "badge.title.unknown": "Riptide",
   "badge.title.paused": "Riptide — capture paused",
-
   "notify.not_running.title": "Riptide not running — open it?",
   "notify.not_running.body": "{name} was left to the browser.",
   "notify.host_missing.title": "Riptide host not found",
@@ -50,15 +46,12 @@
   "notify.failed.body": "{name}: {error}",
   "notify.reload.title": "Reload the page first",
   "notify.reload.body": "Riptide cannot read the links on this page until it is reloaded.",
-
   "content.badge": "Download with Riptide",
   "content.sent": "Sent to Riptide",
   "content.failed": "Riptide unavailable",
-
   "panel.title.all": "Download links with Riptide",
   "panel.title.selection": "Download selected links with Riptide",
   "panel.filter": "Filter",
-  "panel.direct_only": "Direct files only",
   "panel.select_all": "Select all",
   "panel.download": "Download {n}",
   "panel.cancel": "Cancel",
@@ -66,7 +59,6 @@
   "panel.empty": "No links found.",
   "panel.done": "Sent {n} to Riptide",
   "panel.partial": "Sent {ok}, {failed} failed",
-
   "options.title": "Riptide options",
   "options.section.capture": "Capture",
   "options.enabled": "Capture downloads with Riptide",
@@ -111,7 +103,6 @@
   "video.err.not_running": "Riptide is not running. Start it and try again.",
   "video.err.host_missing": "Riptide is not installed, or browser integration is off (Settings → Integration).",
   "video.err.unknown": "Riptide could not read this page.",
-
   "options.videoButton": "Show a “Download this video” button on video pages",
   "options.videoNeverSites": "Sites where the video button is turned off",
   "options.hoverBadge": "Show a Riptide badge when hovering a file link",
@@ -124,8 +115,23 @@
   "options.about.id": "Extension id: {id}",
   "options.about.privacy": "This extension collects nothing. It talks only to the Riptide app on this computer.",
   "options.saved": "Saved",
-
   "units.kb": "KB",
   "units.mb": "MB",
-  "units.gb": "GB"
+  "units.gb": "GB",
+  "panel.title.images": "Download images with Riptide",
+  "panel.types": "File types",
+  "panel.select_none": "Select none",
+  "panel.count": "{n} of {total} selected",
+  "panel.sending": "Sending {n}…",
+  "panel.type.archives": "Archives",
+  "panel.type.video": "Video",
+  "panel.type.audio": "Audio",
+  "panel.type.documents": "Documents",
+  "panel.type.images": "Images",
+  "panel.type.programs": "Programs",
+  "panel.type.other": "Other",
+  "notify.batch.body": "{n} downloads sent",
+  "options.ignoreExtensions": "Never take these extensions",
+  "options.ignoreExtensions.hint": "These stay in the browser even when their group above is on. Comma-separated, for example: iso, torrent",
+  "options.altBypass.hint": "Works for clicks on links. The browser gives extensions no modifier keys for downloads, so the page tells the extension about the Alt-click just before the download starts. It cannot work on pages where the extension is not allowed to run (the browser's own pages, the add-on store)."
 }

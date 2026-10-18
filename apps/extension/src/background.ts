@@ -12,6 +12,7 @@
 import browser from 'webextension-polyfill';
 import type { Downloads, Menus, Notifications, Runtime, Tabs, WebRequest } from 'webextension-polyfill';
 
+import { BypassTracker } from './bypass';
 import { HostClient } from './host';
 import { resolveLang, t } from './i18n';
 import type { Lang, MessageKey } from './i18n';
@@ -22,9 +23,11 @@ import type {
   MediaProbeReply,
   MediaQueryReply,
   Message,
+  PanelMode,
   RecentItem,
   StatusReply,
 } from './messages';
+import { MAX_BATCH, mapLimit, mayCarryCookies, sanitiseBatch } from './links';
 import { MEDIA_HOSTS, classifyMediaResponse, cookieOriginOf, isMediaKey, withSite } from './media';
 import type { DownloadId, DownloadRequest, RequestBody } from './protocol';
 import {
@@ -45,8 +48,8 @@ import { getSession, loadSettings, onSettingsChanged, saveSettings, setSession }
 
 const IS_FIREFOX = __BROWSER__ === 'firefox';
 const MAX_RECENT = 10;
-const BYPASS_URL_MS = 4_000;
-const BYPASS_ANY_MS = 1_500;
+/** Parallel `add` requests while sending a checklist (the host has no batch message yet). */
+const BATCH_CONCURRENCY = 4;
 const COLOR_CONNECTED = '#19C6B5';
 const COLOR_OFF = '#6D7B87';
 const COLOR_BADGE_TEXT = '#06201D';
@@ -57,6 +60,7 @@ const PROBE_TIMEOUT_MS = 90_000;
 const MENU_LINK = 'riptide-link';
 const MENU_ALL = 'riptide-all';
 const MENU_SELECTION = 'riptide-selection';
+const MENU_IMAGES = 'riptide-images';
 const MENU_VIDEO_PAGE = 'riptide-video-page';
 const MENU_VIDEO_LINK = 'riptide-video-link';
 
@@ -75,8 +79,7 @@ let settingsLoaded = false;
 let paused = false;
 let missingNotified = false;
 let listAvailable = true;
-const bypassUrls = new Map<string, number>();
-let lastAltClickAt = 0;
+const bypass = new BypassTracker();
 
 /** What each tab has shown us: videos in the DOM (content script) and media on the wire (Firefox). */
 interface TabMedia {
@@ -126,10 +129,7 @@ function errorText(e: unknown): string {
 }
 
 function wasBypassed(url: string): boolean {
-  const now = Date.now();
-  const at = bypassUrls.get(url);
-  if (at !== undefined && now - at < BYPASS_URL_MS) return true;
-  return now - lastAltClickAt < BYPASS_ANY_MS;
+  return bypass.was(url, Date.now());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -167,30 +167,38 @@ async function cookieHeaderFor(url: string): Promise<string | null> {
   }
 }
 
-async function recordSent(c: Candidate, downloadId: DownloadId): Promise<void> {
+async function recordSent(c: Candidate, downloadId: DownloadId, quiet = false): Promise<void> {
   const captured = (await getSession('captured', 0)) + 1;
   const recent = await getSession<RecentItem[]>('recent', []);
   recent.unshift({ download_id: downloadId, url: c.url, filename: displayName(c), at: Date.now(), state: null });
   await setSession('captured', captured);
   await setSession('recent', recent.slice(0, MAX_RECENT));
   await updateBadge();
-  if (settings.notify) {
+  if (settings.notify && !quiet) {
     await notify(NOTIFY_SENT, tr('notify.sent.title'), tr('notify.sent.body', { name: displayName(c) }));
   }
 }
 
+/** Options for one hand-off. */
+interface HandoffOptions {
+  /** Do not show the per-download notification (batches notify once). */
+  quiet?: boolean;
+  /** Attach the browser's cookies for the URL. Default true. */
+  cookies?: boolean;
+}
+
 /** Send `add` for a candidate. Never throws; the caller decides what to do on failure. */
-async function handoff(c: Candidate): Promise<HandoffReply> {
+async function handoff(c: Candidate, opts: HandoffOptions = {}): Promise<HandoffReply> {
   const request: DownloadRequest = { url: c.url, user_agent: navigator.userAgent };
   if (c.filename) request.filename = c.filename;
   if (c.referrer && hostOf(c.referrer) !== null) request.referrer = c.referrer;
-  const cookies = await cookieHeaderFor(c.url);
+  const cookies = opts.cookies === false ? null : await cookieHeaderFor(c.url);
   if (cookies) request.secrets = { cookies };
 
   try {
     const res = await host.request({ type: 'add', request });
     if (res.type === 'added') {
-      await recordSent(c, res.download_id);
+      await recordSent(c, res.download_id, opts.quiet);
       return { ok: true, status: host.status, download_id: res.download_id };
     }
     if (res.type === 'error') {
@@ -204,24 +212,37 @@ async function handoff(c: Candidate): Promise<HandoffReply> {
   }
 }
 
-async function handoffMany(urls: string[], referrer: string | undefined): Promise<HandoffManyReply> {
+/**
+ * Send a checklist. The host has no batch message, so this is one `add` per URL with a small
+ * concurrency cap. Cookies go only with URLs on the page's own origin (`referrer` is the page).
+ * Stops early when the app turns out to be down.
+ */
+async function handoffMany(rawUrls: string[], referrer: string | undefined): Promise<HandoffManyReply> {
+  const urls = sanitiseBatch(rawUrls.slice(0, MAX_BATCH));
+  const page = referrer && hostOf(referrer) !== null ? referrer : undefined;
   let ok = 0;
-  let failed = 0;
-  let last: HandoffReply | null = null;
-  for (const url of urls) {
-    if (hostOf(url) === null) continue;
-    last = await handoff({ url, referrer });
-    if (last.ok) ok += 1;
+  let down: HandoffReply | null = null;
+  let lastError: HandoffReply | null = null;
+  const results = await mapLimit(
+    urls,
+    BATCH_CONCURRENCY,
+    (url) => handoff({ url, referrer: page }, { quiet: true, cookies: mayCarryCookies(url, page) }),
+    () => down !== null,
+  );
+  for (const r of results) {
+    if (!r) continue;
+    if (r.ok) ok += 1;
     else {
-      failed += 1;
-      if (last.status !== 'connected') break; // app is down: stop hammering
+      lastError = r;
+      if (r.status !== 'connected') down = r;
     }
   }
-  if (failed > 0 && last && !last.ok) {
-    const first = urls[0] ?? '';
-    await notifyUnavailable(last, { url: first });
+  if (ok > 0 && settings.notify) {
+    await notify(NOTIFY_SENT, tr('notify.sent.title'), tr('notify.batch.body', { n: ok }));
   }
-  return { ok, failed: failed + (urls.length - ok - failed), status: host.status };
+  const failure = down ?? lastError;
+  if (failure && ok < urls.length) await notifyUnavailable(failure, { url: urls[0] ?? '' });
+  return { ok, failed: Math.max(0, rawUrls.length - ok), status: host.status };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -608,6 +629,7 @@ async function createMenus(): Promise<void> {
       title: browser.i18n.getMessage('menuLink'),
       contexts: ['link', 'image', 'video', 'audio'],
     });
+    browser.contextMenus.create({ id: MENU_IMAGES, title: browser.i18n.getMessage('menuImages'), contexts: ['page'] });
     browser.contextMenus.create({ id: MENU_ALL, title: browser.i18n.getMessage('menuAll'), contexts: ['page'] });
     const patterns = MEDIA_HOSTS.flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`]);
     browser.contextMenus.create({
@@ -659,9 +681,11 @@ async function onMenuClicked(info: Menus.OnClickData, tab: Tabs.Tab | undefined)
     }
     return;
   }
-  if (info.menuItemId === MENU_ALL || info.menuItemId === MENU_SELECTION) {
+  if (info.menuItemId === MENU_ALL || info.menuItemId === MENU_SELECTION || info.menuItemId === MENU_IMAGES) {
     if (tab?.id === undefined) return;
-    const message: Message = { kind: 'show-panel', selectionOnly: info.menuItemId === MENU_SELECTION };
+    const mode: PanelMode =
+      info.menuItemId === MENU_SELECTION ? 'selection' : info.menuItemId === MENU_IMAGES ? 'images' : 'all';
+    const message: Message = { kind: 'show-panel', mode };
     try {
       await browser.tabs.sendMessage(tab.id, message);
     } catch {
@@ -738,12 +762,9 @@ async function handleMessage(message: Message, sender: Runtime.MessageSender): P
       return result;
     }
     case 'handoff-many':
-      return handoffMany(message.urls.slice(0, 500), message.referrer);
+      return handoffMany(message.urls, message.referrer);
     case 'alt-bypass': {
-      const now = Date.now();
-      lastAltClickAt = now;
-      if (message.url) bypassUrls.set(message.url, now);
-      for (const [url, at] of bypassUrls) if (now - at > BYPASS_URL_MS) bypassUrls.delete(url);
+      bypass.mark(message.url, Date.now());
       return undefined;
     }
     case 'get-status':

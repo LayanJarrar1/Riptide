@@ -1,6 +1,5 @@
 {
   "app.name": "Riptide",
-
   "popup.status.connected": "متصل بـ Riptide",
   "popup.status.app_not_running": "Riptide لا يعمل",
   "popup.status.host_missing": "مضيف Riptide غير مثبّت",
@@ -21,7 +20,6 @@
   "popup.captured": "{n} في هذه الجلسة",
   "popup.grant": "السماح بالوصول إلى كل المواقع",
   "popup.grant.hint": "يحتاج Firefox إلى إذن الوصول للمواقع ليرى التنزيلات والروابط في كل صفحة.",
-
   "state.sent": "أُرسل",
   "state.queued": "في الانتظار",
   "state.probing": "جارٍ الفحص",
@@ -31,13 +29,11 @@
   "state.completed": "اكتمل",
   "state.failed": "فشل",
   "state.cancelled": "أُلغي",
-
   "badge.title.connected": "Riptide — متصل",
   "badge.title.app_not_running": "Riptide — التطبيق لا يعمل",
   "badge.title.host_missing": "Riptide — المضيف غير مثبّت",
   "badge.title.unknown": "Riptide",
   "badge.title.paused": "Riptide — الالتقاط متوقف مؤقتًا",
-
   "notify.not_running.title": "Riptide لا يعمل — هل تريد فتحه؟",
   "notify.not_running.body": "تُرك {name} للمتصفح.",
   "notify.host_missing.title": "لم يُعثر على مضيف Riptide",
@@ -50,15 +46,12 @@
   "notify.failed.body": "{name}: {error}",
   "notify.reload.title": "أعد تحميل الصفحة أولًا",
   "notify.reload.body": "لا يستطيع Riptide قراءة روابط هذه الصفحة قبل إعادة تحميلها.",
-
   "content.badge": "تنزيل عبر Riptide",
   "content.sent": "أُرسل إلى Riptide",
   "content.failed": "Riptide غير متاح",
-
   "panel.title.all": "تنزيل الروابط عبر Riptide",
   "panel.title.selection": "تنزيل الروابط المحددة عبر Riptide",
   "panel.filter": "تصفية",
-  "panel.direct_only": "الملفات المباشرة فقط",
   "panel.select_all": "تحديد الكل",
   "panel.download": "تنزيل {n}",
   "panel.cancel": "إلغاء",
@@ -66,7 +59,6 @@
   "panel.empty": "لم يُعثر على روابط.",
   "panel.done": "أُرسل {n} إلى Riptide",
   "panel.partial": "أُرسل {ok}، وفشل {failed}",
-
   "options.title": "خيارات Riptide",
   "options.section.capture": "الالتقاط",
   "options.enabled": "التقاط التنزيلات عبر Riptide",
@@ -111,7 +103,6 @@
   "video.err.not_running": "Riptide لا يعمل. شغّله ثم حاول مرة أخرى.",
   "video.err.host_missing": "Riptide غير مثبّت، أو تكامل المتصفح متوقف (الإعدادات ← التكامل).",
   "video.err.unknown": "تعذّر على Riptide قراءة هذه الصفحة.",
-
   "options.videoButton": "إظهار زر «تنزيل هذا الفيديو» في صفحات الفيديو",
   "options.videoNeverSites": "المواقع التي أُوقف فيها زر الفيديو",
   "options.hoverBadge": "إظهار شارة Riptide عند المرور فوق رابط ملف",
@@ -124,8 +115,23 @@
   "options.about.id": "معرّف الإضافة: {id}",
   "options.about.privacy": "لا تجمع هذه الإضافة أي بيانات. تتواصل فقط مع تطبيق Riptide على هذا الجهاز.",
   "options.saved": "تم الحفظ",
-
   "units.kb": "ك.ب",
   "units.mb": "م.ب",
-  "units.gb": "ج.ب"
+  "units.gb": "ج.ب",
+  "panel.title.images": "تنزيل الصور عبر Riptide",
+  "panel.types": "أنواع الملفات",
+  "panel.select_none": "إلغاء التحديد",
+  "panel.count": "تم تحديد {n} من {total}",
+  "panel.sending": "جارٍ إرسال {n}…",
+  "panel.type.archives": "مضغوطات",
+  "panel.type.video": "فيديو",
+  "panel.type.audio": "صوت",
+  "panel.type.documents": "مستندات",
+  "panel.type.images": "صور",
+  "panel.type.programs": "برامج",
+  "panel.type.other": "أخرى",
+  "notify.batch.body": "أُرسل {n} تنزيلًا",
+  "options.ignoreExtensions": "امتدادات لا تُلتقط أبدًا",
+  "options.ignoreExtensions.hint": "تبقى في المتصفح حتى لو كانت مجموعتها مفعّلة أعلاه. مفصولة بفواصل، مثلًا: iso, torrent",
+  "options.altBypass.hint": "يعمل عند النقر على الروابط. لا يعطي المتصفح الإضافات مفاتيح التعديل أثناء التنزيل، لذلك تُعلم الصفحة الإضافة بنقرة Alt قبل بدء التنزيل بلحظات. لا يعمل في الصفحات التي لا يُسمح للإضافة بالعمل فيها (صفحات المتصفح نفسه ومتجر الإضافات)."
 }
