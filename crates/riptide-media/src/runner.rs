@@ -183,8 +183,8 @@ impl YtDlp {
     }
 
     /// Runs one download until it finishes, fails or `stop` fires. Progress goes to
-    /// `progress` (at most ten updates a second); a full channel drops updates rather than
-    /// slowing yt-dlp down.
+    /// `progress` (at most ten updates a second, but the final figure is always delivered); a
+    /// full channel drops updates rather than slowing yt-dlp down.
     pub async fn download(
         &self,
         job: &DownloadJob,
@@ -239,6 +239,9 @@ impl YtDlp {
         let mut lines = BufReader::new(stdout);
         let mut tracker = ProgressTracker::new(job.expected_total);
         let mut last_sent: Option<Instant> = None;
+        // the newest update the throttle held back; flushed when yt-dlp's output ends so the
+        // last figure (the one that reaches the total) is never lost
+        let mut held: Option<MediaProgress> = None;
         let mut final_file: Option<PathBuf> = None;
         let mut raw = Vec::new();
         loop {
@@ -262,13 +265,20 @@ impl YtDlp {
                         let due = last_sent.is_none_or(|t| t.elapsed() >= PROGRESS_EVERY);
                         if due {
                             last_sent = Some(Instant::now());
+                            held = None;
                             let _ = progress.try_send(overall);
+                        } else {
+                            held = Some(overall);
                         }
                     } else if let Some(path) = parse_file_line(&line) {
                         final_file = Some(PathBuf::from(path));
                     }
                 }
             }
+        }
+        if let Some(last) = held {
+            // bounded wait: a full channel must not park the download forever
+            let _ = tokio::time::timeout(Duration::from_secs(1), progress.send(last)).await;
         }
         let status = tokio::select! {
             () = stop.cancelled() => {
