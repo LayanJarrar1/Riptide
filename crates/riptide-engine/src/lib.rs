@@ -39,6 +39,14 @@
 //! `Verifying` → `Completed` once the merged file is on disk. Pause stops the process and resume
 //! runs it again (`--continue` picks up its `.part` files); cancel and remove delete them.
 //!
+//! # Site grabber
+//!
+//! [`Engine::crawl`] runs `riptide-crawl` with the engine's HTTP client (proxy, user agent, TLS
+//! verification) and returns a [`riptide_crawl::CrawlResult`]: the files a site links to, to
+//! depth N, within scope and caps, `robots.txt` obeyed. It adds nothing; the caller shows the
+//! preview and passes the chosen files through
+//! [`riptide_crawl::CrawlResult::download_requests`] to [`Engine::add`].
+//!
 //! # Queues, schedules, post-queue events
 //!
 //! Every download belongs to a queue ([`riptide_core::Queue`]: name, `max_concurrent`, manual
@@ -98,6 +106,9 @@ pub enum Error {
     /// Media page (yt-dlp).
     #[error(transparent)]
     Media(#[from] riptide_media::Error),
+    /// The site grabber could not start (bad start URL or setting).
+    #[error(transparent)]
+    Crawl(#[from] riptide_crawl::Error),
     /// Disk.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
@@ -589,6 +600,24 @@ impl Engine {
     pub async fn probe_media(&self, url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
         riptide_net::parse_http_url(url)?;
         Ok(self.require_media()?.probe(url, cookies).await?)
+    }
+
+    /// Crawls a site for downloadable files (the *site grabber*) with the engine's own HTTP
+    /// client: its proxy, its `User-Agent`, TLS verification on, redirects capped at 20.
+    ///
+    /// Nothing is added to the download list: the result is a preview. Turn it into downloads
+    /// with [`riptide_crawl::CrawlResult::download_requests`] and [`Engine::add`] (the file
+    /// list is the user's to edit first). Progress arrives on `events` as it happens, ending
+    /// with `Done`; `cancel` stops the crawl and the partial result is returned. The crawl's
+    /// cookies and credentials (`spec.secrets`) only ever go to the start page's origin, and
+    /// `robots.txt` is obeyed unless `spec.respect_robots` is off. See `riptide-crawl`.
+    pub async fn crawl(
+        &self,
+        spec: riptide_crawl::CrawlSpec,
+        events: Option<mpsc::Sender<riptide_crawl::CrawlEvent>>,
+        cancel: CancellationToken,
+    ) -> Result<riptide_crawl::CrawlResult> {
+        Ok(riptide_crawl::crawl(spec, self.client(), events, cancel).await?)
     }
 
     /// Engine events (added, probed, state changes, progress, completed, failed, removed).
