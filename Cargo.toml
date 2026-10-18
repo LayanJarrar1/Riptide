@@ -65,7 +65,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "std"] 
 tracing-appender = "0.2"
 
 # http
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "socks", "cookies", "stream", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "socks", "cookies", "stream", "json", "system-proxy"] }
 axum = "0.8"
 http = "1"
 url = "2"

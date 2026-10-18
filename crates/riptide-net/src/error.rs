@@ -21,6 +21,9 @@ pub enum Error {
         /// Why.
         reason: String,
     },
+    /// The proxy URL is not usable (the message never contains its credentials).
+    #[error("invalid proxy: {0}")]
+    InvalidProxy(String),
     /// More than the allowed number of redirects.
     #[error("too many redirects (limit {max})")]
     TooManyRedirects {

@@ -32,6 +32,7 @@ use crate::file::PartFile;
 use crate::http::{ensure_success, send};
 use crate::limiter::HostLimiter;
 use crate::probe::{parse_content_range, parse_content_range_total};
+use crate::rate::RateLimiter;
 use crate::retry::RetryPolicy;
 use crate::speed::SpeedMeter;
 use crate::verify::verify_file;
@@ -53,6 +54,9 @@ pub struct TransferConfig {
     pub checkpoint_interval: Duration,
     /// Replace an existing final file instead of failing with `TargetExists`.
     pub overwrite: bool,
+    /// Bandwidth buckets every connection draws from before a chunk reaches the writer (the
+    /// download's own limit, the global one). Their rates may change while the transfer runs.
+    pub rate_limits: Vec<Arc<RateLimiter>>,
 }
 
 impl Default for TransferConfig {
@@ -65,6 +69,7 @@ impl Default for TransferConfig {
             progress_interval: Duration::from_millis(250),
             checkpoint_interval: Duration::from_secs(1),
             overwrite: false,
+            rate_limits: Vec::new(),
         }
     }
 }
@@ -367,6 +372,7 @@ async fn run_once(
             tx: tx.clone(),
             policy: cfg.retry.clone(),
             limiter: Arc::clone(limiter),
+            rate_limits: cfg.rate_limits.clone(),
             stop: run_token.clone(),
             events: events.clone(),
         };
@@ -692,6 +698,7 @@ struct SegmentTask {
     tx: mpsc::Sender<Chunk>,
     policy: RetryPolicy,
     limiter: Arc<HostLimiter>,
+    rate_limits: Vec<Arc<RateLimiter>>,
     stop: CancellationToken,
     events: mpsc::Sender<TransferEvent>,
 }
@@ -915,6 +922,13 @@ impl SegmentTask {
                 chunk
             };
             let len = data.len() as u64;
+            for bucket in &self.rate_limits {
+                tokio::select! {
+                    biased;
+                    () = self.stop.cancelled() => return Ok((SegEnd::Stopped, pos)),
+                    () = bucket.acquire(len) => {}
+                }
+            }
             if self
                 .tx
                 .send(Chunk {
