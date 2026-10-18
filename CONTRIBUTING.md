@@ -70,10 +70,10 @@ Every change must leave the gate green. Run it from the repository root:
 
 It runs, in order:
 
-1. `npm run i18n:lint` – every UI string exists in both `ar.json` and `en.json`
-2. `npm run lint` – ESLint on the Angular app (strict TypeScript, no `any`)
-3. `npm run build` – production build of the app
-4. `npm test` – Karma unit tests in headless Chrome
+1. `npm run i18n:lint` â€“ every UI string exists in both `ar.json` and `en.json`
+2. `npm run lint` â€“ ESLint on the Angular app (strict TypeScript, no `any`)
+3. `npm run build` â€“ production build of the app
+4. `npm test` â€“ Karma unit tests in headless Chrome
 5. `cargo fmt --all -- --check`
 6. `cargo build --release`
 7. `cargo clippy --all-targets -- -D warnings`
@@ -131,7 +131,7 @@ makes.
 
 - A bug fix comes with the test that would have caught it.
 - Engine behaviour is tested against `riptide-testserver` (`/drop`, `/flaky`, `/etag-changes`,
-  `/wrong-length`, `/corrupt`, …). Anything that touches resume compares the SHA-256 of the result
+  `/wrong-length`, `/corrupt`, â€¦). Anything that touches resume compares the SHA-256 of the result
   with the source.
 - Property tests (`proptest`) cover the segment planner and the filename sanitiser.
 
@@ -150,7 +150,7 @@ and keep the Arabic natural rather than literal.
   `site/faq`.
 - Commit messages follow `area(scope): what changed`, in the imperative, under 72 characters:
   `net(transfer): split the largest remaining segment when a connection finishes`. Short
-  area tags such as `desktop(ui): …` are fine too.
+  area tags such as `desktop(ui): â€¦` are fine too.
 - Open a pull request against `main`. The template asks for three things: what changed, why,
   and how you verified it (the gate result, and a manual test note when a screen changed).
   Screenshots in both languages are expected for UI changes.
@@ -168,7 +168,7 @@ publishes nothing. Pushing a `v*` tag runs `.github/workflows/release.yml`, whic
 and publishes.
 
 - **Signing key.** The updater key pair lives outside the repository
-  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, empty password); only the public key is in
+  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, its password in `riptide-updater.password` next to it); only the public key is in
   `tauri.conf.json`. CI reads it from the `TAURI_SIGNING_PRIVATE_KEY` secret. Losing the key
   means installed copies can no longer update themselves.
 - **Update channels.** Stable reads `releases/latest/download/latest.json`; GitHub's `latest`
