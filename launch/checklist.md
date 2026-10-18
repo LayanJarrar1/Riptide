@@ -1,8 +1,8 @@
 # Launch checklist
 
-Launch day: **Monday 2026-10-19** (LinkedIn). Work backwards from it; dates in brackets are suggestions. Tick a box only when it is done.
+Launch day: **Tuesday 2026-10-20** (LinkedIn; Monday evening works if steps 1–4 are done). Work backwards from it; dates in brackets are suggestions. Tick a box only when it is done.
 
-## 1. Merge what ships (by Fri 2026-10-16)
+## 1. Merge what ships (Mon 2026-10-19, morning)
 
 - [ ] Review and merge #31 (batch downloads)
 - [ ] Review and merge #32 (update notifications)
@@ -17,7 +17,7 @@ Launch day: **Monday 2026-10-19** (LinkedIn). Work backwards from it; dates in b
 - [ ] Open the live site on a phone (English and `/ar/`): layout, RTL, video, download buttons, privacy page
 - [ ] The download buttons point at the new release, not alpha.3
 
-## 3. Release v0.1.0-alpha.4 (by Sat 2026-10-17)
+## 3. Release v0.1.0-alpha.4 (Mon 2026-10-19, midday)
 
 Alpha.3 does not contain video-page support or the new features; alpha.4 does.
 
@@ -27,7 +27,7 @@ Alpha.3 does not contain video-page support or the new features; alpha.4 does.
 - [ ] From an installed alpha.3, confirm the app offers the update on the beta channel and installs it
 - [ ] Release notes: say it is an alpha, list what is new, list known rough edges
 
-## 4. Verify on a clean machine (Sun 2026-10-18)
+## 4. Verify on a clean machine (Mon 2026-10-19, afternoon)
 
 - [ ] New Windows user account (not an admin): install with the NSIS installer, no UAC prompt
 - [ ] First run, Arabic and English, RTL screens
@@ -42,7 +42,7 @@ Alpha.3 does not contain video-page support or the new features; alpha.4 does.
 - [ ] Submit to Chrome Web Store, Edge Add-ons and AMO: steps in [`extension-stores.md`](extension-stores.md) (issue #29)
 - [ ] Reviews can take days and will not finish before 10-19. The posts say so; the extension installs from the repo until then.
 
-## 6. Launch day (Mon 2026-10-19)
+## 6. Launch day (Tue 2026-10-20)
 
 - [ ] Re-read both posts in [`linkedin-post.md`](linkedin-post.md) against the live release
 - [ ] Post the Arabic version in the morning, the English version in the afternoon
@@ -50,7 +50,7 @@ Alpha.3 does not contain video-page support or the new features; alpha.4 does.
 - [ ] Pin the post to Featured; pin the repo on the GitHub profile
 - [ ] Reply to every comment in the first hour
 
-## 7. First 48 hours (until Wed 2026-10-21)
+## 7. First 48 hours (until Thu 2026-10-22)
 
 - [ ] Check GitHub issues, the repo's Discussions if enabled, LinkedIn comments and messages twice a day
 - [ ] Triage each new issue within 24 h with a label: `bug` (reproducible), `needs-info` (ask for the log and Windows version), `feature` (acknowledge, do not promise), `duplicate`
