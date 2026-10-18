@@ -81,6 +81,43 @@ fn migrate_from_v1_fixture_keeps_every_row() {
 }
 
 #[test]
+fn v1_to_v2_adds_queue_columns_and_keeps_item_order() {
+    let (_dir, path) = fixture_db(V1_FIXTURE);
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(SCHEMA_VERSION, 2);
+
+    // the v1 queues survive with an empty schedule and no post action
+    let queues = store.queues().unwrap();
+    assert_eq!(queues.len(), 2);
+    assert_eq!(queues[1].name, "Night");
+    assert!(!queues[1].enabled);
+    assert!(queues.iter().all(|q| q.schedule.is_unscheduled()));
+    assert!(queues.iter().all(|q| q.on_done.is_none()));
+
+    // existing downloads keep their old order (by id) through the new position column
+    let positions: Vec<_> = store
+        .list_downloads()
+        .unwrap()
+        .iter()
+        .map(|d| (d.id, d.queue_position))
+        .collect();
+    assert_eq!(positions, [(DownloadId(1), 1), (DownloadId(2), 2)]);
+
+    // new rows continue the numbering within their queue
+    let mut d = riptide_core::Download::new(DownloadId(0), "https://a/b", "b", ".", 1);
+    d.queue_id = QueueId(2);
+    let id = store.insert_download(&d).unwrap();
+    assert_eq!(store.get_download(id).unwrap().unwrap().queue_position, 3);
+
+    // and the new columns work on a migrated file
+    let mut spec = riptide_core::QueueSpec::new("Weekend", 2);
+    spec.schedule = riptide_core::Schedule::only_at_night();
+    spec.on_done = Some(riptide_core::PostAction::Sleep);
+    let q = store.create_queue(&spec).unwrap();
+    assert_eq!(store.get_queue(q).unwrap().unwrap().spec(), spec);
+}
+
+#[test]
 fn newer_schema_is_refused_without_touching_the_file() {
     let (_dir, path) = fixture_db(V1_FIXTURE);
     {

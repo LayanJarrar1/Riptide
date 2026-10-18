@@ -16,7 +16,9 @@ mod store;
 
 pub use error::Error;
 pub use migrate::{Migration, MIGRATIONS, SCHEMA_VERSION};
-pub use store::{Category, Queue, SegmentProgress, Store, BUSY_TIMEOUT_MS};
+/// Queues are defined in `riptide-core`; re-exported for callers that only know the store.
+pub use riptide_core::Queue;
+pub use store::{Category, SegmentProgress, Store, BUSY_TIMEOUT_MS};
 
 /// `Result` with this crate's [`Error`].
 pub type Result<T, E = Error> = std::result::Result<T, E>;
