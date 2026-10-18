@@ -8,6 +8,7 @@ node_modules/
 /apps/desktop/dist/
 /apps/desktop/.angular/
 /apps/extension/dist/
+/apps/extension/icons/*.png
 npm-debug.log*
 coverage/
 

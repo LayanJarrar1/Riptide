@@ -200,6 +200,18 @@ function build() {
     const outDir = join(DIST, lang.out);
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html);
+
+    // Privacy policy: /privacy/ and /ar/privacy/, one level deeper than the home page.
+    const privacyOut = join(lang.out, 'privacy');
+    const privacyHtml = render(join(SRC, 'privacy.template.html'), [{
+      ...globals,
+      root: `../${lang.root}`,
+      home: '../',
+      pageUrl: `${SITE_URL}${privacyOut.split(/[\\/]/).join('/')}/`,
+      altHref: `../${lang.root}${other.out ? `${other.out}/` : ''}privacy/`,
+    }, table], icons);
+    mkdirSync(join(DIST, privacyOut), { recursive: true });
+    writeFileSync(join(DIST, privacyOut, 'index.html'), privacyHtml);
   }
 
   const notFound = render(join(SRC, '404.template.html'), [{ base: BASE_PATH, v: version, repo: REPO_URL, en: tables.en, ar: tables.ar }], icons);

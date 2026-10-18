@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="{{lang}}" dir="{{dir}}" data-theme="light" class="{{fontClass}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{privacy.meta.title}}</title>
+  <meta name="description" content="{{privacy.meta.description}}">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="canonical" href="{{pageUrl}}">
+  <link rel="alternate" hreflang="en" href="{{siteUrl}}privacy/">
+  <link rel="alternate" hreflang="ar" href="{{siteUrl}}ar/privacy/">
+  <link rel="alternate" hreflang="x-default" href="{{siteUrl}}privacy/">
+  <link rel="icon" href="{{root}}assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{{root}}assets/apple-touch-icon.png">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Riptide">
+  <meta property="og:title" content="{{privacy.meta.title}}">
+  <meta property="og:description" content="{{privacy.meta.description}}">
+  <meta property="og:url" content="{{pageUrl}}">
+  <meta property="og:locale" content="{{locale}}">
+  {{#if isEn}}<link rel="preload" href="{{root}}assets/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>{{/if}}
+  {{#if isAr}}<link rel="preload" href="{{root}}assets/fonts/IBMPlexSansArabic-Regular.woff2" as="font" type="font/woff2" crossorigin>{{/if}}
+  <link rel="stylesheet" href="{{root}}css/site.css?v={{v}}">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('riptide-theme');
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : (dark ? 'dark' : 'light');
+      } catch (e) { /* storage blocked: stay light */ }
+    })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">{{nav.skip}}</a>
+
+  <header class="site-header" id="top">
+    <nav class="nav container" aria-label="{{nav.menu}}">
+      <a class="brand" href="{{home}}">
+        {{{svg mark}}}
+        <span class="brand-name">{{nav.brand}}</span>
+      </a>
+      <div class="nav-actions legal-actions">
+        <a class="nav-lang" href="{{altHref}}" lang="{{altLang}}" hreflang="{{altLang}}" aria-label="{{nav.switchLangLabel}}">{{nav.switchLang}}</a>
+        <button class="theme-toggle" type="button" aria-label="{{nav.theme}}">
+          {{{svg sun}}}
+          {{{svg moon}}}
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main" class="container legal">
+    <h1>{{privacy.title}}</h1>
+    <p class="legal-updated">{{privacy.updated}}</p>
+    <p class="legal-lede">{{privacy.lede}}</p>
+    {{#each privacy.sections}}
+    <section class="legal-section" id="{{id}}">
+      <h2>{{h}}</h2>
+      {{#each paras}}
+      <p>{{.}}</p>
+      {{/each}}
+    </section>
+    {{/each}}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="{{home}}">
+          {{{svg mark}}}
+          <span class="brand-name">{{nav.brand}}</span>
+        </a>
+        <p>{{footer.tagline}}</p>
+      </div>
+      <ul class="footer-links">
+        <li><a href="{{home}}#download">{{nav.download}}</a></li>
+        <li><a href="{{releasesUrl}}" rel="noopener">{{footer.releases}}</a></li>
+        <li><a href="{{repo}}" rel="noopener">{{footer.github}}</a></li>
+        <li><a href="{{repo}}/blob/main/LICENSE" rel="noopener">{{footer.licenseLink}}</a></li>
+        <li><a href="./" aria-current="page">{{footer.privacy}}</a></li>
+        <li><a href="{{altHref}}" lang="{{altLang}}" hreflang="{{altLang}}">{{nav.switchLang}}</a></li>
+      </ul>
+      <p class="footer-meta">
+        <span>{{footer.license}}</span>
+        <span>{{footer.made}}</span>
+      </p>
+    </div>
+  </footer>
+
+  <script src="{{root}}js/site.js?v={{v}}" defer></script>
+</body>
+</html>
