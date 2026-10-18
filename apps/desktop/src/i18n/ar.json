@@ -328,5 +328,15 @@
   "notify.failed": "فشل التحميل: {reason}",
   "clipboard.prompt": "تحميل {name}؟",
   "clipboard.download": "تحميل",
-  "toast.autostartFailed": "تعذّر تغيير إعداد التشغيل مع ويندوز"
+  "toast.autostartFailed": "تعذّر تغيير إعداد التشغيل مع ويندوز",
+
+  "add.media.detected": "صفحة فيديو",
+  "add.media.quality": "الجودة",
+  "add.media.best": "أفضل جودة",
+  "add.media.audio": "الصوت فقط ({ext})",
+  "settings.videoSupport": "دعم الفيديو",
+  "settings.videoMissing": "غير مثبّت",
+  "settings.videoUpdate": "تحديث دعم الفيديو",
+  "settings.videoUpdating": "جارٍ التحديث…",
+  "toast.videoUpdated": "تم تحديث دعم الفيديو إلى yt-dlp {version}"
 }

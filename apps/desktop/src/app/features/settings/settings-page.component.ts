@@ -1,3 +1,4 @@
+import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { BrowserIntegrationService } from '../../core/browser-integration.service';
@@ -206,6 +207,13 @@ export function isValidProxyUrl(raw: string): boolean {
             </div>
           </div>
         }
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.videoSupport') }}</span>
+            <span class="setting-desc num" dir="ltr">{{ videoVersion() }}</span>
+          </div>
+          <button appButton variant="secondary" icon="retry" type="button" [disabled]="!tauriAvailable || videoUpdating()" (click)="updateVideoSupport()">{{ i18n.t(videoUpdating() ? 'settings.videoUpdating' : 'settings.videoUpdate') }}</button>
+        </div>
         <label class="setting">
           <div class="setting-text">
             <span class="setting-name">{{ i18n.t('settings.autoUpdate') }}</span>
@@ -512,6 +520,15 @@ export class SettingsPageComponent {
   private readonly toasts = inject(ToastService);
   protected readonly browser = inject(BrowserIntegrationService);
   protected readonly updates = inject(UpdateService);
+  protected readonly tauriAvailable = inject(TAURI_AVAILABLE);
+  private readonly invoke = inject(TAURI_INVOKE);
+  /** `yt-dlp --version`, `null` when video support is not installed. */
+  private readonly ytDlpVersion = signal<string | null>(null);
+  protected readonly videoUpdating = signal(false);
+  protected readonly videoVersion = computed(() => {
+    const v = this.ytDlpVersion();
+    return v === null ? this.i18n.t('settings.videoMissing') : `yt-dlp ${v}`;
+  });
 
   protected readonly s = this.settings.settings;
 
@@ -525,6 +542,33 @@ export class SettingsPageComponent {
 
   constructor() {
     void this.browser.refresh();
+    void this.loadVideoSupport();
+  }
+
+  private async loadVideoSupport(): Promise<void> {
+    if (!this.tauriAvailable) {
+      return;
+    }
+    try {
+      const info = await this.invoke<{ available: boolean; version: string | null }>('media_tools_info');
+      this.ytDlpVersion.set(info.available ? (info.version ?? '?') : null);
+    } catch (error: unknown) {
+      console.warn('[settings] media_tools_info failed', error);
+    }
+  }
+
+  /** `yt-dlp -U` on the app's own copy (sites such as YouTube change often). */
+  protected async updateVideoSupport(): Promise<void> {
+    this.videoUpdating.set(true);
+    try {
+      const version = await this.invoke<string>('update_media_tools');
+      this.ytDlpVersion.set(version);
+      this.toasts.show('success', this.i18n.t('toast.videoUpdated').replace('{version}', version));
+    } catch (error: unknown) {
+      this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error)));
+    } finally {
+      this.videoUpdating.set(false);
+    }
   }
   protected readonly categories = CATEGORY_KEYS;
   protected readonly icons = CATEGORY_ICONS;

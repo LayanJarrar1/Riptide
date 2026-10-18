@@ -328,5 +328,15 @@
   "notify.failed": "Download failed: {reason}",
   "clipboard.prompt": "Download {name}?",
   "clipboard.download": "Download",
-  "toast.autostartFailed": "Could not change the Windows startup setting"
+  "toast.autostartFailed": "Could not change the Windows startup setting",
+
+  "add.media.detected": "Video page",
+  "add.media.quality": "Quality",
+  "add.media.best": "Best quality",
+  "add.media.audio": "Audio only ({ext})",
+  "settings.videoSupport": "Video support",
+  "settings.videoMissing": "Not installed",
+  "settings.videoUpdate": "Update video support",
+  "settings.videoUpdating": "Updating…",
+  "toast.videoUpdated": "Video support updated to yt-dlp {version}"
 }

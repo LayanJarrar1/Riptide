@@ -6,7 +6,7 @@ import { FormatService } from '../../core/format.service';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
-import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, ProbeResult } from '../../model/download';
+import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, isMediaUrl, MediaChoice, MediaProbe, ProbeResult } from '../../model/download';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -62,6 +62,13 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
               <app-icon name="alert" [size]="14" />
               {{ i18n.t('add.noSpace').replace('{free}', format.bytes(freeBytes())) }}
             </span>
+          } @else if (media(); as m) {
+            <span class="help preview">
+              <app-icon name="play" [size]="14" class="ok" />
+              {{ i18n.t('add.media.detected') }}{{ m.uploader ? ' · ' + m.uploader : '' }}{{ m.duration ? ' · ' + format.duration(m.duration) : '' }}
+            </span>
+          } @else if (mediaError(); as err) {
+            <span class="help is-error">{{ err }}</span>
           } @else if (result(); as r) {
             <span class="help preview">
               <app-icon [name]="r.supportsRanges ? 'bolt' : 'info'" [size]="14" [class.ok]="r.supportsRanges" />
@@ -99,8 +106,22 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           </span>
         </label>
 
+        @if (media(); as m) {
+          <div class="field">
+            <span class="label">{{ i18n.t('add.media.quality') }}</span>
+            <div class="qualities" role="radiogroup" [attr.aria-label]="i18n.t('add.media.quality')">
+              @for (c of m.choices; track c.key) {
+                <button type="button" role="radio" class="quality" [class.is-active]="c.key === mediaChoice()" [attr.aria-checked]="c.key === mediaChoice()" (click)="pickQuality(c)">
+                  <span class="quality-name">{{ choiceLabel(c) }}</span>
+                  <span class="quality-size num">{{ c.approxSize === null ? '' : '≈ ' + format.bytes(c.approxSize) }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
         <div class="row">
-          <div class="field grow">
+          <div class="field grow" [hidden]="media() !== null">
             <span class="label">{{ i18n.t('add.connections') }}</span>
             <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.connections')">
               @for (n of presets; track n) {
@@ -368,6 +389,45 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       color: var(--color-on-accent);
     }
 
+    .qualities {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: var(--space-2);
+    }
+
+    .quality {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-2);
+      block-size: 36px;
+      padding-inline: 12px;
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      font: inherit;
+      font-size: var(--text-sm);
+      cursor: pointer;
+      transition:
+        border-color var(--motion-fast) var(--ease-standard),
+        background-color var(--motion-fast) var(--ease-standard);
+    }
+
+    .quality:hover {
+      border-color: var(--color-accent);
+    }
+
+    .quality.is-active {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px var(--color-accent-ring);
+    }
+
+    .quality-size {
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
+    }
+
     .advanced {
       border-block-start: 1px solid var(--color-border);
       padding-block-start: var(--space-3);
@@ -442,6 +502,12 @@ export class AddDownloadDialogComponent {
   protected readonly submitting = signal(false);
   /** Free bytes on the chosen folder's volume; `null` while unknown. */
   protected readonly freeBytes = signal<number | null>(null);
+  /** What yt-dlp found when the link is a video page; the quality picker shows while set. */
+  protected readonly media = signal<MediaProbe | null>(null);
+  /** The picked quality key (`best`, `h720`, `audio-mp3`, ...). */
+  protected readonly mediaChoice = signal('best');
+  /** Why a video page cannot be downloaded (DRM, live stream), shown under the link. */
+  protected readonly mediaError = signal<string | null>(null);
   /** A record the engine says this request would duplicate; the prompt shows while set. */
   protected readonly duplicate = signal<Download | null>(null);
 
@@ -484,6 +550,24 @@ export class AddDownloadDialogComponent {
         }
       });
     });
+  }
+
+  /** "Best quality", "720p", "Audio only (MP3)". */
+  protected choiceLabel(c: MediaChoice): string {
+    if (c.kind === 'best') {
+      return this.i18n.t('add.media.best');
+    }
+    if (c.kind === 'audio') {
+      return this.i18n.t('add.media.audio').replace('{ext}', c.ext.toUpperCase());
+    }
+    return `${c.height ?? '?'}p`;
+  }
+
+  protected pickQuality(c: MediaChoice): void {
+    this.mediaChoice.set(c.key);
+    const category: CategoryKey = c.kind === 'audio' ? 'music' : 'video';
+    this.category.set(category);
+    this.dir.set(this.settingsService.dirFor(category));
   }
 
   protected value(event: Event): string {
@@ -534,14 +618,17 @@ export class AddDownloadDialogComponent {
     }
     const hex = this.checksum().trim().toLowerCase();
     const algo = hex.length === 32 ? 'md5' : hex.length === 40 ? 'sha1' : 'sha256';
+    const isMedia = this.media() !== null;
     const request: DownloadRequest = {
       url: this.url().trim(),
       filename: this.filename().trim() || undefined,
       dir: this.dir().trim() || undefined,
       category: this.category(),
-      connections: this.connections(),
+      connections: isMedia ? 1 : this.connections(),
       startPaused: this.startPaused(),
-      checksum: hex.length > 0 ? { algo, hex } : undefined,
+      checksum: !isMedia && hex.length > 0 ? { algo, hex } : undefined,
+      kind: isMedia ? 'media' : 'http',
+      mediaFormat: isMedia ? this.mediaChoice() : undefined,
     };
     this.submitting.set(true);
     try {
@@ -577,7 +664,7 @@ export class AddDownloadDialogComponent {
   private async send(request: DownloadRequest): Promise<void> {
     this.submitting.set(true);
     try {
-      const id = await this.engine.add(request, this.result() ?? undefined);
+      const id = await this.engine.add(request, request.kind === 'media' ? undefined : (this.result() ?? undefined));
       this.toasts.show('success', this.i18n.t(this.startPaused() ? 'toast.addedLater' : 'toast.added').replace('{name}', request.filename ?? this.result()?.filename ?? request.url));
       this.added.emit(id);
       this.closed.emit();
@@ -588,8 +675,40 @@ export class AddDownloadDialogComponent {
     }
   }
 
+  /** Asks yt-dlp about a video page; `quiet` keeps a failure silent (the page was only HTML). */
+  private probeMedia(url: string, token: number, quiet: boolean): void {
+    void this.engine
+      .probeMedia(url)
+      .then((m) => {
+        if (token !== this.probeToken) {
+          return;
+        }
+        this.media.set(m);
+        this.mediaError.set(null);
+        this.probe.set('ok');
+        if (this.filename().trim().length === 0) {
+          this.filename.set(m.title);
+        }
+        const first = m.choices[0];
+        if (first !== undefined) {
+          this.pickQuality(first);
+        }
+      })
+      .catch((error: unknown) => {
+        if (token !== this.probeToken) {
+          return;
+        }
+        this.probe.set('ok');
+        if (!quiet) {
+          this.mediaError.set(String(error instanceof Error ? error.message : error));
+        }
+      });
+  }
+
   private setUrl(raw: string): void {
     this.url.set(raw);
+    this.media.set(null);
+    this.mediaError.set(null);
     if (this.probeTimer !== null) {
       clearTimeout(this.probeTimer);
       this.probeTimer = null;
@@ -607,10 +726,20 @@ export class AddDownloadDialogComponent {
     }
     this.probe.set('probing');
     const token = ++this.probeToken;
+    if (isMediaUrl(trimmed)) {
+      // a video page: there is no file at this address, ask yt-dlp for the qualities
+      this.result.set(null);
+      this.probeTimer = setTimeout(() => this.probeMedia(trimmed, token, false), 250);
+      return;
+    }
     this.probeTimer = setTimeout(() => {
       void this.engine.probe(trimmed).then((r) => {
         if (token !== this.probeToken) {
           return;
+        }
+        if (r.contentType?.startsWith('text/html') === true) {
+          // a web page, not a file: it may still be a video page yt-dlp knows
+          this.probeMedia(trimmed, token, true);
         }
         this.result.set(r);
         this.probe.set('ok');
@@ -628,6 +757,9 @@ export class AddDownloadDialogComponent {
     this.url.set('');
     this.probe.set('idle');
     this.result.set(null);
+    this.media.set(null);
+    this.mediaError.set(null);
+    this.mediaChoice.set('best');
     this.filename.set('');
     this.category.set('other');
     this.dir.set(this.settingsService.settings().defaultDir);
