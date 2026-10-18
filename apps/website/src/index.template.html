@@ -299,6 +299,12 @@
           <h2 id="shots-title">{{shots.title}}</h2>
           <p class="section-lead">{{shots.lead}}</p>
         </div>
+        <figure class="promo-video">
+          <video controls muted playsinline preload="none" poster="{{root}}assets/video/riptide-ad-poster.webp" width="1280" height="720" aria-describedby="promo-video-caption">
+            <source src="{{root}}assets/video/riptide-ad.mp4" type="video/mp4">
+          </video>
+          <figcaption id="promo-video-caption">{{shots.videoCaption}}</figcaption>
+        </figure>
         <ul class="gallery">
           {{#each shots.items}}
           <li class="shot">

@@ -25,7 +25,7 @@ The build fails (exit code 1) when a page still contains a `{{ }}` token, a loca
 does not resolve to a file, an `<img>` is missing `alt`, `width` or `height`, a font referenced
 from the stylesheet is missing, a structural tag is left unclosed, a page loads an image, script,
 stylesheet or frame from another origin, or a size budget is exceeded (HTML 60 KiB, CSS 64 KiB, JS
-40 KiB, images 120 KiB, fonts 110 KiB, whole `dist/` 2 MiB).
+40 KiB, images 120 KiB, fonts 110 KiB, whole `dist/` 2 MiB, not counting the video, which has its own 8 MiB budget).
 
 `SITE_URL` sets the public origin used for canonical, `hreflang` and Open Graph URLs (default:
 the GitHub Pages URL of the repository). Every in-page link is relative, so the site also works

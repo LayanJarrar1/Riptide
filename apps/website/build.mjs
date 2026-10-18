@@ -43,7 +43,7 @@ const SITE_URL = (process.env.SITE_URL || 'https://layanjarrar1.github.io/Riptid
 const BASE_PATH = new URL(SITE_URL).pathname;
 
 // Size budgets in bytes (uncompressed). The build fails when something grows past them.
-const BUDGET = { html: 60 * 1024, css: 64 * 1024, js: 40 * 1024, image: 120 * 1024, font: 110 * 1024, total: 2 * 1024 * 1024 };
+const BUDGET = { html: 60 * 1024, css: 64 * 1024, js: 40 * 1024, image: 120 * 1024, font: 110 * 1024, video: 8 * 1024 * 1024, total: 2 * 1024 * 1024 };
 
 const LANGUAGES = [
   { code: 'en', out: '', root: '' },
@@ -353,8 +353,10 @@ function verify() {
     const ext = extname(f);
     if (['.png', '.webp', '.jpg', '.svg'].includes(ext) && size > BUDGET.image) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.image} byte image budget`);
     if (ext === '.woff2' && size > BUDGET.font) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.font} byte font budget`);
+    if (ext === '.mp4' && size > BUDGET.video) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.video} byte video budget`);
   }
-  const total = walk(DIST).reduce((sum, f) => sum + statSync(f).size, 0);
+  // Videos are lazy-loaded (preload="none"), so they get their own budget and stay out of the total.
+  const total = walk(DIST).filter((f) => extname(f) !== '.mp4').reduce((sum, f) => sum + statSync(f).size, 0);
   if (total > BUDGET.total) problems.push(`dist is ${total} bytes, over the ${BUDGET.total} byte budget`);
 
   if (problems.length) {
