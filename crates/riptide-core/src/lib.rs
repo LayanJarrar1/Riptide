@@ -23,7 +23,8 @@ pub mod throttle;
 
 pub use category::Category;
 pub use download::{
-    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadRequest,
+    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind,
+    DownloadRequest,
     Priority, QueueId, Secrets, UnixMillis, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
 };
 pub use error::Error;

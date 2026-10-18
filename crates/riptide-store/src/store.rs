@@ -6,7 +6,8 @@ use std::time::Duration;
 use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 
 use riptide_core::{
-    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadState, Priority,
+    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind, DownloadState,
+    Priority,
     QueueId, Secrets, Segment, SegmentState,
 };
 
@@ -71,7 +72,7 @@ type SecretsRow = (Option<String>, String, Option<String>, Option<String>);
 const DOWNLOAD_COLUMNS: &str = "id, url, final_url, filename, dir, size, supports_ranges, etag, \
     last_modified, content_type, state, retryable, category_id, queue_id, priority, speed_limit, \
     connections, checksum_algo, checksum_expected, checksum_actual_algo, checksum_actual, error, \
-    added_at, started_at, completed_at";
+    added_at, started_at, completed_at, kind, media_format";
 
 impl Store {
     /// Opens (or creates) the database file, applies PRAGMAs and migrations.
@@ -157,6 +158,8 @@ impl Store {
                 d.added_at,
                 d.started_at,
                 d.completed_at,
+                d.kind.name(),
+                d.media_format,
             ],
         )?;
         Ok(DownloadId(self.conn.last_insert_rowid()))
@@ -200,7 +203,7 @@ impl Store {
              retryable = ?12, category_id = ?13, queue_id = ?14, priority = ?15, speed_limit = ?16, \
              connections = ?17, checksum_algo = ?18, checksum_expected = ?19, \
              checksum_actual_algo = ?20, checksum_actual = ?21, error = ?22, added_at = ?23, \
-             started_at = ?24, completed_at = ?25 WHERE id = ?1",
+             started_at = ?24, completed_at = ?25, kind = ?26, media_format = ?27 WHERE id = ?1",
             params![
                 d.id.0,
                 d.url,
@@ -227,6 +230,8 @@ impl Store {
                 d.added_at,
                 d.started_at,
                 d.completed_at,
+                d.kind.name(),
+                d.media_format,
             ],
         )?;
         if n == 0 {
@@ -645,6 +650,9 @@ fn read_download(row: &Row<'_>) -> Result<Download> {
     let dir: String = row.get("dir")?;
     let size: Option<i64> = row.get("size")?;
     let speed_limit: Option<i64> = row.get("speed_limit")?;
+    let kind_name: String = row.get("kind")?;
+    let kind = DownloadKind::from_name(&kind_name)
+        .ok_or_else(|| Error::Corrupt(format!("unknown kind {kind_name:?}")))?;
     Ok(Download {
         id: DownloadId(row.get("id")?),
         url: row.get("url")?,
@@ -676,6 +684,8 @@ fn read_download(row: &Row<'_>) -> Result<Download> {
         added_at: row.get("added_at")?,
         started_at: row.get("started_at")?,
         completed_at: row.get("completed_at")?,
+        kind,
+        media_format: row.get("media_format")?,
     })
 }
 

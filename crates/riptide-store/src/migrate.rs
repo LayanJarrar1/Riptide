@@ -21,14 +21,21 @@ pub struct Migration {
 }
 
 /// All migrations, in order. Append; never edit a released entry.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("sql/v1.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("sql/v1.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "media_kind",
+        sql: include_str!("sql/v2.sql"),
+    },
+];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -145,7 +152,7 @@ mod tests {
     #[test]
     fn failed_migration_rolls_back_entirely() {
         let mut conn = Connection::open_in_memory().unwrap();
-        run(&mut conn).unwrap();
+        run_with(&mut conn, &MIGRATIONS[..1]).unwrap();
 
         let broken = [
             MIGRATIONS[0],
@@ -173,7 +180,7 @@ mod tests {
             .query_row("PRAGMA integrity_check", [], |r| r.get(0))
             .unwrap();
         assert_eq!(ok, "ok");
-        assert_eq!(run(&mut conn).unwrap(), 1);
+        assert_eq!(run(&mut conn).unwrap(), SCHEMA_VERSION);
     }
 
     #[test]
