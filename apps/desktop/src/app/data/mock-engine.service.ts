@@ -186,6 +186,12 @@ export class MockEngineService extends DownloadEngine {
     return Promise.resolve();
   }
 
+  /** Records the cap (the simulation does not throttle). */
+  setSpeedLimit(id: number, bps: number | null): Promise<void> {
+    this.update(id, (d) => ({ ...d, speedLimitBps: bps }));
+    return Promise.resolve();
+  }
+
   /** Pauses a queued or running download. */
   pause(id: number): Promise<void> {
     this.update(id, (d) =>

@@ -26,6 +26,8 @@ pub mod file;
 pub mod http;
 pub mod limiter;
 pub mod probe;
+pub mod proxy;
+pub mod rate;
 pub mod redirect;
 pub mod retry;
 pub mod speed;
@@ -37,6 +39,8 @@ pub use error::{Error, Result};
 pub use file::{part_path_for, PartFile, PART_EXTENSION};
 pub use limiter::HostLimiter;
 pub use probe::{probe, Probe};
+pub use proxy::{ProxyChoice, ProxyUrl};
+pub use rate::RateLimiter;
 pub use redirect::{parse_http_url, strip_query, Origin, MAX_REDIRECTS};
 pub use retry::RetryPolicy;
 pub use speed::SpeedMeter;
@@ -60,6 +64,8 @@ pub struct ClientOptions {
     /// Skip TLS certificate verification for this client. Never a default; the UI shows a
     /// warning when it is on.
     pub accept_invalid_certs: bool,
+    /// Proxy for every request of this client.
+    pub proxy: ProxyChoice,
 }
 
 /// Headers every request carries. `Accept-Encoding: identity` so `Content-Length` and `Range`
@@ -75,13 +81,14 @@ pub fn default_headers(user_agent: Option<&str>) -> HeaderMap {
     h
 }
 
-/// Builds the shared `reqwest::Client`: rustls, HTTP/2 allowed, system proxy respected,
+/// Builds the shared `reqwest::Client`: rustls, HTTP/2 allowed, proxy per [`ProxyChoice`],
 /// redirects **not** followed automatically (the engine follows them itself so it can drop
 /// `Authorization` / `Cookie` on cross-origin hops and cap the chain at [`MAX_REDIRECTS`]),
 /// no automatic decompression, no cookie jar (the engine sends captured cookies explicitly and
 /// only to their origin).
 pub fn build_client(options: &ClientOptions) -> Result<reqwest::Client> {
-    reqwest::Client::builder()
+    let builder = options.proxy.apply(reqwest::Client::builder())?;
+    builder
         .default_headers(default_headers(options.user_agent.as_deref()))
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(CONNECT_TIMEOUT)
@@ -125,6 +132,7 @@ mod tests {
         build_client(&ClientOptions {
             user_agent: Some("x".into()),
             accept_invalid_certs: true,
+            ..Default::default()
         })
         .unwrap();
     }

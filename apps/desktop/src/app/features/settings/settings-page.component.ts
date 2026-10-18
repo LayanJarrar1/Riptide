@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { BrowserIntegrationService } from '../../core/browser-integration.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
@@ -10,12 +10,27 @@ import { Theme, THEMES, ThemeService } from '../../theme/theme.service';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { SegmentedControlComponent, SegmentedOption } from '../../ui/segmented-control.component';
+import { SpeedLimitControlComponent } from '../../ui/speed-limit-control.component';
 import { ToastService } from '../../ui/toast.service';
 import { CATEGORY_ICONS } from '../downloads/download-row.component';
 import { Settings, SettingsService } from './settings.service';
 
-const MB = 1024 * 1024;
-const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB, 25 * MB, 50 * MB];
+/** `http://`, `https://` or `socks5(h)://` + host[:port], optional `user:pass@`, nothing after. */
+export function isValidProxyUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return false;
+  }
+  return (
+    ['http:', 'https:', 'socks5:', 'socks5h:'].includes(url.protocol) &&
+    url.hostname.length > 0 &&
+    (url.pathname === '' || url.pathname === '/') &&
+    url.search === '' &&
+    url.hash === ''
+  );
+}
 
 /**
  * Settings, one scrolling page in sections. Every control writes straight to the settings
@@ -24,7 +39,7 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, SegmentedControlComponent],
+  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, SegmentedControlComponent, SpeedLimitControlComponent],
   template: `
     <div class="page">
       <header class="page-head">
@@ -103,13 +118,7 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
             <span class="setting-name">{{ i18n.t('settings.speedLimit') }}</span>
             <span class="setting-desc">{{ i18n.t('settings.speedLimitDesc') }}</span>
           </div>
-          <div class="chips" role="radiogroup" [attr.aria-label]="i18n.t('settings.speedLimit')">
-            @for (limit of speedLimits; track limit) {
-              <button type="button" role="radio" class="chip num" [class.is-active]="limit === s().speedLimitBps" [attr.aria-checked]="limit === s().speedLimitBps" (click)="patch({ speedLimitBps: limit })">
-                {{ limit === null ? i18n.t('settings.unlimited') : (limit | speed) }}
-              </button>
-            }
-          </div>
+          <app-speed-limit-control [value]="s().speedLimitBps" [label]="i18n.t('settings.speedLimit')" (valueChange)="patch({ speedLimitBps: $event })" />
         </div>
       </section>
 
@@ -154,7 +163,20 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
             <div class="setting-text">
               <span class="setting-name">{{ i18n.t('settings.proxyUrl') }}</span>
             </div>
-            <input class="input" type="text" dir="ltr" placeholder="socks5://127.0.0.1:1080" [value]="s().proxyUrl" (change)="patch({ proxyUrl: value($event) })" />
+            <input
+              class="input"
+              type="text"
+              dir="ltr"
+              placeholder="socks5://127.0.0.1:1080"
+              [class.is-invalid]="proxyInvalid()"
+              [attr.aria-invalid]="proxyInvalid()"
+              [value]="s().proxyUrl"
+              (input)="proxyInvalid.set(false)"
+              (change)="setProxyUrl(value($event))"
+            />
+            @if (proxyInvalid()) {
+              <p class="field-error" role="alert">{{ i18n.t('settings.proxyUrlInvalid') }}</p>
+            }
           </div>
         }
       </section>
@@ -301,6 +323,15 @@ const SPEED_LIMITS: readonly (number | null)[] = [null, 1 * MB, 5 * MB, 10 * MB,
       background: var(--color-surface-2);
       color: var(--color-text);
       font: inherit;
+      font-size: var(--text-sm);
+    }
+
+    .input.is-invalid {
+      border-color: var(--color-danger);
+    }
+
+    .field-error {
+      color: var(--color-danger);
       font-size: var(--text-sm);
     }
 
@@ -497,7 +528,8 @@ export class SettingsPageComponent {
   }
   protected readonly categories = CATEGORY_KEYS;
   protected readonly icons = CATEGORY_ICONS;
-  protected readonly speedLimits = SPEED_LIMITS;
+  /** The typed proxy URL was refused (not saved, so the engine keeps the last good one). */
+  protected readonly proxyInvalid = signal(false);
   protected readonly langAttr: Readonly<Record<Lang, string>> = { ar: 'ar', en: 'en' };
 
   protected readonly toggles: readonly { key: 'confirmOnExit' | 'startWithWindows' | 'closeToTray' | 'clipboardMonitor' | 'notifyOnComplete' }[] = [
@@ -534,6 +566,16 @@ export class SettingsPageComponent {
 
   protected patch(change: Partial<Settings>): void {
     this.settings.patch(change);
+  }
+
+  protected setProxyUrl(raw: string): void {
+    const url = raw.trim();
+    if (url !== '' && !isValidProxyUrl(url)) {
+      this.proxyInvalid.set(true);
+      return;
+    }
+    this.proxyInvalid.set(false);
+    this.settings.patch({ proxyUrl: url });
   }
 
   protected toggle(key: (typeof this.toggles)[number]['key'], event: Event): void {

@@ -58,10 +58,12 @@ export const DEFAULT_SETTINGS: Settings = {
 /**
  * Settings as a signal, persisted on every change.
  *
- * Inside Tauri the three values the engine owns (`default_dir`, `connections`, `per_host`) are
- * read from `get_engine_settings` at start-up and written back with `set_engine_settings`
- * (debounced) whenever they change; `max_active` is passed through as the engine reported it
- * and `user_agent` stays `null`. In a plain browser nothing talks to an engine.
+ * Inside Tauri the values the engine owns (`default_dir`, `connections`, `per_host`,
+ * `category_dirs`, `global_speed_limit`, `proxy`) are read from `get_engine_settings` at
+ * start-up and written back with `set_engine_settings` (debounced) whenever they change;
+ * `max_active` and `user_agent` are passed through as the engine reported them.
+ * `confirmOnExit` is mirrored to the window's close handler with `set_exit_guard`. In a plain
+ * browser nothing talks to an engine.
  */
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -87,8 +89,11 @@ export class SettingsService {
     this.engineLoaded = this.tauri ? this.loadEngineSettings() : Promise.resolve();
     if (this.tauri) {
       effect(() => {
-        const { defaultDir, connections, perHost, categoryDirs } = this.settings();
-        this.scheduleSync(defaultDir, connections, perHost, categoryDirs);
+        this.scheduleSync(this.settings());
+      });
+      effect(() => {
+        const enabled = this.settings().confirmOnExit;
+        this.invoke<void>('set_exit_guard', { enabled }).catch((error: unknown) => console.warn('[settings] set_exit_guard failed', error));
       });
       inject(DestroyRef).onDestroy(() => {
         if (this.syncTimer !== null) {
@@ -165,23 +170,27 @@ export class SettingsService {
         connections: engine.connections,
         perHost: engine.per_host,
         categoryDirs,
+        speedLimitBps: engine.global_speed_limit ?? null,
+        proxyMode: engine.proxy.mode,
+        proxyUrl: engine.proxy.url,
       }));
     } catch (error: unknown) {
       console.warn('[settings] get_engine_settings failed', error);
     }
   }
 
-  private scheduleSync(defaultDir: string, connections: number, perHost: number, categoryDirs: Settings['categoryDirs']): void {
+  private scheduleSync(current: Settings): void {
     if (this.syncTimer !== null) {
       clearTimeout(this.syncTimer);
     }
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
-      this.syncing = this.pushEngineSettings(defaultDir, connections, perHost, categoryDirs);
+      this.syncing = this.pushEngineSettings(current);
     }, this.debounceMs);
   }
 
-  private async pushEngineSettings(defaultDir: string, connections: number, perHost: number, categoryDirs: Settings['categoryDirs']): Promise<void> {
+  private async pushEngineSettings(current: Settings): Promise<void> {
+    const { defaultDir, connections, perHost, categoryDirs } = current;
     const known = this.engine;
     // not loaded yet: the load merges the engine's values and the effect runs again
     if (known === null) {
@@ -194,11 +203,18 @@ export class SettingsService {
         category_dirs[key] = dir;
       }
     }
+    const global_speed_limit = current.speedLimitBps !== null && current.speedLimitBps > 0 ? current.speedLimitBps : null;
+    // a manual proxy without an address is not applied (the engine would refuse it)
+    const proxy: EngineSettings['proxy'] =
+      current.proxyMode === 'manual' && current.proxyUrl.trim() === '' ? known.proxy : { mode: current.proxyMode, url: current.proxyUrl.trim() };
     if (
       known.default_dir === defaultDir &&
       known.connections === connections &&
       known.per_host === perHost &&
-      JSON.stringify(known.category_dirs ?? {}) === JSON.stringify(category_dirs)
+      JSON.stringify(known.category_dirs ?? {}) === JSON.stringify(category_dirs) &&
+      (known.global_speed_limit ?? null) === global_speed_limit &&
+      known.proxy.mode === proxy.mode &&
+      known.proxy.url === proxy.url
     ) {
       return;
     }
@@ -207,8 +223,10 @@ export class SettingsService {
       connections,
       per_host: perHost,
       max_active: known.max_active,
-      user_agent: null,
+      user_agent: known.user_agent,
       category_dirs,
+      global_speed_limit,
+      proxy,
     };
     try {
       await this.invoke<void>('set_engine_settings', { settings });

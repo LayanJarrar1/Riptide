@@ -84,6 +84,7 @@ pub async fn fetch(
     let client = build_client(&ClientOptions {
         user_agent: opts.user_agent.clone(),
         accept_invalid_certs: opts.insecure,
+        ..ClientOptions::default()
     })?;
     let url = riptide_net::parse_http_url(&opts.url)?;
     if opts.insecure && !opts.quiet {

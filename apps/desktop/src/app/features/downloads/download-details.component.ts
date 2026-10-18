@@ -13,6 +13,7 @@ import { SegmentMapComponent } from '../../ui/segment-map.component';
 import { SparklineComponent } from '../../ui/sparkline.component';
 import { StatusPillComponent } from '../../ui/status-pill.component';
 import { CATEGORY_ICONS, hostOf, RowAction } from './download-row.component';
+import { DownloadSpeedLimitComponent } from './download-speed-limit.component';
 
 interface LogLine {
   readonly at: number;
@@ -34,6 +35,7 @@ interface LogLine {
   imports: [
     ...FORMAT_PIPES,
     ButtonComponent,
+    DownloadSpeedLimitComponent,
     IconComponent,
     ProgressFlowComponent,
     SegmentMapComponent,
@@ -99,6 +101,10 @@ interface LogLine {
           <span class="block-meta num">{{ i18n.t('details.peak') }} {{ peak() | speed }}</span>
         </div>
         <app-sparkline [samples]="d().speedHistory" [draw]="true" />
+      </section>
+
+      <section class="block" style="--i: 5">
+        <app-download-speed-limit [download]="d()" />
       </section>
 
       <section class="block facts" style="--i: 6">

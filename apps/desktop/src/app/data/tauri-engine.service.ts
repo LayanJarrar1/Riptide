@@ -114,6 +114,12 @@ export class TauriEngineService extends DownloadEngine {
     return this.invoke<void>('pause_download', { id });
   }
 
+  /** `set_speed_limit`; the row shows the new cap at once (the engine emits no event for it). */
+  async setSpeedLimit(id: number, bps: number | null): Promise<void> {
+    await this.invoke<void>('set_speed_limit', { id, limit: bps });
+    this.update(id, (d) => ({ ...d, speedLimitBps: bps }));
+  }
+
   /** `restart_download`; the row follows the engine's events (paused → queued, or added again). */
   restart(id: number): Promise<void> {
     return this.invoke<void>('restart_download', { id });

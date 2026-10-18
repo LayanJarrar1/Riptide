@@ -17,6 +17,7 @@ use tauri::{Emitter, Manager};
 
 pub mod clipboard;
 pub mod commands;
+pub mod exit;
 pub mod integration;
 pub mod ipc_server;
 pub mod notify;
@@ -132,6 +133,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(exit::ExitGuard::default())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updater::PendingUpdate::default())
         .plugin(tauri_plugin_notification::init())
@@ -211,6 +213,10 @@ pub fn run() {
                 if shell::close_to_tray(window, api) {
                     return;
                 }
+                // active downloads + confirmOnExit: the webview asks, then calls `quit_app`
+                if exit::confirm_before_close(window, api) {
+                    return;
+                }
                 // stop transfers at a checkpoint; their records stay Downloading and resume on
                 // the next start (crash-safe resume).
                 if let Some(engine) = window.try_state::<Engine>() {
@@ -236,6 +242,9 @@ pub fn run() {
             commands::resume_all,
             commands::get_engine_settings,
             commands::set_engine_settings,
+            commands::set_speed_limit,
+            exit::set_exit_guard,
+            exit::quit_app,
             commands::disk_free,
             commands::open_file,
             commands::show_in_folder,

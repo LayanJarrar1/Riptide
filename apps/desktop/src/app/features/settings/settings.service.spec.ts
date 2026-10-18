@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('SettingsService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' } };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' } };
   let calls: Call[];
 
   function configure(tauri: boolean): SettingsService {
@@ -60,7 +60,7 @@ describe('SettingsService', () => {
     expect(service.settings().closeToTray).toBe(DEFAULT_SETTINGS.closeToTray);
     await wait(20);
     await service.whenSynced();
-    expect(calls.map((c) => c.cmd)).toEqual(['get_engine_settings']);
+    expect(calls.map((c) => c.cmd).filter((c) => c !== 'set_exit_guard')).toEqual(['get_engine_settings']);
   });
 
   it('under Tauri a change to an engine-owned value is written back once, debounced, in full', async () => {
@@ -76,7 +76,7 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect(writes[0].args).toEqual({
-      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: null, category_dirs: { video: 'D:\\Engine\\Video' } },
+      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' } },
     });
     // a UI-only change does not reach the engine
     service.patch({ closeToTray: false });

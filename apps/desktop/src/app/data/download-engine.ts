@@ -73,6 +73,12 @@ export abstract class DownloadEngine {
   /** Resumes every paused or failed download. */
   abstract resumeAll(): Promise<void>;
 
+  /**
+   * Sets one download's own speed cap in bytes per second (`null` = unlimited). A running
+   * download follows it within a second; the global cap in Settings still applies on top.
+   */
+  abstract setSpeedLimit(id: number, bps: number | null): Promise<void>;
+
   /** Gives an expired download a fresh address. */
   abstract refresh(id: number, url: string): Promise<void>;
 }

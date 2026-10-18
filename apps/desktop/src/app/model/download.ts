@@ -90,6 +90,8 @@ export interface Download {
   readonly startedAt: number | null;
   readonly completedAt: number | null;
   readonly failure: FailureKind | null;
+  /** This download's own cap in bytes per second; `null` or absent = unlimited. */
+  readonly speedLimitBps?: number | null;
   /** Expected digest, if the user gave one. */
   readonly checksum: { readonly algo: 'md5' | 'sha1' | 'sha256'; readonly hex: string } | null;
 }

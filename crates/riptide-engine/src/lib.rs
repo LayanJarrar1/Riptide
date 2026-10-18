@@ -42,8 +42,8 @@ use riptide_core::{
     Category, Download, DownloadId, DownloadRequest, DownloadState, Event, Secrets, Segment,
 };
 use riptide_net::{
-    build_client, part_path_for, probe, transfer, ClientOptions, HostLimiter, Outcome,
-    RequestContext, TransferConfig, TransferEvent, TransferPlan,
+    build_client, part_path_for, probe, transfer, ClientOptions, HostLimiter, Outcome, ProxyChoice,
+    ProxyUrl, RateLimiter, RequestContext, TransferConfig, TransferEvent, TransferPlan,
 };
 use riptide_store::Store;
 use serde::{Deserialize, Serialize};
@@ -105,6 +105,68 @@ pub struct EngineSettings {
     /// Only absolute paths under known keys survive [`Engine::set_settings`].
     #[serde(default)]
     pub category_dirs: BTreeMap<String, String>,
+    /// Cap in bytes per second across all downloads together; `None` = unlimited. Applies to
+    /// running downloads within a second.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub global_speed_limit: Option<u64>,
+    /// Which proxy new connections use.
+    #[serde(default)]
+    pub proxy: ProxySettings,
+}
+
+/// How the engine reaches the network.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyMode {
+    /// The operating system's proxy (Windows: the per-user WinINet settings; also the
+    /// `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` variables). PAC scripts are not evaluated.
+    #[default]
+    System,
+    /// Direct connections.
+    None,
+    /// [`ProxySettings::url`].
+    Manual,
+}
+
+/// Proxy settings. `Debug` hides credentials in the URL.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProxySettings {
+    /// System, none or manual.
+    pub mode: ProxyMode,
+    /// `http://`, `https://` or `socks5://` URL, optionally with `user:password@`; used only
+    /// in [`ProxyMode::Manual`].
+    pub url: String,
+}
+
+impl std::fmt::Debug for ProxySettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let url = match ProxyUrl::parse(&self.url) {
+            Ok(u) => u.redacted(),
+            Err(_) if self.url.is_empty() => String::new(),
+            Err(_) => "[invalid]".to_string(),
+        };
+        f.debug_struct("ProxySettings")
+            .field("mode", &self.mode)
+            .field("url", &url)
+            .finish()
+    }
+}
+
+impl ProxySettings {
+    /// The client-level choice; a manual URL is validated here.
+    pub fn choice(&self) -> Result<ProxyChoice> {
+        Ok(match self.mode {
+            ProxyMode::System => ProxyChoice::System,
+            ProxyMode::None => ProxyChoice::Direct,
+            ProxyMode::Manual => ProxyChoice::Manual(ProxyUrl::parse(&self.url)?),
+        })
+    }
 }
 
 impl EngineSettings {
@@ -146,7 +208,24 @@ impl EngineSettings {
                 .then(|| (key, dir.to_owned()))
             })
             .collect();
+        // 0 means unlimited, as everywhere else
+        self.global_speed_limit = self.global_speed_limit.filter(|&l| l > 0);
+        self.proxy.url = self.proxy.url.trim().to_string();
         self
+    }
+
+    /// Options for the shared HTTP client. An unusable manual proxy (only possible for a
+    /// settings row written by hand) falls back to the system proxy, with a warning.
+    fn client_options(&self) -> ClientOptions {
+        let proxy = self.proxy.choice().unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "ignoring the stored proxy");
+            ProxyChoice::System
+        });
+        ClientOptions {
+            user_agent: self.user_agent.clone(),
+            accept_invalid_certs: false,
+            proxy,
+        }
     }
 }
 
@@ -159,6 +238,8 @@ impl Default for EngineSettings {
             max_active: 3,
             user_agent: None,
             category_dirs: BTreeMap::new(),
+            global_speed_limit: None,
+            proxy: ProxySettings::default(),
         }
     }
 }
@@ -219,12 +300,17 @@ struct Running {
     stop: CancellationToken,
     reason: Arc<Mutex<StopReason>>,
     task: JoinHandle<()>,
+    /// The download's own bandwidth bucket (its `speed_limit`), shared by its connections.
+    limit: Arc<RateLimiter>,
 }
 
 struct Inner {
     store: Arc<Mutex<Store>>,
-    client: reqwest::Client,
+    /// Rebuilt when the proxy or user agent changes; running transfers keep the old one.
+    client: RwLock<reqwest::Client>,
     limiter: RwLock<Arc<HostLimiter>>,
+    /// [`EngineSettings::global_speed_limit`], shared by every connection of every download.
+    global_limit: Arc<RateLimiter>,
     events: broadcast::Sender<Event>,
     running: Mutex<HashMap<DownloadId, Running>>,
     wake: Notify,
@@ -326,15 +412,13 @@ impl Engine {
         })
         .await?;
 
-        let client = build_client(&ClientOptions {
-            user_agent: settings.user_agent.clone(),
-            accept_invalid_certs: false,
-        })?;
+        let client = build_client(&settings.client_options())?;
         let (events, _) = broadcast::channel(2048);
         let inner = Arc::new(Inner {
             store,
-            client,
+            client: RwLock::new(client),
             limiter: RwLock::new(HostLimiter::new(settings.per_host as usize)),
+            global_limit: Arc::new(RateLimiter::new(settings.global_speed_limit)),
             events,
             running: Mutex::new(HashMap::new()),
             wake: Notify::new(),
@@ -360,9 +444,19 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// Replaces the settings (persisted). Running transfers keep their connection count.
+    /// Replaces the settings (persisted). Running transfers keep their connection count; the
+    /// global speed limit applies to them within a second; a new proxy or user agent applies
+    /// to connections opened after this call. An invalid manual proxy URL is refused.
     pub async fn set_settings(&self, settings: EngineSettings) -> Result<()> {
         let settings = settings.sanitized();
+        let previous = self.settings();
+        let new_client =
+            if previous.proxy != settings.proxy || previous.user_agent != settings.user_agent {
+                settings.proxy.choice()?;
+                Some(build_client(&settings.client_options())?)
+            } else {
+                None
+            };
         let raw = serde_json::to_string(&settings).map_err(|e| Error::Internal(e.to_string()))?;
         db(&self.inner.store, move |s| {
             s.set_setting(EngineSettings::KEY, &raw)
@@ -371,6 +465,15 @@ impl Engine {
         if let Ok(mut l) = self.inner.limiter.write() {
             *l = HostLimiter::new(settings.per_host as usize);
         }
+        if let Some(client) = new_client {
+            if let Ok(mut c) = self.inner.client.write() {
+                *c = client;
+            }
+            tracing::info!(proxy = ?settings.proxy, "HTTP client rebuilt");
+        }
+        self.inner
+            .global_limit
+            .set_limit(settings.global_speed_limit);
         if let Ok(mut s) = self.inner.settings.write() {
             *s = settings;
         }
@@ -405,7 +508,7 @@ impl Engine {
         if let Some(s) = secrets {
             ctx = ctx.with_secrets(s);
         }
-        let p = probe(&self.inner.client, url, &ctx).await?;
+        let p = probe(&self.client(), url, &ctx).await?;
         Ok(ProbeInfo {
             final_url: p.final_url.to_string(),
             filename: p.filename.clone(),
@@ -499,6 +602,39 @@ impl Engine {
         self.emit(Event::Added { id });
         self.inner.wake.notify_one();
         Ok(id)
+    }
+
+    /// Sets a download's own speed limit in bytes per second (`None` or `0` = unlimited).
+    /// Persisted; a running download slows down or speeds up within a second, without a
+    /// restart. The global limit still applies on top.
+    pub async fn set_speed_limit(&self, id: DownloadId, limit: Option<u64>) -> Result<()> {
+        let limit = limit.filter(|&l| l > 0);
+        if let Some(r) = self
+            .inner
+            .running
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(&id)
+        {
+            r.limit.set_limit(limit);
+        }
+        db(&self.inner.store, move |s| {
+            let mut d = s
+                .get_download(id)?
+                .ok_or(riptide_store::Error::NotFound(id))?;
+            d.speed_limit = limit;
+            s.update_download(&d)
+        })
+        .await
+    }
+
+    /// The HTTP client new connections use.
+    fn client(&self) -> reqwest::Client {
+        self.inner
+            .client
+            .read()
+            .map(|c| c.clone())
+            .unwrap_or_else(|p| p.into_inner().clone())
     }
 
     /// Pauses a queued or running download.
@@ -938,14 +1074,24 @@ impl Engine {
         let id = next.id;
         let task_stop = stop.clone();
         let task_reason = Arc::clone(&reason);
+        let limit = Arc::new(RateLimiter::new(next.speed_limit));
+        let task_limit = Arc::clone(&limit);
+        // the map lock is held across the spawn so the task's own `remove` cannot run first
+        let mut running = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
         let task = tokio::spawn(async move {
-            engine.run_download(id, task_stop, task_reason).await;
+            engine
+                .run_download(id, task_stop, task_reason, task_limit)
+                .await;
         });
-        self.inner
-            .running
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(id, Running { stop, reason, task });
+        running.insert(
+            id,
+            Running {
+                stop,
+                reason,
+                task,
+                limit,
+            },
+        );
         Ok(true)
     }
 
@@ -955,8 +1101,11 @@ impl Engine {
         id: DownloadId,
         stop: CancellationToken,
         reason: Arc<Mutex<StopReason>>,
+        limit: Arc<RateLimiter>,
     ) {
-        let outcome = self.run_download_inner(id, stop.clone(), &reason).await;
+        let outcome = self
+            .run_download_inner(id, stop.clone(), &reason, &limit)
+            .await;
         if let Err(e) = outcome {
             let retryable = match &e {
                 Error::Net(n) => n.is_retryable(),
@@ -980,6 +1129,7 @@ impl Engine {
         id: DownloadId,
         stop: CancellationToken,
         reason: &Arc<Mutex<StopReason>>,
+        limit: &Arc<RateLimiter>,
     ) -> Result<()> {
         let store = &self.inner.store;
         let secrets = db(store, move |s| s.secrets(id)).await?.unwrap_or_default();
@@ -1002,11 +1152,13 @@ impl Engine {
 
         let url = riptide_net::parse_http_url(&record.url)?;
         let ctx = Arc::new(RequestContext::new(&url).with_secrets(&secrets));
+        // one client for the whole run: a proxy change applies from the next start
+        let client = self.client();
         let probed = tokio::select! {
             () = stop.cancelled() => {
                 return self.stopped(id, reason, Vec::new()).await;
             }
-            p = probe(&self.inner.client, &record.url, &ctx) => p?,
+            p = probe(&client, &record.url, &ctx) => p?,
         };
 
         // existing segments are only worth keeping if the server still serves the same file
@@ -1043,6 +1195,9 @@ impl Engine {
                 record.filename = name.to_string_lossy().into_owned();
             }
         }
+        // the bucket is the truth while running: `set_speed_limit` may have changed it after
+        // the record was read
+        record.speed_limit = limit.limit();
         let to_save = record.clone();
         db(store, move |s| s.update_download(&to_save)).await?;
         self.emit(Event::Probed {
@@ -1070,6 +1225,7 @@ impl Engine {
         };
         let cfg = TransferConfig {
             connections: record.connections,
+            rate_limits: vec![Arc::clone(limit), Arc::clone(&self.inner.global_limit)],
             ..TransferConfig::default()
         };
         let limiter = self
@@ -1138,16 +1294,7 @@ impl Engine {
             }
         });
 
-        let result = transfer(
-            self.inner.client.clone(),
-            ctx,
-            plan,
-            cfg,
-            tx,
-            stop.clone(),
-            limiter,
-        )
-        .await;
+        let result = transfer(client, ctx, plan, cfg, tx, stop.clone(), limiter).await;
         let _ = forwarder.await;
 
         match result {
