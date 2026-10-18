@@ -81,6 +81,7 @@ clap = { version = "4", features = ["derive", "env"] }
 # misc
 regex = "1"
 dirs = "6"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
 base64 = "0.22"
 md-5 = "0.10"

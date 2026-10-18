@@ -3931,6 +3931,7 @@ dependencies = [
 name = "riptide-engine"
 version = "0.1.0-alpha.3"
 dependencies = [
+ "chrono",
  "hex",
  "reqwest 0.12.28",
  "riptide-core",

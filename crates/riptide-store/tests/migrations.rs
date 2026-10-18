@@ -87,6 +87,81 @@ fn migrate_from_v1_fixture_keeps_every_row() {
 }
 
 #[test]
+fn v1_to_v3_adds_media_and_queue_columns_and_keeps_item_order() {
+    let (_dir, path) = fixture_db(V1_FIXTURE);
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(SCHEMA_VERSION, 3);
+
+    // the v1 queues survive with an empty schedule and no post action
+    let queues = store.queues().unwrap();
+    assert_eq!(queues.len(), 2);
+    assert_eq!(queues[1].name, "Night");
+    assert!(!queues[1].enabled);
+    assert!(queues.iter().all(|q| q.schedule.is_unscheduled()));
+    assert!(queues.iter().all(|q| q.on_done.is_none()));
+
+    // existing downloads keep their old order (by id) through the new position column
+    let positions: Vec<_> = store
+        .list_downloads()
+        .unwrap()
+        .iter()
+        .map(|d| (d.id, d.queue_position))
+        .collect();
+    assert_eq!(positions, [(DownloadId(1), 1), (DownloadId(2), 2)]);
+
+    // new rows continue the numbering within their queue
+    let mut d = riptide_core::Download::new(DownloadId(0), "https://a/b", "b", ".", 1);
+    d.queue_id = QueueId(2);
+    let id = store.insert_download(&d).unwrap();
+    assert_eq!(store.get_download(id).unwrap().unwrap().queue_position, 3);
+
+    // and the new columns work on a migrated file
+    let mut spec = riptide_core::QueueSpec::new("Weekend", 2);
+    spec.schedule = riptide_core::Schedule::only_at_night();
+    spec.on_done = Some(riptide_core::PostAction::Sleep);
+    let q = store.create_queue(&spec).unwrap();
+    assert_eq!(store.get_queue(q).unwrap().unwrap().spec(), spec);
+}
+
+#[test]
+fn v2_database_with_a_media_row_migrates_to_v3() {
+    use riptide_core::DownloadKind;
+    use riptide_store::{migrate, MIGRATIONS};
+
+    // a database exactly as the media release (schema v2) left it
+    let (_dir, path) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&path).unwrap();
+        let v = migrate::run_with(&mut conn, &MIGRATIONS[..2]).unwrap();
+        assert_eq!(v, 2);
+        conn.execute(
+            "UPDATE downloads SET kind = 'media', media_format = 'h720' WHERE id = 2",
+            [],
+        )
+        .unwrap();
+    }
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 3);
+
+    let all = store.list_downloads().unwrap();
+    assert_eq!(all[0].kind, DownloadKind::Http);
+    assert_eq!(all[1].kind, DownloadKind::Media);
+    assert_eq!(all[1].media_format.as_deref(), Some("h720"));
+    assert_eq!(
+        all.iter().map(|d| d.queue_position).collect::<Vec<_>>(),
+        [1, 2]
+    );
+
+    // a media record added now joins its queue like any other
+    let mut d = riptide_core::Download::new(DownloadId(0), "https://v/watch", "v.mp4", ".", 1);
+    d.kind = DownloadKind::Media;
+    d.queue_id = QueueId(2);
+    let id = store.insert_download(&d).unwrap();
+    let back = store.get_download(id).unwrap().unwrap();
+    assert_eq!((back.kind, back.queue_position), (DownloadKind::Media, 3));
+}
+
+#[test]
 fn newer_schema_is_refused_without_touching_the_file() {
     let (_dir, path) = fixture_db(V1_FIXTURE);
     {

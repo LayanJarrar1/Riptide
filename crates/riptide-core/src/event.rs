@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::download::DownloadId;
+use crate::download::{DownloadId, QueueId};
+use crate::queue::PostAction;
 use crate::state::DownloadState;
 
 /// Something happened to a download. Progress events are coalesced by the engine to at most ten
@@ -94,11 +95,50 @@ pub enum Event {
         /// Download.
         id: DownloadId,
     },
+    /// A queue was created.
+    QueueCreated {
+        /// The new queue.
+        queue_id: QueueId,
+    },
+    /// A queue's name, limit, schedule, post action or started/stopped switch changed.
+    QueueUpdated {
+        /// Queue.
+        queue_id: QueueId,
+    },
+    /// A queue was deleted; its items went back to *Main*.
+    QueueDeleted {
+        /// The former queue.
+        queue_id: QueueId,
+    },
+    /// The order of the queues themselves changed.
+    QueuesReordered,
+    /// The items of a queue were reordered.
+    QueueOrderChanged {
+        /// Queue.
+        queue_id: QueueId,
+    },
+    /// A download moved to another queue.
+    DownloadMoved {
+        /// Download.
+        id: DownloadId,
+        /// Queue it left.
+        from: QueueId,
+        /// Queue it joined.
+        to: QueueId,
+    },
+    /// The last unfinished item of a queue completed. The engine does not act on `action`;
+    /// the app layer performs it (shutdown, sleep, … — platform code).
+    QueueFinished {
+        /// Queue that drained.
+        queue_id: QueueId,
+        /// The queue's post-queue action, if one is set.
+        action: Option<PostAction>,
+    },
 }
 
 impl Event {
-    /// The download this event is about.
-    pub const fn download_id(&self) -> DownloadId {
+    /// The download this event is about (`None` for queue events).
+    pub const fn download_id(&self) -> Option<DownloadId> {
         match self {
             Event::Added { id }
             | Event::Probed { id, .. }
@@ -107,7 +147,14 @@ impl Event {
             | Event::SegmentProgress { id, .. }
             | Event::Completed { id, .. }
             | Event::Failed { id, .. }
-            | Event::Removed { id } => *id,
+            | Event::Removed { id }
+            | Event::DownloadMoved { id, .. } => Some(*id),
+            Event::QueueCreated { .. }
+            | Event::QueueUpdated { .. }
+            | Event::QueueDeleted { .. }
+            | Event::QueuesReordered
+            | Event::QueueOrderChanged { .. }
+            | Event::QueueFinished { .. } => None,
         }
     }
 
@@ -137,6 +184,30 @@ mod tests {
     }
 
     #[test]
+    fn queue_finished_json_carries_the_action() {
+        let e = Event::QueueFinished {
+            queue_id: QueueId(3),
+            action: Some(PostAction::RunCommand {
+                command: "done.cmd".into(),
+            }),
+        };
+        let json = serde_json::to_value(&e).unwrap();
+        assert_eq!(json["type"], "queue_finished");
+        assert_eq!(json["queue_id"], 3);
+        assert_eq!(json["action"]["action"], "run_command");
+        assert_eq!(json["action"]["command"], "done.cmd");
+        assert_eq!(serde_json::from_value::<Event>(json).unwrap(), e);
+        let none = Event::QueueFinished {
+            queue_id: QueueId(1),
+            action: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&none).unwrap()["action"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
     fn download_id_and_progress_flag() {
         let p = Event::Progress {
             id: DownloadId(2),
@@ -146,7 +217,8 @@ mod tests {
             eta_secs: None,
             connections: 1,
         };
-        assert_eq!(p.download_id(), DownloadId(2));
+        assert_eq!(p.download_id(), Some(DownloadId(2)));
+        assert_eq!(Event::QueuesReordered.download_id(), None);
         assert!(p.is_progress());
         assert!(!Event::Removed { id: DownloadId(2) }.is_progress());
     }

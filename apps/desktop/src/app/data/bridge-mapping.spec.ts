@@ -37,6 +37,7 @@ export function bridgeDownload(overrides: Partial<Download> = {}): Download {
     state: { state: 'downloading' },
     category_id: null,
     queue_id: 1,
+    queue_position: 1,
     priority: 'normal',
     speed_limit: 0,
     connections: 8,

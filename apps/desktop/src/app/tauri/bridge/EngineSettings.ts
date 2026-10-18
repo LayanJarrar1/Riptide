@@ -19,7 +19,9 @@ connections: number,
  */
 per_host: number, 
 /**
- * Downloads running at once (the Main queue's limit; per-queue limits come later).
+ * Downloads running at once across all queues. Changing it also sets the *Main* queue's own
+ * `max_concurrent` to the same value; other queues keep their own limit (the lower of the
+ * two applies).
  */
 max_active: number, 
 /**

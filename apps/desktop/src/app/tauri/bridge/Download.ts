@@ -66,6 +66,11 @@ category_id: CategoryId | null,
  */
 queue_id: QueueId, 
 /**
+ * Place in the queue's manual order (smaller runs first among equal priorities). Set by
+ * the store when the download is added, moved or reordered; ignored on insert/update.
+ */
+queue_position: number, 
+/**
  * Priority within the queue.
  */
 priority: Priority, 

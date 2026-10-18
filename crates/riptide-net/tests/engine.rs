@@ -433,6 +433,34 @@ async fn per_host_cap_keeps_a_limited_server_happy() {
 }
 
 #[tokio::test]
+async fn throttled_host_gets_a_lower_cap_and_the_download_still_completes() {
+    let h = harness().await;
+    let size = 4 * MIB;
+    let limiter = HostLimiter::new(8);
+    let done = Job::new(&h, &format!("/limit?conns=2&bps=2097152&size={size}"))
+        .connections(8)
+        .limiter(Arc::clone(&limiter))
+        .run()
+        .await;
+    completed(&done);
+    assert!(
+        done.events
+            .iter()
+            .any(|e| matches!(e, TransferEvent::Retrying { .. })),
+        "the server answered 429 at least once"
+    );
+    let cap = limiter.cap_for("127.0.0.1");
+    assert!(
+        (1..8).contains(&cap),
+        "429s must lower the cap below the configured 8, got {cap}"
+    );
+    assert_eq!(
+        sha(&done.final_path).await,
+        expected_sha256_hex(DEFAULT_SEED, size)
+    );
+}
+
+#[tokio::test]
 async fn redirect_chain_is_followed_and_credentials_do_not_cross_origins() {
     let h = harness().await;
     let size = MIB;
