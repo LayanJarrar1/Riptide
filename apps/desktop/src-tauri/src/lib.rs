@@ -18,6 +18,7 @@ use tauri::{Emitter, Manager};
 pub mod commands;
 pub mod integration;
 pub mod ipc_server;
+pub mod updater;
 
 pub use commands::{AppInfo, BUILD_LABEL, PRODUCT_NAME};
 
@@ -127,6 +128,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updater::PendingUpdate::default())
         .setup(move |app| {
             let config = engine_config()?;
             let engine = tauri::async_runtime::block_on(Engine::open(config))?;
@@ -213,6 +216,8 @@ pub fn run() {
             commands::integration_status,
             commands::register_browser_host,
             commands::unregister_browser_host,
+            updater::check_update,
+            updater::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Riptide desktop application");

@@ -21,6 +21,9 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+# self-update from signed manifests on GitHub Releases (see src/updater.rs)
+tauri-plugin-updater = "2"
+url = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
