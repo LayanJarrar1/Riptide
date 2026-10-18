@@ -10,6 +10,7 @@
 //   store/screenshots/*.png   1280x800
 //   store/promo/promo-440x280.png, store/promo/marquee-1400x560.png
 //   store/icon-128.png        (copy of the built toolbar icon)
+/* global window, document -- used inside page.evaluate callbacks, which run in the browser */
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

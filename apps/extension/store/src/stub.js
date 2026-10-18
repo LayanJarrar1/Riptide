@@ -1,3 +1,4 @@
+/* global window */
 // Screenshot-only stand-in for the extension APIs, injected by store/render.mjs before the real
 // built popup/options/content bundles run. webextension-polyfill returns globalThis.browser as-is
 // when it already has runtime.id, so a promise-based object is enough. Values come from

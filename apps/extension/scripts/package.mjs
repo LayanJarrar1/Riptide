@@ -155,15 +155,28 @@ Steps the build runs (package.json "build" + scripts/package.mjs):
 Checks: npm run check (tsc --noEmit + eslint), npm test.
 `;
 
-const tracked = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '.'], { cwd: root, encoding: 'utf8' })
-  .split('\0')
-  .filter((f) => f && !f.startsWith('store/') && !f.startsWith('dist/'));
-if (tracked.length === 0) problems.push('source: git ls-files returned nothing');
-const sourceEntries = tracked.map((name) => ({ name, data: readFileSync(join(root, name)) }));
-sourceEntries.push({ name: 'BUILD.md', data: Buffer.from(BUILD_STEPS, 'utf8') });
-const sourceOut = join(dist, `riptide-source-${version}.zip`);
-writeFileSync(sourceOut, zip(sourceEntries));
-console.log(`zip  ${relative(root, sourceOut)} (${sourceEntries.length} files, ${statSync(sourceOut).size} bytes)`);
+// The source list comes from git (tracked + untracked-but-not-ignored). Outside a checkout, e.g.
+// when a reviewer rebuilds from the source zip itself, the store zips are still produced.
+let tracked = null;
+try {
+  tracked = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '.'], {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+    .split('\0')
+    .filter((f) => f && f !== 'BUILD.md' && !f.startsWith('store/') && !f.startsWith('dist/'));
+} catch {
+  console.log('skip riptide-source zip: not a git checkout');
+}
+if (tracked) {
+  if (tracked.length === 0) problems.push('source: git ls-files returned nothing');
+  const sourceEntries = tracked.map((name) => ({ name, data: readFileSync(join(root, name)) }));
+  sourceEntries.push({ name: 'BUILD.md', data: Buffer.from(BUILD_STEPS, 'utf8') });
+  const sourceOut = join(dist, `riptide-source-${version}.zip`);
+  writeFileSync(sourceOut, zip(sourceEntries));
+  console.log(`zip  ${relative(root, sourceOut)} (${sourceEntries.length} files, ${statSync(sourceOut).size} bytes)`);
+}
 
 if (problems.length) {
   for (const p of problems) console.error(`FAIL ${p}`);
