@@ -32,10 +32,15 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "media_kind",
         sql: include_str!("sql/v2.sql"),
     },
+    Migration {
+        version: 3,
+        name: "queue_schedule_and_order",
+        sql: include_str!("sql/v3.sql"),
+    },
 ];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -152,12 +157,14 @@ mod tests {
     #[test]
     fn failed_migration_rolls_back_entirely() {
         let mut conn = Connection::open_in_memory().unwrap();
-        run_with(&mut conn, &MIGRATIONS[..1]).unwrap();
+        run(&mut conn).unwrap();
 
         let broken = [
             MIGRATIONS[0],
+            MIGRATIONS[1],
+            MIGRATIONS[2],
             Migration {
-                version: 2,
+                version: 4,
                 name: "broken",
                 // the third statement fails: nothing from the first two may survive
                 sql: "CREATE TABLE will_vanish_a (x);
@@ -166,11 +173,11 @@ mod tests {
             },
         ];
         let err = run_with(&mut conn, &broken).unwrap_err();
-        assert!(matches!(err, Error::Migration { version: 2, .. }), "{err}");
+        assert!(matches!(err, Error::Migration { version: 4, .. }), "{err}");
 
         assert_eq!(
             current_version(&conn).unwrap(),
-            1,
+            SCHEMA_VERSION,
             "version must not advance"
         );
         assert!(!table_exists(&conn, "will_vanish_a"));

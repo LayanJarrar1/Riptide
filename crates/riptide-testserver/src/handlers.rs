@@ -334,7 +334,7 @@ pub(crate) async fn index(State(st): App) -> Response {
          /drop?after=             closes the connection after N body bytes\n\
          /flaky?rate=             5xx or connection reset with probability rate (deterministic PRNG)\n\
          /retry-after?fails=      first N requests answer 503 + Retry-After: 1\n\
-         /limit?conns=            429 when more than N bodies are in flight\n\
+         /limit?conns=[&bps=]     429 when more than N bodies are in flight\n\
          /redirect?n=&cross=&code=&to=  redirect chain; cross=1 hops to the other origin\n\
          /etag-changes?after=     validator and bytes change after N requests\n\
          /wrong-length?delta=     Content-Length = size + delta, body is size bytes\n\
@@ -484,7 +484,7 @@ pub(crate) async fn retry_after(
     )
 }
 
-/// `/limit?conns=`
+/// `/limit?conns=[&bps=]`
 pub(crate) async fn limit(
     State(st): App,
     method: Method,
@@ -492,6 +492,8 @@ pub(crate) async fn limit(
     headers: HeaderMap,
 ) -> HandlerResult {
     let conns = usize::try_from(param_u64(&q, "conns", 2)?).unwrap_or(usize::MAX);
+    // optional `bps=` keeps each body in flight long enough for connections to overlap
+    let bps = param_u64(&q, "bps", 0)?;
     match st.shared().try_acquire(conns) {
         Some(guard) => serve(
             &method,
@@ -499,6 +501,8 @@ pub(crate) async fn limit(
             Resource::from_params(&q)?,
             Shaping {
                 guard: Some(guard),
+                bps: (bps > 0).then_some(bps),
+                chunk: (bps > 0).then(|| (bps / 8).clamp(1024, CHUNK_SIZE as u64) as usize),
                 ..Shaping::default()
             },
         ),

@@ -37,7 +37,7 @@ pub mod verify;
 pub use context::RequestContext;
 pub use error::{Error, Result};
 pub use file::{part_path_for, PartFile, PART_EXTENSION};
-pub use limiter::HostLimiter;
+pub use limiter::{CapObserver, HostLimiter, HostPermit};
 pub use probe::{probe, Probe};
 pub use proxy::{ProxyChoice, ProxyUrl};
 pub use rate::RateLimiter;

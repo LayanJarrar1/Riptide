@@ -7,7 +7,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 
 use riptide_core::{
     CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind,
-    DownloadState, Priority, QueueId, Secrets, Segment, SegmentState,
+    DownloadState, PostAction, Priority, Queue, QueueId, QueueSpec, Schedule, Secrets, Segment,
+    SegmentState,
 };
 
 use crate::migrate::{self, now_millis};
@@ -15,21 +16,6 @@ use crate::{Error, Result};
 
 /// How long a writer waits for a lock before giving up (milliseconds).
 pub const BUSY_TIMEOUT_MS: u64 = 5_000;
-
-/// A queue row.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Queue {
-    /// Row id.
-    pub id: QueueId,
-    /// Display name.
-    pub name: String,
-    /// Maximum simultaneously active downloads.
-    pub max_concurrent: u32,
-    /// Sort order.
-    pub position: i64,
-    /// Whether the queue is running.
-    pub enabled: bool,
-}
 
 /// A category row.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +57,7 @@ type SecretsRow = (Option<String>, String, Option<String>, Option<String>);
 const DOWNLOAD_COLUMNS: &str = "id, url, final_url, filename, dir, size, supports_ranges, etag, \
     last_modified, content_type, state, retryable, category_id, queue_id, priority, speed_limit, \
     connections, checksum_algo, checksum_expected, checksum_actual_algo, checksum_actual, error, \
-    added_at, started_at, completed_at, kind, media_format";
+    added_at, started_at, completed_at, kind, media_format, queue_pos";
 
 impl Store {
     /// Opens (or creates) the database file, applies PRAGMAs and migrations.
@@ -125,13 +111,15 @@ impl Store {
     pub fn insert_download(&mut self, d: &Download) -> Result<DownloadId> {
         let (algo, hex) = checksum_cols(d.checksum_expected.as_ref());
         let (aalgo, ahex) = checksum_cols(d.checksum_actual.as_ref());
+        let position = self.next_position(d.queue_id)?;
         self.conn.execute(
             "INSERT INTO downloads (url, final_url, filename, dir, size, supports_ranges, etag, \
              last_modified, content_type, state, retryable, category_id, queue_id, priority, \
              speed_limit, connections, checksum_algo, checksum_expected, checksum_actual_algo, \
-             checksum_actual, error, added_at, started_at, completed_at, kind, media_format) \
+             checksum_actual, error, added_at, started_at, completed_at, kind, media_format, \
+             queue_pos) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, \
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
             params![
                 d.url,
                 d.final_url,
@@ -159,6 +147,7 @@ impl Store {
                 d.completed_at,
                 d.kind.name(),
                 d.media_format,
+                position,
             ],
         )?;
         Ok(DownloadId(self.conn.last_insert_rowid()))
@@ -191,15 +180,18 @@ impl Store {
         Ok(all.into_iter().filter(|d| d.state == state).collect())
     }
 
-    /// Rewrites every column of `d` (matched by `d.id`). The state is written as-is; use
-    /// [`Self::set_state`] when the transition must be checked.
+    /// Rewrites every column of `d` (matched by `d.id`) except its queue and place in the
+    /// queue, which only [`Self::move_download`], [`Self::reorder_queue_items`] and
+    /// [`Self::delete_queue`] change (a transfer saving its probe result must not undo a move
+    /// made meanwhile). The state is written as-is; use [`Self::set_state`] when the
+    /// transition must be checked.
     pub fn update_download(&mut self, d: &Download) -> Result<()> {
         let (algo, hex) = checksum_cols(d.checksum_expected.as_ref());
         let (aalgo, ahex) = checksum_cols(d.checksum_actual.as_ref());
         let n = self.conn.execute(
             "UPDATE downloads SET url = ?2, final_url = ?3, filename = ?4, dir = ?5, size = ?6, \
              supports_ranges = ?7, etag = ?8, last_modified = ?9, content_type = ?10, state = ?11, \
-             retryable = ?12, category_id = ?13, queue_id = ?14, priority = ?15, speed_limit = ?16, \
+             retryable = ?12, category_id = ?13, priority = ?15, speed_limit = ?16, \
              connections = ?17, checksum_algo = ?18, checksum_expected = ?19, \
              checksum_actual_algo = ?20, checksum_actual = ?21, error = ?22, added_at = ?23, \
              started_at = ?24, completed_at = ?25, kind = ?26, media_format = ?27 WHERE id = ?1",
@@ -519,33 +511,247 @@ impl Store {
 
     /// All queues by position.
     pub fn queues(&self) -> Result<Vec<Queue>> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT id, name, max_concurrent, position, enabled FROM queues ORDER BY position, id",
-        )?;
-        let rows = stmt.query_map([], |r| {
-            Ok(Queue {
-                id: QueueId(r.get(0)?),
-                name: r.get(1)?,
-                max_concurrent: r.get(2)?,
-                position: r.get(3)?,
-                enabled: r.get(4)?,
-            })
-        })?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {QUEUE_COLUMNS} FROM queues ORDER BY position, id"
+        ))?;
+        let rows = stmt.query_and_then([], read_queue)?;
+        rows.collect()
     }
 
-    /// Creates a queue and returns its id.
+    /// One queue.
+    pub fn get_queue(&self, id: QueueId) -> Result<Option<Queue>> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(&format!("SELECT {QUEUE_COLUMNS} FROM queues WHERE id = ?1"))?;
+        let mut rows = stmt.query_and_then([id.0], read_queue)?;
+        rows.next().transpose()
+    }
+
+    /// Creates a queue (no schedule, started) and returns its id. See [`Self::create_queue`].
     pub fn insert_queue(&mut self, name: &str, max_concurrent: u32) -> Result<QueueId> {
-        let position: i64 = self.conn.query_row(
+        self.create_queue(&QueueSpec::new(name, max_concurrent))
+    }
+
+    /// Creates a started queue after the existing ones.
+    ///
+    /// Errors: [`riptide_core::Error::Invalid`] (through [`Error::Core`]) for a bad spec or a
+    /// name another queue already has.
+    pub fn create_queue(&mut self, spec: &QueueSpec) -> Result<QueueId> {
+        let spec = spec.clone().validated()?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        ensure_name_free(&tx, &spec.name, None)?;
+        let position: i64 = tx.query_row(
             "SELECT COALESCE(MAX(position), -1) + 1 FROM queues",
             [],
             |r| r.get(0),
         )?;
-        self.conn.execute(
-            "INSERT INTO queues (name, max_concurrent, position, enabled) VALUES (?1, ?2, ?3, 1)",
-            params![name, max_concurrent, position],
+        tx.execute(
+            "INSERT INTO queues (name, max_concurrent, position, enabled, schedule, on_done) \
+             VALUES (?1, ?2, ?3, 1, ?4, ?5)",
+            params![
+                spec.name,
+                spec.max_concurrent,
+                position,
+                schedule_json(&spec.schedule)?,
+                on_done_json(spec.on_done.as_ref())?,
+            ],
         )?;
-        Ok(QueueId(self.conn.last_insert_rowid()))
+        let id = QueueId(tx.last_insert_rowid());
+        tx.commit()?;
+        Ok(id)
+    }
+
+    /// Replaces a queue's name, limit, schedule and post action. Returns the stored queue.
+    pub fn update_queue(&mut self, id: QueueId, spec: &QueueSpec) -> Result<Queue> {
+        let spec = spec.clone().validated()?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        ensure_name_free(&tx, &spec.name, Some(id))?;
+        let n = tx.execute(
+            "UPDATE queues SET name = ?2, max_concurrent = ?3, schedule = ?4, on_done = ?5 \
+             WHERE id = ?1",
+            params![
+                id.0,
+                spec.name,
+                spec.max_concurrent,
+                schedule_json(&spec.schedule)?,
+                on_done_json(spec.on_done.as_ref())?,
+            ],
+        )?;
+        if n == 0 {
+            return Err(Error::QueueNotFound(id));
+        }
+        tx.commit()?;
+        self.get_queue(id)?.ok_or(Error::QueueNotFound(id))
+    }
+
+    /// Starts (`true`) or stops (`false`) a queue. Returns `true` if the switch changed.
+    pub fn set_queue_enabled(&mut self, id: QueueId, enabled: bool) -> Result<bool> {
+        let before: Option<bool> = self
+            .conn
+            .query_row("SELECT enabled FROM queues WHERE id = ?1", [id.0], |r| {
+                r.get(0)
+            })
+            .optional()?;
+        let before = before.ok_or(Error::QueueNotFound(id))?;
+        if before != enabled {
+            self.conn.execute(
+                "UPDATE queues SET enabled = ?2 WHERE id = ?1",
+                params![id.0, enabled],
+            )?;
+        }
+        Ok(before != enabled)
+    }
+
+    /// Replaces only the schedule (the engine uses this to clear a fired one-shot).
+    pub fn set_queue_schedule(&mut self, id: QueueId, schedule: &Schedule) -> Result<()> {
+        schedule.validate()?;
+        let n = self.conn.execute(
+            "UPDATE queues SET schedule = ?2 WHERE id = ?1",
+            params![id.0, schedule_json(schedule)?],
+        )?;
+        if n == 0 {
+            return Err(Error::QueueNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Deletes a queue; its downloads join the end of *Main* in their current order. Returns
+    /// the ids that moved. *Main* itself cannot be deleted.
+    pub fn delete_queue(&mut self, id: QueueId) -> Result<Vec<DownloadId>> {
+        if id == QueueId::MAIN {
+            return Err(
+                riptide_core::Error::Invalid("the Main queue cannot be deleted".into()).into(),
+            );
+        }
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let exists: i64 =
+            tx.query_row("SELECT COUNT(*) FROM queues WHERE id = ?1", [id.0], |r| {
+                r.get(0)
+            })?;
+        if exists == 0 {
+            return Err(Error::QueueNotFound(id));
+        }
+        let moved: Vec<DownloadId> = {
+            let mut stmt =
+                tx.prepare("SELECT id FROM downloads WHERE queue_id = ?1 ORDER BY queue_pos, id")?;
+            let rows = stmt.query_map([id.0], |r| Ok(DownloadId(r.get(0)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        let mut pos = max_position(&tx, QueueId::MAIN)?;
+        for d in &moved {
+            pos += 1;
+            tx.execute(
+                "UPDATE downloads SET queue_id = ?2, queue_pos = ?3 WHERE id = ?1",
+                params![d.0, QueueId::MAIN.0, pos],
+            )?;
+        }
+        tx.execute("DELETE FROM queues WHERE id = ?1", [id.0])?;
+        tx.commit()?;
+        Ok(moved)
+    }
+
+    /// Puts the queues in the given order (ids not listed follow, in their current order).
+    pub fn reorder_queues(&mut self, order: &[QueueId]) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let current: Vec<QueueId> = {
+            let mut stmt = tx.prepare("SELECT id FROM queues ORDER BY position, id")?;
+            let rows = stmt.query_map([], |r| Ok(QueueId(r.get(0)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        let full = merge_order(&current, order)?;
+        for (i, q) in full.iter().enumerate() {
+            tx.execute(
+                "UPDATE queues SET position = ?2 WHERE id = ?1",
+                params![q.0, i as i64],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Moves a download to the end of another queue. Returns the queue it left.
+    pub fn move_download(&mut self, id: DownloadId, to: QueueId) -> Result<QueueId> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let exists: i64 =
+            tx.query_row("SELECT COUNT(*) FROM queues WHERE id = ?1", [to.0], |r| {
+                r.get(0)
+            })?;
+        if exists == 0 {
+            return Err(Error::QueueNotFound(to));
+        }
+        let from: Option<i64> = tx
+            .query_row(
+                "SELECT queue_id FROM downloads WHERE id = ?1",
+                [id.0],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let from = QueueId(from.ok_or(Error::NotFound(id))?);
+        if from != to {
+            let pos = max_position(&tx, to)? + 1;
+            tx.execute(
+                "UPDATE downloads SET queue_id = ?2, queue_pos = ?3 WHERE id = ?1",
+                params![id.0, to.0, pos],
+            )?;
+        }
+        tx.commit()?;
+        Ok(from)
+    }
+
+    /// Orders the downloads of a queue: `order` first, then the rest in their current order.
+    /// Every id in `order` must belong to `queue`. Positions are renumbered `1..=n`.
+    pub fn reorder_queue_items(&mut self, queue: QueueId, order: &[DownloadId]) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let exists: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM queues WHERE id = ?1",
+            [queue.0],
+            |r| r.get(0),
+        )?;
+        if exists == 0 {
+            return Err(Error::QueueNotFound(queue));
+        }
+        let current: Vec<DownloadId> = {
+            let mut stmt =
+                tx.prepare("SELECT id FROM downloads WHERE queue_id = ?1 ORDER BY queue_pos, id")?;
+            let rows = stmt.query_map([queue.0], |r| Ok(DownloadId(r.get(0)?)))?;
+            rows.collect::<rusqlite::Result<_>>()?
+        };
+        let full = merge_order(&current, order)?;
+        for (i, d) in full.iter().enumerate() {
+            tx.execute(
+                "UPDATE downloads SET queue_pos = ?2 WHERE id = ?1",
+                params![d.0, i as i64 + 1],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Downloads of a queue in their manual order.
+    pub fn list_downloads_in_queue(&self, queue: QueueId) -> Result<Vec<Download>> {
+        let sql = format!(
+            "SELECT {DOWNLOAD_COLUMNS} FROM downloads WHERE queue_id = ?1 ORDER BY queue_pos, id"
+        );
+        let mut stmt = self.conn.prepare_cached(&sql)?;
+        let rows = stmt.query_and_then([queue.0], read_download)?;
+        rows.collect()
+    }
+
+    /// Position for a download appended to `queue`.
+    fn next_position(&self, queue: QueueId) -> Result<i64> {
+        Ok(max_position(&self.conn, queue)? + 1)
     }
 
     /// All categories by position.
@@ -597,6 +803,103 @@ impl Store {
 }
 
 // ---------------------------------------------------------------------- helpers
+
+const QUEUE_COLUMNS: &str = "id, name, max_concurrent, position, enabled, schedule, on_done";
+
+fn max_position(conn: &Connection, queue: QueueId) -> Result<i64> {
+    Ok(conn.query_row(
+        "SELECT COALESCE(MAX(queue_pos), 0) FROM downloads WHERE queue_id = ?1",
+        [queue.0],
+        |r| r.get(0),
+    )?)
+}
+
+fn ensure_name_free(conn: &Connection, name: &str, except: Option<QueueId>) -> Result<()> {
+    let taken: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM queues WHERE name = ?1 COLLATE NOCASE AND id != ?2",
+        params![name, except.map_or(-1, |q| q.0)],
+        |r| r.get(0),
+    )?;
+    if taken > 0 {
+        return Err(
+            riptide_core::Error::Invalid(format!("a queue named {name:?} already exists")).into(),
+        );
+    }
+    Ok(())
+}
+
+/// `wanted` first (no duplicates, all must be in `current`), then the rest of `current`.
+fn merge_order<T: Copy + PartialEq + std::fmt::Debug>(
+    current: &[T],
+    wanted: &[T],
+) -> Result<Vec<T>> {
+    let mut out: Vec<T> = Vec::with_capacity(current.len());
+    for w in wanted {
+        if !current.contains(w) {
+            return Err(
+                riptide_core::Error::Invalid(format!("{w:?} is not part of this list")).into(),
+            );
+        }
+        if !out.contains(w) {
+            out.push(*w);
+        }
+    }
+    let rest: Vec<T> = current
+        .iter()
+        .filter(|c| !out.contains(c))
+        .copied()
+        .collect();
+    out.extend(rest);
+    Ok(out)
+}
+
+fn schedule_json(s: &Schedule) -> Result<Option<String>> {
+    if s.is_unscheduled() {
+        return Ok(None);
+    }
+    serde_json::to_string(s)
+        .map(Some)
+        .map_err(|source| Error::Json {
+            what: "queues.schedule",
+            source,
+        })
+}
+
+fn on_done_json(a: Option<&PostAction>) -> Result<Option<String>> {
+    a.map(serde_json::to_string)
+        .transpose()
+        .map_err(|source| Error::Json {
+            what: "queues.on_done",
+            source,
+        })
+}
+
+fn read_queue(row: &Row<'_>) -> Result<Queue> {
+    let schedule: Option<String> = row.get(5)?;
+    let on_done: Option<String> = row.get(6)?;
+    Ok(Queue {
+        id: QueueId(row.get(0)?),
+        name: row.get(1)?,
+        max_concurrent: row.get(2)?,
+        position: row.get(3)?,
+        enabled: row.get(4)?,
+        schedule: schedule
+            .map(|j| serde_json::from_str(&j))
+            .transpose()
+            .map_err(|source| Error::Json {
+                what: "queues.schedule",
+                source,
+            })?
+            .unwrap_or_default(),
+        on_done: on_done
+            .map(|j| serde_json::from_str(&j))
+            .transpose()
+            .map_err(|source| Error::Json {
+                what: "queues.on_done",
+                source,
+            })?,
+    })
+}
 
 fn to_db(v: u64) -> Result<i64> {
     i64::try_from(v)
@@ -666,6 +969,7 @@ fn read_download(row: &Row<'_>) -> Result<Download> {
         state,
         category_id: row.get::<_, Option<i64>>("category_id")?.map(CategoryId),
         queue_id: QueueId(row.get("queue_id")?),
+        queue_position: row.get("queue_pos")?,
         priority,
         speed_limit: speed_limit.map(from_db).transpose()?,
         connections: row.get("connections")?,
@@ -796,6 +1100,7 @@ mod tests {
         let mut d = sample("https://a/1.zip");
         let id = store.insert_download(&d).unwrap();
         d.id = id;
+        d.queue_position = 1; // assigned by the store
         assert_eq!(store.get_download(id).unwrap(), Some(d.clone()));
         assert_eq!(store.get_download(DownloadId(999)).unwrap(), None);
 
@@ -1040,5 +1345,180 @@ mod tests {
             .list_downloads_in_state(DownloadState::Paused)
             .unwrap();
         assert_eq!(paused.iter().map(|d| d.id).collect::<Vec<_>>(), [b]);
+    }
+
+    fn ids(ds: &[Download]) -> Vec<DownloadId> {
+        ds.iter().map(|d| d.id).collect()
+    }
+
+    #[test]
+    fn queue_crud_round_trips_schedule_and_post_action() {
+        use riptide_core::{PostAction, Schedule};
+        let mut store = Store::open_in_memory().unwrap();
+        let mut spec = QueueSpec::new("Night", 2);
+        spec.schedule = Schedule::only_at_night();
+        spec.on_done = Some(PostAction::RunCommand {
+            command: "notify.exe --done".into(),
+        });
+        let id = store.create_queue(&spec).unwrap();
+        let q = store.get_queue(id).unwrap().unwrap();
+        assert_eq!(q.spec(), spec);
+        assert!(q.enabled, "new queues start started");
+        assert_eq!(q.position, 1);
+
+        // Main stays unscheduled with no action
+        let main = store.get_queue(QueueId::MAIN).unwrap().unwrap();
+        assert!(main.schedule.is_unscheduled());
+        assert_eq!(main.on_done, None);
+
+        spec.name = "Weekend".into();
+        spec.max_concurrent = 5;
+        spec.on_done = Some(PostAction::Shutdown);
+        let q = store.update_queue(id, &spec).unwrap();
+        assert_eq!(q.spec(), spec);
+
+        assert!(store.set_queue_enabled(id, false).unwrap());
+        assert!(!store.set_queue_enabled(id, false).unwrap(), "no change");
+        assert!(!store.get_queue(id).unwrap().unwrap().enabled);
+
+        store.set_queue_schedule(id, &Schedule::default()).unwrap();
+        assert!(store
+            .get_queue(id)
+            .unwrap()
+            .unwrap()
+            .schedule
+            .is_unscheduled());
+    }
+
+    #[test]
+    fn queue_validation_and_errors() {
+        let mut store = Store::open_in_memory().unwrap();
+        let invalid = |e: Error| matches!(e, Error::Core(riptide_core::Error::Invalid(_)));
+        assert!(invalid(
+            store.create_queue(&QueueSpec::new("main", 1)).unwrap_err()
+        ));
+        assert!(invalid(
+            store.create_queue(&QueueSpec::new("  ", 1)).unwrap_err()
+        ));
+        assert!(invalid(
+            store.create_queue(&QueueSpec::new("x", 0)).unwrap_err()
+        ));
+        let id = store.create_queue(&QueueSpec::new("A", 1)).unwrap();
+        // renaming to its own name is fine, to another queue's is not
+        store.update_queue(id, &QueueSpec::new("A", 4)).unwrap();
+        assert!(invalid(
+            store
+                .update_queue(id, &QueueSpec::new("Main", 4))
+                .unwrap_err()
+        ));
+        assert!(matches!(
+            store.update_queue(QueueId(99), &QueueSpec::new("Z", 1)),
+            Err(Error::QueueNotFound(QueueId(99)))
+        ));
+        assert!(matches!(
+            store.set_queue_enabled(QueueId(99), true),
+            Err(Error::QueueNotFound(_))
+        ));
+        assert!(invalid(store.delete_queue(QueueId::MAIN).unwrap_err()));
+        assert!(matches!(
+            store.delete_queue(QueueId(99)),
+            Err(Error::QueueNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn items_get_increasing_positions_and_reorder() {
+        let mut store = Store::open_in_memory().unwrap();
+        let a = store.insert_download(&sample("https://a/1")).unwrap();
+        let b = store.insert_download(&sample("https://a/2")).unwrap();
+        let c = store.insert_download(&sample("https://a/3")).unwrap();
+        let list = store.list_downloads_in_queue(QueueId::MAIN).unwrap();
+        assert_eq!(ids(&list), [a, b, c]);
+        assert_eq!(
+            list.iter().map(|d| d.queue_position).collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+
+        store.reorder_queue_items(QueueId::MAIN, &[c, a]).unwrap();
+        let list = store.list_downloads_in_queue(QueueId::MAIN).unwrap();
+        assert_eq!(ids(&list), [c, a, b], "unlisted items follow");
+        assert_eq!(
+            list.iter().map(|d| d.queue_position).collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+
+        // an id from another queue (or unknown) is refused and changes nothing
+        let other = store.create_queue(&QueueSpec::new("O", 1)).unwrap();
+        let x = store.insert_download(&sample("https://a/4")).unwrap();
+        store.move_download(x, other).unwrap();
+        assert!(store.reorder_queue_items(QueueId::MAIN, &[x]).is_err());
+        assert!(store.reorder_queue_items(QueueId(99), &[]).is_err());
+        assert_eq!(
+            ids(&store.list_downloads_in_queue(QueueId::MAIN).unwrap()),
+            [c, a, b]
+        );
+    }
+
+    #[test]
+    fn move_appends_and_update_download_does_not_undo_it() {
+        let mut store = Store::open_in_memory().unwrap();
+        let a = store.insert_download(&sample("https://a/1")).unwrap();
+        let b = store.insert_download(&sample("https://a/2")).unwrap();
+        let night = store.create_queue(&QueueSpec::new("Night", 1)).unwrap();
+        let stale = store.get_download(a).unwrap().unwrap();
+        assert_eq!(store.move_download(a, night).unwrap(), QueueId::MAIN);
+        assert_eq!(store.move_download(b, night).unwrap(), QueueId::MAIN);
+        assert_eq!(store.move_download(b, night).unwrap(), night, "no-op move");
+        let moved = store.list_downloads_in_queue(night).unwrap();
+        assert_eq!(ids(&moved), [a, b]);
+        assert_eq!(moved[1].queue_position, 2);
+
+        // a transfer saving a record it read before the move must not put it back
+        let mut stale = stale;
+        stale.filename = "renamed.zip".into();
+        store.update_download(&stale).unwrap();
+        let now = store.get_download(a).unwrap().unwrap();
+        assert_eq!(now.queue_id, night);
+        assert_eq!(now.queue_position, 1);
+        assert_eq!(now.filename, "renamed.zip");
+
+        assert!(matches!(
+            store.move_download(a, QueueId(99)),
+            Err(Error::QueueNotFound(_))
+        ));
+        assert!(matches!(
+            store.move_download(DownloadId(999), night),
+            Err(Error::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn deleting_a_queue_sends_its_items_to_the_end_of_main() {
+        let mut store = Store::open_in_memory().unwrap();
+        let m1 = store.insert_download(&sample("https://a/m1")).unwrap();
+        let night = store.create_queue(&QueueSpec::new("Night", 1)).unwrap();
+        let mut d = sample("https://a/n1");
+        d.queue_id = night;
+        let n1 = store.insert_download(&d).unwrap();
+        let n2 = store.insert_download(&d).unwrap();
+        store.reorder_queue_items(night, &[n2, n1]).unwrap();
+        let m2 = store.insert_download(&sample("https://a/m2")).unwrap();
+
+        assert_eq!(store.delete_queue(night).unwrap(), [n2, n1]);
+        assert!(store.get_queue(night).unwrap().is_none());
+        let main = store.list_downloads_in_queue(QueueId::MAIN).unwrap();
+        assert_eq!(ids(&main), [m1, m2, n2, n1]);
+        assert!(main.iter().all(|d| d.queue_id == QueueId::MAIN));
+    }
+
+    #[test]
+    fn queues_can_be_reordered() {
+        let mut store = Store::open_in_memory().unwrap();
+        let a = store.create_queue(&QueueSpec::new("A", 1)).unwrap();
+        let b = store.create_queue(&QueueSpec::new("B", 1)).unwrap();
+        store.reorder_queues(&[b, a]).unwrap();
+        let order: Vec<_> = store.queues().unwrap().iter().map(|q| q.id).collect();
+        assert_eq!(order, [b, a, QueueId::MAIN]);
+        assert!(store.reorder_queues(&[QueueId(99)]).is_err());
     }
 }

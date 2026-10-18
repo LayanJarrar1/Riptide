@@ -38,18 +38,28 @@
 //! size estimate; live and DRM-only pages fail here), `Downloading` runs yt-dlp with progress,
 //! `Verifying` → `Completed` once the merged file is on disk. Pause stops the process and resume
 //! runs it again (`--continue` picks up its `.part` files); cancel and remove delete them.
+//!
+//! # Queues, schedules, post-queue events
+//!
+//! Every download belongs to a queue ([`riptide_core::Queue`]: name, `max_concurrent`, manual
+//! order, started/stopped switch, [`riptide_core::Schedule`], `on_done`). Three limits apply
+//! together: [`EngineSettings::max_active`] (global), the queue's `max_concurrent`, and the
+//! queue being started. See the [`queues`] module for the API (`create_queue`, `update_queue`,
+//! `delete_queue`, `move_to_queue`, `start_queue`, `stop_queue`, `reorder`), the schedule timer
+//! (a sleeping PC is not woken in v1) and [`Event::QueueFinished`], which only *announces* the
+//! post-queue action: shutting down or sleeping is the app layer's job.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 // `deny`, not `forbid`: `disk::sys` on Windows is one documented Win32 call.
 #![deny(unsafe_code)]
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use riptide_core::{
-    Category, Download, DownloadId, DownloadKind, DownloadRequest, DownloadState, Event, MediaInfo,
-    MediaSelection, Secrets, Segment,
+    Category, Clock, Download, DownloadId, DownloadKind, DownloadRequest, DownloadState, Event,
+    MediaInfo, MediaSelection, QueueId, Secrets, Segment,
 };
 use riptide_media::{DownloadJob, MediaOutcome, MediaProgress, YtDlp};
 use riptide_net::{
@@ -64,8 +74,10 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 
 pub mod disk;
+pub mod queues;
 
 pub use disk::free_space;
+pub use queues::SystemClock;
 pub use riptide_net::parse_http_url;
 
 /// Errors from the runtime.
@@ -110,7 +122,9 @@ pub struct EngineSettings {
     pub connections: u32,
     /// Simultaneous connections per host across all downloads.
     pub per_host: u32,
-    /// Downloads running at once (the Main queue's limit; per-queue limits come later).
+    /// Downloads running at once across all queues. Changing it also sets the *Main* queue's own
+    /// `max_concurrent` to the same value; other queues keep their own limit (the lower of the
+    /// two applies).
     pub max_active: u32,
     /// `User-Agent` for requests that do not carry a browser's.
     pub user_agent: Option<String>,
@@ -304,6 +318,8 @@ enum StopReason {
     Shutdown,
     /// `restart` takes over once the task has stopped; the task itself leaves the state alone.
     Restart,
+    /// The queue was stopped: back to `Queued` (via `Paused`), so starting the queue resumes it.
+    Requeue,
 }
 
 /// Per-download flags kept in the `settings` table (the record has no columns for them).
@@ -378,6 +394,8 @@ struct Running {
     task: JoinHandle<()>,
     /// The download's own bandwidth bucket (its `speed_limit`), shared by its connections.
     limit: Arc<RateLimiter>,
+    /// Queue the download counts against; kept current by `move_to_queue` / `delete_queue`.
+    queue_id: QueueId,
 }
 
 struct Inner {
@@ -385,6 +403,16 @@ struct Inner {
     /// Rebuilt when the proxy or user agent changes; running transfers keep the old one.
     client: RwLock<reqwest::Client>,
     limiter: RwLock<Arc<HostLimiter>>,
+    /// Per-host connection caps learned from `429` / `503`, persisted as `host_cap.<host>`.
+    host_caps: Arc<Mutex<HashMap<String, u32>>>,
+    /// Local wall-clock source for queue schedules.
+    clock: Arc<dyn Clock>,
+    /// Wakes the schedule timer (queues changed, shutdown).
+    sched_wake: Notify,
+    /// Per scheduled queue: the last "should be running" answer the timer applied.
+    sched_applied: Mutex<HashMap<QueueId, bool>>,
+    /// Queues whose `QueueFinished` was announced and that have not started anything since.
+    announced: Mutex<HashSet<QueueId>>,
     /// [`EngineSettings::global_speed_limit`], shared by every connection of every download.
     global_limit: Arc<RateLimiter>,
     events: broadcast::Sender<Event>,
@@ -447,6 +475,12 @@ impl Engine {
     /// Opens the store, loads settings, re-queues downloads a crash left active, and starts
     /// the scheduler.
     pub async fn open(config: EngineConfig) -> Result<Engine> {
+        Self::open_with_clock(config, Arc::new(SystemClock)).await
+    }
+
+    /// Like [`Engine::open`] with an explicit wall clock for queue schedules (tests drive a
+    /// [`riptide_core::ManualClock`] and call [`Engine::check_schedules`]).
+    pub async fn open_with_clock(config: EngineConfig, clock: Arc<dyn Clock>) -> Result<Engine> {
         let db_path = config.db_path.clone();
         let store = tokio::task::spawn_blocking(move || Store::open(&db_path))
             .await
@@ -490,12 +524,34 @@ impl Engine {
         })
         .await?;
 
+        let learned: HashMap<String, u32> = db(&store, |s| {
+            Ok(s.settings()?
+                .into_iter()
+                .filter_map(|(k, v)| {
+                    let host = k.strip_prefix(queues::HOST_CAP_PREFIX)?;
+                    let cap = v.parse::<u32>().ok().filter(|c| *c > 0)?;
+                    Some((host.to_string(), cap))
+                })
+                .collect())
+        })
+        .await?;
+        let host_caps = Arc::new(Mutex::new(learned));
+
         let client = build_client(&settings.client_options())?;
         let (events, _) = broadcast::channel(2048);
         let inner = Arc::new(Inner {
+            limiter: RwLock::new(queues::make_limiter(
+                settings.per_host as usize,
+                &store,
+                &host_caps,
+            )),
+            host_caps,
+            clock,
+            sched_wake: Notify::new(),
+            sched_applied: Mutex::new(HashMap::new()),
+            announced: Mutex::new(HashSet::new()),
             store,
             client: RwLock::new(client),
-            limiter: RwLock::new(HostLimiter::new(settings.per_host as usize)),
             global_limit: Arc::new(RateLimiter::new(settings.global_speed_limit)),
             events,
             running: Mutex::new(HashMap::new()),
@@ -506,6 +562,7 @@ impl Engine {
         });
         let engine = Engine { inner };
         tokio::spawn(engine.clone().scheduler());
+        tokio::spawn(engine.clone().schedule_timer());
         Ok(engine)
     }
 
@@ -567,7 +624,11 @@ impl Engine {
         })
         .await?;
         if let Ok(mut l) = self.inner.limiter.write() {
-            *l = HostLimiter::new(settings.per_host as usize);
+            *l = queues::make_limiter(
+                settings.per_host as usize,
+                &self.inner.store,
+                &self.inner.host_caps,
+            );
         }
         if let Some(client) = new_client {
             if let Ok(mut c) = self.inner.client.write() {
@@ -578,8 +639,12 @@ impl Engine {
         self.inner
             .global_limit
             .set_limit(settings.global_speed_limit);
+        let max_active = settings.max_active;
         if let Ok(mut s) = self.inner.settings.write() {
             *s = settings;
+        }
+        if previous.max_active != max_active {
+            self.sync_main_queue_limit(max_active).await?;
         }
         self.inner.wake.notify_one();
         Ok(())
@@ -679,7 +744,7 @@ impl Engine {
             .clamp(1, riptide_core::MAX_CONNECTIONS);
         d.priority = request.priority.unwrap_or_default();
         d.checksum_expected = request.checksum.clone();
-        d.queue_id = request.queue_id.unwrap_or(riptide_core::QueueId::MAIN);
+        d.queue_id = request.queue_id.unwrap_or(QueueId::MAIN);
         d.category_id = request.category_id;
         d.speed_limit = request.speed_limit;
         d.kind = request.kind;
@@ -1084,6 +1149,7 @@ impl Engine {
     pub async fn shutdown(&self) {
         self.inner.shutting_down.store(true, Ordering::SeqCst);
         self.inner.wake.notify_one();
+        self.inner.sched_wake.notify_one();
         let running: Vec<Running> = {
             let mut map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
             map.drain().map(|(_, r)| r).collect()
@@ -1181,23 +1247,36 @@ impl Engine {
     }
 
     async fn start_next(&self, max_active: usize) -> Result<bool> {
-        let running_ids: Vec<DownloadId> = self.running_ids();
+        let (running_ids, per_queue) = {
+            let map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
+            let mut per_queue: HashMap<QueueId, usize> = HashMap::new();
+            for r in map.values() {
+                *per_queue.entry(r.queue_id).or_default() += 1;
+            }
+            (map.keys().copied().collect::<Vec<_>>(), per_queue)
+        };
         if running_ids.len() >= max_active {
             return Ok(false);
         }
-        let mut queued = db(&self.inner.store, |s| {
-            s.list_downloads_in_state(DownloadState::Queued)
+        let (queues, mut queued) = db(&self.inner.store, |s| {
+            Ok((
+                s.queues()?,
+                s.list_downloads_in_state(DownloadState::Queued)?,
+            ))
         })
         .await?;
         queued.retain(|d| !running_ids.contains(&d.id));
-        queued.sort_by(|a, b| {
-            b.priority
-                .cmp(&a.priority)
-                .then(a.added_at.cmp(&b.added_at))
-        });
-        let Some(next) = queued.into_iter().next() else {
+        let Some(id) = riptide_core::pick_next(&queues, &queued, &per_queue, max_active) else {
             return Ok(false);
         };
+        let Some(next) = queued.into_iter().find(|d| d.id == id) else {
+            return Ok(false);
+        };
+        self.inner
+            .announced
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&next.queue_id);
 
         let stop = CancellationToken::new();
         let reason = Arc::new(Mutex::new(StopReason::Pause));
@@ -1221,6 +1300,7 @@ impl Engine {
                 reason,
                 task,
                 limit,
+                queue_id: next.queue_id,
             },
         );
         Ok(true)
@@ -1451,6 +1531,7 @@ impl Engine {
                 }
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
+                self.announce_drained_after(id).await;
                 Ok(())
             }
             Ok(Outcome::Stopped { segments }) => self.stopped(id, reason, segments).await,
@@ -1486,6 +1567,15 @@ impl Engine {
             }
             // the record is removed by `remove`, reset by `restart`, or left as-is for the
             // next start
+            StopReason::Requeue => {
+                if matches!(
+                    current,
+                    Some(DownloadState::Probing | DownloadState::Downloading)
+                ) {
+                    self.transition(id, DownloadState::Paused, None).await?;
+                    self.transition(id, DownloadState::Queued, None).await?;
+                }
+            }
             StopReason::Remove | StopReason::Shutdown | StopReason::Restart => {}
         }
         Ok(())
@@ -1631,6 +1721,7 @@ impl Engine {
                 });
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
+                self.announce_drained_after(id).await;
                 Ok(())
             }
             MediaOutcome::Stopped => self.stopped(id, reason, Vec::new()).await,

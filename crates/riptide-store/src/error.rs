@@ -1,6 +1,6 @@
 //! Store error type.
 
-use riptide_core::DownloadId;
+use riptide_core::{DownloadId, QueueId};
 
 /// Everything that can go wrong in the store.
 #[derive(Debug, thiserror::Error)]
@@ -14,6 +14,9 @@ pub enum Error {
     /// The download does not exist.
     #[error("download {} not found", .0 .0)]
     NotFound(DownloadId),
+    /// The queue does not exist.
+    #[error("queue {} not found", .0 .0)]
+    QueueNotFound(QueueId),
     /// A row holds a value the model cannot represent (bad enum name, negative size, …).
     #[error("corrupt row: {0}")]
     Corrupt(String),
