@@ -158,6 +158,31 @@ and keep the Arabic natural rather than literal.
 - Design decisions that change an established choice (storage, HTTP stack, UI framework,
   install model) need a short written rationale in the pull request so the reasoning survives.
 
+## Releasing
+
+Maintainers only. `.\scripts\release.ps1 -Version 0.1.0-alpha.3 -Prerelease` bumps the version
+(workspace `Cargo.toml`, `Cargo.lock`, `apps/desktop/package.json`), builds the signed NSIS
+installer, its updater `.sig` and the portable zip, writes the update manifests and
+`SHA256SUMS.txt` into `target/release-artifacts/<version>/`, and prints the `gh` commands. It
+publishes nothing. Pushing a `v*` tag runs `.github/workflows/release.yml`, which does the same
+and publishes.
+
+- **Signing key.** The updater key pair lives outside the repository
+  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, empty password); only the public key is in
+  `tauri.conf.json`. CI reads it from the `TAURI_SIGNING_PRIVATE_KEY` secret. Losing the key
+  means installed copies can no longer update themselves.
+- **Update channels.** Stable reads `releases/latest/download/latest.json`; GitHub's `latest`
+  skips pre-releases, so `latest.json` is attached to stable releases only. Beta reads
+  `releases/download/channel-beta/latest-beta.json`: GitHub has no "latest including
+  pre-releases" link, so every release re-uploads `latest-beta.json` to the fixed pre-release
+  `channel-beta`.
+- **Privacy.** The update check is the only network call that is not a download. It runs when
+  the user clicks *Check for updates*, or at most once a day while *Check for updates
+  automatically* is on (Settings > About), and installing always waits for a click.
+- **Uninstall.** `src-tauri/windows/hooks.nsh` removes the Native Messaging registry keys and
+  manifests and the autostart value, and asks whether to keep the download history and settings
+  (silent uninstalls keep them). Downloaded files are never touched.
+
 ## Reporting bugs
 
 Use the bug report template. The most helpful reports include the URL (or a description of the

@@ -33,6 +33,7 @@ apps/website/
   src/
     index.template.html      the page, rendered once per language
     404.template.html        bilingual not-found page
+    privacy.template.html    privacy policy, rendered to privacy/ and ar/privacy/ (strings under `privacy`)
     css/site.css             tokens (light first, dark override), layout, step animations
     js/site.js               theme, mobile nav, hero canvas, in-view animations, lightbox
     i18n/en.json             every English string

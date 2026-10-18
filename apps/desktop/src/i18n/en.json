@@ -202,6 +202,9 @@
   "toast.browserOff": "Browser integration is off",
   "toast.browserFailed": "Could not change the browser integration. Details are in the log.",
   "toast.upToDate": "Riptide is up to date",
+  "toast.updateAvailable": "Riptide {version} is available",
+  "toast.updateCheckFailed": "Could not check for updates. Details are in the log.",
+  "toast.updateFailed": "The update could not be installed. Details are in the log.",
   "toast.settingsReset": "Settings restored to defaults",
 
   "settings.title": "Settings",
@@ -264,6 +267,12 @@
   "settings.channel.stable": "Stable",
   "settings.channel.beta": "Beta",
   "settings.checkUpdates": "Check for updates",
+  "settings.checkingUpdates": "Checking…",
+  "settings.updateAvailable": "Version {version} is available",
+  "settings.updateRestart": "Update and restart",
+  "settings.updateInstalling": "Downloading the update…",
+  "settings.autoUpdate": "Check for updates automatically",
+  "settings.autoUpdateDesc": "At most once a day, from GitHub Releases. This is the only connection Riptide makes besides your downloads.",
   "settings.reset": "Reset settings",
   "settings.resetDesc": "Puts every setting back to its default. Downloads are not touched.",
   "settings.resetAction": "Reset",
@@ -307,5 +316,17 @@
   "key.space": "Space",
   "key.click": "click",
   "key.dblclick": "Double-click",
-  "key.rightclick": "Right-click"
+  "key.rightclick": "Right-click",
+
+  "tray.open": "Open Riptide",
+  "tray.pauseAll": "Pause all",
+  "tray.resumeAll": "Resume all",
+  "tray.quit": "Quit",
+  "tray.idle": "Riptide",
+  "tray.active": "Riptide: {count} active, {speed}",
+  "notify.completed": "Download complete",
+  "notify.failed": "Download failed: {reason}",
+  "clipboard.prompt": "Download {name}?",
+  "clipboard.download": "Download",
+  "toast.autostartFailed": "Could not change the Windows startup setting"
 }

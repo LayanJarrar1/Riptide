@@ -202,6 +202,9 @@
   "toast.browserOff": "تكامل المتصفح معطّل",
   "toast.browserFailed": "تعذّر تغيير تكامل المتصفح. التفاصيل في السجل.",
   "toast.upToDate": "ريبتايد محدّث إلى آخر إصدار",
+  "toast.updateAvailable": "الإصدار {version} من ريبتايد متاح",
+  "toast.updateCheckFailed": "تعذّر التحقق من التحديثات. التفاصيل في السجل.",
+  "toast.updateFailed": "تعذّر تثبيت التحديث. التفاصيل في السجل.",
   "toast.settingsReset": "أُعيدت الإعدادات إلى الوضع الافتراضي",
 
   "settings.title": "الإعدادات",
@@ -264,6 +267,12 @@
   "settings.channel.stable": "مستقرة",
   "settings.channel.beta": "تجريبية",
   "settings.checkUpdates": "التحقق من التحديثات",
+  "settings.checkingUpdates": "جارٍ التحقق…",
+  "settings.updateAvailable": "الإصدار {version} متاح",
+  "settings.updateRestart": "التحديث وإعادة التشغيل",
+  "settings.updateInstalling": "جارٍ تنزيل التحديث…",
+  "settings.autoUpdate": "التحقق من التحديثات تلقائيًا",
+  "settings.autoUpdateDesc": "مرة واحدة في اليوم على الأكثر، من إصدارات GitHub. هذا هو الاتصال الوحيد الذي يجريه ريبتايد غير تنزيلاتك.",
   "settings.reset": "إعادة ضبط الإعدادات",
   "settings.resetDesc": "يعيد كل إعداد إلى قيمته الافتراضية. لا يمس التحميلات.",
   "settings.resetAction": "إعادة الضبط",
@@ -307,5 +316,17 @@
   "key.space": "مسافة",
   "key.click": "نقر",
   "key.dblclick": "نقر مزدوج",
-  "key.rightclick": "نقر بالزر الأيمن"
+  "key.rightclick": "نقر بالزر الأيمن",
+
+  "tray.open": "فتح ريبتايد",
+  "tray.pauseAll": "إيقاف الكل مؤقتًا",
+  "tray.resumeAll": "استئناف الكل",
+  "tray.quit": "خروج",
+  "tray.idle": "ريبتايد",
+  "tray.active": "ريبتايد: {count} نشطة، {speed}",
+  "notify.completed": "اكتمل التحميل",
+  "notify.failed": "فشل التحميل: {reason}",
+  "clipboard.prompt": "تحميل {name}؟",
+  "clipboard.download": "تحميل",
+  "toast.autostartFailed": "تعذّر تغيير إعداد التشغيل مع ويندوز"
 }

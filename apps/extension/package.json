@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "test": "node scripts/test.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "key": "node scripts/gen-key.mjs"
+    "key": "node scripts/gen-key.mjs",
+    "package": "npm run build && node scripts/package.mjs"
   },
   "dependencies": {
     "webextension-polyfill": "^0.12.0"
