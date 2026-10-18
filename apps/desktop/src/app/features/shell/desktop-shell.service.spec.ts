@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../../core/preferences';
-import { provideDownloadEngine } from '../../data/engine.provider';
+import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { MOCK_ENGINE_AUTOSTART, MockEngineService } from '../../data/mock-engine.service';
 import { I18nService } from '../../i18n/i18n.service';
@@ -47,7 +47,8 @@ describe('DesktopShellService', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        provideDownloadEngine(),
+        // the mock engine even though the bridge is "available": the spec drives its list
+        { provide: DownloadEngine, useExisting: MockEngineService },
         { provide: MOCK_ENGINE_AUTOSTART, useValue: false },
         { provide: NAVIGATOR_LANGUAGES, useValue: ['en-US'] },
         { provide: PREFERENCE_STORE, useValue: new MemoryPreferenceStore() },
