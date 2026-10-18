@@ -1,4 +1,4 @@
-//! The yt-dlp command lines, built from validated values only.
+﻿//! The yt-dlp command lines, built from validated values only.
 //!
 //! Every run starts with [`COMMON`]: `--ignore-config` (a user's own yt-dlp config must not
 //! change what Riptide does), `--no-playlist`, UTF-8 output. Nothing here ever adds a flag that
@@ -80,15 +80,17 @@ pub struct RunArgs<'a> {
     pub proxy: Option<&'a str>,
 }
 
-/// The format selector and sort for a quality. Video prefers MP4/M4A streams so the merged file
-/// plays everywhere; `-S res:N` takes the largest resolution not above N.
+/// The format selector and sort for a quality. Video prefers H.264 in MP4 with AAC (M4A) at the
+/// same resolution and frame rate, so the merged file plays everywhere (AV1/VP9 only win where
+/// no H.264 exists, as for 1440p and up on YouTube); `-S res:N` takes the largest resolution not
+/// above N.
 pub fn selection_args(selection: MediaSelection) -> Vec<OsString> {
     let v: Vec<String> = match selection {
         MediaSelection::Best => vec![
             "-f".into(),
             "bv*+ba/b".into(),
             "-S".into(),
-            "res,fps,ext:mp4:m4a".into(),
+            "res,fps,vcodec:h264,ext:mp4:m4a".into(),
             "--merge-output-format".into(),
             "mp4".into(),
         ],
@@ -96,7 +98,7 @@ pub fn selection_args(selection: MediaSelection) -> Vec<OsString> {
             "-f".into(),
             "bv*+ba/b".into(),
             "-S".into(),
-            format!("res:{h},fps,ext:mp4:m4a"),
+            format!("res:{h},fps,vcodec:h264,ext:mp4:m4a"),
             "--merge-output-format".into(),
             "mp4".into(),
         ],
@@ -208,7 +210,7 @@ mod tests {
         assert!(a.contains(&"100%% Bunny.%(ext)s".to_string()));
         assert!(a
             .windows(2)
-            .any(|w| w[0] == "-S" && w[1] == "res:720,fps,ext:mp4:m4a"));
+            .any(|w| w[0] == "-S" && w[1] == "res:720,fps,vcodec:h264,ext:mp4:m4a"));
         assert!(a
             .windows(2)
             .any(|w| w[0] == "--ffmpeg-location" && w[1] == "C:/app/ffmpeg.exe"));

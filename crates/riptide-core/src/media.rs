@@ -254,7 +254,13 @@ fn video_for<'a>(formats: &'a [MediaFormat], max: Option<u32>) -> Option<&'a Med
     candidates
         .into_iter()
         .filter(|f| f.resolution() == top)
-        .max_by_key(|f| (f.ext == "mp4", (f.tbr.unwrap_or(0.0) * 1000.0) as u64))
+        .max_by_key(|f| {
+            (
+                f.vcodec.as_deref().is_some_and(|c| c.starts_with("avc")),
+                f.ext == "mp4",
+                (f.tbr.unwrap_or(0.0) * 1000.0) as u64,
+            )
+        })
 }
 
 fn video_size(formats: &[MediaFormat], v: &MediaFormat, duration: Option<f64>) -> Option<u64> {
