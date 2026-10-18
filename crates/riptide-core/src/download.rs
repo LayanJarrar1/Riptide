@@ -197,6 +197,11 @@ pub struct Download {
     pub category_id: Option<CategoryId>,
     /// Queue this download belongs to.
     pub queue_id: QueueId,
+    /// Place in the queue's manual order (smaller runs first among equal priorities). Set by
+    /// the store when the download is added, moved or reordered; ignored on insert/update.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub queue_position: i64,
     /// Priority within the queue.
     pub priority: Priority,
     /// Per-download speed cap in bytes per second, `None` for unlimited.
@@ -244,6 +249,7 @@ impl Download {
             state: DownloadState::initial(),
             category_id: None,
             queue_id: QueueId::MAIN,
+            queue_position: 0,
             priority: Priority::Normal,
             speed_limit: None,
             connections: DEFAULT_CONNECTIONS,
