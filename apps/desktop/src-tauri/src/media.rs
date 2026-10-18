@@ -13,7 +13,7 @@
 //!    changes often; the installed copy next to the app is replaced only by app updates).
 //! 2. `yt-dlp.exe` next to `riptide-desktop.exe` (installer and portable zip).
 //! 3. `RIPTIDE_YTDLP` / `RIPTIDE_FFMPEG` (development).
-//! 4. Debug builds only: `src-tauri/binaries/yt-dlp-<target>.exe` as staged by
+//! 4. Debug builds only: `src-tauri/binaries/dev/yt-dlp.exe` as staged by
 //!    `scripts/fetch-media-tools.mjs`.
 //!
 //! ffmpeg is never updated by the app; it is looked up next to the app, then `RIPTIDE_FFMPEG`,
@@ -42,22 +42,18 @@ fn exe_dir() -> Option<PathBuf> {
         .and_then(|p| p.parent().map(Path::to_path_buf))
 }
 
-/// Debug builds: the staging folder of `scripts/fetch-media-tools.mjs`.
+/// Debug builds: the dev staging folder of `scripts/fetch-media-tools.mjs`.
 fn staged(name: &str) -> Option<PathBuf> {
     if !cfg!(debug_assertions) {
         return None;
     }
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
-    let prefix = format!("{name}-");
-    std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .find(|p| {
-            p.file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .is_some_and(|n| n.starts_with(&prefix) && n.ends_with(EXE))
-        })
+    Some(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join("dev")
+            .join(format!("{name}{EXE}")),
+    )
+    .filter(|p| p.is_file())
 }
 
 fn from_env(var: &str) -> Option<PathBuf> {
