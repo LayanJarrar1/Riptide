@@ -1,6 +1,6 @@
 # LinkedIn launch posts
 
-Publish date: **Monday 2026-10-19**. Post the English and the Arabic version as two separate posts, a few hours apart (see tips). Each is under 1,300 characters and has no link in the body, because LinkedIn lowers reach for posts with outbound links. The links go in the first comment.
+Publish date: **Tuesday 2026-10-20** (or Monday evening once the checklist steps 1–4 are done). Post the English and the Arabic version as two separate posts, a few hours apart (see tips). Each is under 1,300 characters and has no link in the body, because LinkedIn lowers reach for posts with outbound links. The links go in the first comment.
 
 Before posting, confirm the facts still hold on the day: the latest release tag, whether video-page support (yt-dlp + ffmpeg) shipped in alpha.4, and whether queues and batch downloads are merged. The posts only claim what is on `main` or list under "Next".
 
