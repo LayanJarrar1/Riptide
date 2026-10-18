@@ -184,6 +184,30 @@ mod tests {
     }
 
     #[test]
+    fn queue_finished_json_carries_the_action() {
+        let e = Event::QueueFinished {
+            queue_id: QueueId(3),
+            action: Some(PostAction::RunCommand {
+                command: "done.cmd".into(),
+            }),
+        };
+        let json = serde_json::to_value(&e).unwrap();
+        assert_eq!(json["type"], "queue_finished");
+        assert_eq!(json["queue_id"], 3);
+        assert_eq!(json["action"]["action"], "run_command");
+        assert_eq!(json["action"]["command"], "done.cmd");
+        assert_eq!(serde_json::from_value::<Event>(json).unwrap(), e);
+        let none = Event::QueueFinished {
+            queue_id: QueueId(1),
+            action: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&none).unwrap()["action"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
     fn download_id_and_progress_flag() {
         let p = Event::Progress {
             id: DownloadId(2),

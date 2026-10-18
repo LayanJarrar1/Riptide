@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 pub mod category;
+pub mod dispatch;
 pub mod download;
 pub mod error;
 pub mod event;
@@ -26,6 +27,7 @@ pub mod state;
 pub mod throttle;
 
 pub use category::Category;
+pub use dispatch::pick_next;
 pub use download::{
     CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadRequest,
     Priority, QueueId, Secrets, UnixMillis, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
