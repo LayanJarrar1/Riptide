@@ -121,6 +121,7 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     queueId: d.queue_id,
     priority: d.priority,
     connections: d.connections,
+    speedLimitBps: toUiSize(d.speed_limit),
     segments: toUiSegments(segments, state, size),
     speedBps: state === 'downloading' ? (previous?.speedBps ?? 0) : 0,
     speedHistory: previous?.speedHistory ?? emptyHistory(),

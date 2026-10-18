@@ -22,6 +22,7 @@ import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
 import { CompletionToastService } from './features/downloads/completion-toast.service';
 import { CATEGORY_ICONS } from './features/downloads/download-row.component';
+import { ExitConfirmDialogComponent } from './features/shell/exit-confirm-dialog.component';
 import { ShortcutsDialogComponent } from './features/shell/shortcuts-dialog.component';
 import { UiState } from './features/shell/ui-state.service';
 import { I18nService } from './i18n/i18n.service';
@@ -64,6 +65,7 @@ const BOOT_MS = 900;
     RouterLinkActive,
     RouterOutlet,
     ShortcutsDialogComponent,
+    ExitConfirmDialogComponent,
     SparklineComponent,
     TickerDirective,
     ToastsComponent,
