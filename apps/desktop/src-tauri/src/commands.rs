@@ -16,6 +16,8 @@
 //! | `remove_download` | `id`, `deleteFile` | – |
 //! | `pause_all` / `resume_all` | – | – |
 //! | `get_engine_settings` / `set_engine_settings` | – / `settings` | `EngineSettings` / – |
+//! | `set_speed_limit` | `id`, `limit` (bytes/s or `null`) | – (applies to a running download) |
+//! | `set_exit_guard` / `quit_app` | `enabled` / – | – (see [`crate::exit`]) |
 //! | `disk_free` | `path` | free bytes on that folder's volume |
 //! | `open_file` / `show_in_folder` | `path` | – |
 //! | `pick_folder` | – | the chosen folder or `null` |
@@ -199,6 +201,19 @@ pub async fn set_engine_settings(
     settings: EngineSettings,
 ) -> CmdResult<()> {
     engine.set_settings(settings).await.map_err(err)
+}
+
+/// Sets one download's own speed limit (bytes per second, `null` = unlimited).
+#[tauri::command]
+pub async fn set_speed_limit(
+    engine: State<'_, Engine>,
+    id: i64,
+    limit: Option<u64>,
+) -> CmdResult<()> {
+    engine
+        .set_speed_limit(DownloadId(id), limit)
+        .await
+        .map_err(err)
 }
 
 /// Opens a finished file with its default application.
