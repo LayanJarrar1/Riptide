@@ -29,6 +29,15 @@
 //!   state is reborn in place and announced with [`Event::Added`] again.
 //! * **Disk space.** [`free_space`] reports the bytes available on the volume of a folder,
 //!   even one that does not exist yet.
+//!
+//! # Media pages
+//!
+//! A record with [`DownloadKind::Media`] (a YouTube / Vimeo / ... page) is run by
+//! `riptide-media` (the bundled yt-dlp, see [`Engine::set_media_tools`]) instead of
+//! `riptide-net`, through the same states and events: `Probing` asks yt-dlp for the page (title,
+//! size estimate; live and DRM-only pages fail here), `Downloading` runs yt-dlp with progress,
+//! `Verifying` → `Completed` once the merged file is on disk. Pause stops the process and resume
+//! runs it again (`--continue` picks up its `.part` files); cancel and remove delete them.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 // `deny`, not `forbid`: `disk::sys` on Windows is one documented Win32 call.
 #![deny(unsafe_code)]
@@ -39,8 +48,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use riptide_core::{
-    Category, Download, DownloadId, DownloadRequest, DownloadState, Event, Secrets, Segment,
+    Category, Download, DownloadId, DownloadKind, DownloadRequest, DownloadState, Event, MediaInfo,
+    MediaSelection, Secrets, Segment,
 };
+use riptide_media::{DownloadJob, MediaOutcome, MediaProgress, YtDlp};
 use riptide_net::{
     build_client, part_path_for, probe, transfer, ClientOptions, HostLimiter, Outcome, ProxyChoice,
     ProxyUrl, RateLimiter, RequestContext, TransferConfig, TransferEvent, TransferPlan,
@@ -72,6 +83,9 @@ pub enum Error {
     /// No such download.
     #[error("download {} not found", .0 .0)]
     NotFound(DownloadId),
+    /// Media page (yt-dlp).
+    #[error(transparent)]
+    Media(#[from] riptide_media::Error),
     /// Disk.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
@@ -273,6 +287,14 @@ pub struct EngineConfig {
     pub default_dir: PathBuf,
 }
 
+/// What `add` left to the engine for a media record.
+#[derive(Debug, Clone, Copy)]
+struct MediaFlags {
+    explicit_name: bool,
+    auto_category: bool,
+    auto_dir: bool,
+}
+
 /// Why a running transfer is being stopped; decides the state it ends in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StopReason {
@@ -295,6 +317,60 @@ const FLAG_EXPLICIT_NAME: &str = "explicit_name";
 const FLAG_AUTO_CATEGORY: &str = "auto_category";
 /// The folder came from the category, not the request; it follows the category.
 const FLAG_AUTO_DIR: &str = "auto_dir";
+/// A media record got its final name from the first probe; later runs keep it (the partial
+/// files carry that name).
+const FLAG_MEDIA_NAMED: &str = "media_named";
+/// Every per-download flag, for cleanup.
+const ALL_FLAGS: [&str; 4] = [
+    FLAG_EXPLICIT_NAME,
+    FLAG_AUTO_CATEGORY,
+    FLAG_AUTO_DIR,
+    FLAG_MEDIA_NAMED,
+];
+
+/// Longest title (in characters) used as a media file name; yt-dlp appends `.f137.mp4.part`.
+const MAX_MEDIA_STEM_CHARS: usize = 120;
+
+/// `<name>` without the extension the selection produces.
+fn media_stem(filename: &str, selection: MediaSelection) -> String {
+    filename
+        .strip_suffix(&format!(".{}", selection.final_ext()))
+        .unwrap_or(filename)
+        .to_string()
+}
+
+/// `<title>.<ext>`, sanitised and short enough for yt-dlp's suffixes.
+fn media_filename(title: &str, selection: MediaSelection) -> String {
+    let title: String = title.trim().chars().take(MAX_MEDIA_STEM_CHARS).collect();
+    let stem = riptide_core::sanitize_filename(&title);
+    let stem = if stem.is_empty() || stem == "_" {
+        "video".to_string()
+    } else {
+        stem
+    };
+    riptide_core::sanitize_filename(&format!("{stem}.{}", selection.final_ext()))
+}
+
+/// Deletes what an unfinished download left on disk: the `.rtpart` file, or yt-dlp's partial
+/// files for a media record.
+fn delete_partials(d: &Download) {
+    match d.kind {
+        DownloadKind::Http => {
+            let _ = std::fs::remove_file(part_path_for(&d.final_path()));
+        }
+        DownloadKind::Media => {
+            let selection = d
+                .media_format
+                .as_deref()
+                .and_then(MediaSelection::parse)
+                .unwrap_or(MediaSelection::Best);
+            let stem = media_stem(&d.filename, selection);
+            for p in riptide_media::partial_files(&d.dir, &stem) {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+    }
+}
 
 struct Running {
     stop: CancellationToken,
@@ -316,6 +392,8 @@ struct Inner {
     wake: Notify,
     settings: RwLock<EngineSettings>,
     shutting_down: AtomicBool,
+    /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
+    media: RwLock<Option<YtDlp>>,
 }
 
 /// The runtime. Cheap to clone; all clones share one state.
@@ -424,10 +502,36 @@ impl Engine {
             wake: Notify::new(),
             settings: RwLock::new(settings),
             shutting_down: AtomicBool::new(false),
+            media: RwLock::new(None),
         });
         let engine = Engine { inner };
         tokio::spawn(engine.clone().scheduler());
         Ok(engine)
+    }
+
+    /// Sets (or clears) the yt-dlp that runs media records. Applies from the next start.
+    pub fn set_media_tools(&self, tools: Option<YtDlp>) {
+        if let Ok(mut m) = self.inner.media.write() {
+            *m = tools;
+        }
+    }
+
+    /// The yt-dlp media records use, if set.
+    pub fn media_tools(&self) -> Option<YtDlp> {
+        self.inner.media.read().ok().and_then(|m| m.clone())
+    }
+
+    fn require_media(&self) -> Result<YtDlp> {
+        self.media_tools()
+            .ok_or_else(|| Error::Media(riptide_media::Error::ToolMissing(PathBuf::from("yt-dlp"))))
+    }
+
+    /// Asks yt-dlp what a video page offers (title, formats, the quality menu) without adding
+    /// it. `cookies` is the browser's `Cookie` header for the page; it goes to yt-dlp in a
+    /// temporary file and nowhere else.
+    pub async fn probe_media(&self, url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
+        riptide_net::parse_http_url(url)?;
+        Ok(self.require_media()?.probe(url, cookies).await?)
     }
 
     /// Engine events (added, probed, state changes, progress, completed, failed, removed).
@@ -524,13 +628,35 @@ impl Engine {
     pub async fn add(&self, request: DownloadRequest) -> Result<DownloadId> {
         let url = riptide_net::parse_http_url(&request.url)?;
         let settings = self.settings();
-        let filename = request
-            .filename
-            .as_deref()
-            .map(riptide_core::sanitize_filename)
-            .unwrap_or_else(|| {
-                riptide_core::sanitize_filename(&riptide_net::probe::filename_from_url(&url))
-            });
+        let media_selection = match request.kind {
+            DownloadKind::Http => None,
+            DownloadKind::Media => {
+                let key = request.media_format.as_deref().unwrap_or("best");
+                Some(MediaSelection::parse(key).ok_or_else(|| {
+                    Error::Core(riptide_core::Error::Invalid(format!(
+                        "unknown media quality {key:?}"
+                    )))
+                })?)
+            }
+        };
+        let filename = match media_selection {
+            // a media name is `<title>.<ext>`; the extension follows the chosen quality
+            Some(selection) => {
+                let title = request
+                    .filename
+                    .as_deref()
+                    .map(|f| media_stem(f, selection))
+                    .unwrap_or_else(|| "video".into());
+                media_filename(&title, selection)
+            }
+            None => request
+                .filename
+                .as_deref()
+                .map(riptide_core::sanitize_filename)
+                .unwrap_or_else(|| {
+                    riptide_core::sanitize_filename(&riptide_net::probe::filename_from_url(&url))
+                }),
+        };
         // folder: the request's, else the category's (by extension), else the default; the
         // folder of an explicit category is resolved below, where its key can be looked up
         let category = Category::from_filename(&filename);
@@ -556,6 +682,11 @@ impl Engine {
         d.queue_id = request.queue_id.unwrap_or(riptide_core::QueueId::MAIN);
         d.category_id = request.category_id;
         d.speed_limit = request.speed_limit;
+        d.kind = request.kind;
+        d.media_format = media_selection.map(MediaSelection::key);
+        if media_selection.is_some() {
+            d.connections = 1;
+        }
         if request.start_paused {
             d.state = DownloadState::Paused;
         }
@@ -670,7 +801,7 @@ impl Engine {
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
         if !d.state.is_terminal() {
             self.transition(id, DownloadState::Cancelled, None).await?;
-            let _ = std::fs::remove_file(part_path_for(&d.final_path()));
+            delete_partials(&d);
         }
         Ok(())
     }
@@ -683,13 +814,13 @@ impl Engine {
             let _ = running.task.await;
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
-        let _ = std::fs::remove_file(part_path_for(&d.final_path()));
+        delete_partials(&d);
         if delete_file && d.state == DownloadState::Completed {
             let _ = std::fs::remove_file(d.final_path());
         }
         db(&self.inner.store, move |s| {
             s.remove_download(id)?;
-            for flag in [FLAG_EXPLICIT_NAME, FLAG_AUTO_CATEGORY, FLAG_AUTO_DIR] {
+            for flag in ALL_FLAGS {
                 s.set_setting(&flag_key(id, flag), "")?;
             }
             Ok(())
@@ -794,7 +925,7 @@ impl Engine {
         // 3. the files: the part file always; the finished file only if it is ours (the
         //    engine renamed it there and, when the size is known, it still has that size)
         let final_path = before.final_path();
-        let _ = std::fs::remove_file(part_path_for(&final_path));
+        delete_partials(&before);
         let ours = matches!(
             before.state,
             DownloadState::Completed | DownloadState::Failed { .. }
@@ -1109,6 +1240,7 @@ impl Engine {
         if let Err(e) = outcome {
             let retryable = match &e {
                 Error::Net(n) => n.is_retryable(),
+                Error::Media(m) => m.is_retryable(),
                 _ => false,
             };
             tracing::warn!(id = id.0, error = %e, retryable, "download failed");
@@ -1149,6 +1281,16 @@ impl Engine {
         // read the record *after* the transition: `update_download` below writes every column,
         // including `state`, and must not roll it back to Queued
         let mut record = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        if record.kind == DownloadKind::Media {
+            let flags = MediaFlags {
+                explicit_name,
+                auto_category,
+                auto_dir,
+            };
+            return self
+                .run_media(record, secrets, flags, stop, reason, limit)
+                .await;
+        }
 
         let url = riptide_net::parse_http_url(&record.url)?;
         let ctx = Arc::new(RequestContext::new(&url).with_secrets(&secrets));
@@ -1337,7 +1479,7 @@ impl Engine {
             StopReason::Cancel => {
                 if current.is_some_and(|s| !s.is_terminal()) {
                     if let Some(d) = self.get(id).await? {
-                        let _ = std::fs::remove_file(part_path_for(&d.final_path()));
+                        delete_partials(&d);
                     }
                     self.transition(id, DownloadState::Cancelled, None).await?;
                 }
@@ -1347,5 +1489,151 @@ impl Engine {
             StopReason::Remove | StopReason::Shutdown | StopReason::Restart => {}
         }
         Ok(())
+    }
+
+    /// A media record from `Probing` to its end state (see the module docs).
+    async fn run_media(
+        &self,
+        mut record: Download,
+        secrets: Secrets,
+        flags: MediaFlags,
+        stop: CancellationToken,
+        reason: &Arc<Mutex<StopReason>>,
+        limit: &Arc<RateLimiter>,
+    ) -> Result<()> {
+        let id = record.id;
+        let store = &self.inner.store;
+        let tool = self.require_media()?;
+        let key = record.media_format.clone().unwrap_or_else(|| "best".into());
+        let selection = MediaSelection::parse(&key).ok_or_else(|| {
+            Error::Core(riptide_core::Error::Invalid(format!(
+                "unknown media quality {key:?}"
+            )))
+        })?;
+        let cookies = secrets.cookies.clone();
+        let info = tokio::select! {
+            () = stop.cancelled() => {
+                return self.stopped(id, reason, Vec::new()).await;
+            }
+            i = tool.probe(&record.url, cookies.as_deref()) => i?,
+        };
+
+        let named = db(store, move |s| {
+            Ok(s.setting(&flag_key(id, FLAG_MEDIA_NAMED))?
+                .is_some_and(|v| v == "1"))
+        })
+        .await?;
+        if !named {
+            if !flags.explicit_name {
+                record.filename = media_filename(&info.title, selection);
+            }
+            if flags.auto_category {
+                let category = Category::from_filename(&record.filename);
+                let category_id = db(store, move |s| category_row_id(s, category)).await?;
+                if category_id.is_some() {
+                    record.category_id = category_id;
+                }
+                if flags.auto_dir {
+                    record.dir = self.settings().dir_for(category);
+                }
+            }
+            let unique = riptide_core::unique_path(&record.dir, &record.filename, |p| p.exists());
+            if let Some(name) = unique.file_name() {
+                record.filename = name.to_string_lossy().into_owned();
+            }
+        }
+        if !info.url.is_empty() {
+            record.final_url = Some(info.url.clone());
+        }
+        record.size = info
+            .choices
+            .iter()
+            .find(|c| c.key == key)
+            .and_then(|c| c.approx_size);
+        record.supports_ranges = true;
+        record.content_type = Some(
+            match selection {
+                MediaSelection::AudioMp3 => "audio/mpeg",
+                MediaSelection::AudioM4a => "audio/mp4",
+                _ => "video/mp4",
+            }
+            .into(),
+        );
+        record.speed_limit = limit.limit();
+        let to_save = record.clone();
+        db(store, move |s| {
+            s.update_download(&to_save)?;
+            s.set_setting(&flag_key(id, FLAG_MEDIA_NAMED), "1")
+        })
+        .await?;
+        self.emit(Event::Probed {
+            id,
+            size: record.size,
+            supports_ranges: true,
+            filename: record.filename.clone(),
+            content_type: record.content_type.clone(),
+        });
+        self.transition(id, DownloadState::Downloading, None)
+            .await?;
+
+        let settings = self.settings();
+        let rate_limit = match (limit.limit(), settings.global_speed_limit) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        let proxy = (settings.proxy.mode == ProxyMode::Manual)
+            .then(|| settings.proxy.url.clone())
+            .filter(|u| !u.is_empty());
+        let job = DownloadJob {
+            url: record.url.clone(),
+            selection,
+            dir: record.dir.clone(),
+            stem: media_stem(&record.filename, selection),
+            cookies,
+            rate_limit,
+            proxy,
+            expected_total: record.size,
+        };
+        let (tx, mut rx) = mpsc::channel::<MediaProgress>(64);
+        let forward_engine = self.clone();
+        let forwarder = tokio::spawn(async move {
+            while let Some(p) = rx.recv().await {
+                forward_engine.emit(Event::Progress {
+                    id,
+                    downloaded: p.downloaded,
+                    total: p.total,
+                    speed_bps: p.speed_bps,
+                    eta_secs: p.eta_secs,
+                    connections: 1,
+                });
+            }
+        });
+        let result = tool.download(&job, tx, stop.clone()).await;
+        let _ = forwarder.await;
+
+        match result? {
+            MediaOutcome::Completed { path, size } => {
+                self.transition(id, DownloadState::Verifying, None).await?;
+                let mut done = self.get(id).await?.ok_or(Error::NotFound(id))?;
+                if let Some(name) = path.file_name() {
+                    done.filename = name.to_string_lossy().into_owned();
+                }
+                done.size = Some(size);
+                let to_save = done.clone();
+                db(store, move |s| s.update_download(&to_save)).await?;
+                self.emit(Event::Progress {
+                    id,
+                    downloaded: size,
+                    total: Some(size),
+                    speed_bps: 0,
+                    eta_secs: Some(0),
+                    connections: 1,
+                });
+                self.transition(id, DownloadState::Completed, None).await?;
+                self.emit(Event::Completed { id, path });
+                Ok(())
+            }
+            MediaOutcome::Stopped => self.stopped(id, reason, Vec::new()).await,
+        }
     }
 }

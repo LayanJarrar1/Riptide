@@ -129,9 +129,9 @@ impl Store {
             "INSERT INTO downloads (url, final_url, filename, dir, size, supports_ranges, etag, \
              last_modified, content_type, state, retryable, category_id, queue_id, priority, \
              speed_limit, connections, checksum_algo, checksum_expected, checksum_actual_algo, \
-             checksum_actual, error, added_at, started_at, completed_at) \
+             checksum_actual, error, added_at, started_at, completed_at, kind, media_format) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, \
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
             params![
                 d.url,
                 d.final_url,
@@ -720,6 +720,27 @@ mod tests {
         d.etag = Some("\"abc\"".into());
         d.checksum_expected = Checksum::guess(&"ab".repeat(32));
         d
+    }
+
+    #[test]
+    fn media_kind_and_format_round_trip() {
+        let mut store = Store::open_in_memory().unwrap();
+        let mut d = sample("https://www.youtube.com/watch?v=x");
+        d.kind = DownloadKind::Media;
+        d.media_format = Some("h720".into());
+        let id = store.insert_download(&d).unwrap();
+        let mut back = store.get_download(id).unwrap().unwrap();
+        assert_eq!(back.kind, DownloadKind::Media);
+        assert_eq!(back.media_format.as_deref(), Some("h720"));
+        back.media_format = Some("audio-mp3".into());
+        store.update_download(&back).unwrap();
+        let again = store.get_download(id).unwrap().unwrap();
+        assert_eq!(again.media_format.as_deref(), Some("audio-mp3"));
+        let plain = store.insert_download(&sample("https://a/b.zip")).unwrap();
+        assert_eq!(
+            store.get_download(plain).unwrap().unwrap().kind,
+            DownloadKind::Http
+        );
     }
 
     #[test]

@@ -50,6 +50,12 @@ fn migrate_from_v1_fixture_keeps_every_row() {
         Some(64)
     );
     assert_eq!(big.queue_id, QueueId::MAIN);
+    assert_eq!(
+        big.kind,
+        riptide_core::DownloadKind::Http,
+        "v1 rows become plain HTTP downloads"
+    );
+    assert_eq!(big.media_format, None);
 
     let pdf = &downloads[1];
     assert_eq!(pdf.filename, "ملف.pdf", "Arabic names survive");
