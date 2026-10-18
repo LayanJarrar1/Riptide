@@ -22,6 +22,8 @@ pub mod integration;
 pub mod ipc_server;
 pub mod media;
 pub mod notify;
+pub mod power;
+pub mod queues;
 pub mod shell;
 pub mod tray;
 pub mod updater;
@@ -204,6 +206,17 @@ pub fn run() {
                 loop {
                     match rx.recv().await {
                         Ok(event) => {
+                            // a queue with a post-queue action finished: the countdown dialog
+                            // must be seen, even when the window sits in the tray
+                            if matches!(
+                                &event,
+                                riptide_core::Event::QueueFinished {
+                                    action: Some(_),
+                                    ..
+                                }
+                            ) {
+                                show_main_window(&handle);
+                            }
                             if let Err(e) = handle.emit(EVENT_NAME, &event) {
                                 tracing::debug!(error = %e, "event not delivered to the webview");
                             }
@@ -274,6 +287,18 @@ pub fn run() {
             updater::install_update,
             updater::open_release_page,
             notify::notify_update,
+            queues::list_queues,
+            queues::queue_items,
+            queues::create_queue,
+            queues::update_queue,
+            queues::delete_queue,
+            queues::move_to_queue,
+            queues::start_queue,
+            queues::stop_queue,
+            queues::reorder_queue_items,
+            queues::reorder_queues,
+            queues::validate_post_action,
+            queues::run_post_action,
             shell::set_shell_prefs,
             shell::autostart_enabled,
             shell::set_autostart,
