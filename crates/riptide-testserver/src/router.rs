@@ -6,6 +6,7 @@ use axum::routing::{any, get};
 use axum::Router;
 
 use crate::handlers;
+use crate::site;
 use crate::state::ServerState;
 
 /// Builds the router for one listener. `get` routes also answer `HEAD`.
@@ -33,6 +34,12 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/cd/evil", get(handlers::cd_evil))
         .route("/corrupt", get(handlers::corrupt))
         .route("/echo-headers", any(handlers::echo_headers))
-        .layer(axum::middleware::from_fn(handlers::log_request))
+        .route("/robots.txt", get(site::robots))
+        .route("/site/", get(site::page))
+        .route("/site/{*path}", get(site::page))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            handlers::log_request,
+        ))
         .with_state(state)
 }

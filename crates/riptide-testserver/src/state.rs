@@ -56,6 +56,18 @@ impl ServerState {
         self.shared.seed
     }
 
+    /// Every request seen so far by either listener, oldest first (capped at
+    /// [`REQUEST_LOG_CAP`] entries).
+    #[must_use]
+    pub fn requests(&self) -> Vec<RequestRecord> {
+        self.shared.requests()
+    }
+
+    /// Forgets the request log.
+    pub fn clear_requests(&self) {
+        self.shared.clear_requests();
+    }
+
     /// Number of `/limit` bodies currently being streamed.
     #[must_use]
     pub fn in_flight(&self) -> usize {
@@ -67,8 +79,28 @@ impl ServerState {
     }
 }
 
+/// Most requests the log keeps; later ones are dropped.
+pub const REQUEST_LOG_CAP: usize = 100_000;
+
+/// One logged request. Header *values* are never stored, only whether the secrets-carrying
+/// headers were present (the crawler tests check that they never leave their origin).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestRecord {
+    /// Origin of the listener that served it (`http://127.0.0.1:port`).
+    pub origin: String,
+    /// Method.
+    pub method: String,
+    /// Path and query as sent.
+    pub target: String,
+    /// The request carried a `Cookie` header.
+    pub has_cookie: bool,
+    /// The request carried an `Authorization` header.
+    pub has_authorization: bool,
+}
+
 /// Counters shared by both origins.
 pub(crate) struct Shared {
+    requests: Mutex<Vec<RequestRecord>>,
     seed: u64,
     rng: Mutex<u64>,
     /// Requests seen by `/retry-after`.
@@ -87,6 +119,7 @@ pub(crate) struct Shared {
 impl Shared {
     fn new(seed: u64) -> Self {
         Self {
+            requests: Mutex::new(Vec::new()),
             seed,
             rng: Mutex::new(splitmix64(seed)),
             retry_after_hits: AtomicU64::new(0),
@@ -96,6 +129,30 @@ impl Shared {
             digest_nonce: format!("{:016x}", splitmix64(seed ^ 0x006E_6F6E_6365)),
             digest_opaque: format!("{:016x}", splitmix64(seed ^ 0x6F70_6171_7565)),
         }
+    }
+
+    pub(crate) fn record(&self, record: RequestRecord) {
+        let mut log = self
+            .requests
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if log.len() < REQUEST_LOG_CAP {
+            log.push(record);
+        }
+    }
+
+    fn requests(&self) -> Vec<RequestRecord> {
+        self.requests
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    fn clear_requests(&self) {
+        self.requests
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
     }
 
     /// Next value of the server-level PRNG (deterministic per seed and request order).
