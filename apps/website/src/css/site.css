@@ -346,7 +346,7 @@ p { text-wrap: pretty; }
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   gap: clamp(32px, 6vw, 80px);
-  align-items: center;
+  align-items: start; /* a font swap changes the copy height; the visual must not move with it */
 }
 .hero-copy { max-width: 36rem; }
 .status {
@@ -393,7 +393,7 @@ p { text-wrap: pretty; }
   color: var(--color-text-secondary);
 }
 
-.hero-visual { position: relative; min-width: 0; }
+.hero-visual { position: relative; min-width: 0; margin-top: clamp(0px, 4vw, 56px); }
 .current {
   width: 100%;
   aspect-ratio: 5 / 4;
@@ -426,9 +426,10 @@ p { text-wrap: pretty; }
   .hero-copy > :nth-child(6) { animation-delay: 260ms; }
   .hero-visual { animation: rise 800ms var(--ease-out) 120ms both; }
 }
+/* Transform only: text stays visible from the first paint, so the entrance never delays LCP. */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(10px); }
+  to { transform: none; }
 }
 
 @media (max-width: 899px) {
@@ -441,6 +442,9 @@ p { text-wrap: pretty; }
 /* ---- Sections -------------------------------------------------------------------------- */
 .section { padding-block: clamp(56px, 8vw, 104px); border-top: 1px solid var(--color-border); }
 .section-tinted { background: var(--color-surface-2); }
+/* Below-the-fold sections skip layout and paint until they are near the viewport: it cut the
+   initial main-thread work by roughly 5x on a throttled CPU. The first section stays eager. */
+.section + .section, .site-footer { content-visibility: auto; contain-intrinsic-size: auto 900px; }
 .section-head { max-width: 44rem; margin-bottom: clamp(28px, 4vw, 48px); }
 .section-lead { margin-top: 12px; font-size: 1.0625rem; line-height: 1.6; color: var(--color-text-secondary); max-width: 40rem; }
 .footnote { margin-top: 16px; font-size: 0.8125rem; color: var(--color-text-muted); }

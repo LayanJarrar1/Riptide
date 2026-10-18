@@ -13,6 +13,7 @@
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { gzipSync } from 'node:zlib';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -385,7 +386,15 @@ function serve(port) {
     if (!existsSync(file)) { file = join(DIST, '404.html'); res.statusCode = 404; }
     res.setHeader('Content-Type', MIME[extname(file)] || 'application/octet-stream');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(readFileSync(file));
+    // Compress text like the real hosts do, so a preview (and Lighthouse) sees realistic transfer sizes.
+    const body = readFileSync(file);
+    if (/(?:text|javascript|json|xml|svg)/.test(res.getHeader('Content-Type')) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.end(gzipSync(body));
+    } else {
+      res.end(body);
+    }
   });
   server.listen(port, '127.0.0.1', () => console.log(`serving ${DIST} at http://127.0.0.1:${port}/  (Ctrl+C to stop)`));
 }
