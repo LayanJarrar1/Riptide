@@ -30,7 +30,7 @@
 .PARAMETER KeyPath
     Updater private key (minisign, from `npx tauri signer generate`). Default
     %USERPROFILE%\.riptide-keys\riptide-updater.key. Its password, if any, comes from
-    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD (the default key has an empty password).
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD, or a <key>.password file next to the key.
 .PARAMETER Notes
     Release notes for the update manifests (shown in Settings > About).
 .PARAMETER SkipBump
@@ -111,7 +111,13 @@ if (-not $SkipBump) {
 
 # ---------------------------------------------------------------- 2. build
 $env:TAURI_SIGNING_PRIVATE_KEY = ([IO.File]::ReadAllText($KeyPath)).Trim()
-if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = '' }
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+    # PowerShell cannot hold an empty environment variable, so the key always has a password,
+    # kept in a file next to it (outside the repository).
+    $passwordFile = [IO.Path]::ChangeExtension($KeyPath, '.password')
+    if (-not (Test-Path $passwordFile)) { throw "Signing key password not found: set TAURI_SIGNING_PRIVATE_KEY_PASSWORD or create $passwordFile" }
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ([IO.File]::ReadAllText($passwordFile)).Trim()
+}
 
 Push-Location $Desktop
 try {
