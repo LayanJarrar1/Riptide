@@ -85,7 +85,7 @@ export class AppComponent implements OnInit {
   protected readonly ui = inject(UiState);
   protected readonly format = inject(FormatService);
   private readonly router = inject(Router);
-  private readonly updates = inject(UpdateService);
+  protected readonly updates = inject(UpdateService);
   private readonly searchRef = viewChild<ElementRef<HTMLInputElement>>('search');
 
   protected readonly views = LIST_VIEWS;
@@ -151,7 +151,8 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     void this.tauri.loadAppInfo();
     // at most once a day and only while enabled in Settings (the one non-download call)
-    void this.updates.startupCheck();
+    this.updates.startChecks();
+    void this.updates.announceUpdated();
   }
 
   protected onSearch(event: Event): void {

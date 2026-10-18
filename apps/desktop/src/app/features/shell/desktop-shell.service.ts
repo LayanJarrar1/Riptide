@@ -12,6 +12,9 @@ import { UiState } from './ui-state.service';
 /** Tauri event: a notification was clicked; the payload is the download id. */
 export const OPEN_DOWNLOAD_EVENT = 'riptide://open-download';
 
+/** Tauri event: the update notification was clicked (see `notify.rs`). */
+export const OPEN_UPDATE_EVENT = 'riptide://open-update';
+
 /** Tauri event: a downloadable link was copied (see `clipboard.rs`). */
 export const CLIPBOARD_LINK_EVENT = 'riptide://clipboard-link';
 
@@ -141,6 +144,7 @@ export class DesktopShellService {
     try {
       const handlers = [
         await this.listen<number>(OPEN_DOWNLOAD_EVENT, (id) => this.openDownload(id)),
+        await this.listen<null>(OPEN_UPDATE_EVENT, () => this.openAbout()),
         await this.listen<ClipboardLink>(CLIPBOARD_LINK_EVENT, (link) => this.offerLink(link)),
       ];
       if (this.destroyed) {
@@ -157,6 +161,13 @@ export class DesktopShellService {
     void this.router.navigateByUrl('/').then(() => {
       this.store.select(id);
       this.store.openDetails(id);
+    });
+  }
+
+  /** Opens Settings and scrolls to the About section (where the update card is). */
+  openAbout(): void {
+    void this.router.navigateByUrl('/settings').then(() => {
+      setTimeout(() => document.getElementById('about')?.scrollIntoView({ block: 'start' }), 50);
     });
   }
 
