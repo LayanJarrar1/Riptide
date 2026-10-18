@@ -48,9 +48,7 @@ pub fn confirm_before_close<R: tauri::Runtime>(
     window: &tauri::Window<R>,
     api: &tauri::CloseRequestApi,
 ) -> bool {
-    let enabled = window
-        .try_state::<ExitGuard>()
-        .is_some_and(|g| g.enabled());
+    let enabled = window.try_state::<ExitGuard>().is_some_and(|g| g.enabled());
     let active = window
         .try_state::<Engine>()
         .map(|e| e.running_ids().len())
