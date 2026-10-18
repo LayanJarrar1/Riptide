@@ -89,4 +89,16 @@ describe('AddDownloadDialogComponent video mode', () => {
     expect(el().querySelector('.media')).toBeNull();
     expect(el().querySelector('input[name="checksum"]')).not.toBeNull();
   });
+
+  it('in RTL keeps the start of the LTR path field clear of the Browse button', () => {
+    document.documentElement.dir = 'rtl';
+    try {
+      const input = el().querySelector<HTMLInputElement>('.input-wrap input[name="dir"]') as HTMLInputElement;
+      const style = getComputedStyle(input);
+      expect(parseFloat(style.paddingLeft)).toBeGreaterThanOrEqual(90);
+      expect(parseFloat(style.paddingRight)).toBeLessThan(60);
+    } finally {
+      document.documentElement.dir = '';
+    }
+  });
 });
