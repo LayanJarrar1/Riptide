@@ -1,0 +1,11 @@
+{
+  "id": "live-now",
+  "title": "24/7 lofi radio",
+  "is_live": true,
+  "live_status": "is_live",
+  "webpage_url": "https://www.youtube.com/watch?v=live-now",
+  "extractor_key": "Youtube",
+  "formats": [
+    { "format_id": "95", "ext": "mp4", "protocol": "m3u8_native", "width": 1280, "height": 720, "vcodec": "avc1.4d401f", "acodec": "mp4a.40.2", "tbr": 2500.0 }
+  ]
+}

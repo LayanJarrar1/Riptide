@@ -1,6 +1,6 @@
 import { Signal, signal } from '@angular/core';
 
-import { Download, DownloadRequest, ProbeResult } from '../model/download';
+import { Download, DownloadRequest, MediaProbe, ProbeResult } from '../model/download';
 
 /**
  * What the UI needs from a download engine. Two implementations exist: `MockEngineService`
@@ -38,6 +38,12 @@ export abstract class DownloadEngine {
 
   /** Asks the engine what `url` points at before adding it. */
   abstract probe(url: string): Promise<ProbeResult>;
+
+  /**
+   * Asks the engine (yt-dlp) what a video page offers: title and the quality menu. Rejects for
+   * pages without a downloadable video, live streams and DRM-protected videos.
+   */
+  abstract probeMedia(url: string): Promise<MediaProbe>;
 
   /** Adds a download and resolves with its id. `probe` lets a simulation skip its own probe. */
   abstract add(request: DownloadRequest, probe?: ProbeResult): Promise<number>;

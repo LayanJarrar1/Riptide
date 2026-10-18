@@ -168,7 +168,7 @@ publishes nothing. Pushing a `v*` tag runs `.github/workflows/release.yml`, whic
 and publishes.
 
 - **Signing key.** The updater key pair lives outside the repository
-  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, empty password); only the public key is in
+  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, its password in `riptide-updater.password` next to it); only the public key is in
   `tauri.conf.json`. CI reads it from the `TAURI_SIGNING_PRIVATE_KEY` secret. Losing the key
   means installed copies can no longer update themselves.
 - **Update channels.** Stable reads `releases/latest/download/latest.json`; GitHub's `latest`

@@ -6,7 +6,7 @@ import { FormatService } from '../../core/format.service';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
-import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, ProbeResult } from '../../model/download';
+import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, isMediaUrl, MediaChoice, MediaProbe, ProbeResult } from '../../model/download';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -62,6 +62,16 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
               <app-icon name="alert" [size]="14" />
               {{ i18n.t('add.noSpace').replace('{free}', format.bytes(freeBytes())) }}
             </span>
+          } @else if (mediaError(); as e) {
+            <span class="help is-error">
+              <app-icon name="alert" [size]="14" />
+              {{ i18n.t(e) }}{{ result() ? ' ' + i18n.t('add.mediaPlainFallback') : '' }}
+            </span>
+          } @else if (media()) {
+            <span class="help preview">
+              <app-icon name="bolt" [size]="14" class="ok" />
+              {{ i18n.t('add.mediaReady') }}
+            </span>
           } @else if (result(); as r) {
             <span class="help preview">
               <app-icon [name]="r.supportsRanges ? 'bolt' : 'info'" [size]="14" [class.ok]="r.supportsRanges" />
@@ -72,10 +82,49 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           }
         </label>
 
+        @if (media(); as m) {
+          <section class="media" aria-live="polite">
+            <div class="media-head">
+              @if (m.thumbnail) {
+                <img class="media-thumb" [src]="m.thumbnail" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="hideThumb($event)" />
+              } @else {
+                <span class="media-thumb media-thumb-empty" aria-hidden="true"><app-icon name="play" [size]="22" /></span>
+              }
+              <span class="media-text">
+                <span class="media-title" dir="auto">{{ m.title }}</span>
+                <span class="media-sub" dir="auto">
+                  @if (m.uploader) {
+                    <span>{{ m.uploader }}</span>
+                  }
+                  @if (m.uploader && m.duration !== null) {
+                    <span aria-hidden="true">·</span>
+                  }
+                  @if (m.duration !== null) {
+                    <span class="num">{{ m.duration | duration }}</span>
+                  }
+                </span>
+              </span>
+            </div>
+            <div class="field">
+              <span class="label">{{ i18n.t('add.quality') }}</span>
+              <div class="qualities" role="radiogroup" [attr.aria-label]="i18n.t('add.quality')">
+                @for (c of m.choices; track c.key) {
+                  <button type="button" role="radio" class="quality" [class.is-active]="c.key === choiceKey()" [attr.aria-checked]="c.key === choiceKey()" (click)="chooseQuality(c)">
+                    <span class="quality-name">{{ choiceLabel(c) }}</span>
+                    @if (c.approxSize !== null) {
+                      <span class="quality-size num">~{{ c.approxSize | bytes }}</span>
+                    }
+                  </button>
+                }
+              </div>
+            </div>
+          </section>
+        }
+
         <div class="row">
           <label class="field grow">
             <span class="label">{{ i18n.t('add.filename') }}</span>
-            <input class="input" type="text" name="filename" dir="auto" [value]="filename()" (input)="filename.set(value($event))" [placeholder]="i18n.t('add.filenameHint')" />
+            <input class="input" type="text" name="filename" dir="auto" [value]="filename()" (input)="onFilename($event)" [placeholder]="i18n.t('add.filenameHint')" />
           </label>
           <label class="field category">
             <span class="label">{{ i18n.t('add.category') }}</span>
@@ -100,6 +149,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
         </label>
 
         <div class="row">
+          @if (!media()) {
           <div class="field grow">
             <span class="label">{{ i18n.t('add.connections') }}</span>
             <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.connections')">
@@ -108,7 +158,8 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
               }
             </div>
           </div>
-          <div class="field">
+          }
+          <div class="field" [class.grow]="media()">
             <span class="label">{{ i18n.t('add.start') }}</span>
             <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.start')">
               <button type="button" role="radio" class="preset" [class.is-active]="!startPaused()" [attr.aria-checked]="!startPaused()" (click)="startPaused.set(false)">{{ i18n.t('add.startNow') }}</button>
@@ -123,6 +174,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             {{ i18n.t('add.advanced') }}
           </summary>
           <div class="advanced-body">
+            @if (!media()) {
             <label class="field">
               <span class="label">{{ i18n.t('add.checksum') }}</span>
               <input class="input mono" type="text" name="checksum" dir="ltr" spellcheck="false" [value]="checksum()" (input)="checksum.set(value($event))" [placeholder]="i18n.t('add.checksumHint')" />
@@ -130,6 +182,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
                 <span class="help is-error">{{ i18n.t('add.checksumInvalid') }}</span>
               }
             </label>
+            }
             <div class="row">
               <label class="field grow">
                 <span class="label">{{ i18n.t('add.username') }}</span>
@@ -323,6 +376,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
     @media (prefers-reduced-motion: reduce) {
       .help.is-error,
+      .media,
       .help.preview {
         animation-duration: var(--dur-fade);
         transform: none;
@@ -366,6 +420,102 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
     .preset.is-active {
       background: var(--color-accent);
       color: var(--color-on-accent);
+    }
+
+    .media {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+      animation: help-in var(--dur-2) var(--ease-emphasized-out) both;
+    }
+
+    .media-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      min-inline-size: 0;
+    }
+
+    .media-thumb {
+      flex: none;
+      inline-size: 96px;
+      block-size: 54px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+    }
+
+    .media-thumb-empty {
+      display: grid;
+      place-items: center;
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+    }
+
+    .media-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-inline-size: 0;
+    }
+
+    .media-title {
+      font-weight: var(--weight-medium);
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .media-sub {
+      display: inline-flex;
+      gap: 6px;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+    }
+
+    .qualities {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .quality {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      block-size: 32px;
+      padding-inline: 12px;
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--color-text-secondary);
+      font: inherit;
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition:
+        background-color var(--motion-fast) var(--ease-standard),
+        color var(--motion-fast) var(--ease-standard),
+        border-color var(--motion-fast) var(--ease-standard);
+    }
+
+    .quality:hover {
+      color: var(--color-text);
+    }
+
+    .quality.is-active {
+      border-color: var(--color-accent);
+      background: var(--color-accent);
+      color: var(--color-on-accent);
+    }
+
+    .quality-size {
+      font-size: var(--text-xs);
+      opacity: 0.8;
     }
 
     .advanced {
@@ -445,7 +595,16 @@ export class AddDownloadDialogComponent {
   /** A record the engine says this request would duplicate; the prompt shows while set. */
   protected readonly duplicate = signal<Download | null>(null);
 
+  /** The video page's title, uploader and quality menu; `null` for a plain link. */
+  protected readonly media = signal<MediaProbe | null>(null);
+  /** The picked quality's key (a [`MediaChoice`] key). */
+  protected readonly choiceKey = signal('best');
+  /** i18n key of why the page is not a downloadable video; `null` when there is no problem. */
+  protected readonly mediaError = signal<string | null>(null);
+
   private probeToken = 0;
+  /** `true` once the user typed a name, so a quality change no longer rewrites it. */
+  private filenameEdited = false;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
   private diskToken = 0;
   /** The request waiting for the duplicate prompt's answer. */
@@ -498,6 +657,31 @@ export class AddDownloadDialogComponent {
     // the input event fires right after and carries the pasted text; nothing else to do
   }
 
+  protected onFilename(event: Event): void {
+    this.filename.set(this.value(event));
+    this.filenameEdited = true;
+  }
+
+  protected hideThumb(event: Event): void {
+    (event.target as HTMLElement).style.display = 'none';
+  }
+
+  /** `Best`, `1080p`, `Audio · M4A`. */
+  protected choiceLabel(c: MediaChoice): string {
+    if (c.kind === 'best') {
+      return this.i18n.t('add.qualityBest');
+    }
+    if (c.kind === 'audio') {
+      return this.i18n.t('add.qualityAudio').replace('{ext}', c.ext.toUpperCase());
+    }
+    return `${c.height ?? ''}p`;
+  }
+
+  protected chooseQuality(c: MediaChoice): void {
+    this.choiceKey.set(c.key);
+    this.applyChoice(c);
+  }
+
   protected onCategory(event: Event): void {
     const key = (event.target as HTMLSelectElement).value as CategoryKey;
     this.category.set(key);
@@ -534,14 +718,17 @@ export class AddDownloadDialogComponent {
     }
     const hex = this.checksum().trim().toLowerCase();
     const algo = hex.length === 32 ? 'md5' : hex.length === 40 ? 'sha1' : 'sha256';
+    const isMedia = this.media() !== null;
     const request: DownloadRequest = {
       url: this.url().trim(),
       filename: this.filename().trim() || undefined,
       dir: this.dir().trim() || undefined,
       category: this.category(),
-      connections: this.connections(),
+      connections: isMedia ? undefined : this.connections(),
       startPaused: this.startPaused(),
-      checksum: hex.length > 0 ? { algo, hex } : undefined,
+      checksum: !isMedia && hex.length > 0 ? { algo, hex } : undefined,
+      kind: isMedia ? 'media' : undefined,
+      mediaFormat: isMedia ? this.choiceKey() : undefined,
     };
     this.submitting.set(true);
     try {
@@ -577,8 +764,8 @@ export class AddDownloadDialogComponent {
   private async send(request: DownloadRequest): Promise<void> {
     this.submitting.set(true);
     try {
-      const id = await this.engine.add(request, this.result() ?? undefined);
-      this.toasts.show('success', this.i18n.t(this.startPaused() ? 'toast.addedLater' : 'toast.added').replace('{name}', request.filename ?? this.result()?.filename ?? request.url));
+      const id = await this.engine.add(request, this.media() === null ? (this.result() ?? undefined) : undefined);
+      this.toasts.show('success', this.i18n.t(this.startPaused() ? 'toast.addedLater' : 'toast.added').replace('{name}', request.filename ?? this.media()?.title ?? this.result()?.filename ?? request.url));
       this.added.emit(id);
       this.closed.emit();
     } catch (error: unknown) {
@@ -595,6 +782,8 @@ export class AddDownloadDialogComponent {
       this.probeTimer = null;
     }
     const trimmed = raw.trim();
+    const token = ++this.probeToken;
+    this.clearMedia();
     if (trimmed.length === 0) {
       this.probe.set('idle');
       this.result.set(null);
@@ -606,25 +795,89 @@ export class AddDownloadDialogComponent {
       return;
     }
     this.probe.set('probing');
-    const token = ++this.probeToken;
-    this.probeTimer = setTimeout(() => {
-      void this.engine.probe(trimmed).then((r) => {
-        if (token !== this.probeToken) {
-          return;
-        }
-        this.result.set(r);
-        this.probe.set('ok');
-        if (this.filename().trim().length === 0) {
-          this.filename.set(r.filename);
-        }
-        this.category.set(r.category);
-        this.dir.set(this.settingsService.dirFor(r.category));
-      });
-    }, 250);
+    this.probeTimer = setTimeout(() => void this.runProbe(trimmed, token), 250);
+  }
+
+  /**
+   * The plain probe, plus the video probe right away for known video sites and for any page the
+   * plain probe finds to be HTML. A stale answer (the URL changed meanwhile) is dropped.
+   */
+  private async runProbe(url: string, token: number): Promise<void> {
+    const plainPromise = this.engine.probe(url).then(
+      (r): ProbeResult | null => r,
+      () => null,
+    );
+    const knownVideo = isMediaUrl(url);
+    const earlyMedia = knownVideo ? this.fetchMedia(url) : null;
+    const plain = await plainPromise;
+    if (token !== this.probeToken) {
+      return;
+    }
+    const html = plain?.contentType?.toLowerCase().includes('html') === true;
+    const outcome = earlyMedia !== null ? await earlyMedia : html ? await this.fetchMedia(url) : null;
+    if (token !== this.probeToken) {
+      return;
+    }
+    this.result.set(plain);
+    this.probe.set('ok');
+    if (outcome !== null && 'probe' in outcome) {
+      this.showMedia(outcome.probe);
+      return;
+    }
+    // an HTML page that is not a video is no error worth showing; a known video site is
+    this.mediaError.set(outcome !== null && (knownVideo || plain === null) ? outcome.error : null);
+    if (plain !== null) {
+      if (this.filename().trim().length === 0) {
+        this.filename.set(plain.filename);
+      }
+      this.category.set(plain.category);
+      this.dir.set(this.settingsService.dirFor(plain.category));
+    }
+  }
+
+  private async fetchMedia(url: string): Promise<{ probe: MediaProbe } | { error: string }> {
+    try {
+      return { probe: await this.engine.probeMedia(url) };
+    } catch (error: unknown) {
+      return { error: mediaErrorKey(error) };
+    }
+  }
+
+  private showMedia(m: MediaProbe): void {
+    this.mediaError.set(null);
+    this.media.set(m);
+    const first = m.choices[0];
+    if (first === undefined) {
+      return;
+    }
+    this.choiceKey.set(first.key);
+    this.applyChoice(first);
+  }
+
+  /** The chosen quality decides the extension and the category (unless the user typed a name). */
+  private applyChoice(c: MediaChoice): void {
+    const m = this.media();
+    if (m === null) {
+      return;
+    }
+    const category: CategoryKey = c.kind === 'audio' ? 'music' : 'video';
+    this.category.set(category);
+    this.dir.set(this.settingsService.dirFor(category));
+    if (!this.filenameEdited) {
+      this.filename.set(`${safeTitle(m.title)}.${c.ext}`);
+    }
+  }
+
+  private clearMedia(): void {
+    this.media.set(null);
+    this.mediaError.set(null);
+    this.choiceKey.set('best');
+    this.filenameEdited = false;
   }
 
   private reset(): void {
     this.probeToken++;
+    this.clearMedia();
     this.url.set('');
     this.probe.set('idle');
     this.result.set(null);
@@ -641,4 +894,29 @@ export class AddDownloadDialogComponent {
     this.duplicate.set(null);
     this.pending = null;
   }
+}
+
+/** A title as a file name: characters Windows forbids become spaces. */
+function safeTitle(title: string): string {
+  const cleaned = Array.from(title, (ch) => (ch.charCodeAt(0) < 32 ? ' ' : ch))
+    .join('')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > 0 ? cleaned : 'video';
+}
+
+/** Maps the engine's refusal to a translated, friendly message key. */
+export function mediaErrorKey(error: unknown): string {
+  const text = String(error instanceof Error ? error.message : error).toLowerCase();
+  if (text.includes('not installed') || text.includes('was not found')) {
+    return 'add.mediaNoTools';
+  }
+  if (text.includes('drm')) {
+    return 'add.mediaDrm';
+  }
+  if (text.includes('live')) {
+    return 'add.mediaLive';
+  }
+  return 'add.mediaUnsupported';
 }

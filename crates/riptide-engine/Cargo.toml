@@ -1,6 +1,6 @@
-[package]
+﻿[package]
 name = "riptide-engine"
-description = "Riptide download manager — runtime: queue scheduler, persistence, transfers and events behind one API shared by the app and the CLI"
+description = "Riptide download manager â€” runtime: queue scheduler, persistence, transfers and events behind one API shared by the app and the CLI"
 license = "MIT OR Apache-2.0"
 version.workspace = true
 edition.workspace = true
@@ -13,6 +13,7 @@ publish.workspace = true
 riptide-core = { workspace = true }
 riptide-net = { workspace = true }
 riptide-store = { workspace = true }
+riptide-media = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
@@ -32,6 +33,8 @@ ts = ["dep:ts-rs", "riptide-core/ts"]
 
 [dev-dependencies]
 riptide-testserver = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

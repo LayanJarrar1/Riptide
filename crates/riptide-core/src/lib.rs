@@ -20,6 +20,7 @@ pub mod download;
 pub mod error;
 pub mod event;
 pub mod filename;
+pub mod media;
 pub mod queue;
 pub mod schedule;
 pub mod segment;
@@ -29,12 +30,16 @@ pub mod throttle;
 pub use category::Category;
 pub use dispatch::pick_next;
 pub use download::{
-    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadRequest,
-    Priority, QueueId, Secrets, UnixMillis, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
+    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind,
+    DownloadRequest, Priority, QueueId, Secrets, UnixMillis, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
 };
 pub use error::Error;
 pub use event::Event;
 pub use filename::{sanitize_filename, split_extension, unique_path, MAX_FILENAME_BYTES};
+pub use media::{
+    is_media_host, media_choices, MediaChoice, MediaChoiceKind, MediaFormat, MediaInfo,
+    MediaSelection,
+};
 pub use queue::{PostAction, Queue, QueueSpec, MAX_QUEUE_CONCURRENT, MAX_QUEUE_NAME_CHARS};
 pub use schedule::{
     Clock, DaySet, LocalDateTime, ManualClock, Schedule, Weekday, Window, MINUTES_PER_DAY,

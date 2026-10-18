@@ -20,6 +20,7 @@ pub mod commands;
 pub mod exit;
 pub mod integration;
 pub mod ipc_server;
+pub mod media;
 pub mod notify;
 pub mod shell;
 pub mod tray;
@@ -147,6 +148,15 @@ pub fn run() {
             let config = engine_config()?;
             let engine = tauri::async_runtime::block_on(Engine::open(config))?;
             app.manage(engine.clone());
+            // video support: the bundled (or updated) yt-dlp and ffmpeg
+            let data_dir = riptide_log::Paths::resolve()?.data_dir;
+            let tools = media::resolve(&data_dir);
+            match &tools {
+                Some(t) => tracing::info!(yt_dlp = %t.exe().display(), ffmpeg = t.ffmpeg().is_some(), "video support found"),
+                None => tracing::warn!("video support not installed (no yt-dlp)"),
+            }
+            engine.set_media_tools(tools);
+            app.manage(media::DataDir(data_dir));
 
             // tray, notifications, clipboard monitor; started by Windows → stay in the tray
             if let Err(e) = tray::install(app.handle(), engine.clone()) {
@@ -252,6 +262,9 @@ pub fn run() {
             commands::integration_status,
             commands::register_browser_host,
             commands::unregister_browser_host,
+            media::probe_media,
+            media::media_tools_info,
+            media::update_media_tools,
             updater::check_update,
             updater::install_update,
             shell::set_shell_prefs,

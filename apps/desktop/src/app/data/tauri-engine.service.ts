@@ -1,13 +1,14 @@
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 
-import { Download, DownloadRequest, isActive, ProbeResult, Segment } from '../model/download';
+import { Download, DownloadRequest, isActive, MediaProbe, ProbeResult, Segment } from '../model/download';
 import type { Download as BridgeDownload } from '../tauri/bridge/Download';
 import type { EngineSettings } from '../tauri/bridge/EngineSettings';
 import type { Event as EngineEvent } from '../tauri/bridge/Event';
 import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
+import type { MediaInfo } from '../tauri/bridge/MediaInfo';
 import type { Segment as BridgeSegment } from '../tauri/bridge/Segment';
 import { TAURI_INVOKE, TAURI_LISTEN } from '../tauri/tauri-bridge';
-import { emptyHistory, toBridgeRequest, toUiDownload, toUiProbe, toUiSize } from './bridge-mapping';
+import { emptyHistory, toBridgeRequest, toUiDownload, toUiMedia, toUiProbe, toUiSize } from './bridge-mapping';
 import { DownloadEngine } from './download-engine';
 
 /** The Tauri event every engine notification arrives on; its payload is the generated `Event`. */
@@ -88,6 +89,10 @@ export class TauriEngineService extends DownloadEngine {
 
   async probe(url: string): Promise<ProbeResult> {
     return toUiProbe(await this.invoke<ProbeInfo>('probe_url', { url }));
+  }
+
+  async probeMedia(url: string): Promise<MediaProbe> {
+    return toUiMedia(await this.invoke<MediaInfo>('probe_media', { url }));
   }
 
   /**
@@ -232,8 +237,10 @@ export class TauriEngineService extends DownloadEngine {
     this.update(e.id, (d) => {
       // before the engine has planned segments the only progress we have is the byte count
       const placeholder = d.segments.length === 1 && d.segments[0].end === 0 && d.segments[0].start === 0;
+      // a media download (yt-dlp) never has segments: its byte count is the whole story
+      const synthetic = placeholder || d.kind === 'media';
       const segments: readonly Segment[] =
-        placeholder && e.downloaded > 0
+        synthetic && e.downloaded > 0
           ? [{ index: 0, start: 0, end: Math.max(total ?? 0, e.downloaded), written: e.downloaded, state: 'active' }]
           : d.segments;
       return {

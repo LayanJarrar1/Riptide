@@ -6,8 +6,9 @@ use std::time::Duration;
 use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 
 use riptide_core::{
-    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadState,
-    PostAction, Priority, Queue, QueueId, QueueSpec, Schedule, Secrets, Segment, SegmentState,
+    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind,
+    DownloadState, PostAction, Priority, Queue, QueueId, QueueSpec, Schedule, Secrets, Segment,
+    SegmentState,
 };
 
 use crate::migrate::{self, now_millis};
@@ -56,7 +57,7 @@ type SecretsRow = (Option<String>, String, Option<String>, Option<String>);
 const DOWNLOAD_COLUMNS: &str = "id, url, final_url, filename, dir, size, supports_ranges, etag, \
     last_modified, content_type, state, retryable, category_id, queue_id, priority, speed_limit, \
     connections, checksum_algo, checksum_expected, checksum_actual_algo, checksum_actual, error, \
-    added_at, started_at, completed_at, queue_pos";
+    added_at, started_at, completed_at, kind, media_format, queue_pos";
 
 impl Store {
     /// Opens (or creates) the database file, applies PRAGMAs and migrations.
@@ -115,9 +116,10 @@ impl Store {
             "INSERT INTO downloads (url, final_url, filename, dir, size, supports_ranges, etag, \
              last_modified, content_type, state, retryable, category_id, queue_id, priority, \
              speed_limit, connections, checksum_algo, checksum_expected, checksum_actual_algo, \
-             checksum_actual, error, added_at, started_at, completed_at, queue_pos) \
+             checksum_actual, error, added_at, started_at, completed_at, kind, media_format, \
+             queue_pos) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, \
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
             params![
                 d.url,
                 d.final_url,
@@ -143,6 +145,8 @@ impl Store {
                 d.added_at,
                 d.started_at,
                 d.completed_at,
+                d.kind.name(),
+                d.media_format,
                 position,
             ],
         )?;
@@ -190,7 +194,7 @@ impl Store {
              retryable = ?12, category_id = ?13, priority = ?15, speed_limit = ?16, \
              connections = ?17, checksum_algo = ?18, checksum_expected = ?19, \
              checksum_actual_algo = ?20, checksum_actual = ?21, error = ?22, added_at = ?23, \
-             started_at = ?24, completed_at = ?25 WHERE id = ?1",
+             started_at = ?24, completed_at = ?25, kind = ?26, media_format = ?27 WHERE id = ?1",
             params![
                 d.id.0,
                 d.url,
@@ -217,6 +221,8 @@ impl Store {
                 d.added_at,
                 d.started_at,
                 d.completed_at,
+                d.kind.name(),
+                d.media_format,
             ],
         )?;
         if n == 0 {
@@ -946,6 +952,9 @@ fn read_download(row: &Row<'_>) -> Result<Download> {
     let dir: String = row.get("dir")?;
     let size: Option<i64> = row.get("size")?;
     let speed_limit: Option<i64> = row.get("speed_limit")?;
+    let kind_name: String = row.get("kind")?;
+    let kind = DownloadKind::from_name(&kind_name)
+        .ok_or_else(|| Error::Corrupt(format!("unknown kind {kind_name:?}")))?;
     Ok(Download {
         id: DownloadId(row.get("id")?),
         url: row.get("url")?,
@@ -978,6 +987,8 @@ fn read_download(row: &Row<'_>) -> Result<Download> {
         added_at: row.get("added_at")?,
         started_at: row.get("started_at")?,
         completed_at: row.get("completed_at")?,
+        kind,
+        media_format: row.get("media_format")?,
     })
 }
 
@@ -1013,6 +1024,27 @@ mod tests {
         d.etag = Some("\"abc\"".into());
         d.checksum_expected = Checksum::guess(&"ab".repeat(32));
         d
+    }
+
+    #[test]
+    fn media_kind_and_format_round_trip() {
+        let mut store = Store::open_in_memory().unwrap();
+        let mut d = sample("https://www.youtube.com/watch?v=x");
+        d.kind = DownloadKind::Media;
+        d.media_format = Some("h720".into());
+        let id = store.insert_download(&d).unwrap();
+        let mut back = store.get_download(id).unwrap().unwrap();
+        assert_eq!(back.kind, DownloadKind::Media);
+        assert_eq!(back.media_format.as_deref(), Some("h720"));
+        back.media_format = Some("audio-mp3".into());
+        store.update_download(&back).unwrap();
+        let again = store.get_download(id).unwrap().unwrap();
+        assert_eq!(again.media_format.as_deref(), Some("audio-mp3"));
+        let plain = store.insert_download(&sample("https://a/b.zip")).unwrap();
+        assert_eq!(
+            store.get_download(plain).unwrap().unwrap().kind,
+            DownloadKind::Http
+        );
     }
 
     #[test]

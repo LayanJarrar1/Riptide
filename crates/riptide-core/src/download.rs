@@ -163,6 +163,38 @@ impl Priority {
     }
 }
 
+/// Which engine moves the bytes of a download.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DownloadKind {
+    /// A plain file over HTTP(S): `riptide-net`, segments, `If-Range`.
+    #[default]
+    Http,
+    /// A video page (YouTube, Vimeo, ...) fetched by the bundled `yt-dlp` through `riptide-media`.
+    Media,
+}
+
+impl DownloadKind {
+    /// Stable lower-case name (`"http"`, `"media"`).
+    pub const fn name(self) -> &'static str {
+        match self {
+            DownloadKind::Http => "http",
+            DownloadKind::Media => "media",
+        }
+    }
+
+    /// Inverse of [`Self::name`].
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "http" => Some(DownloadKind::Http),
+            "media" => Some(DownloadKind::Media),
+            _ => None,
+        }
+    }
+}
+
 /// One download as persisted in the `downloads` table. Secrets are **not** here — see
 /// [`Secrets`], which lives in its own table and is wiped on completion or removal.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -224,6 +256,12 @@ pub struct Download {
     /// When it reached `Completed`.
     #[cfg_attr(feature = "ts", ts(type = "number | null"))]
     pub completed_at: Option<UnixMillis>,
+    /// HTTP file or media page. Older records (and JSON without the field) are `http`.
+    #[serde(default)]
+    pub kind: DownloadKind,
+    /// For [`DownloadKind::Media`]: the yt-dlp format selector the user picked.
+    #[serde(default)]
+    pub media_format: Option<String>,
 }
 
 impl Download {
@@ -259,6 +297,8 @@ impl Download {
             added_at,
             started_at: None,
             completed_at: None,
+            kind: DownloadKind::Http,
+            media_format: None,
         }
     }
 
@@ -333,6 +373,12 @@ pub struct DownloadRequest {
     /// Cookies, headers and credentials. Stored separately, never logged.
     #[serde(default)]
     pub secrets: Option<Secrets>,
+    /// `media` hands the URL to yt-dlp (a video page) instead of fetching it as a file.
+    #[serde(default)]
+    pub kind: DownloadKind,
+    /// For `media`: the yt-dlp format selector (`None` = best video + audio).
+    #[serde(default)]
+    pub media_format: Option<String>,
 }
 
 impl DownloadRequest {

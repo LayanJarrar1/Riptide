@@ -1,6 +1,6 @@
-[package]
+﻿[package]
 name = "riptide-desktop"
-description = "Riptide download manager â€” desktop application (Tauri v2 + Angular)"
+description = "Riptide download manager Ã¢â‚¬â€ desktop application (Tauri v2 + Angular)"
 license = "GPL-3.0-or-later"
 version.workspace = true
 edition.workspace = true
@@ -38,6 +38,7 @@ riptide-host = { workspace = true }
 riptide-ipc = { workspace = true }
 riptide-log = { workspace = true }
 riptide-net = { workspace = true }
+riptide-media = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 # HKCU Native Messaging keys; a safe wrapper over the registry API (no `unsafe` in this crate)

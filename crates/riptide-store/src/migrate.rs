@@ -29,13 +29,18 @@ pub const MIGRATIONS: &[Migration] = &[
     },
     Migration {
         version: 2,
-        name: "queue_schedule_and_order",
+        name: "media_kind",
         sql: include_str!("sql/v2.sql"),
+    },
+    Migration {
+        version: 3,
+        name: "queue_schedule_and_order",
+        sql: include_str!("sql/v3.sql"),
     },
 ];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -157,8 +162,9 @@ mod tests {
         let broken = [
             MIGRATIONS[0],
             MIGRATIONS[1],
+            MIGRATIONS[2],
             Migration {
-                version: 3,
+                version: 4,
                 name: "broken",
                 // the third statement fails: nothing from the first two may survive
                 sql: "CREATE TABLE will_vanish_a (x);
@@ -167,11 +173,11 @@ mod tests {
             },
         ];
         let err = run_with(&mut conn, &broken).unwrap_err();
-        assert!(matches!(err, Error::Migration { version: 3, .. }), "{err}");
+        assert!(matches!(err, Error::Migration { version: 4, .. }), "{err}");
 
         assert_eq!(
             current_version(&conn).unwrap(),
-            2,
+            SCHEMA_VERSION,
             "version must not advance"
         );
         assert!(!table_exists(&conn, "will_vanish_a"));
@@ -181,7 +187,7 @@ mod tests {
             .query_row("PRAGMA integrity_check", [], |r| r.get(0))
             .unwrap();
         assert_eq!(ok, "ok");
-        assert_eq!(run(&mut conn).unwrap(), 2);
+        assert_eq!(run(&mut conn).unwrap(), SCHEMA_VERSION);
     }
 
     #[test]

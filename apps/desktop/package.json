@@ -1,6 +1,6 @@
 {
   "name": "riptide-desktop",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.3",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -8,6 +8,7 @@
     "test": "ng test --watch=false --browsers=ChromeHeadless",
     "lint": "ng lint",
     "i18n:lint": "node scripts/i18n-lint.mjs",
+    "media-tools": "node scripts/fetch-media-tools.mjs",
     "tauri": "tauri",
     "bundle": "tauri build --config src-tauri/tauri.bundle.conf.json",
     "bundle:portable": "tauri build --no-bundle --config src-tauri/tauri.bundle.conf.json && node scripts/portable.mjs",

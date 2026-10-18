@@ -6,6 +6,7 @@
 
 import {
   categoryOf,
+  MediaProbe,
   Download as UiDownload,
   DownloadRequest as UiDownloadRequest,
   DownloadState as UiDownloadState,
@@ -16,6 +17,7 @@ import {
 import type { Download } from '../tauri/bridge/Download';
 import type { DownloadRequest } from '../tauri/bridge/DownloadRequest';
 import type { DownloadState } from '../tauri/bridge/DownloadState';
+import type { MediaInfo } from '../tauri/bridge/MediaInfo';
 import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
 import type { Segment } from '../tauri/bridge/Segment';
 
@@ -109,7 +111,11 @@ function toUiSegments(segments: readonly Segment[], state: UiDownloadState, size
 export function toUiDownload(d: Download, segments: readonly Segment[], previous?: UiDownload): UiDownload {
   const state = toUiState(d.state);
   const size = toUiSize(d.size);
+  // a media download has no segments; keep the progress the events built while it is unfinished
+  const keepMediaProgress =
+    d.kind === 'media' && segments.length === 0 && state !== 'completed' && previous !== undefined && previous.segments.some((s) => s.written > 0);
   return {
+    kind: d.kind,
     id: d.id,
     url: d.url,
     filename: d.filename,
@@ -122,7 +128,7 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     priority: d.priority,
     connections: d.connections,
     speedLimitBps: toUiSize(d.speed_limit),
-    segments: toUiSegments(segments, state, size),
+    segments: keepMediaProgress && previous !== undefined ? previous.segments : toUiSegments(segments, state, size),
     speedBps: state === 'downloading' ? (previous?.speedBps ?? 0) : 0,
     speedHistory: previous?.speedHistory ?? emptyHistory(),
     addedAt: toMillis(d.added_at) ?? previous?.addedAt ?? 0,
@@ -153,6 +159,25 @@ export function toBridgeRequest(r: UiDownloadRequest): DownloadRequest {
     referrer: null,
     user_agent: null,
     secrets: null,
+    kind: r.kind ?? 'http',
+    media_format: r.kind === 'media' ? (r.mediaFormat ?? 'best') : null,
+  };
+}
+
+/** yt-dlp's view of a video page → what the quality picker shows. */
+export function toUiMedia(info: MediaInfo): MediaProbe {
+  return {
+    title: info.title,
+    uploader: info.uploader,
+    thumbnail: info.thumbnail,
+    duration: info.duration,
+    choices: info.choices.map((c) => ({
+      key: c.key,
+      kind: c.kind,
+      height: c.height,
+      ext: c.ext,
+      approxSize: toUiSize(c.approx_size),
+    })),
   };
 }
 

@@ -112,6 +112,21 @@ mod tests {
         assert_eq!(pick_next(&qs, &ds, &running, 1), None);
     }
 
+    #[test]
+    fn media_records_count_against_the_same_limits() {
+        let qs = [queue(1, 1, true)];
+        let mut media = dl(1, 1, 1, Priority::Normal);
+        media.kind = crate::download::DownloadKind::Media;
+        let http = dl(2, 1, 2, Priority::Normal);
+        let mut running = HashMap::new();
+        assert_eq!(
+            pick_next(&qs, &[media.clone(), http.clone()], &running, 9),
+            Some(DownloadId(1))
+        );
+        running.insert(QueueId(1), 1);
+        assert_eq!(pick_next(&qs, &[http], &running, 9), None);
+    }
+
     proptest! {
         /// Simulate a scheduler: start whatever `pick_next` offers, finish random runners, and
         /// check the limits after every step.
