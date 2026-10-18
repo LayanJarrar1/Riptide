@@ -119,6 +119,32 @@ impl Store {
             .query_row("PRAGMA busy_timeout", [], |r| r.get(0))?)
     }
 
+    /// Runs `f` inside one `BEGIN IMMEDIATE ... COMMIT`: if it returns `Err` (or panics) every
+    /// write it made is rolled back. `f` must not open a transaction itself, so only the plain
+    /// single-statement methods (`insert_download`, `set_secrets`, `set_setting`, ...) may be
+    /// called inside; those that start their own (`set_state`, `replace_segments`, ...) may not.
+    pub fn transaction<T>(&mut self, f: impl FnOnce(&mut Store) -> Result<T>) -> Result<T> {
+        self.conn.execute_batch("BEGIN IMMEDIATE")?;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self)));
+        match result {
+            Ok(Ok(value)) => match self.conn.execute_batch("COMMIT") {
+                Ok(()) => Ok(value),
+                Err(e) => {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                    Err(e.into())
+                }
+            },
+            Ok(Err(e)) => {
+                let _ = self.conn.execute_batch("ROLLBACK");
+                Err(e)
+            }
+            Err(panic) => {
+                let _ = self.conn.execute_batch("ROLLBACK");
+                std::panic::resume_unwind(panic)
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ downloads
 
     /// Inserts `d` (its `id` is ignored) and returns the new id.
@@ -720,6 +746,40 @@ mod tests {
         d.etag = Some("\"abc\"".into());
         d.checksum_expected = Checksum::guess(&"ab".repeat(32));
         d
+    }
+
+    #[test]
+    fn transaction_commits_all_or_rolls_back_all() {
+        let mut store = Store::open_in_memory().unwrap();
+        let ids = store
+            .transaction(|s| {
+                (0..5)
+                    .map(|i| s.insert_download(&sample(&format!("https://a/{i}.zip"))))
+                    .collect::<Result<Vec<_>>>()
+            })
+            .unwrap();
+        assert_eq!(ids.len(), 5);
+        assert_eq!(store.list_downloads().unwrap().len(), 5);
+
+        let failed: Result<()> = store.transaction(|s| {
+            s.insert_download(&sample("https://a/x.zip"))?;
+            s.insert_download(&sample("https://a/y.zip"))?;
+            Err(Error::NotFound(DownloadId(99)))
+        });
+        assert!(failed.is_err());
+        assert_eq!(store.list_downloads().unwrap().len(), 5);
+
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = store.transaction(|s| -> Result<()> {
+                s.insert_download(&sample("https://a/z.zip"))?;
+                panic!("boom");
+            });
+        }));
+        assert!(panicked.is_err());
+        assert_eq!(store.list_downloads().unwrap().len(), 5);
+        // the connection is usable afterwards
+        store.insert_download(&sample("https://a/ok.zip")).unwrap();
+        assert_eq!(store.list_downloads().unwrap().len(), 6);
     }
 
     #[test]

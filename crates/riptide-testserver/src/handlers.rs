@@ -960,6 +960,33 @@ pub(crate) async fn log_request(req: Request, next: Next) -> Response {
     resp
 }
 
+/// `/batch/<name>` - `fileNNN.zip` (001-120) and `img_<a-z>.jpg`; every other name is `404`.
+/// Each name has its own seed and a default size ([`crate::batch::item`]); `?size=` overrides
+/// the size. Ranges, `ETag` and `HEAD` behave like `/ok`.
+pub(crate) async fn batch_item(
+    Path(name): Path<String>,
+    method: Method,
+    Query(q): Query<Params>,
+    headers: HeaderMap,
+) -> HandlerResult {
+    let Some(item) = crate::batch::item(&name) else {
+        return Ok(plain(
+            StatusCode::NOT_FOUND,
+            format!(
+                "no batch item named {name:?}
+"
+            ),
+        ));
+    };
+    let size = param_u64(&q, "size", item.size)?;
+    serve(
+        &method,
+        &headers,
+        Resource::new(item.seed, size),
+        Shaping::default(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1066,31 +1093,4 @@ mod tests {
         q.insert("size".into(), "ten".into());
         assert!(param_u64(&q, "size", 1).is_err());
     }
-}
-
-/// `/batch/<name>` - `fileNNN.zip` (001-120) and `img_<a-z>.jpg`; every other name is `404`.
-/// Each name has its own seed and a default size ([`crate::batch::item`]); `?size=` overrides
-/// the size. Ranges, `ETag` and `HEAD` behave like `/ok`.
-pub(crate) async fn batch_item(
-    Path(name): Path<String>,
-    method: Method,
-    Query(q): Query<Params>,
-    headers: HeaderMap,
-) -> HandlerResult {
-    let Some(item) = crate::batch::item(&name) else {
-        return Ok(plain(
-            StatusCode::NOT_FOUND,
-            format!(
-                "no batch item named {name:?}
-"
-            ),
-        ));
-    };
-    let size = param_u64(&q, "size", item.size)?;
-    serve(
-        &method,
-        &headers,
-        Resource::new(item.seed, size),
-        Shaping::default(),
-    )
 }

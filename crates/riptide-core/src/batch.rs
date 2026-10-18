@@ -204,10 +204,7 @@ fn parse(pattern: &str) -> Result<Vec<Part>, BatchError> {
     let mut literal = String::new();
     let mut chars = pattern.char_indices();
     let mut pending: Option<(usize, char)> = None;
-    loop {
-        let Some((at, c)) = pending.take().or_else(|| chars.next()) else {
-            break;
-        };
+    while let Some((at, c)) = pending.take().or_else(|| chars.next()) {
         match c {
             '\\' => match chars.next() {
                 Some((_, next @ ('[' | ']' | '\\'))) => literal.push(next),
