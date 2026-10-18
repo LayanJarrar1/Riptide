@@ -3991,6 +3991,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "riptide-media"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "riptide-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "riptide-net"
 version = "0.1.0"
 dependencies = [

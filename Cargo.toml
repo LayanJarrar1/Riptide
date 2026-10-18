@@ -1,4 +1,4 @@
-[workspace]
+﻿[workspace]
 resolver = "2"
 members = [
     "crates/riptide-core",
@@ -7,6 +7,7 @@ members = [
     "crates/riptide-ipc",
     "crates/riptide-log",
     "crates/riptide-engine",
+    "crates/riptide-media",
     "crates/riptide-cli",
     "crates/riptide-host",
     "crates/riptide-testserver",
@@ -36,6 +37,7 @@ riptide-store = { path = "crates/riptide-store" }
 riptide-ipc = { path = "crates/riptide-ipc" }
 riptide-log = { path = "crates/riptide-log" }
 riptide-engine = { path = "crates/riptide-engine" }
+riptide-media = { path = "crates/riptide-media" }
 riptide-host = { path = "crates/riptide-host" }
 riptide-testserver = { path = "crates/riptide-testserver" }
 

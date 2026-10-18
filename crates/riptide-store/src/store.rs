@@ -6,9 +6,8 @@ use std::time::Duration;
 use rusqlite::{params, Connection, OptionalExtension, Row, TransactionBehavior};
 
 use riptide_core::{
-    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind, DownloadState,
-    Priority,
-    QueueId, Secrets, Segment, SegmentState,
+    CategoryId, Checksum, ChecksumAlgo, Credentials, Download, DownloadId, DownloadKind,
+    DownloadState, Priority, QueueId, Secrets, Segment, SegmentState,
 };
 
 use crate::migrate::{self, now_millis};

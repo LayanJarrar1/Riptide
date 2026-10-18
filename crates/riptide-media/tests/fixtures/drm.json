@@ -1,0 +1,13 @@
+{
+  "id": "drm-movie",
+  "title": "A rented movie",
+  "duration": 5400,
+  "is_live": false,
+  "live_status": "not_live",
+  "webpage_url": "https://www.youtube.com/watch?v=drm-movie",
+  "extractor_key": "Youtube",
+  "formats": [
+    { "format_id": "140-drm", "ext": "m4a", "acodec": "mp4a.40.2", "vcodec": "none", "tbr": 129.0, "has_drm": true },
+    { "format_id": "137-drm", "ext": "mp4", "width": 1920, "height": 1080, "vcodec": "avc1.640028", "acodec": "none", "tbr": 4000.0, "has_drm": true }
+  ]
+}
