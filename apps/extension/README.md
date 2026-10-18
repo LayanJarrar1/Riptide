@@ -38,7 +38,13 @@ npm ci
 npm run build      # dist/chrome, dist/edge, dist/firefox (+ icons rendered from icons/riptide.svg)
 npm run check      # tsc --noEmit && eslint .
 npm test           # node:test over src/**/*.test.ts (bundled with esbuild)
+npm run package    # build + dist/riptide-{chrome,edge,firefox,source}-<version>.zip for the stores
 ```
+
+The store zips drop the manifest `key` (the Chrome Web Store refuses it on a new item) and
+contain no source maps; `dist/<target>/` keeps the key for unpacked builds. Listing texts,
+images, permission justifications and the step-by-step for each store are in `store/`
+(`store/SUBMISSION.md`).
 
 `scripts/check.ps1` at the repository root runs `npm ci`, `tsc --noEmit` and `eslint .` here.
 `npm run build -- --watch` rebuilds on change. `npm run build` ends with

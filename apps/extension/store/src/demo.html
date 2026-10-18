@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lumen Editor 3.2 — Downloads</title>
+    <!-- Demo page for the store screenshots: a fictional project's download page. -->
+    <style>
+      @font-face { font-family: Inter; src: url('../../../website/src/assets/fonts/InterVariable.woff2') format('woff2'); font-weight: 100 900; }
+      :root { --ink: #14202b; --muted: #5b6b78; --line: #e3e8ec; --chip: #f2f5f7; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 15px/1.55 Inter, system-ui, sans-serif; color: var(--ink); background: #fff; }
+      .bar { display: flex; align-items: center; gap: 28px; padding: 18px 64px; border-bottom: 1px solid var(--line); }
+      .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+      .brand span { display: inline-block; width: 22px; height: 22px; margin-inline-end: 8px; vertical-align: -5px; border-radius: 6px; background: #6b5cff; }
+      .bar a { color: var(--muted); text-decoration: none; }
+      main { max-width: 1040px; margin: 0 auto; padding: 48px 64px; }
+      h1 { margin: 0 0 6px; font-size: 34px; letter-spacing: -0.02em; }
+      .lede { margin: 0 0 32px; color: var(--muted); }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: start; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); }
+      td { padding: 14px 12px; border-bottom: 1px solid var(--line); }
+      td a { color: #3b4cd6; font-weight: 600; text-decoration: none; }
+      td a:hover { text-decoration: underline; }
+      .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 12px; }
+      .note { margin-top: 28px; color: var(--muted); font-size: 13px; }
+      .note a { color: #3b4cd6; }
+    </style>
+  </head>
+  <body>
+    <header class="bar">
+      <div class="brand"><span></span>Lumen Editor</div>
+      <a href="#">Features</a><a href="#">Docs</a><a href="#">Changelog</a><a href="#">Community</a>
+    </header>
+    <main>
+      <h1>Download Lumen Editor 3.2</h1>
+      <p class="lede">Released 12 October 2026 · Free and open source · Checksums are listed in SHA256SUMS.</p>
+      <table>
+        <thead><tr><th>Platform</th><th>File</th><th>Size</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Windows x64</td><td><a id="target" href="https://downloads.example.org/lumen/3.2.0/Lumen-3.2.0-x64-setup.exe">Lumen-3.2.0-x64-setup.exe</a></td><td>148 MB</td><td><span class="tag">Installer</span></td></tr>
+          <tr><td>Windows x64</td><td><a href="https://downloads.example.org/lumen/3.2.0/Lumen-3.2.0-x64-portable.zip">Lumen-3.2.0-x64-portable.zip</a></td><td>152 MB</td><td><span class="tag">Portable</span></td></tr>
+          <tr><td>macOS (Apple silicon)</td><td><a href="https://downloads.example.org/lumen/3.2.0/Lumen-3.2.0-arm64.dmg">Lumen-3.2.0-arm64.dmg</a></td><td>139 MB</td><td><span class="tag">Disk image</span></td></tr>
+          <tr><td>Linux x64</td><td><a href="https://downloads.example.org/lumen/3.2.0/Lumen-3.2.0-x86_64.AppImage">Lumen-3.2.0-x86_64.AppImage</a></td><td>161 MB</td><td><span class="tag">AppImage</span></td></tr>
+          <tr><td>Linux x64</td><td><a href="https://downloads.example.org/lumen/3.2.0/lumen_3.2.0_amd64.deb">lumen_3.2.0_amd64.deb</a></td><td>118 MB</td><td><span class="tag">Debian</span></td></tr>
+          <tr><td>Source</td><td><a href="https://downloads.example.org/lumen/3.2.0/lumen-3.2.0.tar.gz">lumen-3.2.0.tar.gz</a></td><td>42 MB</td><td><span class="tag">Tarball</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Verify your download: <a href="https://downloads.example.org/lumen/3.2.0/SHA256SUMS">SHA256SUMS</a> · <a href="#">Release notes</a></p>
+    </main>
+  </body>
+</html>
