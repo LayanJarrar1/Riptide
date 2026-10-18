@@ -3,13 +3,11 @@
   "dir": "ltr",
   "locale": "en_US",
   "fontClass": "font-latin",
-
   "meta": {
-    "title": "Riptide — the open-source download manager for Windows",
-    "description": "Riptide is a free, open-source download manager for Windows: multi-connection downloads with work stealing, byte-exact verification, crash-safe resume, Arabic and English. Alpha preview for Windows 10 / 11.",
+    "title": "Riptide: the free, open-source download manager for Windows",
+    "description": "Free, open-source download manager for Windows. Resumes from the exact byte, verified with SHA-256. No accounts, no telemetry, no ads. Arabic and English.",
     "ogAlt": "Riptide: the download manager that pulls harder"
   },
-
   "nav": {
     "brand": "Riptide",
     "skip": "Skip to content",
@@ -24,22 +22,21 @@
     "switchLangLabel": "Switch to Arabic",
     "theme": "Switch theme",
     "menu": "Menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "feedback": "Feedback"
   },
-
   "hero": {
     "status": "Alpha preview for Windows 10 / 11",
     "title": "The download manager that pulls harder.",
-    "lead": "Riptide is a free, open-source download manager for Windows. It fetches every file over many connections at once, writes its progress to a database as it goes, and refuses to hand you a single wrong byte.",
+    "lead": "Riptide splits each file across many connections, resumes from the exact byte after a pause, a crash or a power cut, and verifies the result with SHA-256. Free and open source, for Windows.",
     "ctaDownload": "Download for Windows",
     "ctaGithub": "View on GitHub",
     "note": "Free alpha preview, 64-bit, no admin rights needed. It is an early build and it changes often.",
-    "line": "Open source · GPL-3.0 app, MIT / Apache-2.0 engine · No ads, no accounts, no telemetry",
+    "line": "No accounts. No telemetry. No ads.",
     "visualLabel": "Animated illustration: segment stripes flow like a current and assemble into a completed download bar.",
     "barLabel": "example.iso",
     "barDone": "Verified"
   },
-
   "download": {
     "title": "Download the alpha preview",
     "badge": "Alpha preview — Windows 10/11, 64-bit, no admin rights needed",
@@ -50,65 +47,72 @@
     "portableSub": "Unzip anywhere and run",
     "allReleases": "All releases",
     "requirements": "Requirements: Windows 10 / 11, x64. WebView2 (included in Windows).",
-    "note": "Alpha means early: the build changes often and rough edges are expected. Tell us what breaks on GitHub."
+    "note": "Alpha means early: the build changes often and rough edges are expected. Each release lists SHA-256 checksums for both files. If something breaks, tell us below.",
+    "sums": "SHA-256 checksums"
   },
-
   "extension": {
     "title": "Browser extension",
-    "lead": "The extension catches downloads from the browser and hands them to the app, so every file gets the same segmented, verified transfer. It also shows a Riptide button on download links, so you can send a file to Riptide with one click.",
-    "chrome": "Chrome",
-    "edge": "Edge",
-    "firefox": "Firefox",
-    "sub": "Load from GitHub (store listings coming)"
+    "lead": "The extension catches downloads in the browser and hands them to the app, so every file gets the same segmented, verified transfer. It also puts a Riptide button on download links.",
+    "chrome": "Chrome Web Store",
+    "edge": "Edge Add-ons",
+    "soon": "Coming soon",
+    "sub": "Until the store listings are live, load the extension from the repository. It works in Chrome, Edge and Firefox.",
+    "github": "Load it from GitHub",
+    "storeOpen": "Open listing"
   },
-
   "why": {
     "title": "Why Riptide",
-    "lead": "Most download managers are a decade of features stacked behind a nag screen. Riptide is a new engine built around eight promises it keeps by design.",
+    "lead": "Most download managers are a decade of features behind a nag screen. Riptide is a new engine built around a handful of rules it cannot skip.",
     "items": [
       {
         "icon": "split",
         "title": "Pulls harder",
-        "text": "A file is split into segments and fetched over many connections at once. When one connection finishes early it steals work from the slowest one, so the link stays saturated to the last byte."
+        "text": "A file is split into segments and fetched over many connections at once. When one connection finishes early it takes half of the largest segment left, so the link stays full to the last byte."
       },
       {
         "icon": "exact",
         "title": "Byte-exact or nothing",
-        "text": "A download counts as complete only when every segment is on disk, the server still serves the same version of the file, and the checksum you gave it matches. Riptide never splices bytes from two versions of a file."
+        "text": "A download is complete only when every segment is on disk, the server still serves the same version of the file, and the checksum you gave matches. Riptide never splices bytes from two versions of a file."
       },
       {
         "icon": "shield-db",
         "title": "Survives anything",
-        "text": "Progress is written to a local SQLite database continuously. Kill the process, pull the plug, crash the machine: on the next start every download resumes exactly where it stopped."
+        "text": "Progress is committed to a local SQLite database at least once a second. Kill the process or pull the plug and every download resumes from the exact byte. If the server changed the file meanwhile, Riptide starts over instead of handing you a corrupt one."
       },
       {
-        "icon": "resume",
-        "title": "Resumes properly",
-        "text": "Pause and resume are instant and cheap. If the server changed the file in the meantime, Riptide notices and starts over instead of handing you a corrupt file."
+        "icon": "video",
+        "title": "Video pages too",
+        "tag": "Next alpha",
+        "text": "Paste a YouTube, Vimeo or other video page and Riptide fetches it through bundled yt-dlp, into the same list as every other download. It is in the main branch and ships in the next alpha."
+      },
+      {
+        "icon": "queue",
+        "title": "Queues with schedules",
+        "tag": "Coming soon",
+        "text": "The queue engine and the per-queue scheduler are finished and tested. The screens that control them are still being built, so they are not in any release yet."
       },
       {
         "icon": "rtl",
         "title": "Arabic and English, for real",
-        "text": "Both languages everywhere, auto-detected, switchable live, with a fully mirrored right-to-left layout. Arabic file names from servers land on disk with the right name."
+        "text": "Both languages everywhere, detected automatically and switchable live, with a fully mirrored right-to-left layout. Arabic file names from servers land on disk with the right name."
       },
       {
         "icon": "lock",
         "title": "Nothing to trust",
-        "text": "File names from servers are sanitised, redirects are capped, credentials never leak to another site, TLS verification is on. Secrets live in their own table and are wiped when a download ends."
+        "text": "Server file names are sanitised, redirects are capped at 20, credentials never leave the site they were captured for, and TLS verification is on. Secrets live in their own table and are wiped when a download ends."
       },
       {
         "icon": "user",
         "title": "No admin, no accounts, no ads, no telemetry",
-        "text": "Per-user install, your data stays on your machine, and the only network traffic is your downloads."
+        "text": "A per-user install that never asks for elevation. Your data stays on your machine, and the only network traffic is your downloads."
       },
       {
         "icon": "bolt",
-        "title": "Fast UI",
-        "text": "A dense, keyboard-friendly list that stays smooth with a thousand items. Dark or light, and it respects reduced-motion settings."
+        "title": "A list that stays fast",
+        "text": "Dense, keyboard-friendly, smooth with a thousand items. Dark or light, and it respects the reduced-motion setting."
       }
     ]
   },
-
   "vs": {
     "title": "The open-source alternative to IDM",
     "lead": "Internet Download Manager set the bar for segmented downloads on Windows. Riptide keeps the bar and drops the license, the reminders and the closed source.",
@@ -116,19 +120,54 @@
     "colIdm": "IDM",
     "colRiptide": "Riptide",
     "rows": [
-      { "feature": "Price", "idm": "Paid license per PC", "riptide": "Free, forever" },
-      { "feature": "Source code", "idm": "Closed", "riptide": "Open: GPL-3.0 app, MIT / Apache-2.0 engine" },
-      { "feature": "Ads and nag screens", "idm": "Trial reminders", "riptide": "None" },
-      { "feature": "Admin rights to install", "idm": "Typical installer", "riptide": "Per-user install, no elevation" },
-      { "feature": "Arabic right-to-left interface", "idm": "Translation only", "riptide": "Fully mirrored layout" },
-      { "feature": "Multi-connection downloads", "idm": "Yes", "riptide": "Yes, with work stealing between connections" },
-      { "feature": "Resume after a crash", "idm": "Resumes interrupted downloads", "riptide": "Database checkpoints; resumes after a kill or power loss" },
-      { "feature": "Checksum verification", "idm": "Not a documented feature", "riptide": "Built in" },
-      { "feature": "Privacy", "idm": "Not independently auditable", "riptide": "No telemetry, and the code is public" }
+      {
+        "feature": "Price",
+        "idm": "Paid license per PC",
+        "riptide": "Free, forever"
+      },
+      {
+        "feature": "Source code",
+        "idm": "Closed",
+        "riptide": "Open: GPL-3.0 app, MIT / Apache-2.0 engine"
+      },
+      {
+        "feature": "Ads and nag screens",
+        "idm": "Trial reminders",
+        "riptide": "None"
+      },
+      {
+        "feature": "Admin rights to install",
+        "idm": "Typical installer",
+        "riptide": "Per-user install, no elevation"
+      },
+      {
+        "feature": "Arabic right-to-left interface",
+        "idm": "Translation only",
+        "riptide": "Fully mirrored layout"
+      },
+      {
+        "feature": "Multi-connection downloads",
+        "idm": "Yes",
+        "riptide": "Yes, with work stealing between connections"
+      },
+      {
+        "feature": "Resume after a crash",
+        "idm": "Resumes interrupted downloads",
+        "riptide": "Database checkpoints; resumes after a kill or power loss"
+      },
+      {
+        "feature": "Checksum verification",
+        "idm": "Not a documented feature",
+        "riptide": "Built in"
+      },
+      {
+        "feature": "Privacy",
+        "idm": "Not independently auditable",
+        "riptide": "No telemetry, and the code is public"
+      }
     ],
     "footnote": "IDM is a trademark of Tonec Inc. Comparison reflects publicly documented behaviour at the time of writing."
   },
-
   "how": {
     "title": "How a download happens",
     "lead": "Four moves, repeated for every file. Each one is a rule the engine cannot skip.",
@@ -160,7 +199,6 @@
       }
     ]
   },
-
   "shots": {
     "title": "What it looks like",
     "lead": "Screenshots are from the current build, in the app's light theme. The app itself starts in its dark theme.",
@@ -170,47 +208,46 @@
     "next": "Next screenshot",
     "items": [
       {
-        "src": "shot-list-en.png",
+        "src": "shot-list-en",
         "alt": "The downloads list: segmented progress bars, speed, time left and status for every file",
         "caption": "The list. Every stripe in a progress bar is one connection. Red stripes are a file that failed its checksum."
       },
       {
-        "src": "shot-details-en.png",
+        "src": "shot-details-en",
         "alt": "Details drawer with stat tiles, a segment map, a live speed chart and the source and destination",
         "caption": "Details. Eight connections, a live segment map, the last minute of speed, the checksum the file must match."
       },
       {
-        "src": "shot-add-en.png",
+        "src": "shot-add-en",
         "alt": "Add download dialog: the link is probed as you type, showing size and whether it can resume",
         "caption": "Add a download. Riptide probes the link while you type: size, file name, category and whether the server allows resuming."
       },
       {
-        "src": "shot-details-ar.png",
+        "src": "shot-details-ar",
         "alt": "The same details view in Arabic, mirrored right-to-left",
         "caption": "The same screen in Arabic. The whole layout mirrors, numbers and file names stay readable, and the switch is instant."
       },
       {
-        "src": "shot-settings-en.png",
+        "src": "shot-settings-en",
         "alt": "Settings page: language, appearance, default folder and a folder per category",
         "caption": "Settings. Changes apply immediately. No wizard, no restart."
       }
     ]
   },
-
   "oss": {
     "title": "Open source, nothing to hide",
     "text": "The desktop app, the command-line client and the IPC crate are licensed GPL-3.0-or-later. The engine crates are dual-licensed MIT or Apache-2.0, so anyone can build on them. There is no telemetry, no account and no advertising: the only network traffic is your downloads.",
-    "public": "Riptide is built in public. Every change lands on GitHub first; star or watch the repository to follow along.",
+    "public": "Riptide is built in public. Every change lands on GitHub first, and so does every report, rating and release note.",
     "repo": "Repository",
     "licenses": "Licenses",
     "linkGpl": "GPL-3.0 (app)",
     "linkMit": "MIT (engine)",
     "linkApache": "Apache-2.0 (engine)",
-    "badgeStars": "GitHub stars",
-    "badgeLicense": "License",
-    "badgeNote": "Badges read live data from GitHub."
+    "badgeNote": "These are plain links. This page loads nothing from third parties, so there is no badge service to call.",
+    "star": "Star on GitHub",
+    "starSub": "Opens the stargazers page",
+    "licenseBadge": "GPL-3.0 app · MIT / Apache-2.0 engine"
   },
-
   "faq": {
     "title": "Questions",
     "items": [
@@ -224,7 +261,7 @@
       },
       {
         "q": "Does it work with my browser?",
-        "a": "There is an extension for Chrome, Edge and Firefox that catches downloads and hands them to the app. For now you load it from the GitHub repository; store listings are coming."
+        "a": "There is an extension for Chrome, Edge and Firefox that catches downloads and hands them to the app. Store listings for Chrome and Edge are coming soon; until then you load it from the GitHub repository."
       },
       {
         "q": "Is it Windows only?",
@@ -237,10 +274,17 @@
       {
         "q": "Can I contribute?",
         "a": "Yes. Issues, bug reports and pull requests are welcome on GitHub. Read the README first; it explains how to build from source and which checks every change must pass."
+      },
+      {
+        "q": "How do I report a bug or leave a review?",
+        "a": "Use the Feedback section above. Bug reports, feature requests and reviews each have their own GitHub form, and security problems go through private reporting."
+      },
+      {
+        "q": "Can it download videos?",
+        "a": "Video pages such as YouTube and Vimeo work through bundled yt-dlp in the main branch and will ship in the next alpha. Queues with schedules come after that: the engine is done, the screens are not."
       }
     ]
   },
-
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
     "license": "GPL-3.0 app · MIT / Apache-2.0 engine",
@@ -248,16 +292,16 @@
     "github": "GitHub",
     "releases": "Releases",
     "licenseLink": "License",
-    "privacy": "Privacy"
+    "privacy": "Privacy",
+    "feedback": "Feedback"
   },
-
   "privacy": {
     "meta": {
       "title": "Privacy policy · Riptide",
       "description": "Riptide and its browser extension collect nothing: no telemetry, no accounts, no analytics. What stays on your computer and the few network requests Riptide makes."
     },
     "title": "Privacy policy",
-    "updated": "Last updated: 18 October 2026. Applies to the Riptide desktop app, the Riptide CLI and the Riptide browser extension for Chrome, Edge and Firefox.",
+    "updated": "Last updated: 19 October 2026. Applies to the Riptide desktop app, the Riptide CLI, the Riptide browser extension for Chrome, Edge and Firefox, and this website.",
     "lede": "Short version: Riptide collects nothing. There is no telemetry, no analytics, no account and no advertising. Your downloads, settings and history stay on your computer, and nobody, including the people who make Riptide, receives any of it.",
     "sections": [
       {
@@ -304,7 +348,8 @@
         "id": "website",
         "h": "This website",
         "paras": [
-          "This site is a set of static pages hosted on GitHub Pages. It uses no cookies, no analytics and no trackers. The only thing it stores is your light or dark theme choice, in your own browser. The project badges in the open-source section are images loaded from shields.io. GitHub and shields.io may keep ordinary server logs under their own privacy policies."
+          "This site is a set of static pages hosted on GitHub Pages. It uses no cookies, no analytics and no trackers, and it loads nothing from third parties: fonts, images and scripts come from the same origin. The only thing it stores is your light or dark theme choice, in your own browser. GitHub may keep ordinary server logs under its own privacy policy.",
+          "The Feedback section links to GitHub issue forms. What you write there is public on GitHub and governed by GitHub's terms and privacy statement; this site never sees it."
         ]
       },
       {
@@ -323,10 +368,47 @@
       }
     ]
   },
-
   "notFound": {
     "title": "Page not found",
     "text": "There is nothing at this address.",
     "home": "Back to Riptide"
+  },
+  "feedback": {
+    "title": "Tell us what happened",
+    "lead": "Riptide is in alpha, so your reports decide what gets fixed first. Everything goes through GitHub issues: public, searchable and tracked until it is closed.",
+    "cards": [
+      {
+        "icon": "bug",
+        "title": "Report a problem",
+        "text": "A download failed, a file did not match its checksum, the app crashed. The form asks for your Riptide and Windows versions and the log lines that matter.",
+        "cta": "Open a bug report",
+        "href": "issues/new?template=bug_report.yml"
+      },
+      {
+        "icon": "bulb",
+        "title": "Suggest a feature",
+        "text": "Describe the problem you want solved before the solution you have in mind. We read every request and answer yes, not yet or no, with a reason.",
+        "cta": "Suggest a feature",
+        "href": "issues/new?template=feature_request.yml"
+      },
+      {
+        "icon": "star",
+        "title": "Leave a review",
+        "text": "Rate Riptide from 1 to 5 and tell us what you used it for, what worked and what did not. A low rating with detail helps more than a high one without.",
+        "cta": "Write a review",
+        "href": "issues/new?template=review.yml"
+      },
+      {
+        "icon": "lock",
+        "title": "Report a security issue",
+        "text": "Do not open a public issue. Use GitHub's private reporting, described in SECURITY.md, so a fix can ship before the details are public.",
+        "cta": "Read SECURITY.md",
+        "href": "security/policy"
+      }
+    ],
+    "whyTitle": "Why GitHub, and no form here",
+    "why": "Public reports let other people find the same problem, add detail and see when it is fixed. You need a free GitHub account. This site has no form of its own, no analytics and no tracking scripts, so there is nothing here that could collect your message.",
+    "readReviews": "Read the reviews",
+    "readIssues": "Browse open issues"
   }
 }

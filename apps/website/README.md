@@ -1,7 +1,7 @@
 # Riptide website
 
-The public product site: one static, bilingual page (English at `/`, Arabic at `/ar/`) plus a
-bilingual `404.html`. Plain HTML, CSS and vanilla JavaScript. No framework, no npm packages, no
+The public product site: one static, bilingual page (English at `/`, Arabic at `/ar/`), a privacy
+policy and a bilingual `404.html`. Plain HTML, CSS and vanilla JavaScript. No framework, no npm packages, no
 CDN, no analytics, fonts bundled locally.
 
 ## Build and preview
@@ -17,9 +17,15 @@ node apps/website/build.mjs --check    # verifies an existing dist without rebui
 Any static server works for previews, for example `python -m http.server 8123` from inside
 `dist`. `dist/` is build output and is ignored by git.
 
+The build also writes `robots.txt`, `sitemap.xml` and a `_headers` file (long cache for hashed
+assets, read by Cloudflare Pages and Netlify; GitHub Pages ignores it). See `SCALING.md` for
+serving the site under load.
+
 The build fails (exit code 1) when a page still contains a `{{ }}` token, a local `href`/`src`
 does not resolve to a file, an `<img>` is missing `alt`, `width` or `height`, a font referenced
-from the stylesheet is missing, or a structural tag is left unclosed.
+from the stylesheet is missing, a structural tag is left unclosed, a page loads an image, script,
+stylesheet or frame from another origin, or a size budget is exceeded (HTML 60 KiB, CSS 64 KiB, JS
+40 KiB, images 120 KiB, fonts 110 KiB, whole `dist/` 2 MiB).
 
 `SITE_URL` sets the public origin used for canonical, `hreflang` and Open Graph URLs (default:
 the GitHub Pages URL of the repository). Every in-page link is relative, so the site also works
@@ -39,10 +45,14 @@ apps/website/
     i18n/en.json             every English string
     i18n/ar.json             every Arabic string (same keys, same shape)
     icons/*.svg              inline icons, inserted with {{{svg name}}}
-    assets/fonts/            Inter (variable) and IBM Plex Sans Arabic, OFL
-    assets/screenshots/      copies of assets/readme/shot-*.png
-    assets/favicon.svg       the typographic mark
-    assets/og-en.png, og-ar.png, apple-touch-icon.png
+    assets/fonts/            Inter (variable, Latin subset) and IBM Plex Sans Arabic (Arabic + Latin subset), OFL
+    assets/screenshots/      WebP copies of assets/readme/shot-*.png, 1440 px and a 720 px `-720` variant
+    assets/riptide-logo-light.svg, riptide-logo-dark.svg   brand kit logos, cropped to their artwork
+    assets/favicon.svg       the brand kit app icon
+    assets/og-en.png, og-ar.png, apple-touch-icon.png   rendered from og/og.html
+  og/og.html                 source of the Open Graph cards and touch icon (render at 1200x630 with
+                             any headless browser; `?lang=ar`, `?icon=1`)
+  SCALING.md                 limits, budgets and what to do if traffic outgrows GitHub Pages
 ```
 
 ## Template syntax
@@ -68,17 +78,30 @@ Keep the Arabic natural Modern Standard Arabic, not a word-for-word translation.
 protocol words (`ETag`, `If-Range`) and file names stay Latin and are wrapped in `direction: ltr`
 where they appear inside Arabic text.
 
+## Brand
+
+Colours and logos come from the Riptide brand kit: Abyss `#071A26`, Deep Teal `#075C69`, Riptide
+Cyan `#00D5E8`, Ocean Blue `#168BFF`, Soft Ice `#D9F8FA`. The site is dark first (Abyss) with a light
+theme behind the toggle; the choice is stored in `localStorage` only. The header and footer use the
+light or dark logo according to the theme (`.logo-light` / `.logo-dark` in `site.css`).
+
+## Browser-store links
+
+`STORE_LINKS` at the top of `build.mjs` holds the Chrome Web Store and Edge Add-ons URLs. While a
+value is empty the Extension section shows "Coming soon" for that store; paste the URL and rebuild
+to turn the tile into a link. Nothing else needs to change.
+
 ## Rules the site follows
 
-- Nothing invented: no user counts, download counts, testimonials, ratings or logos. The
-  badges in the "Open source" section read live data from shields.io, which is the only
-  third-party request on the page.
+- Nothing invented: no user counts, download counts, testimonials, ratings or logos. The star and
+  licence links live only in the "Open source" section and are plain links (no badge service), so
+  the page makes no third-party request on load.
 - The build on offer is an alpha preview. The hero, the Download section, the FAQ and the
   footer say so. The release tag and file names live at the top of `build.mjs`.
-- Light theme by default, flat surfaces, no gradients. Dark is available through the toggle
-  or when the system prefers dark.
-- The browser-extension buttons point at the extension's folder on GitHub until store
-  listings exist; no store badges are shown.
+- Features that are not in a release say so: video pages ("Next alpha") and queues with schedules
+  ("Coming soon").
+- Feedback goes to GitHub issue forms (`.github/ISSUE_TEMPLATE/`); the site has no form, no
+  analytics and no tracking.
 - `prefers-reduced-motion` stops the canvas, the step animations and the entrance.
 - Feature copy comes from the repository `README.md`. If the README changes, change the site.
 

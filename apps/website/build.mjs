@@ -23,19 +23,26 @@ const DIST = join(here, 'dist');
 const REPO_URL = 'https://github.com/LayanJarrar1/Riptide';
 const REPO_SLUG = 'LayanJarrar1/Riptide';
 // The current pre-release. Bump these when a new build is published.
-const RELEASE_TAG = 'v0.1.0-alpha.2';
-const INSTALLER_FILE = 'Riptide_0.1.0-alpha.2_x64-setup.exe';
-const PORTABLE_FILE = 'riptide-0.1.0-alpha.2-windows-x64-portable.zip';
+const RELEASE_TAG = 'v0.1.0-alpha.3';
+const INSTALLER_FILE = 'Riptide_0.1.0-alpha.3_x64-setup.exe';
+const PORTABLE_FILE = 'Riptide-0.1.0-alpha.3-portable.zip';
 const RELEASES_URL = `${REPO_URL}/releases`;
 const INSTALLER_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${INSTALLER_FILE}`;
 const PORTABLE_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${PORTABLE_FILE}`;
+const SUMS_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/SHA256SUMS.txt`;
 const EXTENSION_URL = `${REPO_URL}/tree/main/apps/extension`;
+// Browser-store listings. Leave a value empty and the page shows "Coming soon" for that store;
+// paste the listing URL here when it goes live and the tile becomes a link. One line each.
+const STORE_LINKS = { chrome: '', edge: '' };
 // The public URL the site is served from. GitHub Pages for this repository by default;
 // override with SITE_URL=https://example.org/ for a custom domain. Used for canonical,
 // hreflang and Open Graph URLs only; every in-page link is relative.
 const SITE_URL = (process.env.SITE_URL || 'https://layanjarrar1.github.io/Riptide/').replace(/\/*$/, '/');
 // Root-absolute prefix for the 404 page, which GitHub Pages serves at any depth ("/Riptide/").
 const BASE_PATH = new URL(SITE_URL).pathname;
+
+// Size budgets in bytes (uncompressed). The build fails when something grows past them.
+const BUDGET = { html: 60 * 1024, css: 64 * 1024, js: 40 * 1024, image: 120 * 1024, font: 110 * 1024, total: 2 * 1024 * 1024 };
 
 const LANGUAGES = [
   { code: 'en', out: '', root: '' },
@@ -188,7 +195,12 @@ function build() {
       installerFile: INSTALLER_FILE,
       portableUrl: PORTABLE_URL,
       portableFile: PORTABLE_FILE,
+      sumsUrl: SUMS_URL,
       extensionUrl: EXTENSION_URL,
+      chromeStoreUrl: STORE_LINKS.chrome,
+      chromeStoreSoon: !STORE_LINKS.chrome,
+      edgeStoreUrl: STORE_LINKS.edge,
+      edgeStoreSoon: !STORE_LINKS.edge,
       siteUrl: SITE_URL,
       pageUrl: SITE_URL + (lang.out ? `${lang.out}/` : ''),
       altHref: lang.root + (other.out ? `${other.out}/` : ''),
@@ -216,6 +228,41 @@ function build() {
 
   const notFound = render(join(SRC, '404.template.html'), [{ base: BASE_PATH, v: version, repo: REPO_URL, en: tables.en, ar: tables.ar }], icons);
   writeFileSync(join(DIST, '404.html'), notFound);
+
+  // robots.txt, sitemap.xml (with hreflang alternates) and a _headers file that Cloudflare Pages and
+  // Netlify honour (GitHub Pages ignores it and serves its own fixed cache headers).
+  const pages = [['', ''], ['privacy/', 'privacy/']];
+  const url = (lang, path) => `${SITE_URL}${lang ? 'ar/' : ''}${path}`;
+  const sitemap = pages.map(([, path]) => `  <url>
+    <loc>${url(false, path)}</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="${url(false, path)}"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="${url(true, path)}"/>
+  </url>
+  <url>
+    <loc>${url(true, path)}</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="${url(false, path)}"/>
+    <xhtml:link rel="alternate" hreflang="ar" href="${url(true, path)}"/>
+  </url>`).join('\n');
+  writeFileSync(join(DIST, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${sitemap}
+</urlset>
+`);
+  writeFileSync(join(DIST, 'robots.txt'), `User-agent: *
+Allow: /
+
+Sitemap: ${SITE_URL}sitemap.xml
+`);
+  writeFileSync(join(DIST, '_headers'), `/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/css/*
+  Cache-Control: public, max-age=31536000, immutable
+/js/*
+  Cache-Control: public, max-age=31536000, immutable
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+`);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -250,6 +297,19 @@ function verify() {
       if (!/\salt="/.test(tag)) problems.push(`${rel}: <img> without alt: ${tag.slice(0, 80)}`);
     }
 
+    // Nothing may load from a third party: only plain <a> links may leave the origin.
+    for (const m of html.matchAll(/<(img|script|link|iframe|source|video|audio|embed)\b[^>]*>/g)) {
+      if (/\s(?:src|href|srcset|poster)="https?:\/\//.test(m[0]) && !/rel="(?:canonical|alternate|sitemap)"/.test(m[0])) problems.push(`${rel}: third-party resource: ${m[0].slice(0, 90)}`);
+    }
+    for (const m of html.matchAll(/\ssrcset="([^"]+)"/g)) {
+      for (const part of m[1].split(',')) {
+        const ref = part.trim().split(/\s+/)[0];
+        if (ref && !existsSync(resolve(dirname(page), ref))) problems.push(`${rel}: broken srcset reference "${ref}"`);
+      }
+    }
+    const htmlBytes = Buffer.byteLength(html);
+    if (htmlBytes > BUDGET.html) problems.push(`${rel}: ${htmlBytes} bytes of HTML exceeds the ${BUDGET.html} byte budget`);
+
     for (const m of html.matchAll(/\s(?:src|href)="([^"]+)"/g)) {
       const ref = m[1];
       if (/^(?:https?:|mailto:|#|data:)/.test(ref)) continue;
@@ -282,6 +342,20 @@ function verify() {
     if (!existsSync(target)) problems.push(`site.css: missing ${m[1]}`);
   }
 
+  // Size budgets: what a first visit may cost, uncompressed.
+  for (const [file, limit] of [['css/site.css', BUDGET.css], ['js/site.js', BUDGET.js]]) {
+    const size = statSync(join(DIST, file)).size;
+    if (size > limit) problems.push(`${file}: ${size} bytes exceeds the ${limit} byte budget`);
+  }
+  for (const f of walk(join(DIST, 'assets'))) {
+    const size = statSync(f).size;
+    const ext = extname(f);
+    if (['.png', '.webp', '.jpg', '.svg'].includes(ext) && size > BUDGET.image) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.image} byte image budget`);
+    if (ext === '.woff2' && size > BUDGET.font) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.font} byte font budget`);
+  }
+  const total = walk(DIST).reduce((sum, f) => sum + statSync(f).size, 0);
+  if (total > BUDGET.total) problems.push(`dist is ${total} bytes, over the ${BUDGET.total} byte budget`);
+
   if (problems.length) {
     console.error(`verify: ${problems.length} problem(s)`);
     for (const p of problems) console.error(`  - ${p}`);
@@ -298,7 +372,7 @@ function verify() {
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2', '.webp': 'image/webp', '.xml': 'application/xml', '.txt': 'text/plain; charset=utf-8', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json',
 };
 
 function serve(port) {
