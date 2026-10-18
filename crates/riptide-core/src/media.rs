@@ -241,7 +241,7 @@ fn better_audio<'a>(formats: &'a [MediaFormat], prefer_ext: &str) -> Option<&'a 
 
 /// The video format yt-dlp would most likely pick for "best no larger than `max`": the largest
 /// resolution not above it, MP4 first, then the highest bitrate.
-fn video_for<'a>(formats: &'a [MediaFormat], max: Option<u32>) -> Option<&'a MediaFormat> {
+fn video_for(formats: &[MediaFormat], max: Option<u32>) -> Option<&MediaFormat> {
     let candidates: Vec<&MediaFormat> = formats
         .iter()
         .filter(|f| f.has_video())
