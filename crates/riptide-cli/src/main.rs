@@ -1,9 +1,10 @@
 //! `riptide` — the command-line face of the engine.
 //!
-//! `fetch` and `bench` run the standalone engine; `paths` and `ping` are utilities.
+//! `fetch`, `batch` and `bench` run the standalone engine; `paths` and `ping` are utilities.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
 
+mod batch;
 mod fetch;
 mod i18n;
 
@@ -81,6 +82,23 @@ enum Command {
         #[arg(long)]
         no_resume: bool,
     },
+    /// Download many files from a URL pattern such as `file[001-120].zip`.
+    Batch {
+        /// Pattern.
+        pattern: String,
+        /// Destination folder.
+        #[arg(short, long, value_name = "DIR")]
+        dir: Option<PathBuf>,
+        /// Only print the addresses.
+        #[arg(long)]
+        list: bool,
+        /// Connections per file.
+        #[arg(short, long, default_value_t = riptide_core::DEFAULT_CONNECTIONS, value_parser = clap::value_parser!(u32).range(1..=riptide_core::MAX_CONNECTIONS as i64))]
+        connections: u32,
+        /// No progress output.
+        #[arg(short, long)]
+        quiet: bool,
+    },
     /// Benchmark connection counts.
     Bench {
         /// URL.
@@ -122,6 +140,14 @@ fn localized_command(lang: Lang) -> clap::Command {
                 .mut_arg("overwrite", |a| a.help(about("arg.overwrite")))
                 .mut_arg("quiet", |a| a.help(about("arg.quiet")))
                 .mut_arg("no_resume", |a| a.help(about("arg.no_resume")))
+        })
+        .mut_subcommand("batch", |s| {
+            s.about(about("cmd.batch"))
+                .mut_arg("pattern", |a| a.help(about("arg.pattern")))
+                .mut_arg("dir", |a| a.help(about("arg.batch_dir")))
+                .mut_arg("list", |a| a.help(about("arg.batch_list")))
+                .mut_arg("connections", |a| a.help(about("arg.connections")))
+                .mut_arg("quiet", |a| a.help(about("arg.quiet")))
         })
         .mut_subcommand("bench", |s| {
             s.about(about("cmd.bench"))
@@ -279,6 +305,30 @@ fn main() -> anyhow::Result<()> {
             ));
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(fetch::fetch(opts, store, lang)).map(|_| ())
+        }
+        Command::Batch {
+            pattern,
+            dir,
+            list,
+            connections,
+            quiet,
+        } => {
+            let store = if list {
+                None
+            } else {
+                Some(Arc::new(Mutex::new(
+                    Store::open(&paths.db_path).context("opening the database")?,
+                )))
+            };
+            let args = batch::BatchArgs {
+                pattern,
+                dir,
+                list,
+                connections,
+                quiet,
+            };
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(batch::run(args, store, lang))
         }
         Command::Bench {
             url,
