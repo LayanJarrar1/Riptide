@@ -9,8 +9,11 @@ import {
   NgZone,
   OnInit,
   signal,
+  Type,
+  untracked,
   viewChild,
 } from '@angular/core';
+import { NgComponentOutlet } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -61,6 +64,7 @@ const BOOT_MS = 900;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AddDownloadDialogComponent,
+    NgComponentOutlet,
     ButtonComponent,
     IconComponent,
     RouterLink,
@@ -100,6 +104,8 @@ export class AppComponent implements OnInit {
   protected readonly speedFormat = (n: number): string => this.format.speed(n);
 
   private readonly url = signal(this.router.url);
+  /** The batch dialog's class once its chunk has loaded. */
+  protected readonly batchDialog = signal<Type<unknown> | null>(null);
 
   /** Only categories that have at least one download are listed. */
   protected readonly visibleCategories = computed<readonly CategoryKey[]>(() => {
@@ -133,6 +139,13 @@ export class AppComponent implements OnInit {
         takeUntilDestroyed(),
       )
       .subscribe((e) => this.url.set(e.urlAfterRedirects));
+
+    // the batch dialog is its own chunk: fetched the first time it is asked for
+    effect(() => {
+      if (this.ui.batchOpen() && untracked(this.batchDialog) === null) {
+        void import('./features/downloads/batch-download-dialog.component').then((m) => this.batchDialog.set(m.BatchDownloadDialogComponent));
+      }
+    });
 
     effect(() => {
       // every request bumps the counter; focus on each bump (skip the initial value)
@@ -194,7 +207,11 @@ export class AppComponent implements OnInit {
     }
     if (event.key === 'n' || event.key === 'N') {
       event.preventDefault();
-      this.ui.openAdd();
+      if (event.shiftKey) {
+        this.ui.openBatch();
+      } else {
+        this.ui.openAdd();
+      }
     } else if (event.key === 'f' || event.key === 'F') {
       event.preventDefault();
       void this.router.navigateByUrl('/').then(() => this.ui.focusSearch());

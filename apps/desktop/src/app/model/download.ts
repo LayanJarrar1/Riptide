@@ -221,6 +221,28 @@ export interface DownloadRequest {
   readonly mediaFormat?: string;
 }
 
+/** Options shared by every item of a batch. Mirrors `riptide_core::BatchOptions`. */
+export interface BatchOptions {
+  readonly dir?: string;
+  readonly connections?: number;
+  readonly startPaused?: boolean;
+}
+
+/** Why the engine left a batch item out. */
+export type BatchSkipReason = 'duplicate' | 'invalid';
+
+/** A batch item the engine did not add. */
+export interface BatchSkipped {
+  readonly url: string;
+  readonly reason: BatchSkipReason;
+}
+
+/** What `addBatch` did: the new ids and what was skipped. */
+export interface BatchResult {
+  readonly added: readonly number[];
+  readonly skipped: readonly BatchSkipped[];
+}
+
 /** Result of probing a URL before adding it. */
 export interface ProbeResult {
   readonly finalUrl: string;

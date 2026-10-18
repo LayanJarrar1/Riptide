@@ -1,6 +1,9 @@
 import { computed, Injectable, InjectionToken, inject, signal } from '@angular/core';
 
 import {
+  BatchOptions,
+  BatchResult,
+  BatchSkipped,
   categoryOf,
   Download,
   DownloadRequest,
@@ -13,6 +16,7 @@ import {
   MediaChoice,
   MediaProbe,
 } from '../model/download';
+import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { DownloadEngine } from './download-engine';
 import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
 
@@ -194,6 +198,33 @@ export class MockEngineService extends DownloadEngine {
     };
     this.list.update((all) => [...all, d]);
     return Promise.resolve(id);
+  }
+
+  /** The TypeScript port of the Rust expander (see `batch-pattern.ts`). */
+  async expandBatch(pattern: string): Promise<BatchExpansion> {
+    // loaded on demand: the port only matters to the batch dialog, never to the first paint
+    return (await import('./batch-pattern')).expandPattern(pattern);
+  }
+
+  async importUrlList(text: string): Promise<UrlListResult> {
+    return (await import('./batch-pattern')).importUrlList(text);
+  }
+
+  /** Adds the new links in one go and reports the ones already in the list, like the engine. */
+  async addBatch(urls: readonly string[], options: BatchOptions): Promise<BatchResult> {
+    const known = new Set(this.list().map((d) => stripFragment(d.url)));
+    const added: number[] = [];
+    const skipped: BatchSkipped[] = [];
+    for (const url of urls) {
+      const key = stripFragment(url);
+      if (known.has(key)) {
+        skipped.push({ url, reason: 'duplicate' });
+        continue;
+      }
+      known.add(key);
+      added.push(await this.add({ url, dir: options.dir, connections: options.connections, startPaused: options.startPaused }));
+    }
+    return { added, skipped };
   }
 
   /** Scans the list like the engine would: same link without its fragment, or same name in the same folder. */

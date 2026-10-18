@@ -141,4 +141,24 @@ describe('MockEngineService', () => {
     }
     expect(cursor).toBe(big.size ?? 0);
   });
+
+  it('addBatch adds the new links in order and reports the ones already listed', async () => {
+    const before = engine.downloads().length;
+    const first = await engine.addBatch(['https://h/a1.zip', 'https://h/a2.zip'], { dir: 'D:\\batch', startPaused: true });
+    expect(first.added.length).toBe(2);
+    expect(first.skipped).toEqual([]);
+    expect(engine.downloads().length).toBe(before + 2);
+    expect(engine.get(first.added[0])?.state).toBe('paused');
+    expect(engine.get(first.added[1])?.dir).toBe('D:\\batch');
+
+    const second = await engine.addBatch(['https://h/a2.zip#x', 'https://h/a3.zip', 'https://h/a3.zip'], {});
+    expect(second.added.length).toBe(1);
+    expect(second.skipped.map((s) => s.reason)).toEqual(['duplicate', 'duplicate']);
+  });
+
+  it('expandBatch and importUrlList use the port of the engine expander', async () => {
+    expect((await engine.expandBatch('https://h/f[01-03].bin')).urls).toEqual(['https://h/f01.bin', 'https://h/f02.bin', 'https://h/f03.bin']);
+    expect((await engine.expandBatch('nope')).error?.code).toBe('not_http');
+    expect((await engine.importUrlList('# c\nhttps://h/a\nhttps://h/a\n')).urls).toEqual(['https://h/a']);
+  });
 });

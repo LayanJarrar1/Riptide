@@ -49,6 +49,9 @@
       >
         <span [attr.lang]="i18n.lang() === 'ar' ? 'en' : 'ar'">{{ i18n.lang() === 'ar' ? 'English' : 'العربية' }}</span>
       </button>
+      <button appButton variant="secondary" icon="layers" type="button" class="batch-button" (click)="ui.openBatch()">
+        {{ 'action.batch' | t }}
+      </button>
       <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">
         {{ 'action.add' | t }}
       </button>
@@ -145,6 +148,9 @@
 </div>
 
 <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+@if (batchDialog(); as dialog) {
+  <ng-container *ngComponentOutlet="dialog" />
+}
 <app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
 <app-exit-confirm-dialog />
 <app-toasts />

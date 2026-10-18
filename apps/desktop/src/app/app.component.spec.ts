@@ -108,13 +108,26 @@ describe('AppComponent (shell)', () => {
     expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Add download');
   });
 
+  it('opens the batch dialog with Ctrl+Shift+N or its toolbar button, and plain Ctrl+N still adds one download', () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'N', ctrlKey: true, shiftKey: true, bubbles: true }));
+    expect(ui.batchOpen()).toBeTrue();
+    expect(ui.addOpen()).toBeFalse();
+    ui.closeBatch();
+    el().querySelector<HTMLButtonElement>('.batch-button')?.click();
+    expect(ui.batchOpen()).toBeTrue();
+    ui.closeBatch();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true }));
+    expect(ui.addOpen()).toBeTrue();
+    expect(ui.batchOpen()).toBeFalse();
+  });
+
   it('opens the keyboard shortcuts with ? and Ctrl+/, but not while typing in the search box', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
     fixture.detectChanges();
     expect(ui.shortcutsOpen()).toBeTrue();
     const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
     expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Keyboard shortcuts');
-    expect(dialog?.querySelectorAll('.row').length).toBe(12);
+    expect(dialog?.querySelectorAll('.row').length).toBe(13);
 
     el().querySelector<HTMLInputElement>('.search-input')?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
     expect(ui.shortcutsOpen()).toBeTrue();

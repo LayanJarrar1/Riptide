@@ -45,8 +45,14 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 - A real engine inside the app: Tauri commands and an event bridge, with TypeScript types
   generated from the Rust types.
 
+- Batch download (Ctrl+Shift+N): patterns such as `file[001-120].zip`, `img_[a-z].jpg`,
+  `[0-100:5]` and several ranges in one address, a live preview with a check box per link, or a
+  pasted / loaded list of links; copy or export the checked links; duplicates are skipped and
+  reported. The engine adds the whole batch in one transaction.
+
 **Command line**
 
+- `riptide batch "<pattern>"` downloads every address of a pattern (`--list` only prints them).
 - `riptide fetch` (standalone download with resume), `riptide bench` (1 vs 8 vs 32 connections),
   `riptide ping`, `riptide paths`; help in Arabic and English.
 
