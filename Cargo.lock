@@ -3865,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-cli"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -3887,7 +3887,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-core"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "proptest",
  "serde",
@@ -3899,7 +3899,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-desktop"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "dirs 6.0.0",
  "riptide-core",
@@ -3929,7 +3929,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-engine"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "hex",
  "reqwest 0.12.28",
@@ -3953,7 +3953,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-host"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "dirs 6.0.0",
  "riptide-core",
@@ -3969,7 +3969,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-ipc"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "riptide-core",
  "serde",
@@ -3983,7 +3983,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-log"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "dirs 6.0.0",
  "regex",
@@ -4013,7 +4013,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-net"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -4040,7 +4040,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-store"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "riptide-core",
  "rusqlite",
@@ -4052,7 +4052,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-testserver"
-version = "0.1.0"
+version = "0.1.0-alpha.3"
 dependencies = [
  "anyhow",
  "axum",
