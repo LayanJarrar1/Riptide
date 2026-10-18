@@ -267,6 +267,8 @@ pub fn run() {
             media::update_media_tools,
             updater::check_update,
             updater::install_update,
+            updater::open_release_page,
+            notify::notify_update,
             shell::set_shell_prefs,
             shell::autostart_enabled,
             shell::set_autostart,
