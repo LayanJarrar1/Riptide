@@ -304,5 +304,17 @@
   "key.space": "مسافة",
   "key.click": "نقر",
   "key.dblclick": "نقر مزدوج",
-  "key.rightclick": "نقر بالزر الأيمن"
+  "key.rightclick": "نقر بالزر الأيمن",
+
+  "tray.open": "فتح ريبتايد",
+  "tray.pauseAll": "إيقاف الكل مؤقتًا",
+  "tray.resumeAll": "استئناف الكل",
+  "tray.quit": "خروج",
+  "tray.idle": "ريبتايد",
+  "tray.active": "ريبتايد: {count} نشطة، {speed}",
+  "notify.completed": "اكتمل التحميل",
+  "notify.failed": "فشل التحميل: {reason}",
+  "clipboard.prompt": "تحميل {name}؟",
+  "clipboard.download": "تحميل",
+  "toast.autostartFailed": "تعذّر تغيير إعداد التشغيل مع ويندوز"
 }

@@ -1,6 +1,6 @@
 [package]
 name = "riptide-desktop"
-description = "Riptide download manager — desktop application (Tauri v2 + Angular)"
+description = "Riptide download manager â€” desktop application (Tauri v2 + Angular)"
 license = "GPL-3.0-or-later"
 version.workspace = true
 edition.workspace = true
@@ -17,13 +17,16 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 # self-update from signed manifests on GitHub Releases (see src/updater.rs)
 tauri-plugin-updater = "2"
 url = { workspace = true }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
