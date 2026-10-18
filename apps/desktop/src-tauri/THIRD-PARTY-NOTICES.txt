@@ -1,0 +1,24 @@
+Riptide ships two third-party programs next to riptide-desktop.exe for video support. They are
+separate executables that Riptide starts as child processes; Riptide does not link to them and
+they are not modified.
+
+yt-dlp (yt-dlp.exe)
+  Home:     https://github.com/yt-dlp/yt-dlp
+  License:  The Unlicense (public domain). The bundled yt-dlp.exe is a PyInstaller build and
+            contains Python and its libraries under their own licenses; see licenses/yt-dlp-LICENSE.txt.
+  Version:  see Settings > About > Video support (the exact release is pinned in
+            apps/desktop/scripts/fetch-media-tools.mjs together with its SHA-256).
+  Updates:  "Update video support" copies yt-dlp into Riptide's data folder and runs `yt-dlp -U`
+            there; the copy next to the app is only replaced by app updates.
+
+FFmpeg (ffmpeg.exe)
+  Home:     https://ffmpeg.org
+  Build:    https://github.com/BtbN/FFmpeg-Builds (win64, "lgpl" variant: no GPL components)
+  License:  GNU Lesser General Public License v2.1 or later; see licenses/ffmpeg-LICENSE.txt.
+            The build's configuration and bundled library licenses are listed there as well.
+  Source:   the corresponding source is available from the FFmpeg-Builds release that the pinned
+            archive came from (the exact release and SHA-256 are in fetch-media-tools.mjs).
+  Use:      invoked by yt-dlp to merge separate video and audio streams into one MP4/MKV and to
+            extract audio. Riptide never calls it for anything else.
+
+Riptide itself is dual-licensed under MIT or Apache-2.0 (see LICENSE-MIT and LICENSE-APACHE).

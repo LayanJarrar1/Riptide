@@ -9,6 +9,9 @@ import {
   isActive,
   ProbeResult,
   Segment,
+  isMediaUrl,
+  MediaChoice,
+  MediaProbe,
 } from '../model/download';
 import { DownloadEngine } from './download-engine';
 import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
@@ -130,6 +133,36 @@ export class MockEngineService extends DownloadEngine {
     });
   }
 
+  /**
+   * Pretends to ask yt-dlp about a video page: a fixed quality menu for the known video sites,
+   * a rejection for anything else.
+   */
+  probeMedia(url: string): Promise<MediaProbe> {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        if (!isMediaUrl(url)) {
+          reject(new Error('this page has no video Riptide can download'));
+          return;
+        }
+        const choice = (key: string, kind: MediaChoice['kind'], height: number | null, ext: string, approxSize: number): MediaChoice => ({ key, kind, height, ext, approxSize });
+        resolve({
+          title: 'Big Buck Bunny',
+          uploader: 'Blender',
+          thumbnail: null,
+          duration: 635,
+          choices: [
+            choice('best', 'best', 2160, 'mp4', 1_676_000_000),
+            choice('h1080', 'video', 1080, 'mp4', 324_000_000),
+            choice('h720', 'video', 720, 'mp4', 109_000_000),
+            choice('h360', 'video', 360, 'mp4', 40_000_000),
+            choice('audio-m4a', 'audio', null, 'm4a', 10_300_000),
+            choice('audio-mp3', 'audio', null, 'mp3', 19_400_000),
+          ],
+        });
+      }, 300);
+    });
+  }
+
   /** Adds a download and resolves with its id. It starts when the queue has a free slot. */
   add(request: DownloadRequest, probe?: ProbeResult): Promise<number> {
     const id = this.nextId++;
@@ -157,6 +190,7 @@ export class MockEngineService extends DownloadEngine {
       completedAt: null,
       failure: null,
       checksum: request.checksum ?? null,
+      kind: request.kind ?? 'http',
     };
     this.list.update((all) => [...all, d]);
     return Promise.resolve(id);

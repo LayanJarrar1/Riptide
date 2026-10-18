@@ -72,7 +72,12 @@ export function hostOf(url: string): string {
         <app-icon [name]="icon()" [size]="18" />
       </span>
       <span class="name-block">
-        <span class="name" dir="auto" [attr.title]="row().d.filename">{{ row().d.filename }}</span>
+        <span class="name-line">
+          <span class="name" dir="auto" [attr.title]="row().d.filename">{{ row().d.filename }}</span>
+          @if (row().d.kind === 'media') {
+            <span class="media-badge" role="img" [attr.title]="i18n.t('details.video')" [attr.aria-label]="i18n.t('details.video')"><app-icon name="play" [size]="10" /></span>
+          }
+        </span>
         @if (row().d.state === 'failed') {
           <span class="reason">
             <app-icon name="alert" [size]="12" />
@@ -248,6 +253,24 @@ export function hostOf(url: string): string {
       flex-direction: column;
       min-inline-size: 0;
       line-height: 1.25;
+    }
+
+    .name-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-inline-size: 0;
+    }
+
+    .media-badge {
+      flex: none;
+      display: inline-grid;
+      place-items: center;
+      inline-size: 18px;
+      block-size: 14px;
+      border-radius: var(--radius-xs);
+      background: var(--color-accent-ring);
+      color: var(--color-accent-fg);
     }
 
     .name {

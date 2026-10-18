@@ -77,22 +77,32 @@ interface LogLine {
           <span class="stat-value num">{{ row().eta | duration }}</span>
           <span class="stat-label">{{ i18n.t('column.eta') }}</span>
         </div>
-        <div class="stat" style="--i: 3">
-          <span class="stat-value num">{{ activeConnections() }}<span class="stat-dim">/{{ d().connections }}</span></span>
-          <span class="stat-label">{{ i18n.t('details.connections') }}</span>
-        </div>
+        @if (!isMedia()) {
+          <div class="stat" style="--i: 3">
+            <span class="stat-value num">{{ activeConnections() }}<span class="stat-dim">/{{ d().connections }}</span></span>
+            <span class="stat-label">{{ i18n.t('details.connections') }}</span>
+          </div>
+        }
       </section>
 
       <section class="block" style="--i: 4">
         <div class="block-head">
-          <h3 class="block-title">{{ i18n.t('details.segments') }}</h3>
-          <span class="block-meta num">{{ segmentSummary() }}</span>
+          <h3 class="block-title">{{ i18n.t(isMedia() ? 'details.mediaProgress' : 'details.segments') }}</h3>
+          @if (isMedia()) {
+            <span class="block-meta media-badge"><app-icon name="play" [size]="12" /> {{ i18n.t('details.video') }}</span>
+          } @else {
+            <span class="block-meta num">{{ segmentSummary() }}</span>
+          }
         </div>
         <app-progress-flow [segments]="d().segments" [size]="d().size" [state]="d().state" [large]="true" />
-        @if (d().size !== null) {
-          <app-segment-map class="map" [segments]="d().segments" [size]="d().size" />
+        @if (isMedia()) {
+          <p class="hint">{{ i18n.t('details.mediaHint') }}</p>
+        } @else {
+          @if (d().size !== null) {
+            <app-segment-map class="map" [segments]="d().segments" [size]="d().size" />
+          }
+          <p class="hint">{{ i18n.t(d().supportsRanges ? 'details.rangesYes' : 'details.rangesNo') }}</p>
         }
-        <p class="hint">{{ i18n.t(d().supportsRanges ? 'details.rangesYes' : 'details.rangesNo') }}</p>
       </section>
 
       <section class="block" style="--i: 5">
@@ -405,6 +415,13 @@ interface LogLine {
       flex: 1;
     }
 
+    .media-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--color-accent-fg);
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .stat,
       .block {
@@ -436,6 +453,7 @@ export class DownloadDetailsComponent {
   readonly action = output<RowAction>();
 
   protected readonly d = computed(() => this.row().d);
+  protected readonly isMedia = computed(() => this.d().kind === 'media');
   protected readonly icon = computed(() => CATEGORY_ICONS[this.d().category]);
   protected readonly host = computed(() => hostOf(this.d().url));
   protected readonly activeConnections = computed(() => this.d().segments.filter((s) => s.state === 'active').length);

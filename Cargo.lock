@@ -3907,6 +3907,7 @@ dependencies = [
  "riptide-host",
  "riptide-ipc",
  "riptide-log",
+ "riptide-media",
  "riptide-net",
  "serde",
  "serde_json",
@@ -3930,13 +3931,16 @@ dependencies = [
 name = "riptide-engine"
 version = "0.1.0-alpha.3"
 dependencies = [
+ "hex",
  "reqwest 0.12.28",
  "riptide-core",
+ "riptide-media",
  "riptide-net",
  "riptide-store",
  "riptide-testserver",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -3988,6 +3992,23 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "riptide-media"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "riptide-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]

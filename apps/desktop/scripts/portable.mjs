@@ -5,6 +5,7 @@
 //   target/portable/Riptide/
 //     riptide-desktop.exe
 //     riptide-host.exe      Native Messaging host, found by the app next to itself
+//     yt-dlp.exe, ffmpeg.exe video support (pinned, see fetch-media-tools.mjs) + licenses/
 //     portable.txt          data goes to .\data, nothing under %LOCALAPPDATA%
 //
 // and zips it as target/portable/Riptide-<version>-portable.zip (bsdtar, shipped with Windows
@@ -33,6 +34,25 @@ for (const name of [`riptide-desktop${exe}`, `riptide-host${exe}`]) {
     process.exit(1);
   }
   copyFileSync(from, join(folder, name));
+}
+
+// video support: the pinned yt-dlp and ffmpeg staged by scripts/fetch-media-tools.mjs
+// (src-tauri/binaries/<tool>-<target>.exe), shipped as <tool>.exe next to the app like the
+// installer does, with their license texts.
+const binaries = join(desktop, 'src-tauri', 'binaries');
+const target = /^host:\s*(\S+)$/m.exec(execFileSync('rustc', ['-vV'], { encoding: 'utf8' }))?.[1];
+for (const tool of ['yt-dlp', 'ffmpeg']) {
+  const from = join(binaries, `${tool}-${target}${exe}`);
+  if (!existsSync(from)) {
+    console.error(`portable: ${from} is missing; run \`node scripts/fetch-media-tools.mjs\``);
+    process.exit(1);
+  }
+  copyFileSync(from, join(folder, `${tool}${exe}`));
+}
+mkdirSync(join(folder, 'licenses'), { recursive: true });
+copyFileSync(join(desktop, 'src-tauri', 'THIRD-PARTY-NOTICES.txt'), join(folder, 'THIRD-PARTY-NOTICES.txt'));
+for (const tool of ['yt-dlp', 'ffmpeg']) {
+  copyFileSync(join(binaries, `${tool}-LICENSE.txt`), join(folder, 'licenses', `${tool}-LICENSE.txt`));
 }
 writeFileSync(
   join(folder, 'portable.txt'),

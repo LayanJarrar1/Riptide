@@ -6,6 +6,7 @@
 //! |---|---|---|
 //! | `ping` | – | `pong` (app version, [`PROTOCOL_VERSION`]) |
 //! | `probe` | [`Engine::probe`] (referrer, user agent and secrets ride along) | `probed` |
+//! | `probe_media` | [`Engine::probe_media`] (yt-dlp; the cookies go to a temp file) | `media_probed` |
 //! | `add` | [`Engine::add`] | `added`; the window comes to the front |
 //! | `list` / `get` | [`Engine::list`] / [`Engine::get`] | `downloads` / `download` |
 //! | `refresh` | [`Engine::refresh_url`] | `ok`, or `not_found` when there is no such download |
@@ -51,6 +52,10 @@ pub async fn dispatch(engine: &Engine, request: Request) -> Response {
                     },
                 })
         }
+        RequestBody::ProbeMedia { url, cookies } => engine
+            .probe_media(&url, cookies.as_deref())
+            .await
+            .map(|info| ResponseBody::MediaProbed { info }),
         RequestBody::Add { request } => engine
             .add(request)
             .await
@@ -97,6 +102,16 @@ pub fn engine_error(id: u64, e: &riptide_engine::Error) -> Response {
         E::Core(riptide_core::Error::IllegalTransition { .. }) => ErrorCode::IllegalTransition,
         E::Core(riptide_core::Error::Invalid(_)) => ErrorCode::BadRequest,
         E::Net(riptide_net::Error::InvalidUrl { .. }) => ErrorCode::BadRequest,
+        E::Media(riptide_media::Error::InvalidUrl | riptide_media::Error::InvalidFormat(_)) => {
+            ErrorCode::BadRequest
+        }
+        E::Media(
+            riptide_media::Error::Drm
+            | riptide_media::Error::Live
+            | riptide_media::Error::Playlist
+            | riptide_media::Error::Unsupported
+            | riptide_media::Error::ToolMissing(_),
+        ) => ErrorCode::Unsupported,
         _ => ErrorCode::Internal,
     };
     Response::error(id, code, riptide_log::redact_line(&e.to_string()))
@@ -136,6 +151,7 @@ fn request_kind(body: &RequestBody) -> &'static str {
     match body {
         RequestBody::Ping => "ping",
         RequestBody::Probe { .. } => "probe",
+        RequestBody::ProbeMedia { .. } => "probe_media",
         RequestBody::Add { .. } => "add",
         RequestBody::Refresh { .. } => "refresh",
         RequestBody::List => "list",

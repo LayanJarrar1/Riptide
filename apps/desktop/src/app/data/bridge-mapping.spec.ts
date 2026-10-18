@@ -1,6 +1,7 @@
 import { Download as UiDownload, DownloadState as UiDownloadState } from '../model/download';
 import type { Download } from '../tauri/bridge/Download';
 import type { DownloadState } from '../tauri/bridge/DownloadState';
+import type { MediaInfo } from '../tauri/bridge/MediaInfo';
 import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
 import type { Segment } from '../tauri/bridge/Segment';
 import {
@@ -10,6 +11,7 @@ import {
   HISTORY_LENGTH,
   toBridgeRequest,
   toMillis,
+  toUiMedia,
   toUiDownload,
   toUiProbe,
   toUiSegment,
@@ -44,6 +46,8 @@ export function bridgeDownload(overrides: Partial<Download> = {}): Download {
     added_at: ADDED_MS,
     started_at: ADDED_MS + 1000,
     completed_at: 0,
+    kind: 'http',
+    media_format: null,
     ...overrides,
   };
 }
@@ -216,7 +220,17 @@ describe('bridge-mapping', () => {
         referrer: null,
         user_agent: null,
         secrets: null,
+        kind: 'http',
+        media_format: null,
       });
+    });
+
+    it('sends a video page as media with the picked quality', () => {
+      const r = toBridgeRequest({ url: 'https://youtu.be/x', kind: 'media', mediaFormat: 'h720' });
+      expect(r.kind).toBe('media');
+      expect(r.media_format).toBe('h720');
+      expect(toBridgeRequest({ url: 'https://youtu.be/x', kind: 'media' }).media_format).toBe('best');
+      expect(toBridgeRequest({ url: 'https://x/a.zip', mediaFormat: 'h720' }).media_format).toBeNull();
     });
 
     it('defaults: no name, dir, connections or checksum, and starts unpaused', () => {
@@ -259,6 +273,34 @@ describe('bridge-mapping', () => {
       expect(finalPath('D:', 'a.zip')).toBe('D:\\a.zip');
       expect(finalPath('/home/dana/Downloads', 'a.zip')).toBe('/home/dana/Downloads/a.zip');
       expect(finalPath('/home/dana/Downloads/', 'a.zip')).toBe('/home/dana/Downloads/a.zip');
+    });
+  });
+
+  describe('toUiMedia', () => {
+    it('keeps the menu and turns the size into a number or null', () => {
+      const info: MediaInfo = {
+        url: 'https://youtu.be/x',
+        id: 'x',
+        title: 'Big Buck Bunny',
+        uploader: 'Blender',
+        extractor: 'youtube',
+        thumbnail: null,
+        duration: 635,
+        is_live: false,
+        drm: false,
+        formats: [],
+        choices: [
+          { key: 'best', kind: 'best', height: 1080, ext: 'mp4', approx_size: 324_000_000 },
+          { key: 'audio-m4a', kind: 'audio', height: null, ext: 'm4a', approx_size: null },
+        ],
+      };
+      const m = toUiMedia(info);
+      expect(m.title).toBe('Big Buck Bunny');
+      expect(m.uploader).toBe('Blender');
+      expect(m.duration).toBe(635);
+      expect(m.choices.map((c) => c.key)).toEqual(['best', 'audio-m4a']);
+      expect(m.choices[0]?.approxSize).toBe(324_000_000);
+      expect(m.choices[1]?.approxSize).toBeNull();
     });
   });
 });
