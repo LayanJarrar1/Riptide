@@ -21,6 +21,7 @@ import { TickerDirective } from './core/ticker.directive';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
 import { CompletionToastService } from './features/downloads/completion-toast.service';
+import { DesktopShellService } from './features/shell/desktop-shell.service';
 import { CATEGORY_ICONS } from './features/downloads/download-row.component';
 import { ShortcutsDialogComponent } from './features/shell/shortcuts-dialog.component';
 import { UiState } from './features/shell/ui-state.service';
@@ -120,6 +121,7 @@ export class AppComponent implements OnInit {
   constructor() {
     // starts watching the engine for completions (it shows the "is complete" toast)
     inject(CompletionToastService);
+    inject(DesktopShellService);
 
     this.router.events
       .pipe(
