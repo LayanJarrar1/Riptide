@@ -138,6 +138,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[allow(clippy::result_large_err)]
     fn run(frame: Value) -> Result<Request, Response> {
         crate::check_request(&frame)
     }
