@@ -190,6 +190,7 @@ export class MockEngineService extends DownloadEngine {
       completedAt: null,
       failure: null,
       checksum: request.checksum ?? null,
+      kind: request.kind ?? 'http',
     };
     this.list.update((all) => [...all, d]);
     return Promise.resolve(id);
