@@ -17,8 +17,8 @@
 //!   be on the [`AllowList`]: the published ids ([`CHROMIUM_EXTENSION_ID`],
 //!   [`FIREFOX_EXTENSION_ID`]) plus `extra_extension_ids` from the app's [`INTEGRATION_FILE`].
 //!   Anyone else gets one `error` frame and the host exits.
-//! * **Schema.** Only [`BROWSER_REQUEST_TYPES`] are accepted (`ping`, `probe`, `add`, `refresh`
-//!   and the read-only `list`), and only if they parse as a [`riptide_ipc::Request`]. Everything
+//! * **Schema.** Only [`BROWSER_REQUEST_TYPES`] are accepted (`ping`, `probe`, `probe_media`,
+//!   `add`, `refresh` and the read-only `list`), and only if they parse as a [`riptide_ipc::Request`]. Everything
 //!   else is answered with an `error` (`bad_request`) and the session continues.
 //! * **App not running.** Requests get an `error` (`internal`, "the Riptide app is not
 //!   running"); the session continues. A `ping` first tries to start the app (see [`Launcher`])
@@ -71,7 +71,8 @@ pub const APP_EXE_NAMES: &[&str] = if cfg!(windows) {
 
 /// Request types the host forwards from the browser. `list` is read-only and lets the popup
 /// show live states; everything else (pause, remove, shutdown, ...) is for the CLI only.
-pub const BROWSER_REQUEST_TYPES: &[&str] = &["ping", "probe", "add", "refresh", "list"];
+pub const BROWSER_REQUEST_TYPES: &[&str] =
+    &["ping", "probe", "probe_media", "add", "refresh", "list"];
 
 /// How long a `ping` waits for the app's endpoint after starting the app.
 pub const LAUNCH_WAIT: Duration = Duration::from_secs(10);
@@ -676,6 +677,11 @@ mod tests {
     fn only_browser_request_types_pass() {
         let ok = check_request(&serde_json::json!({"id": 3, "type": "ping"})).unwrap();
         assert_eq!(ok.id, 3);
+        let media = check_request(&serde_json::json!({
+            "id": 6, "type": "probe_media", "url": "https://www.youtube.com/watch?v=x"
+        }))
+        .unwrap();
+        assert!(matches!(media.body, RequestBody::ProbeMedia { .. }));
         for kind in ["pause", "remove", "shutdown", "subscribe", "get", "exec"] {
             let refusal =
                 check_request(&serde_json::json!({"id": 4, "type": kind, "download_id": 1}))

@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use riptide_core::{Download, DownloadId, DownloadRequest, Event, Secrets};
+use riptide_core::{Download, DownloadId, DownloadRequest, Event, MediaInfo, Secrets};
 
 /// Bumped only for incompatible changes; reported in [`ResponseBody::Pong`].
 pub const PROTOCOL_VERSION: u32 = 1;
@@ -28,7 +28,7 @@ impl Request {
     }
 }
 
-/// Request payloads. The first four (`ping`, `probe`, `add`, `refresh`) and the read-only `list`
+/// Request payloads. `ping`, `probe`, `probe_media`, `add`, `refresh` and the read-only `list`
 /// are the only ones the Native Messaging host (`riptide-host`) forwards from the browser (hard
 /// rule 5); the rest are for the CLI.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,6 +49,17 @@ pub enum RequestBody {
         /// Cookies / headers / auth for that URL. Never logged.
         #[serde(default)]
         secrets: Option<Secrets>,
+    },
+    /// Ask what a video page (YouTube, Vimeo, ...) offers: title, formats and the quality
+    /// menu. Answered with [`ResponseBody::MediaProbed`]. Add the page afterwards with `add`,
+    /// `kind: "media"` and `media_format` set to one of the menu's keys.
+    ProbeMedia {
+        /// Page URL.
+        url: String,
+        /// The browser's `Cookie` header for the page (signed-in or age-gated videos). Never
+        /// logged; handed to yt-dlp in a temporary file deleted after the probe.
+        #[serde(default)]
+        cookies: Option<String>,
     },
     /// Add a download.
     Add {
@@ -163,6 +174,11 @@ pub enum ResponseBody {
         /// Findings.
         result: ProbeResult,
     },
+    /// Answer to `probe_media`.
+    MediaProbed {
+        /// What the page offers.
+        info: MediaInfo,
+    },
     /// Answer to `add`.
     Added {
         /// The new download.
@@ -265,6 +281,26 @@ mod tests {
                 delete_file: false
             }
         );
+    }
+
+    #[test]
+    fn probe_media_and_media_add_shapes() {
+        let r: Request = serde_json::from_str(
+            r#"{"id":4,"type":"probe_media","url":"https://www.youtube.com/watch?v=x","cookies":"SID=1"}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(r.body, RequestBody::ProbeMedia { ref cookies, .. } if cookies.as_deref() == Some("SID=1"))
+        );
+        let r: Request = serde_json::from_str(
+            r#"{"id":5,"type":"add","request":{"url":"https://youtu.be/x","kind":"media","media_format":"h720","filename":"Clip"}}"#,
+        )
+        .unwrap();
+        let RequestBody::Add { request } = r.body else {
+            panic!()
+        };
+        assert_eq!(request.kind, riptide_core::DownloadKind::Media);
+        assert_eq!(request.media_format.as_deref(), Some("h720"));
     }
 
     #[test]

@@ -2,6 +2,7 @@
 import type { CategoryId } from "./CategoryId";
 import type { Checksum } from "./Checksum";
 import type { DownloadId } from "./DownloadId";
+import type { DownloadKind } from "./DownloadKind";
 import type { DownloadState } from "./DownloadState";
 import type { Priority } from "./Priority";
 import type { QueueId } from "./QueueId";
@@ -99,4 +100,12 @@ started_at: number | null,
 /**
  * When it reached `Completed`.
  */
-completed_at: number | null, };
+completed_at: number | null, 
+/**
+ * HTTP file or media page. Older records (and JSON without the field) are `http`.
+ */
+kind: DownloadKind, 
+/**
+ * For [`DownloadKind::Media`]: the yt-dlp format selector the user picked.
+ */
+media_format: string | null, };

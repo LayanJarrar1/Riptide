@@ -3907,6 +3907,7 @@ dependencies = [
  "riptide-host",
  "riptide-ipc",
  "riptide-log",
+ "riptide-media",
  "riptide-net",
  "serde",
  "serde_json",
