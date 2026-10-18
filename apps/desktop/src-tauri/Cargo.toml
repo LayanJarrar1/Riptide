@@ -17,15 +17,19 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 dirs = { workspace = true }
+url = { workspace = true }
 riptide-core = { workspace = true }
 riptide-engine = { workspace = true }
 riptide-host = { workspace = true }

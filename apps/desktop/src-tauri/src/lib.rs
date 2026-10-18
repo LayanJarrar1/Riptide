@@ -15,9 +15,13 @@ use std::path::PathBuf;
 use riptide_engine::{Engine, EngineConfig};
 use tauri::{Emitter, Manager};
 
+pub mod clipboard;
 pub mod commands;
 pub mod integration;
 pub mod ipc_server;
+pub mod notify;
+pub mod shell;
+pub mod tray;
 
 pub use commands::{AppInfo, BUILD_LABEL, PRODUCT_NAME};
 
@@ -127,10 +131,29 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![shell::MINIMIZED_ARG]),
+        ))
+        .manage(shell::Shell::default())
         .setup(move |app| {
             let config = engine_config()?;
             let engine = tauri::async_runtime::block_on(Engine::open(config))?;
             app.manage(engine.clone());
+
+            // tray, notifications, clipboard monitor; started by Windows → stay in the tray
+            if let Err(e) = tray::install(app.handle(), engine.clone()) {
+                tracing::warn!(error = %e, "no tray icon");
+            }
+            notify::install(app.handle(), engine.clone());
+            clipboard::install(app.handle());
+            if shell::started_minimized(std::env::args()) {
+                if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+                    let _ = window.hide();
+                }
+            }
 
             // browser host / CLI → engine over the per-user pipe; an add brings the window up
             let handle = app.handle().clone();
@@ -180,9 +203,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // close-to-tray first: when it hid the window, downloads keep going
+                if shell::close_to_tray(window, api) {
+                    return;
+                }
                 // stop transfers at a checkpoint; their records stay Downloading and resume on
-                // the next start (crash-safe resume). Close-to-tray comes later.
+                // the next start (crash-safe resume).
                 if let Some(engine) = window.try_state::<Engine>() {
                     let engine = engine.inner().clone();
                     tauri::async_runtime::block_on(engine.shutdown());
@@ -213,6 +240,9 @@ pub fn run() {
             commands::integration_status,
             commands::register_browser_host,
             commands::unregister_browser_host,
+            shell::set_shell_prefs,
+            shell::autostart_enabled,
+            shell::set_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Riptide desktop application");

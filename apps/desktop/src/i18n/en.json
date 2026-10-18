@@ -295,5 +295,17 @@
   "key.space": "Space",
   "key.click": "click",
   "key.dblclick": "Double-click",
-  "key.rightclick": "Right-click"
+  "key.rightclick": "Right-click",
+
+  "tray.open": "Open Riptide",
+  "tray.pauseAll": "Pause all",
+  "tray.resumeAll": "Resume all",
+  "tray.quit": "Quit",
+  "tray.idle": "Riptide",
+  "tray.active": "Riptide: {count} active, {speed}",
+  "notify.completed": "Download complete",
+  "notify.failed": "Download failed: {reason}",
+  "clipboard.prompt": "Download {name}?",
+  "clipboard.download": "Download",
+  "toast.autostartFailed": "Could not change the Windows startup setting"
 }
