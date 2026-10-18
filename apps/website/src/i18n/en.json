@@ -247,7 +247,81 @@
     "made": "Made with care. Alpha preview.",
     "github": "GitHub",
     "releases": "Releases",
-    "licenseLink": "License"
+    "licenseLink": "License",
+    "privacy": "Privacy"
+  },
+
+  "privacy": {
+    "meta": {
+      "title": "Privacy policy · Riptide",
+      "description": "Riptide and its browser extension collect nothing: no telemetry, no accounts, no analytics. What stays on your computer and the few network requests Riptide makes."
+    },
+    "title": "Privacy policy",
+    "updated": "Last updated: 18 October 2026. Applies to the Riptide desktop app, the Riptide CLI and the Riptide browser extension for Chrome, Edge and Firefox.",
+    "lede": "Short version: Riptide collects nothing. There is no telemetry, no analytics, no account and no advertising. Your downloads, settings and history stay on your computer, and nobody, including the people who make Riptide, receives any of it.",
+    "sections": [
+      {
+        "id": "collect",
+        "h": "What we collect",
+        "paras": [
+          "Nothing. Riptide has no server of its own. The app, the CLI and the extension do not send usage statistics, crash reports, identifiers or any other information to us or to anyone else.",
+          "Riptide does not use accounts, so there is no sign-up, no e-mail address and no profile."
+        ]
+      },
+      {
+        "id": "local",
+        "h": "What stays on your computer",
+        "paras": [
+          "The download list, its progress and your settings are kept in a local database in your user profile (%LOCALAPPDATA%\\Riptide on Windows). Log files are written to the same folder; the addresses in them have their query strings removed and cookies, passwords and authorization headers are never written to them.",
+          "You can delete any of this at any time by removing downloads from the list or by deleting the folder."
+        ]
+      },
+      {
+        "id": "network",
+        "h": "Network requests Riptide makes",
+        "paras": [
+          "Riptide connects to the servers of the files you choose to download, and to nothing else on your behalf.",
+          "The only request it makes on its own is an optional check for a new version against GitHub Releases (github.com). It sends nothing about you beyond what any web request carries, such as your IP address, and it can be turned off in Settings. GitHub's own privacy statement applies to that request."
+        ]
+      },
+      {
+        "id": "extension",
+        "h": "The browser extension",
+        "paras": [
+          "The extension's only job is to hand downloads from your browser to the Riptide app on the same computer. It talks to the app through the browser's Native Messaging channel; it has no network access of its own, loads no remote code and contains no analytics.",
+          "When it hands over a download it passes the download address, the suggested file name, the referring page and the browser's user agent to the local app. Your rules and language choice are saved in the browser's extension storage and never leave the browser."
+        ]
+      },
+      {
+        "id": "cookies",
+        "h": "Cookies and sign-ins",
+        "paras": [
+          "Some downloads only work when you are signed in. For those, the extension reads the browser's cookies for the address being downloaded, and only that address, and passes them to the local Riptide app.",
+          "Riptide sends those cookies only to the same site they belong to, for that one download, and never to another site, including after a redirect to a different origin. They are kept in a separate local table while the download is in progress, are never written to logs, and are deleted as soon as the download completes or is removed."
+        ]
+      },
+      {
+        "id": "website",
+        "h": "This website",
+        "paras": [
+          "This site is a set of static pages hosted on GitHub Pages. It uses no cookies, no analytics and no trackers. The only thing it stores is your light or dark theme choice, in your own browser. The project badges in the open-source section are images loaded from shields.io. GitHub and shields.io may keep ordinary server logs under their own privacy policies."
+        ]
+      },
+      {
+        "id": "children",
+        "h": "Sharing, selling and children",
+        "paras": [
+          "Because we receive no data, we have nothing to share, sell or transfer, and nothing is used for advertising, credit decisions or any purpose other than your downloads. Riptide is not directed at children and collects no information from anyone."
+        ]
+      },
+      {
+        "id": "changes",
+        "h": "Changes and contact",
+        "paras": [
+          "If this policy changes, the new version will be published on this page with a new date, and the history of the page is public in the source repository. Questions are welcome as an issue on GitHub at github.com/LayanJarrar1/Riptide/issues."
+        ]
+      }
+    ]
   },
 
   "notFound": {
