@@ -65,8 +65,8 @@
         <button
           type="button"
           class="nav-item"
-          [class.is-active]="store.category() === null && store.view() === view && onDownloads()"
-          [attr.aria-current]="store.category() === null && store.view() === view && onDownloads() ? 'page' : null"
+          [class.is-active]="store.category() === null && store.queue() === null && store.view() === view && onDownloads()"
+          [attr.aria-current]="store.category() === null && store.queue() === null && store.view() === view && onDownloads() ? 'page' : null"
           (click)="goView(view)"
         >
           <app-icon [name]="viewIcons[view]" [size]="16" />
@@ -101,12 +101,7 @@
     }
 
     <div class="nav-group">
-      <p class="nav-heading">{{ 'nav.queues' | t }}</p>
-      <div class="nav-item is-static">
-        <app-icon name="list" [size]="16" />
-        <span class="nav-text">{{ 'queue.main' | t }}</span>
-        <span class="nav-count num"><span [appTicker]="store.totals().active" [tickerFormat]="intFormat"></span>/{{ format.int(store.totals().maxActive) }}</span>
-      </div>
+      <app-queues-nav [current]="onDownloads() ? store.queue() : null" (open)="goQueue($event)" />
     </div>
 
     <div class="nav-foot">
@@ -156,4 +151,5 @@
 }
 <app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
 <app-exit-confirm-dialog />
+<app-post-action-dialog />
 <app-toasts />
