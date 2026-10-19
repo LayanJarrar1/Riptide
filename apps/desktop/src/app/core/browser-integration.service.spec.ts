@@ -35,6 +35,11 @@ describe('BrowserIntegrationService', () => {
         current = status(true);
       } else if (cmd === 'unregister_browser_host') {
         current = status(false);
+      } else if (cmd === 'extension_info') {
+        return Promise.resolve({
+          id: 'dcoeaodjhaibfchhcbfdkekpcacofnhm',
+          browsers: [{ browser: 'chrome', installed: true, folder: 'C:/Riptide/extension/chrome', folderFound: true }],
+        } as unknown as T);
       } else if (cmd === 'get_engine_settings') {
         return Promise.resolve({ default_dir: 'D:\\x', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' } } as unknown as T);
       }
@@ -84,5 +89,42 @@ describe('BrowserIntegrationService', () => {
     expect(service.connected()).toBeFalse();
     expect(service.hostMissing()).toBeTrue();
     expect(service.busy()).toBeFalse();
+  });
+
+  it('reads the extension folders and the bridge state per browser', async () => {
+    const service = configure(true);
+    await service.refresh();
+    await service.refreshExtension();
+    expect(service.extension()?.id).toBe('dcoeaodjhaibfchhcbfdkekpcacofnhm');
+    expect(service.extension()?.browsers[0]?.folderFound).toBeTrue();
+    expect(service.bridgeRegistered('chrome')).toBeFalse();
+    await service.setEnabled(true);
+    expect(service.bridgeRegistered('chrome')).toBeTrue();
+    expect(service.bridgeRegistered('edge')).toBeTrue();
+  });
+
+  it('never calls the extension commands in a plain browser', async () => {
+    const service = configure(false);
+    await service.refreshExtension();
+    expect(await service.openExtensionFolder('chrome')).toBeFalse();
+    expect(await service.openExtensionsPage('edge')).toBeFalse();
+    expect(service.extension()).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it('passes only the browser name to the extension commands', async () => {
+    const service = configure(true);
+    const seen: [string, Record<string, unknown> | undefined][] = [];
+    const stub = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+      seen.push([cmd, args]);
+      return Promise.resolve(null as unknown as T);
+    };
+    (service as unknown as { invoke: typeof stub }).invoke = stub;
+    expect(await service.openExtensionFolder('chrome')).toBeTrue();
+    expect(await service.openExtensionsPage('edge')).toBeTrue();
+    expect(seen).toEqual([
+      ['open_extension_folder', { browser: 'chrome' }],
+      ['open_extensions_page', { browser: 'edge' }],
+    ]);
   });
 });

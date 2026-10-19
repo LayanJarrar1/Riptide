@@ -26,6 +26,7 @@
 //! | `open_file` / `show_in_folder` | `path` | – |
 //! | `pick_folder` | – | the chosen folder or `null` |
 //! | `integration_status` / `register_browser_host` / `unregister_browser_host` | – | `IntegrationStatus` |
+//! | `extension_info` / `open_extension_folder` / `open_extensions_page` | – / `browser` | see [`crate::extension`] |
 //!
 //! Commands live in their own module (not at the crate root) because Tauri's command macro
 //! both `#[macro_export]`s a helper macro and re-exports it with the function's visibility;

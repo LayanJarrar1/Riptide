@@ -38,6 +38,8 @@ await build({
   format: 'esm',
   target: 'node20',
   packages: 'external',
+  // the real polyfill refuses to load outside a browser; tests drive a fake port instead
+  alias: { 'webextension-polyfill': join(srcDir, 'test-support', 'browser-stub.ts') },
   sourcemap: 'inline',
   logLevel: 'warning',
 });
