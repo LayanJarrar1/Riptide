@@ -1,6 +1,6 @@
-﻿[package]
+[package]
 name = "riptide-engine"
-description = "Riptide download manager â€” runtime: queue scheduler, persistence, transfers and events behind one API shared by the app and the CLI"
+description = "Riptide download manager — runtime: queue scheduler, persistence, transfers and events behind one API shared by the app and the CLI"
 license = "MIT OR Apache-2.0"
 version.workspace = true
 edition.workspace = true
