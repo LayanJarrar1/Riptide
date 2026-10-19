@@ -32,6 +32,7 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/cd/arabic", get(handlers::cd_arabic))
         .route("/cd/evil", get(handlers::cd_evil))
         .route("/corrupt", get(handlers::corrupt))
+        .route("/batch/{name}", get(handlers::batch_item))
         .route("/echo-headers", any(handlers::echo_headers))
         .layer(axum::middleware::from_fn(handlers::log_request))
         .with_state(state)

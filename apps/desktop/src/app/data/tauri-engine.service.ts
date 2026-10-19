@@ -1,6 +1,6 @@
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 
-import { Download, DownloadRequest, isActive, MediaProbe, ProbeResult, Segment } from '../model/download';
+import { BatchOptions, BatchResult, Download, DownloadRequest, isActive, MediaProbe, ProbeResult, Segment } from '../model/download';
 import type { Download as BridgeDownload } from '../tauri/bridge/Download';
 import type { EngineSettings } from '../tauri/bridge/EngineSettings';
 import type { Event as EngineEvent } from '../tauri/bridge/Event';
@@ -8,6 +8,10 @@ import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
 import type { MediaInfo } from '../tauri/bridge/MediaInfo';
 import type { Segment as BridgeSegment } from '../tauri/bridge/Segment';
 import { TAURI_INVOKE, TAURI_LISTEN } from '../tauri/tauri-bridge';
+import type { BatchError } from '../tauri/bridge/BatchError';
+import type { BatchOutcome } from '../tauri/bridge/BatchOutcome';
+import type { UrlList } from '../tauri/bridge/UrlList';
+import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { emptyHistory, toBridgeRequest, toUiDownload, toUiMedia, toUiProbe, toUiSize } from './bridge-mapping';
 import { DownloadEngine } from './download-engine';
 
@@ -104,6 +108,42 @@ export class TauriEngineService extends DownloadEngine {
     const id = await this.invoke<number>('add_download', { request: toBridgeRequest(request) });
     await this.refreshRecord(id);
     return id;
+  }
+
+  /** `batch_expand`: a pattern the engine cannot expand answers a typed error, not a rejection. */
+  async expandBatch(pattern: string): Promise<BatchExpansion> {
+    try {
+      return { urls: await this.invoke<string[]>('batch_expand', { pattern }), error: null };
+    } catch (e: unknown) {
+      if (isBatchError(e)) {
+        return { urls: [], error: e };
+      }
+      throw e;
+    }
+  }
+
+  async importUrlList(text: string): Promise<UrlListResult> {
+    return this.invoke<UrlList>('batch_import', { text });
+  }
+
+  /**
+   * `add_batch`: one transaction on the engine side. The rows arrive through the `added` events
+   * (one per new download), so nothing is fetched here.
+   */
+  async addBatch(urls: readonly string[], options: BatchOptions): Promise<BatchResult> {
+    const outcome = await this.invoke<BatchOutcome>('add_batch', {
+      urls,
+      options: {
+        dir: options.dir ?? null,
+        category_id: null,
+        queue_id: null,
+        priority: null,
+        connections: options.connections ?? null,
+        start_paused: options.startPaused ?? false,
+        referrer: null,
+      },
+    });
+    return { added: outcome.added, skipped: outcome.skipped.map((s) => ({ url: s.url, reason: s.reason })) };
   }
 
   /** Asks `find_duplicate`; the answer is mapped with the segments the list already holds, if any. */
@@ -318,4 +358,9 @@ export class TauriEngineService extends DownloadEngine {
     this.refreshSeq.delete(id);
     this.list.update((all) => (all.some((d) => d.id === id) ? all.filter((d) => d.id !== id) : all));
   }
+}
+
+/** Whether a rejected `invoke` carries the typed `BatchError` the backend serializes. */
+function isBatchError(e: unknown): e is BatchError {
+  return typeof e === 'object' && e !== null && 'code' in e && typeof (e as { code: unknown }).code === 'string';
 }

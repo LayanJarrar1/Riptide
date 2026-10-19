@@ -417,6 +417,41 @@ describe('TauriEngineService', () => {
     expect(result).toEqual({ finalUrl: 'https://x/final.iso', filename: 'final.iso', size: 10, supportsRanges: true, contentType: null, category: 'compressed' });
   });
 
+  it('batch: expandBatch answers the urls, or the typed error instead of rejecting', async () => {
+    await start();
+    const handle = bridge.handle;
+    bridge.handle = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+      if (cmd === 'batch_expand') {
+        const pattern = String(args?.['pattern']);
+        return pattern.includes('[1-') && !pattern.includes(']') ? Promise.reject({ code: 'unclosed', at: 9 }) : Promise.resolve(['https://x/1', 'https://x/2'] as unknown as T);
+      }
+      return handle<T>(cmd, args);
+    };
+    expect(await engine.expandBatch('https://x/[1-2]')).toEqual({ urls: ['https://x/1', 'https://x/2'], error: null });
+    expect(await engine.expandBatch('https://x/[1-2')).toEqual({ urls: [], error: { code: 'unclosed', at: 9 } });
+    bridge.handle = (): Promise<never> => Promise.reject(new Error('ipc down'));
+    await expectAsync(engine.expandBatch('https://x/[1-2]')).toBeRejectedWithError('ipc down');
+  });
+
+  it('batch: addBatch sends snake_case options in one command and maps the outcome', async () => {
+    await start();
+    const handle = bridge.handle;
+    bridge.handle = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
+      if (cmd === 'add_batch') {
+        bridge.calls.push({ cmd, args });
+        return Promise.resolve({ added: [7, 8], skipped: [{ url: 'https://x/3', reason: 'duplicate', existing: 1 }] } as unknown as T);
+      }
+      return handle<T>(cmd, args);
+    };
+    const result = await engine.addBatch(['https://x/1', 'https://x/2', 'https://x/3'], { dir: 'D:\\out', startPaused: true });
+    expect(bridge.commands('add_batch').length).toBe(1);
+    expect(bridge.commands('add_batch')[0].args).toEqual({
+      urls: ['https://x/1', 'https://x/2', 'https://x/3'],
+      options: jasmine.objectContaining({ dir: 'D:\\out', start_paused: true, connections: null }),
+    });
+    expect(result).toEqual({ added: [7, 8], skipped: [{ url: 'https://x/3', reason: 'duplicate' }] });
+  });
+
   it('a refused command rejects so the page can report it', async () => {
     await start();
     bridge.handle = (): Promise<never> => Promise.reject(new Error('illegal transition'));

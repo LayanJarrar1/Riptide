@@ -464,6 +464,179 @@ fn category_row_id(
         .map(|c| c.id))
 }
 
+/// A request turned into the records it will insert, before the database is touched.
+struct Prepared {
+    download: Download,
+    secrets: Secrets,
+    category: Category,
+    auto_dir: bool,
+    auto_category: bool,
+    explicit_name: bool,
+}
+
+/// Validates `request` and builds the record [`Engine::add`] inserts.
+fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<Prepared> {
+    let url = riptide_net::parse_http_url(&request.url)?;
+    let media_selection = match request.kind {
+        DownloadKind::Http => None,
+        DownloadKind::Media => {
+            let key = request.media_format.as_deref().unwrap_or("best");
+            Some(MediaSelection::parse(key).ok_or_else(|| {
+                Error::Core(riptide_core::Error::Invalid(format!(
+                    "unknown media quality {key:?}"
+                )))
+            })?)
+        }
+    };
+    let filename = match media_selection {
+        // a media name is `<title>.<ext>`; the extension follows the chosen quality
+        Some(selection) => {
+            let title = request
+                .filename
+                .as_deref()
+                .map(|f| media_stem(f, selection))
+                .unwrap_or_else(|| "video".into());
+            media_filename(&title, selection)
+        }
+        None => request
+            .filename
+            .as_deref()
+            .map(riptide_core::sanitize_filename)
+            .unwrap_or_else(|| {
+                riptide_core::sanitize_filename(&riptide_net::probe::filename_from_url(&url))
+            }),
+    };
+    // folder: the request's, else the category's (by extension), else the default; the
+    // folder of an explicit category is resolved at insert time, where its key can be looked up
+    let category = Category::from_filename(&filename);
+    let auto_dir = request.dir.is_none();
+    let auto_category = request.category_id.is_none();
+    let dir = request
+        .dir
+        .clone()
+        .unwrap_or_else(|| settings.dir_for(category));
+    let mut d = Download::new(
+        DownloadId(0),
+        request.url.clone(),
+        filename,
+        dir,
+        now_millis(),
+    );
+    d.connections = request
+        .connections
+        .unwrap_or(settings.connections)
+        .clamp(1, riptide_core::MAX_CONNECTIONS);
+    d.priority = request.priority.unwrap_or_default();
+    d.checksum_expected = request.checksum.clone();
+    d.queue_id = request.queue_id.unwrap_or(QueueId::MAIN);
+    d.category_id = request.category_id;
+    d.speed_limit = request.speed_limit;
+    d.kind = request.kind;
+    d.media_format = media_selection.map(MediaSelection::key);
+    if media_selection.is_some() {
+        d.connections = 1;
+    }
+    if request.start_paused {
+        d.state = DownloadState::Paused;
+    }
+
+    // referrer and user agent ride along as same-origin headers (the record has no columns)
+    let mut secrets = request.secrets.clone().unwrap_or_default();
+    if let Some(r) = &request.referrer {
+        secrets.headers.push(("Referer".into(), r.clone()));
+    }
+    if let Some(ua) = &request.user_agent {
+        secrets.headers.push(("User-Agent".into(), ua.clone()));
+    }
+    Ok(Prepared {
+        download: d,
+        secrets,
+        category,
+        auto_dir,
+        auto_category,
+        explicit_name: request.filename.is_some(),
+    })
+}
+
+/// Inserts a prepared download with its secrets and auto-decision flags. Runs inside the
+/// caller's transaction (or on its own for a single add).
+fn insert_prepared(
+    s: &mut Store,
+    p: Prepared,
+    settings: &EngineSettings,
+) -> riptide_store::Result<DownloadId> {
+    let Prepared {
+        download: mut d,
+        secrets,
+        category,
+        auto_dir,
+        auto_category,
+        explicit_name,
+    } = p;
+    match d.category_id {
+        None => d.category_id = category_row_id(s, category)?,
+        Some(explicit) if auto_dir => {
+            let row = s.categories()?.into_iter().find(|c| c.id == explicit);
+            if let Some(c) = row.and_then(|c| Category::from_key(&c.key)) {
+                d.dir = settings.dir_for(c);
+            }
+        }
+        Some(_) => {}
+    }
+    let id = s.insert_download(&d)?;
+    if !secrets.is_empty() {
+        s.set_secrets(id, &secrets)?;
+    }
+    // what the request left to the engine is remembered, so the probe (which may rename the
+    // file) can re-decide it; what the user chose is never overridden
+    for (flag, set) in [
+        (FLAG_EXPLICIT_NAME, explicit_name),
+        (FLAG_AUTO_CATEGORY, auto_category),
+        (FLAG_AUTO_DIR, auto_dir),
+    ] {
+        if set {
+            s.set_setting(&flag_key(id, flag), "1")?;
+        }
+    }
+    Ok(id)
+}
+
+/// Why [`Engine::add_batch`] did not add a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum BatchSkipReason {
+    /// The URL is already in the list, or appears earlier in the same batch.
+    Duplicate,
+    /// Not a valid `http(s)` URL (or the request itself was rejected).
+    Invalid,
+}
+
+/// A request [`Engine::add_batch`] left out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct BatchSkip {
+    /// The request's URL.
+    pub url: String,
+    /// Why it was skipped.
+    pub reason: BatchSkipReason,
+    /// For a duplicate of an existing download, that download.
+    pub existing: Option<DownloadId>,
+}
+
+/// The result of [`Engine::add_batch`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct BatchOutcome {
+    /// The new downloads, in request order.
+    pub added: Vec<DownloadId>,
+    /// What was not added, in request order.
+    pub skipped: Vec<BatchSkip>,
+}
+
 /// `url` without its fragment, for duplicate comparison; `None` if it does not parse.
 fn comparable_url(url: &str) -> Option<String> {
     let mut parsed = Url::parse(url).ok()?;
@@ -691,113 +864,92 @@ impl Engine {
     /// Adds a download. It starts when a queue slot is free (or waits in `Paused` when
     /// `start_paused`). Returns its id.
     pub async fn add(&self, request: DownloadRequest) -> Result<DownloadId> {
-        let url = riptide_net::parse_http_url(&request.url)?;
         let settings = self.settings();
-        let media_selection = match request.kind {
-            DownloadKind::Http => None,
-            DownloadKind::Media => {
-                let key = request.media_format.as_deref().unwrap_or("best");
-                Some(MediaSelection::parse(key).ok_or_else(|| {
-                    Error::Core(riptide_core::Error::Invalid(format!(
-                        "unknown media quality {key:?}"
-                    )))
-                })?)
-            }
-        };
-        let filename = match media_selection {
-            // a media name is `<title>.<ext>`; the extension follows the chosen quality
-            Some(selection) => {
-                let title = request
-                    .filename
-                    .as_deref()
-                    .map(|f| media_stem(f, selection))
-                    .unwrap_or_else(|| "video".into());
-                media_filename(&title, selection)
-            }
-            None => request
-                .filename
-                .as_deref()
-                .map(riptide_core::sanitize_filename)
-                .unwrap_or_else(|| {
-                    riptide_core::sanitize_filename(&riptide_net::probe::filename_from_url(&url))
-                }),
-        };
-        // folder: the request's, else the category's (by extension), else the default; the
-        // folder of an explicit category is resolved below, where its key can be looked up
-        let category = Category::from_filename(&filename);
-        let auto_dir = request.dir.is_none();
-        let auto_category = request.category_id.is_none();
-        let dir = request
-            .dir
-            .clone()
-            .unwrap_or_else(|| settings.dir_for(category));
-        let mut d = Download::new(
-            DownloadId(0),
-            request.url.clone(),
-            filename,
-            dir,
-            now_millis(),
-        );
-        d.connections = request
-            .connections
-            .unwrap_or(settings.connections)
-            .clamp(1, riptide_core::MAX_CONNECTIONS);
-        d.priority = request.priority.unwrap_or_default();
-        d.checksum_expected = request.checksum.clone();
-        d.queue_id = request.queue_id.unwrap_or(QueueId::MAIN);
-        d.category_id = request.category_id;
-        d.speed_limit = request.speed_limit;
-        d.kind = request.kind;
-        d.media_format = media_selection.map(MediaSelection::key);
-        if media_selection.is_some() {
-            d.connections = 1;
-        }
-        if request.start_paused {
-            d.state = DownloadState::Paused;
-        }
-
-        // referrer and user agent ride along as same-origin headers (the record has no columns)
-        let mut secrets = request.secrets.clone().unwrap_or_default();
-        if let Some(r) = &request.referrer {
-            secrets.headers.push(("Referer".into(), r.clone()));
-        }
-        if let Some(ua) = &request.user_agent {
-            secrets.headers.push(("User-Agent".into(), ua.clone()));
-        }
-        let explicit_name = request.filename.is_some();
-
+        let prepared = prepare_add(&request, &settings)?;
         let id = db(&self.inner.store, move |s| {
-            match d.category_id {
-                None => d.category_id = category_row_id(s, category)?,
-                Some(explicit) if auto_dir => {
-                    let row = s.categories()?.into_iter().find(|c| c.id == explicit);
-                    if let Some(c) = row.and_then(|c| Category::from_key(&c.key)) {
-                        d.dir = settings.dir_for(c);
-                    }
-                }
-                Some(_) => {}
-            }
-            let id = s.insert_download(&d)?;
-            if !secrets.is_empty() {
-                s.set_secrets(id, &secrets)?;
-            }
-            // what the request left to the engine is remembered, so the probe (which may
-            // rename the file) can re-decide it; what the user chose is never overridden
-            for (flag, set) in [
-                (FLAG_EXPLICIT_NAME, explicit_name),
-                (FLAG_AUTO_CATEGORY, auto_category),
-                (FLAG_AUTO_DIR, auto_dir),
-            ] {
-                if set {
-                    s.set_setting(&flag_key(id, flag), "1")?;
-                }
-            }
-            Ok(id)
+            insert_prepared(s, prepared, &settings)
         })
         .await?;
         self.emit(Event::Added { id });
         self.inner.wake.notify_one();
         Ok(id)
+    }
+
+    /// Adds many downloads in ONE store transaction: either every accepted item is in the list
+    /// afterwards or (on a store error) none is. Each request is handled exactly like
+    /// [`Engine::add`]; shared options are simply copied into every request (see
+    /// [`riptide_core::BatchOptions`]).
+    ///
+    /// Items that are not added are reported, not failed: a request whose URL is already in
+    /// the list (same URL ignoring the fragment, as the original or the final URL) or repeats
+    /// an earlier request of this batch is [`BatchSkipReason::Duplicate`]; an unparseable or
+    /// non-http(s) URL is [`BatchSkipReason::Invalid`]. At most [`riptide_core::MAX_EXPANSION`]
+    /// requests are accepted per call. [`Event::Added`] is emitted for every new download, in
+    /// order, after the commit.
+    pub async fn add_batch(&self, requests: Vec<DownloadRequest>) -> Result<BatchOutcome> {
+        if requests.len() > riptide_core::MAX_EXPANSION {
+            return Err(Error::Core(riptide_core::Error::Invalid(format!(
+                "a batch holds at most {} downloads",
+                riptide_core::MAX_EXPANSION
+            ))));
+        }
+        let settings = self.settings();
+        let mut known: HashMap<String, DownloadId> = HashMap::new();
+        for d in self.list().await? {
+            for url in [Some(d.url.as_str()), d.final_url.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                if let Some(key) = comparable_url(url) {
+                    known.entry(key).or_insert(d.id);
+                }
+            }
+        }
+        let mut in_batch: HashSet<String> = HashSet::new();
+        let mut skipped = Vec::new();
+        let mut prepared = Vec::new();
+        for request in &requests {
+            let skip = |reason, existing| BatchSkip {
+                url: request.url.clone(),
+                reason,
+                existing,
+            };
+            if riptide_net::parse_http_url(&request.url).is_err() {
+                skipped.push(skip(BatchSkipReason::Invalid, None));
+                continue;
+            }
+            let key = comparable_url(&request.url).unwrap_or_else(|| request.url.clone());
+            if let Some(&id) = known.get(&key) {
+                skipped.push(skip(BatchSkipReason::Duplicate, Some(id)));
+            } else if !in_batch.insert(key) {
+                skipped.push(skip(BatchSkipReason::Duplicate, None));
+            } else {
+                match prepare_add(request, &settings) {
+                    Ok(p) => prepared.push(p),
+                    Err(_) => skipped.push(skip(BatchSkipReason::Invalid, None)),
+                }
+            }
+        }
+        let added = if prepared.is_empty() {
+            Vec::new()
+        } else {
+            db(&self.inner.store, move |s| {
+                s.transaction(|s| {
+                    prepared
+                        .into_iter()
+                        .map(|p| insert_prepared(s, p, &settings))
+                        .collect::<riptide_store::Result<Vec<_>>>()
+                })
+            })
+            .await?
+        };
+        for &id in &added {
+            self.emit(Event::Added { id });
+        }
+        if !added.is_empty() {
+            self.inner.wake.notify_one();
+        }
+        Ok(BatchOutcome { added, skipped })
     }
 
     /// Sets a download's own speed limit in bytes per second (`None` or `0` = unlimited).
