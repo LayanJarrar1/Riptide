@@ -173,4 +173,18 @@ describe('BatchDownloadDialogComponent', () => {
     await flush();
     expect(writeText).toHaveBeenCalledOnceWith('https://h/2\nhttps://h/3\n');
   });
+
+  it('in RTL keeps the start of the LTR path field clear of the Browse button', async () => {
+    document.documentElement.dir = 'rtl';
+    try {
+      await setup('ar');
+      const input = el().querySelector<HTMLInputElement>('.input-wrap input[name="dir"]') as HTMLInputElement;
+      const style = getComputedStyle(input);
+      // The path starts at the left edge; the button sits on the left in RTL.
+      expect(parseFloat(style.paddingLeft)).toBeGreaterThanOrEqual(90);
+      expect(parseFloat(style.paddingRight)).toBeLessThan(60);
+    } finally {
+      document.documentElement.dir = '';
+    }
+  });
 });

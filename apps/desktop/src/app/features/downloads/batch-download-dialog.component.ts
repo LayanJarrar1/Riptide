@@ -256,6 +256,20 @@ const EMPTY_LIST: UrlListResult = { urls: [], ignored: 0, duplicates: 0 };
       padding-inline-end: 96px;
     }
 
+    /*
+     * The path field is forced LTR (paths and URLs read left to right) while its icon and
+     * button follow the page direction, so in RTL they sit on the opposite physical sides.
+     * Without this the Browse button covers the start of the path.
+     */
+    :host-context([dir='rtl']) .input-wrap .input[dir='ltr'] {
+      padding-inline-start: 12px;
+      padding-inline-end: 34px;
+    }
+
+    :host-context([dir='rtl']) .input-wrap:has(.input-action) .input[dir='ltr'] {
+      padding-inline-start: 96px;
+    }
+
     .input {
       inline-size: 100%;
       block-size: 36px;

@@ -50,6 +50,13 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
   pasted / loaded list of links; copy or export the checked links; duplicates are skipped and
   reported. The engine adds the whole batch in one transaction.
 
+- Queues in the sidebar: create, rename and delete (the downloads move to Main), start and stop,
+  a limit per queue, drag or Alt + arrow reordering of queues and of the downloads inside one,
+  drag a row onto a queue (or use Move to queue). A schedule per queue (daily hours with an
+  "Only at night" preset, days of the week, a one-time start; a sleeping PC is not woken) and an
+  action for when it finishes: exit, sleep, hibernate, shut down or run a program, after a
+  30-second countdown you can cancel.
+
 **Command line**
 
 - `riptide batch "<pattern>"` downloads every address of a pattern (`--list` only prints them).

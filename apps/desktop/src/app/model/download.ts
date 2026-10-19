@@ -78,6 +78,8 @@ export interface Download {
   readonly state: DownloadState;
   readonly category: CategoryKey;
   readonly queueId: number;
+  /** Place in the queue's manual order (smaller runs first); absent = unknown. */
+  readonly queuePosition?: number;
   readonly priority: Priority;
   /** Simultaneous connections the engine may open. */
   readonly connections: number;

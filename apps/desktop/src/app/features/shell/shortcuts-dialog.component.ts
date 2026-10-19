@@ -201,6 +201,7 @@ export class ShortcutsDialogComponent {
           { label: t('shortcuts.multi'), chords: [['Ctrl', t('key.click')]] },
           { label: t('shortcuts.range'), chords: [['Shift', t('key.click')]] },
           { label: t('shortcuts.context'), chords: [[t('key.rightclick')]] },
+          { label: t('shortcuts.moveInQueue'), chords: [['Alt', '↑'], ['Alt', '↓']] },
         ],
       },
     ];

@@ -27,6 +27,9 @@ import { AddDownloadDialogComponent } from './features/downloads/add-download-di
 import { CompletionToastService } from './features/downloads/completion-toast.service';
 import { DesktopShellService } from './features/shell/desktop-shell.service';
 import { CATEGORY_ICONS } from './features/downloads/download-row.component';
+import { PostActionDialogComponent } from './features/queues/post-action-dialog.component';
+import { PostActionCountdown } from './features/queues/post-action-countdown.service';
+import { QueuesNavComponent } from './features/queues/queues-nav.component';
 import { ExitConfirmDialogComponent } from './features/shell/exit-confirm-dialog.component';
 import { ShortcutsDialogComponent } from './features/shell/shortcuts-dialog.component';
 import { UiState } from './features/shell/ui-state.service';
@@ -72,6 +75,8 @@ const BOOT_MS = 900;
     RouterOutlet,
     ShortcutsDialogComponent,
     ExitConfirmDialogComponent,
+    PostActionDialogComponent,
+    QueuesNavComponent,
     SparklineComponent,
     TickerDirective,
     ToastsComponent,
@@ -132,6 +137,8 @@ export class AppComponent implements OnInit {
     // starts watching the engine for completions (it shows the "is complete" toast)
     inject(CompletionToastService);
     inject(DesktopShellService);
+    // listens for finished queues; the dialog shows its countdown
+    inject(PostActionCountdown);
 
     this.router.events
       .pipe(
@@ -179,6 +186,11 @@ export class AppComponent implements OnInit {
 
   protected goView(view: ListView): void {
     this.store.setView(view);
+    void this.router.navigateByUrl('/');
+  }
+
+  protected goQueue(queue: number): void {
+    this.store.setQueue(queue);
     void this.router.navigateByUrl('/');
   }
 

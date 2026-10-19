@@ -12,7 +12,7 @@ import { ProgressFlowComponent } from '../../ui/progress-flow.component';
 import { StatusPillComponent } from '../../ui/status-pill.component';
 
 /** Actions a row (or the details drawer) can ask for. */
-export type RowAction = 'pause' | 'resume' | 'retry' | 'restart' | 'cancel' | 'remove' | 'openFile' | 'openFolder' | 'copyLink' | 'details' | 'refreshLink';
+export type RowAction = 'pause' | 'resume' | 'retry' | 'restart' | 'cancel' | 'remove' | 'openFile' | 'openFolder' | 'copyLink' | 'details' | 'refreshLink' | 'moveToQueue' | 'moveUp' | 'moveDown';
 
 /** File-type glyph per category. */
 export const CATEGORY_ICONS: Readonly<Record<CategoryKey, IconName>> = {
