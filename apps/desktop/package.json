@@ -57,5 +57,10 @@
     "typescript-eslint": "8.46.4"
   },
   "description": "Riptide download manager — desktop app (Tauri v2 + Angular)",
-  "license": "GPL-3.0-or-later"
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LayanJarrar1/Riptide.git"
+  },
+  "homepage": "https://layanjarrar1.github.io/Riptide/"
 }

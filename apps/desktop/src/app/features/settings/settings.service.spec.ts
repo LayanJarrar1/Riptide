@@ -38,6 +38,20 @@ describe('SettingsService', () => {
     return TestBed.inject(SettingsService);
   }
 
+  it('defaults to the beta update channel during the alpha, and keeps a persisted choice', () => {
+    expect(DEFAULT_SETTINGS.channel).toBe('beta');
+    expect(configure(false).settings().channel).toBe('beta');
+    TestBed.resetTestingModule();
+    const store = new MemoryPreferenceStore({ 'riptide.settings': JSON.stringify({ channel: 'stable' }) });
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PREFERENCE_STORE, useValue: store },
+        { provide: TAURI_AVAILABLE, useValue: false },
+      ],
+    });
+    expect(TestBed.inject(SettingsService).settings().channel).toBe('stable');
+  });
+
   it('in a plain browser it never talks to an engine', async () => {
     const service = configure(false);
     await service.engineLoaded;

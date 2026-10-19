@@ -37,12 +37,13 @@ contains download logic.
 | `riptide-core` | `Download`, `Segment`, `DownloadState` and its transitions, events, the segment planner, the filename sanitiser, categories. No IO. | – |
 | `riptide-net` | Probe, redirects, auth, ranges, multi-connection transfer, retry policy, part files, checksum verification. One download at a time. | core |
 | `riptide-store` | SQLite (WAL), schema migrations, records, segments, settings, the separate `secrets` table. | core |
-| `riptide-engine` | The runtime: scheduler, crash recovery, event broadcast, settings, `crawl`. The API the app and CLI use. | core, net, store, media, crawl |
+| `riptide-engine` | The runtime: scheduler, queues (a limit, a schedule and a finish action per queue, host caps learned from `429` / `503`), batch adds in one transaction, video downloads, crash recovery, event broadcast, settings, `crawl`. The API the app and CLI use. | core, net, store, media, crawl |
+| `riptide-media` | Video pages (YouTube, Vimeo and others) through the bundled yt-dlp sidecar: probe into a quality menu, download with progress, pause and resume, cookies in a private temporary file. Refuses live streams and DRM. | core |
 | `riptide-crawl` | The site grabber: crawl to depth N, scope, `robots.txt`, per-host politeness, filters, caps; lists files, downloads nothing. | core, net |
 | `riptide-ipc` | Length-prefixed JSON over a per-user named pipe (Windows) or Unix socket; message schema. | – |
 | `riptide-log` | `tracing` setup, daily rotating files, redaction layer, installed vs portable paths. | – |
-| `riptide-cli` | `riptide fetch`, `grab`, `bench`, `ping`, `paths`. Bilingual help. | engine, crawl, net, log |
-| `riptide-host` | Native Messaging host `app.riptide.host` (`riptide-host.exe`): checks the calling extension id, accepts only `ping`/`probe`/`add`/`refresh`/`list`, forwards them to the app's pipe, starts the app on `ping`. | ipc, log |
+| `riptide-cli` | `riptide fetch`, `batch`, `grab`, `bench`, `ping`, `paths`. Bilingual help. | engine, crawl, net, log |
+| `riptide-host` | Native Messaging host `app.riptide.host` (`riptide-host.exe`): checks the calling extension id, accepts only `ping`/`probe`/`probe_media`/`add`/`refresh`/`list`, forwards them to the app's pipe, starts the app on `ping`. | ipc, log |
 | `riptide-testserver` | An `axum` server with deterministic bytes and every failure mode the tests need. Dev only. | – |
 | `apps/desktop/src-tauri` | Tauri shell: hosts the engine, exposes commands, forwards events, serves the IPC pipe, registers the browser host under `HKCU`. | engine, ipc, host, log |
 | `apps/desktop/src` | Angular UI. Knows nothing about HTTP or SQLite. | the Tauri bridge |
