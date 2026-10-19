@@ -1,9 +1,7 @@
 <div class="frame" [class.is-booting]="ui.booting()">
   <header class="topbar">
     <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
-      <span class="brand-mark" aria-hidden="true">
-        <app-icon name="download" [size]="18" />
-      </span>
+      <img class="brand-mark" src="brand-mark.svg" alt="" width="28" height="28" />
       <span class="brand-name">{{ 'app.title' | t }}</span>
     </a>
 

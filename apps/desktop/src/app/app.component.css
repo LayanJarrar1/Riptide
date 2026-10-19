@@ -91,13 +91,10 @@
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   inline-size: 28px;
   block-size: 28px;
-  border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  flex: none;
 }
 
 .brand-name {
