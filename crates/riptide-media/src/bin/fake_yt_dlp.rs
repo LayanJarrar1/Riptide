@@ -8,6 +8,15 @@
 //! bytes (see `byte`) in two streams (video `f137`, audio `f140`) that are "merged" by
 //! concatenation, resume from their `.part` files with `--continue`, and leave `args.json` (the
 //! command line) and `cookies-seen.txt` (the cookie file's content) next to the output.
+//!
+//! Refusal scenarios, picked by words in the URL (probe and download alike):
+//! `reloadcookies` fails with "The page needs to be reloaded." when `--cookies` is passed;
+//! `needclient` fails the same way unless `player_client=android_vr` (the ladder's second step)
+//! is passed, `needclient-tv` unless `player_client=tv,mweb` (the third); `agegate` fails with
+//! "Sign in to confirm your age" unless `--cookies` is passed; `alwaysrefuse` always fails with
+//! the reload error after the "No supported JavaScript runtime" warning. A `log=NAME` query
+//! parameter makes every run append one JSON line (mode, argv, whether cookies were passed) to
+//! `<temp dir>/riptide-fake-NAME.log` so tests can assert on what was passed.
 #![allow(clippy::unwrap_used, missing_docs)]
 
 use std::fs::{self, OpenOptions};
@@ -32,6 +41,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--cookies",
     "--limit-rate",
     "--proxy",
+    "--extractor-args",
     "-f",
     "-S",
     "--merge-output-format",
@@ -91,6 +101,55 @@ fn fail(msg: &str) -> ! {
     std::process::exit(1);
 }
 
+/// Appends the run to the log named by the URL's `log=` parameter, if any.
+fn record(args: &Args, mode: &str) {
+    let Some(name) = args
+        .url
+        .split(['?', '&'])
+        .find_map(|p| p.strip_prefix("log="))
+        .filter(|n| n.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+    else {
+        return;
+    };
+    let path = std::env::temp_dir().join(format!("riptide-fake-{name}.log"));
+    let line = serde_json::json!({
+        "mode": mode,
+        "args": args.all,
+        "cookies": args.value("--cookies").is_some(),
+    });
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+    writeln!(f, "{line}").unwrap();
+}
+
+/// The refusal scenarios (see the module docs).
+fn refuse_if_scenario(args: &Args) {
+    let url = &args.url;
+    let cookies = args.value("--cookies").is_some();
+    let clients = args.value("--extractor-args").unwrap_or("");
+    let reload = "[youtube] x: The page needs to be reloaded.";
+    if url.contains("alwaysrefuse") {
+        eprintln!("WARNING: [youtube] No supported JavaScript runtime could be found.");
+        fail(reload);
+    }
+    if url.contains("reloadcookies") && cookies {
+        fail(reload);
+    }
+    if url.contains("needclient-tv") {
+        if !clients.contains("player_client=tv,mweb") {
+            fail(reload);
+        }
+    } else if url.contains("needclient") && !clients.contains("player_client=android_vr") {
+        fail(reload);
+    }
+    if url.contains("agegate") && !cookies {
+        fail("[youtube] x: Sign in to confirm your age. This video may be inappropriate for some users.");
+    }
+}
+
 fn say(line: &str) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{line}");
@@ -108,6 +167,8 @@ fn main() {
         return;
     }
     if args.has("-J") {
+        record(&args, "probe");
+        refuse_if_scenario(&args);
         if args.url.contains("missing") {
             fail("[youtube] missing: Video unavailable");
         }
@@ -125,6 +186,8 @@ fn main() {
 }
 
 fn download(args: &Args) {
+    record(args, "download");
+    refuse_if_scenario(args);
     let dir = PathBuf::from(args.value("-P").unwrap_or("."));
     fs::create_dir_all(&dir).unwrap();
     fs::write(

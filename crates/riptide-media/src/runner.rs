@@ -10,8 +10,9 @@ use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::args::{check_url, download_args, probe_args, RunArgs, COMMON};
+use crate::args::{check_url, download_args, probe_args, PlayerClients, RunArgs, COMMON};
 use crate::cookies::CookieFile;
+use crate::ladder::{Attempt, Ladder};
 use crate::parse::{
     classify_error, parse_file_line, parse_info, parse_progress_line, ProgressTracker,
 };
@@ -52,6 +53,8 @@ pub struct DownloadJob {
     pub rate_limit: Option<u64>,
     /// Proxy URL (`http://`, `socks5://`).
     pub proxy: Option<String>,
+    /// YouTube player clients for this run (the ones the probe succeeded with).
+    pub clients: PlayerClients,
     /// The probe's size estimate, so progress has a total from the first line.
     pub expected_total: Option<u64>,
 }
@@ -165,17 +168,61 @@ impl YtDlp {
         self.version().await
     }
 
-    /// Probes a page with `yt-dlp -J --no-playlist`. `cookies` is the browser's `Cookie`
-    /// header for the page, if any.
+    /// Probes a page with `yt-dlp -J --no-playlist` under the retry policy of
+    /// [`crate::ladder`]: no cookies first, cookies only when a login is needed. `cookies` is
+    /// the browser's `Cookie` header for the page, if any.
     pub async fn probe(&self, url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
-        let url = check_url(url)?;
-        let jar = match cookies.filter(|c| !c.trim().is_empty()) {
-            Some(c) => Some(CookieFile::write(&url, c)?),
+        Ok(self.probe_resilient(url, cookies, None).await?.0)
+    }
+
+    /// Like [`YtDlp::probe`], also returning the [`Attempt`] that worked (so the caller can run
+    /// the download the same way) and starting from `hint`, the attempt that worked before.
+    pub async fn probe_resilient(
+        &self,
+        url: &str,
+        cookies: Option<&str>,
+        hint: Option<Attempt>,
+    ) -> Result<(MediaInfo, Attempt)> {
+        let checked = check_url(url)?;
+        let cookies = cookies.filter(|c| !c.trim().is_empty());
+        let mut ladder = Ladder::new(checked.as_str(), cookies.is_some(), hint);
+        loop {
+            let attempt = ladder.current();
+            tracing::info!(
+                attempt = ladder.used(),
+                cookies = attempt.cookies,
+                clients = attempt.clients.key(),
+                "yt-dlp probe"
+            );
+            match self.probe_once(&checked, cookies, attempt).await {
+                Ok(info) => return Ok((info, attempt)),
+                Err(e) => match ladder.next(&e) {
+                    Some(next) => tracing::info!(
+                        class = ?e.class(),
+                        cookies = next.cookies,
+                        clients = next.clients.key(),
+                        "yt-dlp probe refused; trying another way"
+                    ),
+                    None => return Err(e),
+                },
+            }
+        }
+    }
+
+    async fn probe_once(
+        &self,
+        url: &url::Url,
+        cookies: Option<&str>,
+        attempt: Attempt,
+    ) -> Result<MediaInfo> {
+        let jar = match cookies.filter(|_| attempt.cookies) {
+            Some(c) => Some(CookieFile::write(url, c)?),
             None => None,
         };
-        let args = probe_args(&url, jar.as_ref().map(CookieFile::path));
-        let (ok, out, err) = self.output(&args, PROBE_TIMEOUT).await?;
+        let args = probe_args(url, jar.as_ref().map(CookieFile::path), attempt.clients);
+        let result = self.output(&args, PROBE_TIMEOUT).await;
         drop(jar);
+        let (ok, out, err) = result?;
         if !ok {
             return Err(classify_error(&err));
         }
@@ -209,11 +256,17 @@ impl YtDlp {
             cookies: jar.as_ref().map(CookieFile::path),
             rate_limit: job.rate_limit,
             proxy: job.proxy.as_deref(),
+            clients: job.clients,
         });
         let mut cmd = self.command()?;
         cmd.args(&args);
         let mut child = cmd.spawn()?;
-        tracing::info!(selection = %job.selection.key(), "yt-dlp started");
+        tracing::info!(
+            selection = %job.selection.key(),
+            cookies = jar.is_some(),
+            clients = job.clients.key(),
+            "yt-dlp started"
+        );
 
         let stderr = child.stderr.take();
         let stderr_task = tokio::spawn(async move {

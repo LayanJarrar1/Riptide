@@ -69,7 +69,9 @@ use riptide_core::{
     Category, Clock, Download, DownloadId, DownloadKind, DownloadRequest, DownloadState, Event,
     MediaInfo, MediaSelection, QueueId, Secrets, Segment,
 };
-use riptide_media::{DownloadJob, MediaOutcome, MediaProgress, YtDlp};
+use riptide_media::{
+    Attempt, DownloadJob, Ladder, MediaOutcome, MediaProgress, PlayerClients, YtDlp,
+};
 use riptide_net::{
     build_client, part_path_for, probe, transfer, ClientOptions, HostLimiter, Outcome, ProxyChoice,
     ProxyUrl, RateLimiter, RequestContext, TransferConfig, TransferEvent, TransferPlan,
@@ -347,13 +349,34 @@ const FLAG_AUTO_DIR: &str = "auto_dir";
 /// A media record got its final name from the first probe; later runs keep it (the partial
 /// files carry that name).
 const FLAG_MEDIA_NAMED: &str = "media_named";
+/// `"1"` when the media attempt that worked used the browser's cookies, `"0"` when it did not:
+/// the download then runs the same way (a probe that worked anonymously keeps the cookies out
+/// of the yt-dlp job altogether).
+const FLAG_MEDIA_COOKIES: &str = "media_cookies";
+/// The [`PlayerClients`] key of the media attempt that worked; the next run starts with it.
+const FLAG_MEDIA_CLIENT: &str = "media_client";
 /// Every per-download flag, for cleanup.
-const ALL_FLAGS: [&str; 4] = [
+const ALL_FLAGS: [&str; 6] = [
     FLAG_EXPLICIT_NAME,
     FLAG_AUTO_CATEGORY,
     FLAG_AUTO_DIR,
     FLAG_MEDIA_NAMED,
+    FLAG_MEDIA_COOKIES,
+    FLAG_MEDIA_CLIENT,
 ];
+
+/// Remembers which way of running yt-dlp worked for a record.
+fn store_attempt(
+    s: &mut riptide_store::Store,
+    id: DownloadId,
+    a: Attempt,
+) -> riptide_store::Result<()> {
+    s.set_setting(
+        &flag_key(id, FLAG_MEDIA_COOKIES),
+        if a.cookies { "1" } else { "0" },
+    )?;
+    s.set_setting(&flag_key(id, FLAG_MEDIA_CLIENT), a.clients.key())
+}
 
 /// Longest title (in characters) used as a media file name; yt-dlp appends `.f137.mp4.part`.
 const MAX_MEDIA_STEM_CHARS: usize = 120;
@@ -1782,13 +1805,22 @@ impl Engine {
             )))
         })?;
         let cookies = secrets.cookies.clone();
-        let info = tokio::select! {
+        // what worked for this record last time is tried first; a fresh record starts without
+        // cookies and with yt-dlp's own player clients
+        let hint = db(store, move |s| {
+            let clients = s
+                .setting(&flag_key(id, FLAG_MEDIA_CLIENT))?
+                .and_then(|k| PlayerClients::parse(&k));
+            let cookies = s.setting(&flag_key(id, FLAG_MEDIA_COOKIES))?.as_deref() == Some("1");
+            Ok(clients.map(|clients| Attempt { cookies, clients }))
+        })
+        .await?;
+        let (info, attempt) = tokio::select! {
             () = stop.cancelled() => {
                 return self.stopped(id, reason, Vec::new()).await;
             }
-            i = tool.probe(&record.url, cookies.as_deref()) => i?,
+            i = tool.probe_resilient(&record.url, cookies.as_deref(), hint) => i?,
         };
-
         let named = db(store, move |s| {
             Ok(s.setting(&flag_key(id, FLAG_MEDIA_NAMED))?
                 .is_some_and(|v| v == "1"))
@@ -1834,6 +1866,7 @@ impl Engine {
         let to_save = record.clone();
         db(store, move |s| {
             s.update_download(&to_save)?;
+            store_attempt(s, id, attempt)?;
             s.set_setting(&flag_key(id, FLAG_MEDIA_NAMED), "1")
         })
         .await?;
@@ -1855,32 +1888,57 @@ impl Engine {
         let proxy = (settings.proxy.mode == ProxyMode::Manual)
             .then(|| settings.proxy.url.clone())
             .filter(|u| !u.is_empty());
-        let job = DownloadJob {
+        let mut job = DownloadJob {
             url: record.url.clone(),
             selection,
             dir: record.dir.clone(),
             stem: media_stem(&record.filename, selection),
-            cookies,
+            cookies: None,
             rate_limit,
             proxy,
+            clients: attempt.clients,
             expected_total: record.size,
         };
-        let (tx, mut rx) = mpsc::channel::<MediaProgress>(64);
-        let forward_engine = self.clone();
-        let forwarder = tokio::spawn(async move {
-            while let Some(p) = rx.recv().await {
-                forward_engine.emit(Event::Progress {
-                    id,
-                    downloaded: p.downloaded,
-                    total: p.total,
-                    speed_bps: p.speed_bps,
-                    eta_secs: p.eta_secs,
-                    connections: 1,
-                });
+        // the download runs the way the probe worked, under the same retry policy: cookies only
+        // when the probe needed them, another player client when the site refuses
+        let mut ladder = Ladder::new(&record.url, cookies.is_some(), Some(attempt));
+        let result = loop {
+            let now = ladder.current();
+            job.cookies = if now.cookies { cookies.clone() } else { None };
+            job.clients = now.clients;
+            let (tx, mut rx) = mpsc::channel::<MediaProgress>(64);
+            let forward_engine = self.clone();
+            let forwarder = tokio::spawn(async move {
+                while let Some(p) = rx.recv().await {
+                    forward_engine.emit(Event::Progress {
+                        id,
+                        downloaded: p.downloaded,
+                        total: p.total,
+                        speed_bps: p.speed_bps,
+                        eta_secs: p.eta_secs,
+                        connections: 1,
+                    });
+                }
+            });
+            let result = tool.download(&job, tx, stop.clone()).await;
+            let _ = forwarder.await;
+            match result {
+                Err(e) => match ladder.next(&e) {
+                    Some(next) => {
+                        tracing::info!(
+                            id = id.0,
+                            class = ?e.class(),
+                            cookies = next.cookies,
+                            clients = next.clients.key(),
+                            "media download refused; trying another way"
+                        );
+                        db(store, move |s| store_attempt(s, id, next)).await?;
+                    }
+                    None => break Err(e),
+                },
+                ok => break ok,
             }
-        });
-        let result = tool.download(&job, tx, stop.clone()).await;
-        let _ = forwarder.await;
+        };
 
         match result? {
             MediaOutcome::Completed { path, size } => {

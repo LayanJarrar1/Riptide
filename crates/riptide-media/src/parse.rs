@@ -182,24 +182,110 @@ pub fn classify_error(stderr: &str) -> Error {
     if lower.contains("unsupported url") {
         return Error::Unsupported;
     }
-    let retryable = [
-        "http error 5",
-        "http error 429",
-        "timed out",
-        "timeout",
-        "connection",
-        "getaddrinfo",
-        "temporary failure",
-        "network",
-        "unable to download",
-    ]
-    .iter()
-    .any(|k| lower.contains(k));
+    let class = classify_message(&lower);
+    let retryable = class == ErrorClass::Refused
+        || [
+            "http error 5",
+            "http error 429",
+            "timed out",
+            "timeout",
+            "connection",
+            "getaddrinfo",
+            "temporary failure",
+            "network",
+            "unable to download",
+        ]
+        .iter()
+        .any(|k| lower.contains(k));
     let mut message: String = line.chars().take(300).collect();
     if message.is_empty() {
         message = "yt-dlp failed".into();
     }
-    Error::Tool { message, retryable }
+    let js_runtime_missing = stderr
+        .to_ascii_lowercase()
+        .contains("no supported javascript runtime");
+    Error::Tool {
+        message,
+        retryable,
+        class,
+        js_runtime_missing,
+    }
+}
+
+/// What kind of refusal a yt-dlp error line is, for the cookie policy, the client ladder and
+/// the friendly message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorClass {
+    /// The video needs a signed-in user (age gate, private, members only, bot check).
+    Login,
+    /// The site refused this request (stale page state, 403, PO token): a different client or
+    /// a later try may work.
+    Refused,
+    /// Anything else.
+    Other,
+}
+
+impl ErrorClass {
+    /// The short tag in front of the message (see [`crate::Error`]'s `Display`), `None` for
+    /// [`ErrorClass::Other`].
+    pub fn tag(self) -> Option<&'static str> {
+        match self {
+            ErrorClass::Login => Some("login"),
+            ErrorClass::Refused => Some("refused"),
+            ErrorClass::Other => None,
+        }
+    }
+}
+
+const LOGIN_MARKERS: &[&str] = &[
+    "sign in to confirm",
+    "this video is private",
+    "private video",
+    "members-only",
+    "members only",
+    "join this channel",
+    "login required",
+    "log in to",
+    "http error 401",
+    "use --cookies",
+];
+
+const CLIENT_RETRY_MARKERS: &[&str] = &[
+    "page needs to be reloaded",
+    "sign in to confirm",
+    "http error 403",
+    "precondition check failed",
+    "po_token",
+    "po token",
+];
+
+/// The (lower-cased) error says "this needs a signed-in user".
+pub(crate) fn needs_login(lower: &str) -> bool {
+    LOGIN_MARKERS.iter().any(|k| lower.contains(k))
+}
+
+/// A different player client may get past this (lower-cased) error.
+pub(crate) fn client_retryable(lower: &str) -> bool {
+    // a video that is gone or private will not come back with another client
+    if lower.contains("video unavailable") || lower.contains("private video") {
+        return false;
+    }
+    CLIENT_RETRY_MARKERS.iter().any(|k| lower.contains(k))
+}
+
+/// The (lower-cased) error says the page state, or the cookies bound to it, is stale.
+pub(crate) fn page_reload(lower: &str) -> bool {
+    lower.contains("page needs to be reloaded")
+}
+
+fn classify_message(lower: &str) -> ErrorClass {
+    if needs_login(lower) {
+        ErrorClass::Login
+    } else if client_retryable(lower) {
+        ErrorClass::Refused
+    } else {
+        ErrorClass::Other
+    }
 }
 
 /// One line of the progress template.
@@ -416,13 +502,70 @@ mod tests {
         ));
         let e = classify_error("ERROR: [youtube] abc: Video unavailable");
         assert!(
-            matches!(&e, Error::Tool { message, retryable: false } if message == "[youtube] abc: Video unavailable")
+            matches!(&e, Error::Tool { message, retryable: false, .. } if message == "[youtube] abc: Video unavailable")
         );
         let e = classify_error(
             "ERROR: unable to download video data: HTTP Error 503: Service Unavailable",
         );
         assert!(e.is_retryable());
         assert!(matches!(classify_error(""), Error::Tool { .. }));
+    }
+
+    #[test]
+    fn refusals_are_classified_for_the_ladder_and_the_cookie_policy() {
+        let class = |s: &str| match classify_error(s) {
+            Error::Tool {
+                class, retryable, ..
+            } => (class, retryable),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            class("ERROR: [youtube] x: The page needs to be reloaded."),
+            (ErrorClass::Refused, true)
+        );
+        assert_eq!(
+            class(
+                "ERROR: [youtube] x: Sign in to confirm your age. This video may be inappropriate"
+            ),
+            (ErrorClass::Login, false)
+        );
+        assert_eq!(
+            class("ERROR: [youtube] x: Sign in to confirm you're not a bot."),
+            (ErrorClass::Login, false)
+        );
+        assert_eq!(
+            class("ERROR: [youtube] x: Private video. Sign in if you've been granted access"),
+            (ErrorClass::Login, false)
+        );
+        assert_eq!(
+            class("ERROR: unable to download video data: HTTP Error 403: Forbidden"),
+            (ErrorClass::Refused, true)
+        );
+        assert_eq!(
+            class("ERROR: [youtube] x: Video unavailable. This content isn't available"),
+            (ErrorClass::Other, false)
+        );
+        assert!(!client_retryable(
+            "private video. sign in if you've been granted access"
+        ));
+        assert!(!client_retryable("video unavailable. http error 403"));
+        // the JS-runtime warning is remembered for the Details text
+        let e = classify_error(
+            "WARNING: [youtube] No supported JavaScript runtime could be found.
+ERROR: [youtube] x: The page needs to be reloaded.",
+        );
+        assert!(matches!(
+            e,
+            Error::Tool {
+                js_runtime_missing: true,
+                ..
+            }
+        ));
+        assert!(e.to_string().starts_with("[rt:refused] "), "{e}");
+        assert!(e.to_string().contains("JavaScript runtime"), "{e}");
+        // without the warning, no hint
+        let e = classify_error("ERROR: [youtube] x: The page needs to be reloaded.");
+        assert!(!e.to_string().contains("JavaScript"), "{e}");
     }
 
     #[test]
