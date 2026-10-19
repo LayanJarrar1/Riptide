@@ -716,4 +716,18 @@ mod tests {
         assert!(launcher.app_path().is_none());
         assert!(!launcher.spawn());
     }
+
+    #[test]
+    fn launcher_finds_the_app_next_to_the_host_in_a_folder_with_spaces_and_unicode() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_dir = dir.path().join("Riptide مجلد ü ñ 日本");
+        std::fs::create_dir_all(&app_dir).unwrap();
+        let exe = app_dir.join(APP_EXE_NAMES[0]);
+        std::fs::write(&exe, b"x").unwrap();
+        // the per-user install folder comes second: the copy next to the host wins
+        let other = tempfile::tempdir().unwrap();
+        std::fs::write(other.path().join(APP_EXE_NAMES[0]), b"y").unwrap();
+        let launcher = Launcher::in_dirs(&[app_dir.clone(), other.path().to_path_buf()]);
+        assert_eq!(launcher.app_path(), Some(exe.as_path()));
+    }
 }
