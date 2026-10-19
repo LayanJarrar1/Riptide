@@ -525,8 +525,4 @@
   "grab.next": "Next",
   "grab.summary": "{count} files will be added to your downloads.",
   "grab.submit": "Add {count} downloads"
-  "postaction.failed": "The action could not be carried out: {error}"
-}
-}
-  "batch.nothingAdded": "Nothing was added: all {skipped} links are already in the list or not valid"
 }

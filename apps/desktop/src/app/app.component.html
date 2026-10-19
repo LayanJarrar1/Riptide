@@ -166,11 +166,4 @@
   <app-exit-confirm-dialog />
   <app-post-action-dialog />
 }
-<app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
-@if (batchDialog(); as dialog) {
-  <ng-container *ngComponentOutlet="dialog" />
-}
-<app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
-<app-exit-confirm-dialog />
-<app-post-action-dialog />
 <app-toasts />
