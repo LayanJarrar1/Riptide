@@ -437,6 +437,9 @@ async function neverAskFor(site: string): Promise<void> {
 }
 
 async function openApp(): Promise<HostStatus> {
+  // The user asked: do not answer from the "host missing" cache, the host may have been
+  // registered (installed, repaired) in the last minute.
+  host.retryNow();
   // `ping` is the only "open" there is: the host decides whether to launch the app and waits up
   // to 10 s for its pipe, so give the answer longer than that (cold start of the webview).
   return host.ping(OPEN_APP_TIMEOUT_MS);
@@ -774,6 +777,7 @@ async function handleMessage(message: Message, sender: Runtime.MessageSender): P
       if (host.status === 'unknown') await host.ping(3_000);
       return statusReply();
     case 'refresh':
+      host.retryNow();
       await host.ping(3_000);
       return statusReply();
     case 'open-app':
