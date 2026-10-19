@@ -15,6 +15,9 @@ export interface RecentItem {
   state: DownloadState | null;
 }
 
+/** Which candidates the checklist collects. */
+export type PanelMode = 'all' | 'selection' | 'images';
+
 /** Internal message union, discriminated by `kind`. */
 export type Message =
   | { kind: 'handoff'; url: string; referrer?: string; filename?: string }
@@ -36,6 +39,7 @@ export type Message =
   /** Content -> background: never show the video button on this site. */
   | { kind: 'video-never'; site: string }
   /** Background -> content script. */
+  | { kind: 'show-panel'; mode: PanelMode }
   | { kind: 'show-panel'; selectionOnly: boolean }
   /** Background -> content script: open the quality picker for this page (context menu). */
   | { kind: 'show-video'; url: string }

@@ -44,6 +44,7 @@ function fill(): void {
   $<HTMLInputElement>('minSize').value = String(settings.rules.minSize / unit);
   for (const key of FILE_TYPE_KEYS) typeBox(key).checked = settings.rules.types[key];
   $<HTMLInputElement>('customExtensions').value = settings.rules.customExtensions.join(', ');
+  $<HTMLInputElement>('ignoreExtensions').value = settings.rules.ignoreExtensions.join(', ');
   $<HTMLTextAreaElement>('allowSites').value = settings.rules.allowSites.join('\n');
   $<HTMLTextAreaElement>('denySites').value = settings.rules.denySites.join('\n');
   $<HTMLTextAreaElement>('neverAskSites').value = settings.rules.neverAskSites.join('\n');
@@ -69,6 +70,7 @@ function read(): Settings {
       minSize: Number.isFinite(sizeValue) && sizeValue >= 0 ? Math.round(sizeValue * unit) : settings.rules.minSize,
       types,
       customExtensions: parseExtensionList($<HTMLInputElement>('customExtensions').value),
+      ignoreExtensions: parseExtensionList($<HTMLInputElement>('ignoreExtensions').value),
       allowSites: parseSiteList($<HTMLTextAreaElement>('allowSites').value),
       denySites: parseSiteList($<HTMLTextAreaElement>('denySites').value),
       neverAskSites: parseSiteList($<HTMLTextAreaElement>('neverAskSites').value),
