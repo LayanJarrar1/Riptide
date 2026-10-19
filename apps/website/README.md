@@ -159,12 +159,6 @@ Cyan `#00D5E8`, Ocean Blue `#168BFF`, Soft Ice `#D9F8FA`. The site is light by d
 behind the toggle; the choice is stored in `localStorage` only. The header and footer use the
 light or dark logo according to the theme (`.logo-light` / `.logo-dark` in `site.css`).
 
-## Browser-store links
-
-`STORE_LINKS` at the top of `build.mjs` holds the Chrome Web Store and Edge Add-ons URLs. While a
-value is empty the Extension section shows "Coming soon" for that store; paste the URL and rebuild
-to turn the tile into a link. Nothing else needs to change.
-
 ## Rules the site follows
 
 - Nothing invented: no user counts, download counts, testimonials, ratings or logos. The star and

@@ -193,21 +193,7 @@
     "lead": "Dense, calm, keyboard-friendly. Light and dark, English and Arabic.",
     "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speeds, time left and status for each file",
     "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speeds, time left and status for each file",
-    "winLabel": "The Riptide desktop app, with four numbered annotations.",
-    "callouts": [
-      {
-        "x": 63.2,
-        "y": 59.7,
-        "t": "One stripe per connection",
-        "tag": ""
-      },
-      {
-        "x": 77.4,
-        "y": 80.6,
-        "t": "Checksum mismatches are caught, not hidden",
-        "tag": ""
-      }
-    ]
+    "winLabel": "The Riptide desktop app."
   },
   "speed": {
     "titleA": "Eight connections.",
@@ -380,7 +366,7 @@
       },
       {
         "q": "Does it work with my browser?",
-        "a": "Chrome and Edge, through the extension: install it in three steps from Settings → Integration. Firefox builds are on GitHub. Store listings are on the way."
+        "a": "Chrome and Edge: install the extension in three steps from Settings → Integration. A Firefox build is on GitHub."
       },
       {
         "q": "Can it download videos?",
@@ -405,15 +391,10 @@
     "allReleases": "All releases",
     "note": "An early build. Expect rough edges, and tell us about them.",
     "ext": {
-      "title": "Browser extension",
+      "title": "Install the extension in Chrome or Edge",
       "lead": "Sends downloads from Chrome and Edge to Riptide. Adds \"Download this video\" with a quality picker, download all or selected links and all images, and capture rules.",
-      "chrome": "Chrome Web Store",
-      "edge": "Edge Add-ons",
-      "soon": "Coming soon",
-      "open": "Open listing",
-      "github": "Load it from GitHub",
+      "github": "Extension source on GitHub",
       "steps": {
-        "h": "Chrome or Edge: install in 3 steps",
         "items": [
           "In Riptide open Settings → Integration and press Open extension folder.",
           "In the browser open chrome://extensions (edge://extensions in Edge) and turn on Developer mode.",

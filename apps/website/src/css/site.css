@@ -455,22 +455,10 @@ html.calm.js-ready #streams .pin { --mx: 0; --my: 0; }
 @media (max-width: 560px) { .fc-t span { display: none; } .file-chip { width: 40cqw; } }
 
 /* ---- Product experience ------------------------------------------------------------------ */
-.legend { display: grid; gap: 6px; margin-top: 2px; width: 100%; max-width: 460px; }
-.pin .lg, .pin .dot { --on: clamp(0, (var(--p) - (.18 + var(--n) * .16)) / .08, 1); }
-.lg { display: flex; align-items: flex-start; gap: 12px; padding: 8px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; line-height: 1.35; font-size: .875rem;
-  opacity: calc(.38 + var(--on) * .62); transform: translate3d(calc((1 - var(--on)) * 14px * var(--dir)), 0, 0); background: color-mix(in srgb, var(--card) calc(var(--on) * 100%), transparent); }
-.lg-n, .dot { display: block; flex: none; width: 12px; height: 12px; margin-top: .3em; border-radius: 50%; background: var(--abyss); }
-:root[data-theme="dark"] .lg-n, :root[data-theme="dark"] .dot { background: var(--cyan); color: var(--abyss); }
-.lg-t { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 2px; }
 .stage3d { width: 100%; perspective: 1600px; perspective-origin: 50% 0; }
 .win-app { --w3: clamp(0, (var(--p) + .1) / .6, 1); width: 100%; max-width: 880px; margin-inline-start: auto; transform-origin: 50% 0;
   transform: rotateX(calc((1 - var(--w3)) * 26deg)) rotateY(calc(var(--dir) * (1 - var(--w3)) * -12deg)) translateY(calc((1 - var(--w3)) * 8vh)) scale(calc(.8 + var(--w3) * .2)); }
 .win-shot { position: relative; }
-.dot { position: absolute; z-index: 2; inset-inline-start: var(--x); top: var(--y); margin: -7px 0 0; margin-inline-start: -7px; width: 14px; height: 14px; margin-top: -7px; box-shadow: 0 0 0 3px #fff, 0 6px 16px rgba(7, 26, 38, .35);
-  opacity: var(--on); transform: scale(calc(.4 + var(--on) * .6)); }
-:root[data-theme="dark"] .dot { box-shadow: 0 0 0 3px var(--abyss), 0 6px 16px rgba(0, 0, 0, .5); }
-.dot::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid var(--cyan); opacity: 0; animation: ping 2.4s var(--ease-out) infinite; animation-delay: calc(var(--n) * .3s); }
-@keyframes ping { 0% { transform: scale(.6); opacity: .9; } 70%, 100% { transform: scale(1.35); opacity: 0; } }
 @media (min-width: 1024px) { .app-grid { margin-inline-end: calc(var(--gutter) * -.6); } }
 
 /* ---- Speed -------------------------------------------------------------------------------- */
@@ -698,11 +686,6 @@ html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset
 .ext { display: grid; gap: 10px; width: 100%; max-width: 860px; margin-top: clamp(14px, 2vw, 24px); padding-top: clamp(16px, 2vw, 24px); border-top: 1px solid var(--line); justify-items: start; }
 .ext-copy { display: grid; gap: 6px; }
 .ext-copy p { color: var(--fg2); max-width: 44ch; }
-.stores { display: flex; flex-wrap: wrap; gap: 10px; }
-.stores a, .store { display: inline-grid; gap: 2px; padding: 8px 14px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); font-weight: 650; text-decoration: none; font-size: .875rem; }
-.stores a { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2); }
-.stores a:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1.5px var(--cyan); }
-.stores a span, .store span { font-size: .8125rem; font-weight: 500; color: var(--fg2); }
 
 /* Alpha 4: the primary button shows the version; the "more" row under the feature panels; what's new / always up to date; the Chrome install steps. */
 .btn .ver, .dl-t .ver { font-family: var(--mono); font-size: .75rem; font-weight: 500; opacity: .8; }
@@ -719,7 +702,6 @@ html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset
 .whats-new li::before { content: ""; position: absolute; inset-inline-start: 0; top: .6em; width: 8px; height: 2px; border-radius: 2px; background: var(--cyan); }
 .always-up p { color: var(--fg2); font-size: .9375rem; max-width: 44ch; }
 .steps { display: grid; gap: 6px; max-width: 60ch; }
-.steps h4 { font-size: .9375rem; font-weight: 700; }
 .steps ol { display: grid; gap: 4px; padding-inline-start: 1.4em; list-style: decimal; color: var(--fg2); font-size: .9375rem; }
 .steps li::marker { color: var(--cyan); font-weight: 700; }
 
@@ -763,13 +745,13 @@ html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset
 html.calm .rise, html.calm .fl-in, html.calm .win-hero { animation-name: fade-soft; }
 html.calm .hero-copy .ln > span { animation-name: fade-soft; }
 html.calm .win-app, html.calm .hero .par, html.calm .hero .fl { transform: none; }
-html.calm .rt-d .rt-pg b::after, html.calm .spd-g g, html.calm .dot::after, html.calm .ln-flow, html.calm .vbars i, html.calm .path::after { animation: none; }
+html.calm .rt-d .rt-pg b::after, html.calm .spd-g g, html.calm .ln-flow, html.calm .vbars i, html.calm .path::after { animation: none; }
 html.calm .pin .mask .ln > span { transform: none; opacity: var(--t1); }
 html.calm .pin .mask .ln:nth-child(2) > span { opacity: var(--t2); }
 html.calm .pin .fade { transform: none; }
 /* Lite level (weak device, data saver, or a session the frame monitor measured as slow): same content, less work. */
 html[data-level="lite"] .win-app, html[data-level="lite"] .hero .par, html[data-level="lite"] .hero .fl { transform: none; }
-html[data-level="lite"] .rt-d .rt-pg b::after, html[data-level="lite"] .spd-g g, html[data-level="lite"] .dot::after, html[data-level="lite"] .ln-flow, html[data-level="lite"] .vbars i { animation: none; }
+html[data-level="lite"] .rt-d .rt-pg b::after, html[data-level="lite"] .spd-g g, html[data-level="lite"] .ln-flow, html[data-level="lite"] .vbars i { animation: none; }
 html[data-level="lite"] .hero-bg path:nth-child(3) { display: none; }
 html[data-level="lite"] .win { box-shadow: 0 0 0 1px var(--line), 0 18px 36px -24px rgba(7, 26, 38, .4); }
 /* Opening animations wait for the page font (head script adds html.ready); without JS they simply run. */
@@ -787,7 +769,7 @@ html.tab-hidden *, html.tab-hidden *::before, html.tab-hidden *::after { animati
   .hero-bg path:nth-child(3) { display: none; }
 }
 /* Pause the endless loops while their chapter is off-screen (js/site.js toggles .off). */
-.off .ln-flow, .off .dot::after, .off .vbars i, .off .spd-g g, .off .rt-d .rt-pg b::after { animation-play-state: paused; }
+.off .ln-flow, .off .vbars i, .off .spd-g g, .off .rt-d .rt-pg b::after { animation-play-state: paused; }
 
 /* Off-screen chapters skip style, layout and paint until they come near (pinned chapters have an
    explicit height, so offsets stay exact; the unpinned blocks remember their last size). */

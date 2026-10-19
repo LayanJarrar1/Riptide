@@ -36,9 +36,6 @@ const INSTALLER_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${INSTALLER_FILE}
 const PORTABLE_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${PORTABLE_FILE}`;
 const SUMS_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/SHA256SUMS.txt`;
 const EXTENSION_URL = `${REPO_URL}/tree/main/apps/extension`;
-// Browser-store listings. Leave a value empty and the page shows "Coming soon" for that store;
-// paste the listing URL here when it goes live and the tile becomes a link. One line each.
-const STORE_LINKS = { chrome: '', edge: '' };
 // The public URL the site is served from. GitHub Pages for this repository by default;
 // override with SITE_URL=https://example.org/ for a custom domain. Used for canonical,
 // hreflang and Open Graph URLs only; every in-page link is relative.
@@ -207,10 +204,6 @@ function build() {
       portableFile: PORTABLE_FILE,
       sumsUrl: SUMS_URL,
       extensionUrl: EXTENSION_URL,
-      chromeStoreUrl: STORE_LINKS.chrome,
-      chromeStoreSoon: !STORE_LINKS.chrome,
-      edgeStoreUrl: STORE_LINKS.edge,
-      edgeStoreSoon: !STORE_LINKS.edge,
       siteUrl: SITE_URL,
       pageUrl: SITE_URL + (lang.out ? `${lang.out}/` : ''),
       altHref: lang.root + (other.out ? `${other.out}/` : ''),

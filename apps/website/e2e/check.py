@@ -73,10 +73,21 @@ with sync_playwright() as p:
         links = page.eval_on_selector_all('a[href]', 'els => els.map(e => e.href)')
         for want in (f'{REL}/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip', f'{REL}/download/v0.1.0-alpha.4/SHA256SUMS.txt', f'{REL}/tag/v0.1.0-alpha.4'):
             check(f'{tag} links to {want.split("/")[-1]}', want in links)
+        EXACT = {
+            'installer': f'{REL}/download/v0.1.0-alpha.4/Riptide_0.1.0-alpha.4_x64-setup.exe',
+            'portable': f'{REL}/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip',
+            'sums': f'{REL}/download/v0.1.0-alpha.4/SHA256SUMS.txt',
+        }
+        rel_hrefs = page.eval_on_selector_all('a[href*="/releases"]', 'els => els.map(e => e.href)')
+        allowed = set(EXACT.values()) | {REL, f'{REL}/tag/v0.1.0-alpha.4'}
+        check(f'{tag} every releases href is exactly an expected release URL', rel_hrefs and all(h in allowed for h in rel_hrefs), str([h for h in rel_hrefs if h not in allowed]))
+        main_dl = page.eval_on_selector('#download .dl-main', 'e => e.href'); port = page.eval_on_selector('#download .dl:not(.dl-main)', 'e => e.href')
+        check(f'{tag} band installer and portable are the exact asset URLs', main_dl == EXACT['installer'] and port == EXACT['portable'], f'{main_dl} {port}')
+        check(f'{tag} header Download button is the installer', page.eval_on_selector('.nav-actions .btn-primary', 'e => e.href') == EXACT['installer'])
         body = page.content()
         check(f'{tag} no leftover alpha 3', not re.search(r'alpha[ .\-]?3|ألفا 3', body, re.I))
         check(f'{tag} badges say alpha 4', ('Alpha 4' in body) if lang == 'en' else ('ألفا 4' in body))
-        check(f'{tag} extension block says coming soon', page.locator('.store').count() >= 2)
+        check(f'{tag} no store tiles and no soon/coming text', page.locator('.stores, .store').count() == 0 and not re.search(r'coming soon|soon|قريب', page.content(), re.I))
         VER = '0.1.0-alpha.4'
         check(f'{tag} hero CTA shows the version', VER in page.text_content('.hero .btn-primary'))
         check(f'{tag} footer shows the version', VER in page.text_content('.footer-meta'))
@@ -242,16 +253,13 @@ with sync_playwright() as p:
             ctx, page = new_page(browser)
             page.goto((url if path == '' else url + path) if path != '404.html' else BASE + '404.html', wait_until='load')
             html = page.content()
-            texts = page.evaluate("Array.from(document.querySelectorAll('.eyebrow, h1, h2, h3, .h2, .h3, .lg-t, .panel-tag')).map(e => e.textContent.trim())")
+            texts = page.evaluate("Array.from(document.querySelectorAll('.eyebrow, h1, h2, h3, .h2, .h3, .panel-tag')).map(e => e.textContent.trim())")
             bad = [t for t in texts if re.match(r'^\d{1,2}\s*/\s*\S', t)]
             check(f'[{lang} {label}] no "NN /" numbered labels', not bad, str(bad))
             nxt = re.findall(r'Next release|الإصدار القادم', html)
             check(f'[{lang} {label}] no "Next release" tags', not nxt, str(nxt))
             if label == 'home':
-                numbered = page.evaluate("Array.from(document.querySelectorAll('.lg-n, .dot')).filter(e => e.textContent.trim() !== '').length")
-                check(f'[{lang} home] annotation markers carry no numbers', numbered == 0)
-                legend = page.evaluate("Array.from(document.querySelectorAll('.legend .lg-t')).map(e => e.textContent)")
-                check(f'[{lang} home] annotations exclude batch/queues ({len(legend)} left)', len(legend) == 2 and not any(('Batch' in t or 'Queues' in t or 'دفعة' in t or 'قوائم' in t) for t in legend), str(legend))
+                check(f'[{lang} home] app images carry no marker dots or legend', page.locator('.dot, .legend, .lg').count() == 0)
                 eb = page.locator('.eyebrow').count()
                 check(f'[{lang} home] only the status badges remain as labels ({eb})', eb == 2)
             ctx.close()
