@@ -77,6 +77,19 @@ with sync_playwright() as p:
         check(f'{tag} no leftover alpha 3', not re.search(r'alpha[ .\-]?3|ألفا 3', body, re.I))
         check(f'{tag} badges say alpha 4', ('Alpha 4' in body) if lang == 'en' else ('ألفا 4' in body))
         check(f'{tag} extension block says coming soon', page.locator('.store').count() >= 2)
+        VER = '0.1.0-alpha.4'
+        check(f'{tag} hero CTA shows the version', VER in page.text_content('.hero .btn-primary'))
+        check(f'{tag} footer shows the version', VER in page.text_content('.footer-meta'))
+        check(f'{tag} download band has the version', VER in page.text_content('#download .dl-main'))
+        wn = page.locator('.whats-new li').count()
+        check(f'{tag} whats-new list has 5-6 lines', 5 <= wn <= 6, str(wn))
+        check(f'{tag} whats-new heading names the version', VER in page.text_content('.whats-new h3'))
+        check(f'{tag} always-up-to-date block present', page.locator('.always-up p').text_content().count('GitHub') == 1)
+        check(f'{tag} 3 install steps for Chrome', page.locator('.steps li').count() == 3 and 'chrome://extensions' in page.text_content('.steps'))
+        check(f'{tag} feature row has queues, batch, grabber', page.locator('.more li').count() == 3)
+        txt = page.text_content('main')
+        for word in ('yt-dlp', '144p', 'robots.txt', 'file[001-120].zip'):
+            check(f'{tag} copy mentions {word}', word in txt)
         check(f'{tag} FAQ has at most 5 entries', 1 <= page.locator('details.faq-item').count() <= 5)
 
         # Logo is the unmodified brand-kit file, and no filter or blend is applied to it
@@ -248,7 +261,7 @@ with sync_playwright() as p:
         for w, h_ in ((1920, 1080), (1440, 900), (1366, 768), (1280, 720), (768, 1024), (390, 844)):
             ctx, page = new_page(browser, w, h_)
             page.goto(url, wait_until='load')
-            page.evaluate("window.scrollTo(0, document.getElementById('download').getBoundingClientRect().top + scrollY - 60)")
+            page.evaluate("window.scrollTo(0, document.querySelector('.dl-grid').getBoundingClientRect().top + scrollY - 160)")  # the band is taller than a viewport now: aim at the cards
             page.wait_for_timeout(1200)
             if w >= 1100:
                 res = page.evaluate("""() => Array.from(document.querySelectorAll('.dl')).map((e) => {
@@ -306,7 +319,11 @@ with sync_playwright() as p:
     page.goto(BASE + 'privacy/', wait_until='load')
     page.go_back(wait_until='load')
     page.wait_for_timeout(1500)
-    pb = p_of(page)
+    for _ in range(20):  # the restored state settles after the scroll position does; poll instead of a fixed wait
+        pb = p_of(page)
+        if pb == pb and abs(pb - expected(page)) < 0.03:
+            break
+        page.wait_for_timeout(500)
     check('[engine] back/forward restores the stage state', abs(pb - expected(page)) < 0.03 and pb == pb, f'{pb} vs {expected(page)}')
     # anchor jump
     page.evaluate("window.scrollTo(0, 0)")
