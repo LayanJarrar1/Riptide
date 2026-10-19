@@ -185,3 +185,6 @@ Write-Host "  gh release create $Tag $assets --repo $Repo --title `"Riptide $Ver
 Write-Host "  gh release view channel-beta --repo $Repo *> `$null; if (-not `$?) { gh release create channel-beta --repo $Repo --prerelease --title `"Beta update channel`" --notes `"Holds latest-beta.json for the beta update channel. Not a release.`" }"
 Write-Host "  gh release upload channel-beta `"$(Join-Path $out 'latest-beta.json')`" --repo $Repo --clobber"
 Write-Host ''
+Write-Host 'Or publish with checks (dry run without -Publish, then verifies the update feed):'
+Write-Host "  .\scripts\publish-release.ps1 -Version $Version -NotesFile <notes.md> -Publish"
+Write-Host ''

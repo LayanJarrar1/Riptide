@@ -1,6 +1,6 @@
 [package]
 name = "riptide-desktop"
-description = "Riptide download manager Ã¢â‚¬â€ desktop application (Tauri v2 + Angular)"
+description = "Riptide download manager — desktop application (Tauri v2 + Angular)"
 license = "GPL-3.0-or-later"
 version.workspace = true
 edition.workspace = true

@@ -167,6 +167,12 @@ if ($SkipWeb) {
 }
 
 # ---------------------------------------------------------------------------
+# Repository: Markdown links and the release helper scripts
+# ---------------------------------------------------------------------------
+Invoke-Step 'repo: markdown links' { node scripts/check-links.mjs }
+Invoke-Step 'repo: release script tests' { node --test scripts/set-release-version.test.mjs }
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 Write-Host ''

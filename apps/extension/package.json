@@ -4,6 +4,11 @@
   "private": true,
   "description": "Riptide download manager — browser extension for Chrome, Edge and Firefox (Manifest V3)",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LayanJarrar1/Riptide.git"
+  },
+  "homepage": "https://layanjarrar1.github.io/Riptide/",
   "type": "module",
   "scripts": {
     "build": "node scripts/make-icons.mjs && node scripts/build.mjs && node scripts/verify-dist.mjs",
