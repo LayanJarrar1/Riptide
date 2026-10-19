@@ -429,6 +429,19 @@ pub(crate) async fn nolength(
     serve(&method, &headers, res, Shaping::default())
 }
 
+/// Optional `?bps=` throttle for endpoints that are not `/slow`, so a test can interrupt them.
+fn optional_throttle(q: &Params) -> Result<Shaping, HttpError> {
+    let bps = param_u64(q, "bps", 0)?;
+    if bps == 0 {
+        return Ok(Shaping::default());
+    }
+    Ok(Shaping {
+        bps: Some(bps),
+        chunk: Some((bps / 8).clamp(1024, CHUNK_SIZE as u64) as usize),
+        ..Shaping::default()
+    })
+}
+
 /// `/slow?bps=`
 pub(crate) async fn slow(
     method: Method,
@@ -633,7 +646,7 @@ pub(crate) async fn etag_changes(
         let inner = content::etag(res.seed, res.size);
         res.etag = format!("\"v2-{}\"", inner.trim_matches('"'));
     }
-    serve(&method, &headers, res, Shaping::default())
+    serve(&method, &headers, res, optional_throttle(&q)?)
 }
 
 /// `/wrong-length?delta=`
@@ -670,7 +683,7 @@ pub(crate) async fn expires(
         &method,
         &headers,
         Resource::from_params(&q)?,
-        Shaping::default(),
+        optional_throttle(&q)?,
     )
 }
 

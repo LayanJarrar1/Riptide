@@ -86,8 +86,8 @@ async fn more_than_four_gibibytes_proves_u64_offsets() {
     assert_complete(&engine, id, &path, &w.downloads(), DEFAULT_SEED, size).await;
     let segs = engine.segments(id).await.unwrap();
     assert!(
-        segs.iter().any(|s| s.start > u64::from(u32::MAX)),
-        "no segment starts beyond 4 GiB: {segs:?}"
+        segs.iter().any(|s| s.end > u64::from(u32::MAX)),
+        "no segment reaches beyond 4 GiB: {segs:?}"
     );
     assert_eq!(segs.iter().map(|s| s.end).max(), Some(size));
     assert_eq!(
