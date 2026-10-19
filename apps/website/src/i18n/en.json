@@ -12,9 +12,9 @@
     "brand": "Riptide",
     "skip": "Skip to content",
     "download": "Download",
-    "speed": "Speed",
-    "verified": "Verified",
     "app": "The app",
+    "speed": "Speed",
+    "integrity": "Integrity",
     "compare": "Compare",
     "faq": "FAQ",
     "switchLang": "العربية",
@@ -25,200 +25,209 @@
     "githubLabel": "Riptide on GitHub"
   },
   "hero": {
-    "status": "Alpha for Windows 10 and 11",
+    "status": "Alpha 3 for Windows 10 and 11",
     "titleA": "Download faster.",
-    "titleB": "Every byte, verified.",
-    "lead": "A free, open-source download manager for Windows.",
+    "titleB": "Every byte verified.",
+    "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
     "ctaDownload": "Download for Windows",
     "ctaGithub": "View source",
-    "note": "Alpha preview. Installs per user, no admin rights.",
+    "chips": [
+      "Open source",
+      "No telemetry",
+      "No admin rights"
+    ],
+    "winTitle": "Riptide",
     "scroll": "Scroll",
-    "tagline": "Three streams. One exact file.",
-    "visualLabel": "The Riptide logo: three streams draw the letter R."
+    "sim": {
+      "tag": "Simulation",
+      "label": "Simulation of a download in progress. An illustration, not a measurement.",
+      "file": "ubuntu-24.04.2-desktop-amd64.iso",
+      "host": "releases.ubuntu.com",
+      "conns": "8 connections",
+      "eta": "left",
+      "done": "Completed",
+      "speed": "Speed",
+      "unit": "MB/s",
+      "verified": "SHA-256 verified",
+      "hash": "7a0550bc…a14a51d0"
+    }
   },
-  "speed": {
-    "titleA": "Eight connections.",
-    "titleB": "One file.",
-    "lead": "Riptide splits each file and fetches every piece at once.",
-    "tag": "Simulation",
-    "conns": "connections",
-    "label": "Simulation: eight connections fill one file. A connection that finishes early takes over half of a slower one's range."
-  },
-  "resume": {
-    "titleA": "Pull the plug.",
-    "titleB": "Lose nothing.",
-    "lead": "Progress is saved every second. Riptide picks up at the exact byte.",
-    "file": "ubuntu-24.04.iso",
-    "run": "Downloading",
-    "cut": "Power lost",
-    "resumed": "Resumed at byte",
-    "done": "Complete",
-    "bytes": "bytes",
-    "label": "Simulation: a power cut stops a download, and it resumes from the same byte."
-  },
-  "verify": {
-    "titleA": "Every byte,",
-    "titleB": "verified.",
-    "lead": "A download is done only when its SHA‑256 matches.",
-    "file": "ubuntu-24.04.iso",
-    "ext": ".rtpart",
-    "hash": "7a0550bccce738e90be22f4f686e14e088200863504ddddc97484270a14a51d0",
-    "match": "SHA-256 match",
-    "label": "The partial file is checked with SHA-256, then renamed into place."
+  "streams": {
+    "eyebrow": "01 / How it works",
+    "titleA": "Streams in.",
+    "titleB": "One exact file out.",
+    "lead": "Riptide pulls a file down several lanes at once, then rebuilds it byte for byte.",
+    "label": "The Riptide logo is drawn by three streams, which then run down parallel lanes into one file.",
+    "file": "ubuntu-24.04.2.iso",
+    "fileSub": "1 file · SHA-256 verified"
   },
   "app": {
+    "eyebrow": "02 / The app",
     "titleA": "A list that",
     "titleB": "stays fast.",
-    "lead": "Dense, calm and keyboard-friendly, even with a thousand downloads.",
+    "lead": "Dense, calm, keyboard-friendly. Light and dark, English and Arabic.",
+    "soon": "Next release",
     "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speeds, time left and status for each file",
-    "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speeds, time left and status for each file"
-  },
-  "langs": {
-    "titleA": "Arabic and English.",
-    "titleB": "Both native.",
-    "lead": "A fully mirrored right-to-left layout. Switch live, no restart.",
-    "wordA": "English",
-    "wordB": "العربية",
-    "altEn": "The downloads list in English",
-    "altAr": "The same list in Arabic, mirrored right to left"
-  },
-  "clean": {
-    "title": "None of the junk.",
-    "lead": "Free and open source. Nothing phones home.",
-    "words": [
-      "Ads",
-      "Telemetry",
-      "Accounts",
-      "Admin prompts"
-    ]
-  },
-  "stats": {
-    "title": "Riptide in numbers",
-    "items": [
+    "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speeds, time left and status for each file",
+    "winLabel": "The Riptide desktop app, with four numbered annotations.",
+    "callouts": [
       {
-        "n": "8",
-        "s": "",
-        "t": "connections per file"
+        "x": 47.5,
+        "y": 43.8,
+        "t": "One stripe per connection",
+        "tag": ""
       },
       {
-        "n": "1",
-        "s": " s",
-        "t": "between progress saves"
+        "x": 80.5,
+        "y": 59.2,
+        "t": "Checksum mismatches are caught, not hidden",
+        "tag": ""
       },
       {
-        "n": "0",
-        "s": "",
-        "t": "trackers"
+        "x": 74.8,
+        "y": 2.9,
+        "t": "Batch download and site grabber",
+        "tag": "Next release"
       },
       {
-        "n": "2",
-        "s": "",
-        "t": "languages, both native"
+        "x": 4.9,
+        "y": 66.3,
+        "t": "Queues",
+        "tag": "Next release"
       }
     ]
   },
-  "more": {
-    "ext": {
-      "title": "Catch it in the browser.",
-      "lead": "The extension hands downloads from Chrome, Edge and Firefox to Riptide.",
-      "chrome": "Chrome Web Store",
-      "edge": "Edge Add-ons",
-      "soon": "Coming soon",
-      "open": "Open listing",
-      "github": "Load it from GitHub"
+  "speed": {
+    "eyebrow": "03 / Speed",
+    "titleA": "Eight connections.",
+    "titleB": "One file.",
+    "lead": "A connection that finishes early takes over half of a slower one's range. Nothing sits idle.",
+    "tag": "Simulation",
+    "conns": "connections",
+    "note": "A simulation, not a benchmark. Real speed depends on your connection and the server.",
+    "label": "Simulation: eight connections fill one file. A connection that finishes early takes over half of a slower one's range."
+  },
+  "integrity": {
+    "eyebrow": "04 / Integrity",
+    "titleA": "Pull the plug.",
+    "titleB": "Lose nothing.",
+    "lead": "Progress is saved every second. Only a matching checksum makes a download Completed.",
+    "resume": {
+      "tag": "A / Resume",
+      "h": "Exact resume",
+      "p": "Riptide continues at the saved byte. If the file changed on the server, it starts over.",
+      "file": "ubuntu-24.04.iso",
+      "run": "Downloading",
+      "cut": "Power lost",
+      "resumed": "Resumed at byte",
+      "done": "Complete",
+      "bytes": "bytes",
+      "label": "Simulation: a power cut stops a download, and it resumes from the same byte."
+    },
+    "verify": {
+      "tag": "B / Verify",
+      "h": "Verified, then renamed",
+      "p": "The .rtpart file is hashed and compared. Only a match becomes the final file.",
+      "file": "ubuntu-24.04.iso",
+      "ext": ".rtpart",
+      "hash": "7a0550bccce738e90be22f4f686e14e088200863504ddddc97484270a14a51d0",
+      "match": "SHA-256 match",
+      "label": "The partial file is checked with SHA-256, then renamed into place."
+    }
+  },
+  "features": {
+    "eyebrow": "05 / Details",
+    "title": "Made for daily use.",
+    "details": {
+      "h": "Every connection, live",
+      "p": "Segment map, speed graph and a limit per download.",
+      "alt": "The details drawer: 8 of 8 connections, a per-segment progress map, a speed graph for the last minute and the source link"
+    },
+    "junk": {
+      "h": "None of the junk.",
+      "p": "Free and open source. Nothing phones home.",
+      "words": [
+        "Ads",
+        "Telemetry",
+        "Accounts",
+        "Admin prompts"
+      ]
+    },
+    "add": {
+      "h": "Checked before it starts",
+      "p": "Paste a link. Size, resume support and connections are verified first.",
+      "alt": "The Add download dialog: the link is already checked (3.36 GB, resumable, multiple connections), with file name, category, folder and a connections picker"
+    },
+    "langs": {
+      "h": "Arabic and English, both native.",
+      "p": "Fully mirrored right to left. Switch live.",
+      "wordA": "English",
+      "wordB": "العربية",
+      "altEn": "The downloads list in English",
+      "altAr": "The same list in Arabic, mirrored right to left"
     },
     "video": {
-      "title": "Video pages, too.",
-      "lead": "Paste a video page link and Riptide fetches it.",
-      "tag": "Next alpha"
+      "h": "Video pages",
+      "p": "Paste a page link and Riptide fetches the video.",
+      "tag": "Next release"
+    },
+    "peruser": {
+      "h": "No admin. Ever.",
+      "p": "Per-user install, plus a portable zip.",
+      "path": "%LOCALAPPDATA%\\Riptide"
     }
   },
   "vs": {
-    "title": "Riptide vs IDM",
-    "lead": "The essentials, side by side.",
+    "eyebrow": "06 / Compared",
+    "title": "Versus paid managers.",
+    "lead": "Plain facts about Riptide next to what is generally true of paid products.",
     "colFeature": "Feature",
-    "colIdm": "IDM",
     "colRiptide": "Riptide",
-    "yes": "Yes",
-    "no": "No",
+    "colPaid": "Paid managers",
     "rows": [
       {
-        "f": "Free, no trial",
-        "r": true,
-        "i": false
+        "f": "Price",
+        "r": "Free",
+        "p": "Licence or subscription"
       },
       {
-        "f": "Open source",
-        "r": true,
-        "i": false
+        "f": "Source code",
+        "r": "Open: GPL-3.0, MIT, Apache-2.0",
+        "p": "Usually closed"
       },
       {
-        "f": "No nag screens",
-        "r": true,
-        "i": false
+        "f": "Trials and nag screens",
+        "r": "None",
+        "p": "Common in trials"
       },
       {
-        "f": "Parallel connections",
-        "r": true,
-        "i": true
+        "f": "Telemetry and accounts",
+        "r": "None",
+        "p": "Check each vendor"
       },
       {
-        "f": "Resume after a crash",
-        "r": true,
-        "i": true
+        "f": "Integrity",
+        "r": "SHA-256 and server validators",
+        "p": "Varies by product"
       },
       {
-        "f": "SHA-256 check built in",
-        "r": true,
-        "i": false
-      },
-      {
-        "f": "Browser extension",
-        "r": true,
-        "i": true
+        "f": "Arabic interface",
+        "r": "Native, fully mirrored",
+        "p": "Varies by product"
       }
     ],
-    "footnote": "IDM is a trademark of Tonec Inc. Based on its public documentation, October 2026."
-  },
-  "gallery": {
-    "title": "Take a closer look.",
-    "lead": "From the current development build. Batch downloads and queues are not in alpha 3 yet.",
-    "open": "Open full size",
-    "items": [
-      {
-        "light": "add-en-light",
-        "dark": "add-en-dark",
-        "caption": "Add a download",
-        "alt": "Add download dialog: the link is already checked (3.36 GB, resumable, multiple connections), with file name, category, folder and a connections picker"
-      },
-      {
-        "light": "batch-en-light",
-        "dark": "batch-en-dark",
-        "caption": "Batch from a pattern",
-        "alt": "Batch download dialog: the pattern part[001-120].zip expands into a preview of 120 links"
-      },
-      {
-        "light": "details-en-light",
-        "dark": "details-en-dark",
-        "caption": "Every connection, live",
-        "alt": "Details drawer: 8 of 8 connections, a per-segment progress map, a speed graph for the last minute and the source link"
-      },
-      {
-        "light": "queues-en-light",
-        "dark": "queues-en-dark",
-        "caption": "Queues",
-        "alt": "Main queue view: the queue is running, with a Stop queue control above its downloads"
-      }
-    ]
+    "footnote": "We name no product. Check any vendor's own documentation before you decide."
   },
   "oss": {
+    "eyebrow": "07 / Open source",
     "title": "Built in the open.",
-    "lead": "The app is GPL-3.0, the engine MIT or Apache-2.0. Every line is on GitHub.",
-    "repo": "Repository",
+    "lead": "App: GPL-3.0. Engine: MIT or Apache-2.0. Every line is on GitHub.",
     "star": "Star on GitHub",
+    "releases": "Releases",
     "linkGpl": "GPL-3.0 (app)",
     "linkMit": "MIT (engine)",
-    "linkApache": "Apache-2.0 (engine)"
+    "linkApache": "Apache-2.0 (engine)",
+    "cloneLabel": "Build it yourself"
   },
   "feedback": {
     "title": "Found a rough edge?",
@@ -240,6 +249,7 @@
     "security": "Security issue? Report it privately."
   },
   "faq": {
+    "eyebrow": "08 / Questions",
     "title": "Questions",
     "items": [
       {
@@ -256,7 +266,7 @@
       },
       {
         "q": "Can it download videos?",
-        "a": "Video pages work through bundled yt-dlp in the main branch and ship in the next alpha."
+        "a": "Video pages work through bundled yt-dlp in the main branch and ship in the next release."
       },
       {
         "q": "Is it Windows only?",
@@ -265,7 +275,8 @@
     ]
   },
   "download": {
-    "badge": "Alpha preview",
+    "eyebrow": "09 / Download",
+    "badge": "Alpha 3",
     "title": "Get Riptide.",
     "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
     "installer": "Installer",
@@ -274,7 +285,16 @@
     "portableSub": "Unzip and run",
     "sums": "SHA-256 checksums",
     "allReleases": "All releases",
-    "note": "An early build. Expect rough edges, and tell us about them."
+    "note": "An early build. Expect rough edges, and tell us about them.",
+    "ext": {
+      "title": "Browser extension",
+      "lead": "Hands downloads from Chrome, Edge and Firefox to Riptide.",
+      "chrome": "Chrome Web Store",
+      "edge": "Edge Add-ons",
+      "soon": "Coming soon",
+      "open": "Open listing",
+      "github": "Load it from GitHub"
+    }
   },
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
