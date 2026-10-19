@@ -8,7 +8,16 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- Downloads that start together with the same file name no longer share one partial file (the
+  finished file could hold another download's bytes).
+- A server that sends more bytes than its own `Content-Range` announces (jsDelivr) no longer
+  yields a truncated file marked Completed; Riptide falls back to one plain connection.
+- `http://user:password@host/...` links keep the password out of the downloads list; it is stored
+  with the other secrets and removed with them.
+- Pause followed at once by Resume no longer leaves the download paused.
+- Links without a file extension get one for CSV, XML, SVG, WAV, EPUB and Office types.
 
 ## [0.1.0-alpha.4] - 2026-10-19
 
