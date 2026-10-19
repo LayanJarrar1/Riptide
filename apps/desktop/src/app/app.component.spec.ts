@@ -128,6 +128,7 @@ describe('AppComponent (shell)', () => {
     const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
     expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Keyboard shortcuts');
     expect(dialog?.querySelectorAll('.row').length).toBe(14);
+    expect(dialog?.querySelectorAll('.row').length).toBe(13);
 
     el().querySelector<HTMLInputElement>('.search-input')?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
     expect(ui.shortcutsOpen()).toBeTrue();

@@ -476,3 +476,5 @@
   "postaction.now": "Do it now",
   "postaction.failed": "The action could not be carried out: {error}"
 }
+  "batch.nothingAdded": "Nothing was added: all {skipped} links are already in the list or not valid"
+}

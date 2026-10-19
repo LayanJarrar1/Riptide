@@ -476,3 +476,5 @@
   "postaction.now": "نفّذ الآن",
   "postaction.failed": "تعذّر تنفيذ الإجراء: {error}"
 }
+  "batch.nothingAdded": "لم تُضف أي روابط: كل الروابط الـ {skipped} موجودة في القائمة أو غير صالحة"
+}
