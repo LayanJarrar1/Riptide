@@ -79,14 +79,23 @@ On phones (`max-width: 899px`) `#app` and `#integrity` are not pinned and show t
 no-JS show every end state with nothing pinned. Scrolling itself is native: no smooth-scroll library, no scroll-jacking, no
 custom cursor. Motion tokens (`--ease-*`, `--dur-*`, `--stagger`) are at the top of `site.css`.
 
-Chapter lengths live in `site.css` (`#speed { --len: 1.8; }` and so on, in viewport heights of pinned scroll).
+Chapter lengths live in `site.css` (`#speed { --len: .7; }` and so on, in viewport heights of pinned scroll; each chapter is 170-190 vh in total).
+
+### Motion switch
+
+The head script resolves `html[data-motion="full|reduced"]` before first paint: `?motion=on|off` (stored, then removed from the URL) wins, then the saved
+`riptide-motion` choice from the header's Animations button (`aria-pressed`), then the OS `prefers-reduced-motion`. `html.anim` is only set for `full`.
+CSS and JS key off that attribute (`motion.enabled()` in `site.js`), never off the raw media query, so forcing motion on with an OS "reduce" setting
+leaves no reduce-only rule behind. Reduced mode shows end states, with a 200 ms opacity fade on the hero.
+
+The header is the top layer (`z-index: 100`, near-opaque tone background plus blur) and the hero cards sit inside the hero stage; the e2e check asserts both.
 
 ## Checks
 
 `apps/website/e2e/check.py <base-url>` (Python Playwright, Edge by default) runs against a served build: nav and download
 links, theme persistence, language switch, mobile menu, console errors, third-party requests, no video, no filter or blend on
 the logo, native scroll, horizontal overflow at 1920x1080, 1440x900, 768x1024 and 390x844 in both languages and themes,
-reduced-motion and no-JS states.
+reduced-motion and no-JS states, the header/hero no-overlap assertion at seven viewports, CTAs above the fold at 1366x768 and 1350x530, and the Animations override (`?motion=on` animates under an OS reduce setting and persists).
 
 ## Template syntax
 

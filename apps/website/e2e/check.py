@@ -15,7 +15,7 @@ from playwright.sync_api import sync_playwright
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:8124/').rstrip('/') + '/'
 CHANNEL = os.environ.get('RIPTIDE_E2E_CHANNEL', 'msedge') or None
-VIEWPORTS = [(1920, 1080), (1440, 900), (768, 1024), (390, 844)]
+VIEWPORTS = [(1920, 1080), (1440, 900), (1366, 768), (1280, 720), (1350, 530), (768, 1024), (390, 844)]
 PAGES = [('en', BASE), ('ar', BASE + 'ar/')]
 
 results = []
@@ -136,11 +136,88 @@ with sync_playwright() as p:
         check(f'{tag} nothing pinned', sticky == 0, str(sticky))
         hidden = page.evaluate("Array.from(document.querySelectorAll('.rv, .hero-copy .rise, .hero-copy .ln > span')).filter(e => { const c = getComputedStyle(e); return c.opacity === '0' || c.visibility === 'hidden'; }).length")
         check(f'{tag} all content visible without animation', hidden == 0, str(hidden))
-        anims = page.evaluate("document.getAnimations().length")
-        check(f'{tag} no running animations', anims == 0, str(anims))
+        anims = page.evaluate("document.getAnimations().filter(a => { const t = a.effect.getTiming(); return !(t.duration <= 200 && t.iterations === 1); }).length")
+        check(f'{tag} no running animations (only <=200 ms fades allowed)', anims == 0, str(anims))
+        check(f'{tag} data-motion is reduced by default', page.evaluate("document.documentElement.dataset.motion") == 'reduced')
         check(f'{tag} hero shows the completed simulation and verified chip', page.is_visible('.sha') and page.evaluate("getComputedStyle(document.querySelector('.sha')).opacity") == '1')
         check(f'{tag} CTA visible and clickable', page.is_visible('.hero .btn-primary'))
         ctx.close()
+
+    # Header never overlaps the hero, and the first screen fits short viewports
+    for w, h in VIEWPORTS:
+        for lang, url in PAGES:
+            ctx, page = new_page(browser, w, h)
+            page.goto(url, wait_until='load')
+            page.wait_for_timeout(2800)
+            data = page.evaluate("""() => {
+              const box = (e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+              const vis = (e) => { const c = getComputedStyle(e); return c.display !== 'none' && c.visibility !== 'hidden' && e.getBoundingClientRect().width > 0; };
+              const hd = box(document.querySelector('.site-header'));
+              const hero = box(document.querySelector('.hero'));
+              const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+              const bad = [];
+              const parts = Array.from(document.querySelectorAll('.hero-copy, .win-hero, .fl .sim, .fl .spd, .fl .sha')).filter(vis);
+              parts.forEach((e) => { if (hit(box(e), hd)) bad.push('header overlaps ' + e.className); });
+              Array.from(document.querySelectorAll('.fl .sim, .fl .spd, .fl .sha')).filter(vis).forEach((e) => {
+                const b = box(e);
+                if (b[0] < hero[0] - 1 || b[2] > hero[2] + 1 || b[1] < hero[1] - 1 || b[3] > hero[3] + 1) bad.push('card outside hero ' + e.className);
+              });
+              const q = (s) => { const e = document.querySelector(s); return e ? box(e) : null; };
+              return { bad, header: hd, cta: q('.hero .btn-primary'), cta2: q('.hero .btn-ghost'), chips: q('.hero .chips'), vh: innerHeight, vw: innerWidth };
+            }""")
+            check(f'header does not overlap hero elements {w}x{h} {lang}', not data['bad'], '; '.join(data['bad']))
+            if w >= 900:
+                ok = all(data[k] and data[k][3] <= data['vh'] for k in ('cta', 'cta2'))
+                check(f'both hero CTAs above the fold {w}x{h} {lang}', ok, str((data['cta'], data['cta2'], data['vh'])))
+            else:
+                check(f'primary hero CTA above the fold {w}x{h} {lang}', data['cta'][3] <= data['vh'], str(data['cta']))
+            ctx.close()
+
+    # Header stays on top while scrolling and has a solid background
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE, wait_until='load')
+    page.wait_for_timeout(1500)
+    page.evaluate("window.scrollTo(0, 260)")
+    page.wait_for_timeout(300)
+    top = page.evaluate("""() => { const h = document.querySelector('.site-header'); const r = h.getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height - 4); return { onTop: !!e && h.contains(e), alpha: getComputedStyle(h).backgroundColor, z: getComputedStyle(h).zIndex, height: r.height }; }""")
+    check('header is the top layer while scrolling', top['onTop'], str(top))
+    check('header is compact (<= 60 px)', top['height'] <= 60, str(top['height']))
+    ctx.close()
+
+    # Motion control: OS reduce => static by default; ?motion=on forces the full experience; the choice persists
+    ctx, page = new_page(browser, 1440, 900, reduced=True)
+    page.goto(BASE, wait_until='load')
+    page.wait_for_timeout(500)
+    check('[motion] OS reduce: default is static', page.evaluate("document.documentElement.dataset.motion") == 'reduced' and page.get_attribute('.motion-toggle', 'aria-pressed') == 'false')
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(600)
+    check('[motion] ?motion=on overrides OS reduce', page.evaluate("[document.documentElement.dataset.motion, document.documentElement.classList.contains('anim')]") == ['full', True])
+    check('[motion] ?motion=on is removed from the URL and stored', 'motion=' not in page.url and page.evaluate("localStorage.getItem('riptide-motion')") == 'on', page.url)
+    check('[motion] toggle shows pressed', page.get_attribute('.motion-toggle', 'aria-pressed') == 'true')
+    sticky = page.evaluate("Array.from(document.querySelectorAll('.pin')).filter(e => getComputedStyle(e).position === 'sticky').length")
+    check('[motion] chapters are pinned when forced on', sticky >= 2, str(sticky))
+    page.reload(wait_until='load')
+    page.wait_for_timeout(500)
+    check('[motion] choice persists across reload', page.evaluate("document.documentElement.dataset.motion") == 'full')
+    # scroll-scrubbed logo: mid-draw (not final) inside the first chapter, different at two scroll positions
+    pos = page.evaluate("(() => { const s = document.getElementById('streams'); const r = s.getBoundingClientRect(); return [r.top + scrollY, s.offsetHeight, innerHeight]; })()")
+    def prog(frac):
+        y = pos[0] + (pos[1] - pos[2]) * frac
+        page.evaluate(f"window.scrollTo(0, {y})")
+        page.wait_for_timeout(250)
+        return page.evaluate("(() => { const p = document.querySelector('#streams .pin'); return [parseFloat(p.style.getPropertyValue('--p')), parseFloat(p.style.getPropertyValue('--ms'))]; })()")
+    a, b2, c3 = prog(0.02), prog(0.3), prog(0.9)
+    check('[motion] pinned stage progress changes with scroll', a[0] != b2[0] and b2[0] != c3[0], str((a, b2, c3)))
+    check('[motion] logo is mid-draw (not final) at the chapter start', b2[1] > 1.01, str(b2))
+    page.click('.motion-toggle')
+    page.wait_for_load_state('load')
+    page.wait_for_timeout(400)
+    check('[motion] toggle switches off and persists', page.evaluate("[document.documentElement.dataset.motion, localStorage.getItem('riptide-motion')]") == ['reduced', 'off'])
+    ctx.close()
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE + '?motion=off', wait_until='load')
+    check('[motion] ?motion=off overrides a normal OS setting', page.evaluate("document.documentElement.dataset.motion") == 'reduced')
+    ctx.close()
 
     # JavaScript disabled: content and CTA still there
     ctx = browser.new_context(viewport={'width': 1440, 'height': 900}, java_script_enabled=False)

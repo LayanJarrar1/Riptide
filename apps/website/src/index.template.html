@@ -37,12 +37,24 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Riptide","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 10, Windows 11","description":"{{meta.description}}","url":"{{siteUrl}}","downloadUrl":"{{releasesUrl}}","license":"https://www.gnu.org/licenses/gpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
   <script>
     // Before first paint: light is the default whatever the OS prefers; only a saved choice
-    // switches to dark. `anim` turns on the scroll story (not with reduced motion); `rv-all`
+    // switches to dark. `anim` turns on the scroll story (the OS setting, or the visitor's own Animations choice); `rv-all`
     // is a failsafe that shows every reveal if the script never runs.
     (function () {
       var d = document.documentElement;
       d.classList.add('js');
-      if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) d.classList.add('anim');
+      var q = null, mo = null, full;
+      try {
+        q = /[?&]motion=(on|off)(&|$)/.exec(location.search);
+        if (q) {
+          localStorage.setItem('riptide-motion', q[1]);
+          history.replaceState(null, '', location.pathname + location.search.replace(/([?&])motion=(on|off)&?/, '$1').replace(/[?&]$/, '') + location.hash);
+        }
+        mo = localStorage.getItem('riptide-motion');
+      } catch (e) { if (q) mo = q[1]; }
+      // data-motion: the saved or ?motion= choice wins; otherwise follow the OS setting.
+      full = mo === 'on' ? true : mo === 'off' ? false : !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+      d.dataset.motion = full ? 'full' : 'reduced';
+      if (full) d.classList.add('anim');
       try {
         var t = localStorage.getItem('riptide-theme');
         if (t === 'light' || t === 'dark') d.dataset.theme = t;
@@ -79,6 +91,9 @@
           <button class="icon-btn theme-toggle" type="button" aria-label="{{nav.theme}}">
             {{{svg sun}}}
             {{{svg moon}}}
+          </button>
+          <button class="icon-btn motion-toggle" type="button" aria-pressed="true" aria-label="{{nav.motion}}" title="{{nav.motion}}">
+            {{{svg motion}}}
           </button>
           <a class="icon-btn" href="{{repo}}" rel="noopener" aria-label="{{nav.githubLabel}}">{{{svg github}}}</a>
           <a class="btn btn-primary btn-sm" href="{{installerUrl}}">{{{svg download}}}<span>{{nav.download}}</span></a>

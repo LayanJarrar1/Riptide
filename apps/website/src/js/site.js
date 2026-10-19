@@ -11,14 +11,17 @@
  * 4. The hero download simulation (labelled "Simulation" on the page), paused when off-screen.
  * 5. Reveals, current-section highlight in the nav, and pausing of endless loops off-screen.
  *
- * html.anim is set in <head> unless the visitor prefers reduced motion. Without it this file only wires
+ * html.anim (and data-motion="full") is set in <head> unless the OS asks for reduced motion and the visitor has not switched animations on. Without it this file only wires
  * the theme and menu; the CSS shows every end state and nothing is pinned.
  */
 (function () {
   'use strict';
 
   const root = document.documentElement;
-  const anim = root.classList.contains('anim');
+  // The one place that decides whether scroll motion runs: the head script resolves the OS setting and the
+  // visitor's own Animations choice into html[data-motion] before first paint.
+  const motion = { enabled: () => root.dataset.motion === 'full' };
+  const anim = motion.enabled();
   const dir = root.dir === 'rtl' ? -1 : 1;
   const clamp = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
   const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -36,6 +39,15 @@
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', theme === 'dark' ? '#071a26' : '#ffffff');
       try { localStorage.setItem('riptide-theme', theme); } catch (e) { /* storage blocked */ }
+    });
+  }
+  const motionButton = document.querySelector('.motion-toggle');
+  if (motionButton) {
+    motionButton.setAttribute('aria-pressed', String(motion.enabled()));
+    motionButton.addEventListener('click', () => {
+      const next = motion.enabled() ? 'off' : 'on';
+      try { localStorage.setItem('riptide-motion', next); } catch (e) { location.search = '?motion=' + next; return; }
+      location.reload(); // pinned chapters and listeners are set up once, so a clean reload is the robust switch
     });
   }
   const header = document.querySelector('.site-header');

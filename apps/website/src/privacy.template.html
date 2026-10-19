@@ -28,6 +28,18 @@
     (function () {
       var d = document.documentElement;
       d.classList.add('js');
+      var q = null, mo = null, full;
+      try {
+        q = /[?&]motion=(on|off)(&|$)/.exec(location.search);
+        if (q) {
+          localStorage.setItem('riptide-motion', q[1]);
+          history.replaceState(null, '', location.pathname + location.search.replace(/([?&])motion=(on|off)&?/, '$1').replace(/[?&]$/, '') + location.hash);
+        }
+        mo = localStorage.getItem('riptide-motion');
+      } catch (e) { if (q) mo = q[1]; }
+      // data-motion: the saved or ?motion= choice wins; otherwise follow the OS setting.
+      full = mo === 'on' ? true : mo === 'off' ? false : !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+      d.dataset.motion = full ? 'full' : 'reduced';
       try {
         var t = localStorage.getItem('riptide-theme');
         if (t === 'light' || t === 'dark') d.dataset.theme = t;
