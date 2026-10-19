@@ -32,7 +32,12 @@
 //! | `/corrupt?flip=` | Flips `flip` (default 1) bits at [`corrupt_bit_positions`]; `ETag`/`Content-Length` unchanged |
 //! | `/batch/<name>` | `file001.zip` ... `file120.zip` and `img_a.jpg` ... `img_z.jpg`: per-name seed and size (4-260 KiB, see [`batch_item`]), like `/ok`; any other name is `404` |
 //! | `/echo-headers` | Request headers as a JSON object |
+//! | `/site/` | Small crawlable site (see [`SITE_FILES`] and the `site` module docs): linked HTML pages to depth 3 with a loop back to the start, an off-site link to the other origin, `/site/private/` disallowed by `/robots.txt`, files of every category, a 404 link, pages over the crawler's 5 MiB cap |
+//! | `/robots.txt` | `User-agent: *` / `Disallow: /site/private/` |
 //! | `/` | Plain-text index |
+//!
+//! Every request (method, target, whether it carried `Cookie` / `Authorization`) is recorded and
+//! available from [`TestServer::state`]`().requests()`.
 //!
 //! Multi-range requests (`bytes=0-1,5-6`) and malformed `Range` headers are answered with the
 //! whole resource (`200`). Connection "resets" are implemented by failing the body stream, which
@@ -44,6 +49,7 @@ mod content;
 mod handlers;
 mod router;
 mod server;
+mod site;
 mod state;
 
 pub use batch::{exists as batch_exists, item as batch_item, BatchItem};
@@ -53,4 +59,5 @@ pub use content::{
 };
 pub use router::router;
 pub use server::TestServer;
-pub use state::ServerState;
+pub use site::{site_file_seed, site_file_sha256_hex, SITE_FILES};
+pub use state::{RequestRecord, ServerState, REQUEST_LOG_CAP};

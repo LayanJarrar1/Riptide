@@ -8,6 +8,7 @@ members = [
     "crates/riptide-log",
     "crates/riptide-engine",
     "crates/riptide-media",
+    "crates/riptide-crawl",
     "crates/riptide-cli",
     "crates/riptide-host",
     "crates/riptide-testserver",
@@ -38,6 +39,7 @@ riptide-ipc = { path = "crates/riptide-ipc" }
 riptide-log = { path = "crates/riptide-log" }
 riptide-engine = { path = "crates/riptide-engine" }
 riptide-media = { path = "crates/riptide-media" }
+riptide-crawl = { path = "crates/riptide-crawl" }
 riptide-host = { path = "crates/riptide-host" }
 riptide-testserver = { path = "crates/riptide-testserver" }
 
@@ -71,6 +73,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 axum = "0.8"
 http = "1"
 url = "2"
+html5ever = "0.39"
 
 # storage
 rusqlite = { version = "0.37", features = ["bundled"] }
