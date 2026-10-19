@@ -377,7 +377,7 @@ fn file_name(p: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// `%SystemRoot%\System32	askkill.exe`, never a PATH lookup (a `taskkill.exe` in the working
+/// `%SystemRoot%\System32\taskkill.exe`, never a PATH lookup (a `taskkill.exe` in the working
 /// folder or an odd PATH entry must not be run instead).
 #[cfg(windows)]
 fn taskkill_path() -> PathBuf {
