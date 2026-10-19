@@ -14,6 +14,7 @@ pub fn router(state: Arc<ServerState>) -> Router {
     Router::new()
         .route("/", get(handlers::index))
         .route("/ok", get(handlers::ok))
+        .route("/file/{*name}", get(handlers::file))
         .route("/noranges", get(handlers::noranges))
         .route("/nolength", get(handlers::nolength))
         .route("/slow", get(handlers::slow))

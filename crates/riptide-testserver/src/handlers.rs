@@ -146,7 +146,18 @@ impl Resource {
     fn from_params(q: &Params) -> Result<Self, HttpError> {
         let seed = param_u64(q, "seed", DEFAULT_SEED)?;
         let size = param_u64(q, "size", DEFAULT_SIZE)?;
-        Ok(Self::new(seed, size))
+        let mut res = Self::new(seed, size);
+        // `?ct=` and `?cd=` let a test pick the Content-Type and the raw Content-Disposition
+        // value (percent-decoded by the query parser) of any /ok-like endpoint.
+        if let Some(ct) = q.get("ct") {
+            let v = HeaderValue::from_str(ct).map_err(|_| bad("invalid ct"))?;
+            res.extra.push((header::CONTENT_TYPE, v));
+        }
+        if let Some(cd) = q.get("cd") {
+            let v = HeaderValue::from_bytes(cd.as_bytes()).map_err(|_| bad("invalid cd"))?;
+            res.extra.push((header::CONTENT_DISPOSITION, v));
+        }
+        Ok(res)
     }
 }
 
@@ -234,7 +245,11 @@ fn common_headers(h: &mut HeaderMap, res: &Resource) -> Result<(), HttpError> {
         h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
     }
     for (name, value) in &res.extra {
-        h.append(name.clone(), value.clone());
+        if *name == header::CONTENT_TYPE {
+            h.insert(name.clone(), value.clone());
+        } else {
+            h.append(name.clone(), value.clone());
+        }
     }
     Ok(())
 }
@@ -333,6 +348,7 @@ pub(crate) async fn index(State(st): App) -> Response {
          origin: {}\nalt origin: {}\n\n\
          Common query parameters: size= (bytes, default 1048576), seed= (u64, default {DEFAULT_SEED}).\n\n\
          /ok                      ranges, ETag, Last-Modified, Content-Length, If-Range, 416\n\
+         /file/<name.ext>         like /ok with the name in the path; ?ct= sets Content-Type, ?cd= Content-Disposition\n\
          /noranges                ignores Range, always 200, no Accept-Ranges\n\
          /nolength                chunked transfer, no Content-Length\n\
          /slow?bps=               throttled bandwidth (bytes per second), ranges like /ok\n\
@@ -363,6 +379,22 @@ pub(crate) async fn index(State(st): App) -> Response {
 /// `/ok`
 pub(crate) async fn ok(
     method: Method,
+    Query(q): Query<Params>,
+    headers: HeaderMap,
+) -> HandlerResult {
+    serve(
+        &method,
+        &headers,
+        Resource::from_params(&q)?,
+        Shaping::default(),
+    )
+}
+
+/// `/file/<any/path/name.ext>` — like `/ok`, but the name lives in the URL path (so tests can
+/// exercise percent-encoded, Unicode and extensionless names taken from the URL).
+pub(crate) async fn file(
+    method: Method,
+    Path(_name): Path<String>,
     Query(q): Query<Params>,
     headers: HeaderMap,
 ) -> HandlerResult {
