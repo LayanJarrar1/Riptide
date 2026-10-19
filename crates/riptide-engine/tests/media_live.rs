@@ -148,3 +148,35 @@ async fn real_video_probes_pauses_resumes_and_merges() {
     );
     engine.shutdown().await;
 }
+
+/// Probes the two reference videos without cookies and prints which strategy (player clients,
+/// cookies or not) worked, so the owner can re-run this on a machine where the field test
+/// failed with "The page needs to be reloaded.":
+///
+/// ```text
+/// cargo test -p riptide-engine --test media_live real_videos_report_the_working_strategy -- --ignored --nocapture
+/// ```
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "network: real yt-dlp against real video pages"]
+async fn real_videos_report_the_working_strategy() {
+    let tools = YtDlp::new(tool("RIPTIDE_YTDLP"), None);
+    eprintln!("yt-dlp {}", tools.version().await.unwrap());
+    let mut failures = Vec::new();
+    for id in ["aqz-KE-bpKQ", "Ng274mLQ7-c"] {
+        let url = format!("https://www.youtube.com/watch?v={id}");
+        match tools.probe_resilient(&url, None, None).await {
+            Ok((info, attempt)) => eprintln!(
+                "{id}: ok with clients={} cookies={} ({} choices, {:?})",
+                attempt.clients.key(),
+                attempt.cookies,
+                info.choices.len(),
+                info.title
+            ),
+            Err(e) => {
+                eprintln!("{id}: FAILED: {e}");
+                failures.push(id);
+            }
+        }
+    }
+    assert!(failures.is_empty(), "no strategy worked for {failures:?}");
+}

@@ -51,9 +51,11 @@ pub fn check_url(raw: &str) -> Result<Url> {
 /// and from nowhere else, never from page, browser or user text.
 ///
 /// The ladder order was measured against yt-dlp 2026.08.19 without a JavaScript runtime: the
-/// default clients work for most videos; `android_vr` still lists formats when the default
-/// answers "The page needs to be reloaded."; `tv`/`mweb`/`web_safari` are last because they
-/// need a PO token or a JS runtime on many networks.
+/// default clients work for most videos. When they answer "The page needs to be reloaded.",
+/// `android_vr` still lists formats (its https formats need a PO token, so a download may end
+/// in HTTP 403 and move on); `tv,mweb` and `web_safari,tv` come last because on this build
+/// they fail the same way without a JavaScript runtime, but they may work from other networks
+/// or once a runtime is available. All four names are accepted by yt-dlp 2026.08.19.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerClients {
     /// yt-dlp's own choice (no extractor argument).
