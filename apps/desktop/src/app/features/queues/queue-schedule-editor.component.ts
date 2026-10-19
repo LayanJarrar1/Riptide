@@ -24,6 +24,7 @@ import {
 import type { Schedule } from '../../tauri/bridge/Schedule';
 import type { Weekday } from '../../tauri/bridge/Weekday';
 import { IconComponent } from '../../ui/icon.component';
+import { TimeFieldComponent } from '../../ui/time-field.component';
 
 /** One day button: its position in the week (0 = Monday, for the reference date) and labels. */
 interface DayButton {
@@ -49,7 +50,7 @@ const DEFAULT_START_DELAY_SECS = 3600;
 @Component({
   selector: 'app-queue-schedule-editor',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent],
+  imports: [IconComponent, TimeFieldComponent],
   template: `
     <fieldset class="editor">
       <legend class="legend">{{ i18n.t('schedule.title') }}</legend>
@@ -71,14 +72,8 @@ const DEFAULT_START_DELAY_SECS = 3600;
 
       @if (value().window; as window) {
         <div class="times">
-          <label class="field">
-            <span class="label">{{ i18n.t('schedule.from') }}</span>
-            <input class="input" type="time" name="from" step="60" dir="ltr" [value]="time(window.start_min)" (change)="setTime('start_min', $event)" />
-          </label>
-          <label class="field">
-            <span class="label">{{ i18n.t('schedule.to') }}</span>
-            <input class="input" type="time" name="to" step="60" dir="ltr" [value]="time(window.stop_min)" (change)="setTime('stop_min', $event)" />
-          </label>
+          <app-time-field name="from" [label]="i18n.t('schedule.from')" [value]="time(window.start_min)" (valueChange)="setTime('start_min', $event)" />
+          <app-time-field name="to" [label]="i18n.t('schedule.to')" [value]="time(window.stop_min)" (valueChange)="setTime('stop_min', $event)" />
         </div>
         @if (wraps()) {
           <p class="hint"><app-icon name="moon" [size]="13" /> {{ i18n.t('schedule.wraps') }}</p>
@@ -105,7 +100,10 @@ const DEFAULT_START_DELAY_SECS = 3600;
       </label>
       @if (oneShot()) {
         <div class="once">
-          <input class="input" type="datetime-local" name="startAt" dir="ltr" [attr.aria-label]="i18n.t('schedule.startAt')" [value]="startAtText()" (change)="setStartAt($event)" />
+          <div class="once-row">
+            <input class="input" type="date" name="startAtDate" dir="ltr" [attr.aria-label]="i18n.t('schedule.startAtDate')" [value]="startAtDate()" (change)="setStartAtDate($event)" />
+            <app-time-field name="startAtTime" [label]="i18n.t('schedule.startAtTime')" [value]="startAtTime()" (valueChange)="setStartAtTime($event)" />
+          </div>
           <p class="hint">{{ i18n.t('schedule.startAtHint') }}</p>
         </div>
       }
@@ -189,10 +187,11 @@ const DEFAULT_START_DELAY_SECS = 3600;
       gap: var(--space-3);
     }
 
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+    .once-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-3);
+      align-items: end;
     }
 
     .label {
@@ -341,9 +340,13 @@ export class QueueScheduleEditorComponent {
     const w = this.value().window;
     return w !== null && wrapsMidnight(w);
   });
-  protected readonly startAtText = computed(() => {
+  protected readonly startAtDate = computed(() => {
     const at = this.value().start_at;
-    return at === null ? '' : localDateTimeToInput(at);
+    return at === null ? '' : localDateTimeToInput(at).slice(0, 10);
+  });
+  protected readonly startAtTime = computed(() => {
+    const at = this.value().start_at;
+    return at === null ? '00:00' : localDateTimeToInput(at).slice(11, 16);
   });
   protected readonly issues = computed(() => scheduleIssues(this.value(), toLocalDateTime(this.now())));
 
@@ -375,9 +378,9 @@ export class QueueScheduleEditorComponent {
     this.valueChange.emit({ ...this.value(), window: on ? { ...NIGHT_WINDOW } : null });
   }
 
-  protected setTime(which: 'start_min' | 'stop_min', event: Event): void {
+  protected setTime(which: 'start_min' | 'stop_min', value: string): void {
     const window = this.value().window;
-    const minutes = timeToMinutes((event.target as HTMLInputElement).value);
+    const minutes = timeToMinutes(value);
     if (window !== null && minutes !== null) {
       this.valueChange.emit({ ...this.value(), window: { ...window, [which]: minutes } });
     }
@@ -401,9 +404,16 @@ export class QueueScheduleEditorComponent {
     }
   }
 
-  protected setStartAt(event: Event): void {
-    const at = inputToLocalDateTime((event.target as HTMLInputElement).value);
+  protected setStartAtDate(event: Event): void {
+    const date = (event.target as HTMLInputElement).value;
     // cleared: the one-shot is off
-    this.valueChange.emit({ ...this.value(), start_at: at });
+    this.valueChange.emit({ ...this.value(), start_at: date === '' ? null : inputToLocalDateTime(`${date}T${this.startAtTime()}`) });
+  }
+
+  protected setStartAtTime(time: string): void {
+    const date = this.startAtDate();
+    if (date !== '') {
+      this.valueChange.emit({ ...this.value(), start_at: inputToLocalDateTime(`${date}T${time}`) });
+    }
   }
 }

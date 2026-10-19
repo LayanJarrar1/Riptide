@@ -134,7 +134,8 @@ describe('QueueDialogComponent', () => {
     type('input[name="name"]', 'Odd');
     q<HTMLInputElement>('input[name="restrict"]').click();
     fixture.detectChanges();
-    type('input[name="to"]', '23:00', 'change');
+    type('select[name="to-h"]', '23', 'change');
+    type('select[name="to-m"]', '00', 'change');
     await save();
     expect(el().textContent).toContain('Start and stop time must be different');
     expect(backend.created).toEqual([]);

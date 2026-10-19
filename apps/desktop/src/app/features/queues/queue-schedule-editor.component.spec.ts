@@ -48,12 +48,23 @@ describe('QueueScheduleEditorComponent', () => {
     input.dispatchEvent(new Event('change'));
     fixture.detectChanges();
   }
+  /** Pick an `HH:mm` time in the 24 h field called `name`. */
+  function pickTime(name: string, value: string): void {
+    const [h, m] = value.split(':');
+    for (const [suffix, v] of [['h', h], ['m', m]] as const) {
+      const select = q<HTMLSelectElement>(`select[name="${name}-${suffix}"]`);
+      select.value = v;
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+  }
+  const timeOf = (name: string): string => `${q<HTMLSelectElement>(`select[name="${name}-h"]`).value}:${q<HTMLSelectElement>(`select[name="${name}-m"]`).value}`;
 
   it('starts unrestricted: no times, every day on, no one-shot, and the sleeping-PC note is there', () => {
     setup();
-    expect(q('input[name="from"]')).toBeNull();
+    expect(q('select[name="from-h"]')).toBeNull();
     expect(dayButtons().every((b) => b.getAttribute('aria-pressed') === 'true')).toBeTrue();
-    expect(q('input[name="startAt"]')).toBeNull();
+    expect(q('input[name="startAtDate"]')).toBeNull();
     expect(q('.note').textContent).toContain('A sleeping or switched-off PC is not woken up');
     expect(q('.issue')).toBeNull();
   });
@@ -65,8 +76,8 @@ describe('QueueScheduleEditorComponent', () => {
       click(chips[0]);
       expect(host.value()).toEqual(nightSchedule());
       expect(host.value().window).toEqual({ start_min: 1380, stop_min: 420 });
-      expect(q<HTMLInputElement>('input[name="from"]').value).toBe('23:00');
-      expect(q<HTMLInputElement>('input[name="to"]').value).toBe('07:00');
+      expect(timeOf('from')).toBe('23:00');
+      expect(timeOf('to')).toBe('07:00');
       expect(chips[0].getAttribute('aria-pressed')).toBe('true');
       expect(q('.hint').textContent).toContain('overnight');
     });
@@ -75,12 +86,12 @@ describe('QueueScheduleEditorComponent', () => {
       setup();
       const chips = el().querySelectorAll<HTMLButtonElement>('.chip');
       click(chips[0]);
-      type(q('input[name="to"]'), '08:30');
+      pickTime('to', '08:30');
       expect(host.value().window).toEqual({ start_min: 1380, stop_min: 510 });
       expect(chips[0].getAttribute('aria-pressed')).toBe('false');
       click(chips[1]);
       expect(host.value()).toEqual(UNSCHEDULED);
-      expect(q('input[name="from"]')).toBeNull();
+      expect(q('select[name="from-h"]')).toBeNull();
     });
 
     it('the checkbox switches the window on (at night hours) and off', () => {
@@ -134,15 +145,17 @@ describe('QueueScheduleEditorComponent', () => {
     it('reports a window with the same start and stop time', () => {
       setup();
       click(q('input[name="restrict"]'));
-      type(q('input[name="to"]'), '23:00');
+      pickTime('to', '23:00');
       expect(q('.issue').textContent).toContain('must be different');
     });
 
-    it('ignores a cleared time field instead of storing nonsense', () => {
-      setup();
+    it('shows times in 24 h, with no AM/PM, in the Arabic UI too', () => {
+      setup(['ar-SA']);
+      TestBed.inject(I18nService).setLang('ar');
       click(q('input[name="restrict"]'));
-      type(q('input[name="from"]'), '');
-      expect(host.value().window).toEqual({ start_min: 1380, stop_min: 420 });
+      expect(timeOf('from')).toBe('23:00');
+      expect(el().textContent).not.toMatch(/AM|PM/);
+      expect(el().querySelector('input[type="time"], input[type="datetime-local"]')).toBeNull();
     });
   });
 
@@ -155,16 +168,19 @@ describe('QueueScheduleEditorComponent', () => {
       const now = toLocalDateTime(NOW_MS);
       expect(at ?? 0).toBeGreaterThan(now);
       expect((at ?? 0) % 3600).toBe(0);
-      expect(q<HTMLInputElement>('input[name="startAt"]').value).toMatch(/^2026-10-\d\dT\d\d:00$/);
+      expect(q<HTMLInputElement>('input[name="startAtDate"]').value).toMatch(/^2026-10-\d\d$/);
+      expect(timeOf('startAtTime')).toMatch(/^\d\d:00$/);
       expect(q('.issue')).toBeNull();
     });
 
     it('takes the typed date and time, flags the past, and unticking clears it', () => {
       setup();
       click(q('input[name="startAtOn"]'));
-      type(q('input[name="startAt"]'), '2026-12-24T03:15');
+      type(q('input[name="startAtDate"]'), '2026-12-24');
+      pickTime('startAtTime', '03:15');
       expect(host.value().start_at).toBe(Date.UTC(2026, 11, 24, 3, 15) / 1000);
-      type(q('input[name="startAt"]'), '2020-01-01T00:00');
+      type(q('input[name="startAtDate"]'), '2020-01-01');
+      pickTime('startAtTime', '00:00');
       expect(q('.issue').textContent).toContain('in the future');
       click(q('input[name="startAtOn"]'));
       expect(host.value().start_at).toBeNull();
@@ -174,9 +190,9 @@ describe('QueueScheduleEditorComponent', () => {
     it('clearing the field switches the one-shot off', () => {
       setup();
       click(q('input[name="startAtOn"]'));
-      type(q('input[name="startAt"]'), '');
+      type(q('input[name="startAtDate"]'), '');
       expect(host.value().start_at).toBeNull();
-      expect(q('input[name="startAt"]')).toBeNull();
+      expect(q('input[name="startAtDate"]')).toBeNull();
     });
   });
 });
