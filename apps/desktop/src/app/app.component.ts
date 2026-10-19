@@ -111,6 +111,8 @@ export class AppComponent implements OnInit {
   private readonly url = signal(this.router.url);
   /** The batch dialog's class once its chunk has loaded. */
   protected readonly batchDialog = signal<Type<unknown> | null>(null);
+  /** The site grabber dialog's class once its chunk has loaded. */
+  protected readonly grabberDialog = signal<Type<unknown> | null>(null);
 
   /** Only categories that have at least one download are listed. */
   protected readonly visibleCategories = computed<readonly CategoryKey[]>(() => {
@@ -151,6 +153,13 @@ export class AppComponent implements OnInit {
     effect(() => {
       if (this.ui.batchOpen() && untracked(this.batchDialog) === null) {
         void import('./features/downloads/batch-download-dialog.component').then((m) => this.batchDialog.set(m.BatchDownloadDialogComponent));
+      }
+    });
+
+    // so is the site grabber
+    effect(() => {
+      if (this.ui.grabberOpen() && untracked(this.grabberDialog) === null) {
+        void import('./features/grabber/site-grabber-dialog.component').then((m) => this.grabberDialog.set(m.SiteGrabberDialogComponent));
       }
     });
 

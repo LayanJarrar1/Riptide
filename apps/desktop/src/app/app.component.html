@@ -52,6 +52,9 @@
       <button appButton variant="secondary" icon="layers" type="button" class="batch-button" (click)="ui.openBatch()">
         {{ 'action.batch' | t }}
       </button>
+      <button appButton variant="secondary" icon="globe" type="button" class="grabber-button" (click)="ui.openGrabber()">
+        {{ 'action.grabber' | t }}
+      </button>
       <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">
         {{ 'action.add' | t }}
       </button>
@@ -150,6 +153,9 @@
   <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
 }
 @if (batchDialog(); as dialog) {
+  <ng-container *ngComponentOutlet="dialog" />
+}
+@if (grabberDialog(); as dialog) {
   <ng-container *ngComponentOutlet="dialog" />
 }
 @defer (when ui.shortcutsOpen(); prefetch on idle) {

@@ -17,6 +17,7 @@ use tauri::{Emitter, Manager};
 
 pub mod clipboard;
 pub mod commands;
+pub mod crawl;
 pub mod exit;
 pub mod integration;
 pub mod ipc_server;
@@ -146,6 +147,7 @@ pub fn run() {
             Some(vec![shell::MINIMIZED_ARG]),
         ))
         .manage(shell::Shell::default())
+        .manage(std::sync::Arc::new(crawl::Crawls::default()))
         .setup(move |app| {
             let config = engine_config()?;
             let engine = tauri::async_runtime::block_on(Engine::open(config))?;
@@ -259,6 +261,10 @@ pub fn run() {
             commands::batch_expand,
             commands::batch_import,
             commands::add_batch,
+            crawl::start_crawl,
+            crawl::cancel_crawl,
+            crawl::discard_crawl,
+            crawl::add_crawl_files,
             commands::pick_text_file,
             commands::save_text_file,
             commands::pause_download,

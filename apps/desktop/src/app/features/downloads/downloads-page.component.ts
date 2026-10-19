@@ -1003,6 +1003,9 @@ export class DownloadsPageComponent {
     }
   }
 
+    }
+  }
+
   /** The "Move to queue" dialog chose a queue. */
   protected confirmMove(queueId: number): void {
     const targets = this.moveTargets();
