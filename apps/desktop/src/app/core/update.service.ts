@@ -39,6 +39,12 @@ export const WINDOW_FOCUSED = new InjectionToken<() => boolean>('riptide.window.
   factory: () => () => typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus(),
 });
 
+/** The clock; specs provide a fixed one. */
+export const NOW = new InjectionToken<() => number>('riptide.now', {
+  providedIn: 'root',
+  factory: () => () => typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus(),
+});
+
 export { NOW } from './clock';
 
 /**

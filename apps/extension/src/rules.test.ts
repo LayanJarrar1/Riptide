@@ -185,3 +185,31 @@ test('normaliseRules repairs garbage and keeps valid values', () => {
   assert.deepEqual(n.neverAskSites, ['c.org']);
   assert.equal(normaliseRules({ minSize: 2.9 }).minSize, 2);
 });
+
+test('ignored extensions stay in the browser even when their group is on', () => {
+  const r = rules({ ignoreExtensions: ['zip'] });
+  assert.deepEqual(decide(r, { url: 'https://a/x.zip', size: 10 * MIB }), { take: false, reason: 'ignored_type' });
+  assert.deepEqual(decide(r, { url: 'https://a/x.rar', size: 10 * MIB }), { take: true, reason: 'extension' });
+  assert.deepEqual(decide(r, { url: 'https://a/dl?id=1', filename: 'x.zip', attachment: true }), {
+    take: false,
+    reason: 'ignored_type',
+  });
+});
+
+test('ignored extensions are normalised from storage', () => {
+  assert.deepEqual(normaliseRules({ ignoreExtensions: ['.ISO', 'bad ext', 5, 'iso'] }).ignoreExtensions, ['iso']);
+  assert.deepEqual(normaliseRules({}).ignoreExtensions, []);
+});
+
+test('rule order: never-ask beats everything, Alt beats the lists', () => {
+  const r = rules({ neverAskSites: ['a.com'], denySites: [], allowSites: ['b.com'] });
+  assert.equal(decide(r, { url: 'https://a.com/x.zip', size: 9 * MIB }).take, false);
+  assert.deepEqual(decide(rules({ altBypass: true }), { url: 'https://a.com/x.zip', altHeld: true }), {
+    take: false,
+    reason: 'alt_bypass',
+  });
+  assert.deepEqual(decide(rules({ altBypass: false }), { url: 'https://a.com/x.zip', altHeld: true, size: 9 * MIB }), {
+    take: true,
+    reason: 'extension',
+  });
+});

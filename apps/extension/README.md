@@ -3,8 +3,8 @@
 Manifest V3 extension for Chrome, Edge and Firefox that hands downloads to the Riptide desktop
 app. One TypeScript codebase, three builds (`dist/chrome`, `dist/edge`, `dist/firefox`).
 
-The extension can only **ask**: it sends `ping`, `probe`, `add`, `refresh` and the read-only
-`list` to the Native Messaging host `app.riptide.host` (`crates/riptide-host`), which forwards
+The extension can only **ask**: it sends `ping`, `probe`, `probe_media`, `add`, `refresh` and the
+read-only `list` to the Native Messaging host `app.riptide.host` (`crates/riptide-host`), which forwards
 them to the app over its local pipe.
 Nothing coming from a page is ever executed, shelled or used as a path.
 
@@ -18,15 +18,15 @@ Nothing coming from a page is ever executed, shelled or used as a path.
   only. If anything fails (host missing, app not running, host error) the browser download
   **proceeds** and a notification offers *Open Riptide* / *Never ask for this site*.
 - **Rules** (options page): on/off, minimum size (default 1 MB), file-type groups (archives,
-  video, audio, programs, documents, images) plus custom extensions, site allow/deny lists,
-  hold **Alt** to bypass, per-site "never ask again". The engine is pure (`src/rules.ts`) and
-  unit-tested.
+  video, audio, programs, documents, images) plus custom extensions and a "never take these"
+  extension list, site allow/deny lists, hold **Alt** to bypass, per-site "never ask again".
+  The engine is pure (`src/rules.ts`, `src/bypass.ts`) and unit-tested.
 - **Visible everywhere.** Toolbar badge (count of hand-offs this session; grey when the app is
   not reachable), popup with status (connected / app not running / host not installed), the
   last 10 hand-offs with live state when the host allows `list`, a pause-capture toggle, *Open
   Riptide* and *Options*. Context menu *Download with Riptide* on links, images, video and
-  audio; *Download all links on this page* and *Download selected links* open an in-page
-  checklist. A content script shows a small *Download with Riptide* badge when hovering a
+  audio; *Download all links on this page*, *Download selected links* and *Download all images*
+  open an in-page checklist (see below). A content script shows a small *Download with Riptide* badge when hovering a
   direct file link (shadow DOM, no layout shift, no remote code).
 - **Bilingual.** English and Arabic (RTL) for the manifest (`_locales/`), popup, options,
   notifications and the in-page panel; follows the browser UI language or a fixed choice.
@@ -152,6 +152,58 @@ starts with the browser while the integration is on. The popup sends `list` to s
 states; if the host answers with an `error` (an older host forwarded only
 `ping`/`probe`/`add`/`refresh`), the popup shows "sent" and says live state is unavailable.
 
+## Video pages ("Download this video")
+
+- **Detection** (`src/media.ts`, pure, unit-tested). A page counts as a video page when it is a
+  watch page of a site in `MEDIA_HOSTS` (mirrors `riptide-core`), or when it holds a `<video>`
+  of at least 200x112 px. On Firefox the same `webRequest` permission the capture already uses
+  also *observes* (never blocks) responses with a `video/*` or `audio/*` MIME, an HLS/DASH
+  manifest (`.m3u8`, `.mpd`) or a progressive `mp4`/`webm`. Chrome and Edge have no such
+  permission in this extension, so they rely on the DOM check and the known hosts; adding
+  `webRequest` there would be a new permission and is listed as a follow-up. A detected video
+  puts a counter on the toolbar badge of that tab (cyan `#00D5E8`).
+- **Floating button.** A small pill in the content script's closed shadow root, at the corner
+  of the video (or the viewport corner), RTL-aware, reachable with the keyboard (`Tab`, arrow
+  keys in the menu, `Esc` closes). `x` hides it until the next page; *Never show on this site*
+  stores the host in `settings.videoNeverSites` (editable in Options, switch
+  `settings.videoButton`).
+- **Quality menu.** Clicking asks the app through the host (`probe_media`) and lists the
+  qualities it returns (best, `1080p`, ..., audio-only M4A/MP3) with approximate sizes.
+  Choosing one sends `add` with `kind: "media"` and `media_format` set to the menu's key
+  (`best`, `h<N>`, `audio-m4a`, `audio-mp3`). The host refuses any other value. If the app is
+  not running or video support is missing, the message the app/host returned is shown.
+- **Context menu.** *Download this video with Riptide* on pages and links that belong to a
+  known video site (`documentUrlPatterns` / `targetUrlPatterns` built from `MEDIA_HOSTS`); it
+  opens the same menu on the page.
+- **Cookies** for a video are the cookies of the page's own origin only, sent together with a
+  `cookie_origin` claim that `riptide-host` checks against the URL and drops on mismatch. Extra
+  headers and credentials never travel with a media request. Nothing is logged.
+
+## Download all links / selected links / images
+
+The three context-menu items ask the content script to collect candidates and show a checklist
+in a closed shadow root (RTL-aware, keyboard accessible: arrows/Home/End move, Space/Enter
+toggles, Ctrl+A selects all, Tab stays inside, Escape closes). Candidates are the page's
+resolved `<a href>` values (or, for images, `img` `currentSrc`/`srcset` (largest), `<picture>`
+sources, `input[type=image]` and links straight to pictures), `http(s)` only, no credentials,
+fragment stripped, de-duplicated, at most 5000. File names are guessed from the URL. The list
+filters by type (archives, video, audio, documents, images, programs, other; the same table as
+`riptide-core` `category.rs`, checked by a unit test) and by text, shows a selected count,
+select all/none, and renders only the visible rows above 200 items.
+
+**Sending.** `riptide-host` has no batch message yet, so *Download N* is one `handoff-many`
+message to the background, which sends sequential-with-cap (4 in flight) `add` messages, at
+most 2000, and shows one notification for the batch. Cookies are attached only to URLs on the
+page's own origin. The host validates each `add` (http(s) only, no control
+characters, at most 8192 bytes).
+
+**Alt bypass limits.** Chromium's `onDeterminingFilename` carries no modifier keys, so the
+content script tracks Alt (keydown/keyup/blur and `click.altKey`) and, on a click, tells the
+background to leave that URL (4 s) and any download within 1.5 s to the browser. It cannot work
+on pages where content scripts do not run (`chrome://`, the add-on store, the PDF viewer, other
+extensions' pages) or for downloads not started by a click (keyboard activation, scripted
+navigation).
+
 ## Permissions
 
 | Permission | Why |
@@ -162,7 +214,9 @@ states; if the host answers with an `error` (an older host forwarded only
 | `storage` | rules and language (`local`), session counters (`session`) |
 | `notifications` | "Riptide not running — open it?" and "Sent to Riptide" |
 | `cookies` | send the cookies of the downloaded URL (only that URL) so logged-in downloads work in Riptide; stored in the app's `secrets` table and wiped on completion |
-| `webRequest`, `webRequestBlocking` (Firefox only) | Firefox has no `onDeterminingFilename`; the response headers are the only way to catch a download before it starts |
+| `webRequest`, `webRequestBlocking` (Firefox only) | Firefox has no `onDeterminingFilename`; the response headers are the only way to catch a download before it starts. Also used, without blocking, to notice media responses for the video badge (only the `Content-Type` and URL are looked at, nothing is stored) |
+| *(no new permission for link/image checklists or capture rules)* | the checklist is the content script already listed; the extra menu item needs only `contextMenus` |
+| *(no new permission for video support)* | the floating button needs only the content script and `cookies` already listed; the extra context-menu items need only `contextMenus` |
 | host permissions `<all_urls>` | the content script (hover badge, link panel), reading cookies/referrers and, on Firefox, inspecting response headers on any site the user downloads from. Firefox treats it as optional and the popup asks for it. |
 
 ## Privacy
@@ -186,7 +240,7 @@ src/
   status.ts      host status + disconnect classification
   host.ts        Native Messaging client
   background.ts  capture, context menus, badge, notifications, message bus
-  content/       hover badge, Alt tracking, link panel (shadow DOM)
+  content/       hover badge, Alt tracking, link checklist (links.ts), video button (shadow DOM)
   popup/         toolbar popup
   options/       options page
 scripts/         build.mjs, verify-dist.mjs, test.mjs, make-icons.mjs, gen-key.mjs
