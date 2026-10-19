@@ -1081,11 +1081,19 @@ a.store-link .icon { color: var(--color-accent-fg); }
 }
 
 /* ---- 404 ------------------------------------------------------------------------------- */
-.not-found-main { min-height: 100dvh; display: grid; align-content: center; gap: 40px; padding-block: 64px; }
-.not-found-block { display: grid; gap: 12px; justify-items: start; }
-.not-found-block h1 { font-size: clamp(1.75rem, 1.2rem + 2.5vw, 2.75rem); }
+.not-found-main { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: clamp(32px, 6vw, 80px); align-items: center; padding-block: clamp(32px, 6vw, 64px); }
+.not-found-copy { display: grid; gap: 28px; justify-items: start; }
+.nf-code { font-size: clamp(4.5rem, 2rem + 12vw, 9rem); line-height: 0.9; font-weight: 300; letter-spacing: -0.05em; color: var(--color-accent-fg); font-variant-numeric: tabular-nums; }
+.not-found-block { display: grid; gap: 12px; justify-items: start; justify-self: start; width: min(100%, 24rem); }
+.not-found-block h1 { font-size: clamp(1.5rem, 1.1rem + 1.8vw, 2.25rem); }
 .not-found-block p { color: var(--color-text-secondary); }
 .not-found-block .btn { margin-top: 8px; }
+.nf-stage { padding-block: clamp(28px, 5vw, 56px); }
+@media (max-width: 799px) {
+  .not-found-main { grid-template-columns: 1fr; }
+  .nf-stage { order: -1; }
+  .nf-stage .hero-mark { height: clamp(150px, 40vw, 220px); }
+}
 
 /* ---- Trust strip: facts a visitor can check, not claims ---------------------------------- */
 .trust { border-block: 1px solid var(--color-border); background: var(--color-surface-1); }
