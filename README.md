@@ -202,8 +202,8 @@ requests to the app over a private, per-user channel. The full picture is in
 
 ### Measured
 
-On a Windows Server 2022 machine, release build, 32 downloads in the list: the window is ready in **864 ms**
-(average of three cold starts), idle CPU is **0 %**, and the app process uses **31 MB** (plus WebView2). A batch of
+On a Windows Server 2022 machine, release build, 32 downloads in the list: the window is ready in **899 ms**
+(average of three cold starts), idle CPU is **0 %**, and the app process uses **35 MB** (plus WebView2). A batch of
 120 files from the local test server finishes with every SHA-256 matching its source. These are
 development-machine numbers, not promises for yours; `riptide bench` measures your own.
 
