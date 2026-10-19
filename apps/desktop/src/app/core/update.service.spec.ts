@@ -63,6 +63,12 @@ describe('UpdateService', () => {
 
   const updateCalls = (): string[] => calls.map((c) => c.cmd).filter((c) => c !== 'get_engine_settings');
 
+  it('checks the beta channel by default', async () => {
+    const updates = configure(true);
+    await updates.check();
+    expect(calls.find((c) => c.cmd === 'check_update')?.args).toEqual({ channel: 'beta' });
+  });
+
   it('checks the selected channel and keeps what it found', async () => {
     const updates = configure(true);
     const found = await updates.check('beta');
