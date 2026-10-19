@@ -88,3 +88,13 @@ jobs:
           }
           gh release upload channel-beta "$out/latest-beta.json" --clobber
           if ($LASTEXITCODE -ne 0) { throw 'cannot upload latest-beta.json' }
+
+      # What the app does, unauthenticated: proves older versions will be notified. Once the
+      # repository is public this must pass; a failure here means latest-beta.json is wrong.
+      - name: Verify the update feed
+        shell: pwsh
+        run: |
+          $verifyArgs = @{ ExpectVersion = '${{ steps.v.outputs.version }}' }
+          if ('${{ steps.v.outputs.prerelease }}' -ne 'true') { $verifyArgs.Stable = $true }
+          & .\scripts\verify-update-feed.ps1 @verifyArgs
+          if ($LASTEXITCODE -ne 0) { throw 'the update feed check failed' }
