@@ -76,7 +76,19 @@ export interface DownloadRequest {
   referrer?: string | null;
   user_agent?: string | null;
   secrets?: Secrets | null;
+  /** `media` hands the page URL to the app's video support instead of fetching it as a file. */
+  kind?: DownloadKind;
+  /** For `media`: a quality key from [`isMediaKey`]; the host refuses anything else. */
+  media_format?: string | null;
+  /**
+   * Browser-only, consumed by `riptide-host`: the origin the cookies in `secrets` were read for.
+   * The host drops the cookies unless this is the origin of `url`. Never reaches the app.
+   */
+  cookie_origin?: string | null;
 }
+
+/** How a download is fetched (`DownloadKind`, snake_case). */
+export type DownloadKind = 'file' | 'media';
 
 /** Lifecycle state (`#[serde(tag = "state")]`). */
 export type DownloadState =
@@ -136,6 +148,30 @@ export interface ProbeResult {
   content_type: string | null;
 }
 
+/** One entry of a video page's quality menu (`MediaChoice`). */
+export interface MediaChoice {
+  /** Send back as `media_format`. */
+  key: string;
+  kind: 'best' | 'video' | 'audio';
+  height: number | null;
+  /** Extension of the finished file (`mp4`, `m4a`, `mp3`). */
+  ext: string;
+  approx_size: number | null;
+}
+
+/** What the app learned about a video page (`MediaInfo`, the part the extension uses). */
+export interface MediaInfo {
+  url: string;
+  id: string;
+  title: string;
+  uploader: string | null;
+  extractor: string;
+  duration: number | null;
+  is_live: boolean;
+  drm: boolean;
+  choices: MediaChoice[];
+}
+
 /** Engine events, delivered after `subscribe` (CLI only; listed for completeness). */
 export type Event =
   | { type: 'added'; id: DownloadId }
@@ -180,6 +216,16 @@ export type RequestBody =
       user_agent?: string | null;
       secrets?: Secrets | null;
     }
+  | {
+      /**
+       * Ask what a video page offers. `cookies` is the page origin's `Cookie` header and
+       * `cookie_origin` the origin it was read for (checked by the host, then dropped).
+       */
+      type: 'probe_media';
+      url: string;
+      cookies?: string | null;
+      cookie_origin?: string | null;
+    }
   | { type: 'add'; request: DownloadRequest }
   | {
       type: 'refresh';
@@ -201,6 +247,7 @@ export type RequestBody =
 export const REQUEST_TYPES = [
   'ping',
   'probe',
+  'probe_media',
   'add',
   'refresh',
   'list',
@@ -214,7 +261,7 @@ export const REQUEST_TYPES = [
 ] as const;
 
 /** The request types a browser is allowed to send through the Native Messaging host. */
-export const BROWSER_REQUEST_TYPES = ['ping', 'probe', 'add', 'refresh', 'list'] as const;
+export const BROWSER_REQUEST_TYPES = ['ping', 'probe', 'probe_media', 'add', 'refresh', 'list'] as const;
 
 /** Client → server, with the correlation id flattened next to the body. */
 export type Request = { id: number } & RequestBody;
@@ -239,6 +286,7 @@ export const ERROR_CODES: readonly ErrorCode[] = [
 export type ResponseBody =
   | { type: 'pong'; version: string; protocol: number }
   | { type: 'probed'; result: ProbeResult }
+  | { type: 'media_probed'; info: MediaInfo }
   | { type: 'added'; download_id: DownloadId }
   | { type: 'downloads'; downloads: Download[] }
   | { type: 'download'; download: Download }
@@ -250,6 +298,7 @@ export type ResponseBody =
 export const RESPONSE_TYPES = [
   'pong',
   'probed',
+  'media_probed',
   'added',
   'downloads',
   'download',
@@ -311,6 +360,41 @@ function isDownload(value: unknown): value is Download {
   );
 }
 
+function parseMediaChoice(value: unknown): MediaChoice | null {
+  if (!isRecord(value)) return null;
+  const { key, kind, height, ext, approx_size } = value;
+  if (typeof key !== 'string' || typeof ext !== 'string') return null;
+  if (kind !== 'best' && kind !== 'video' && kind !== 'audio') return null;
+  return {
+    key,
+    kind,
+    height: typeof height === 'number' ? height : null,
+    ext,
+    approx_size: typeof approx_size === 'number' ? approx_size : null,
+  };
+}
+
+function parseMediaInfo(value: unknown): MediaInfo | null {
+  if (!isRecord(value)) return null;
+  if (typeof value['title'] !== 'string' || !Array.isArray(value['choices'])) return null;
+  const choices: MediaChoice[] = [];
+  for (const c of value['choices']) {
+    const choice = parseMediaChoice(c);
+    if (choice) choices.push(choice);
+  }
+  return {
+    url: typeof value['url'] === 'string' ? value['url'] : '',
+    id: typeof value['id'] === 'string' ? value['id'] : '',
+    title: value['title'],
+    uploader: typeof value['uploader'] === 'string' ? value['uploader'] : null,
+    extractor: typeof value['extractor'] === 'string' ? value['extractor'] : '',
+    duration: typeof value['duration'] === 'number' ? value['duration'] : null,
+    is_live: value['is_live'] === true,
+    drm: value['drm'] === true,
+    choices,
+  };
+}
+
 /**
  * Validate a decoded frame from the host. Unknown fields are tolerated (like the Rust side);
  * an unknown `type`, a missing `id`, or a malformed payload throws [`ProtocolError`].
@@ -354,6 +438,11 @@ export function parseResponse(raw: unknown): Response {
           content_type: typeof result['content_type'] === 'string' ? result['content_type'] : null,
         },
       };
+    }
+    case 'media_probed': {
+      const info = parseMediaInfo(raw['info']);
+      if (!info) throw new ProtocolError('malformed media_probed');
+      return { id, type, info };
     }
     case 'added': {
       const downloadId = raw['download_id'];

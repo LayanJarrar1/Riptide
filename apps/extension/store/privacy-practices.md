@@ -25,13 +25,13 @@ Saves the user's capture rules (file types, minimum size, site lists) and langua
 Tells the user when a download was sent to Riptide, and when the Riptide app is not running, with a button to open it.
 
 **cookies**
-Many downloads only work for signed-in users. For a download the user hands to Riptide, the extension reads the cookies for that download's address only and passes them to the local Riptide app, which sends them only to that same site for that one download and deletes them when the download completes. Cookies are never sent to the developer or any third party.
+Many downloads only work for signed-in users. For a download the user hands to Riptide, the extension reads the cookies for that download's address only and passes them to the local Riptide app, which sends them only to that same site for that one download and deletes them when the download completes. The same applies to videos: only the cookies of the video page's own site are read, and only when the user picks a quality. Cookies are never sent to the developer or any third party.
 
 **Host permission (<all_urls>)**
-Downloads can come from any website, so the extension needs access on all sites to: read the cookies of the address being downloaded (above), run the content script that shows the "Download with Riptide" button on hover and the in-page link picker, and (Firefox) read response headers to recognise a download before it starts. The content script only reads link addresses on the page; it does not read page content, form fields or browsing history, and sends nothing off the device.
+Downloads can come from any website, so the extension needs access on all sites to: read the cookies of the address being downloaded (above), run the content script that shows the "Download with Riptide" button on hover and the in-page link picker, and (Firefox) read response headers to recognise a download before it starts. The content script only reads link addresses on the page; it also measures the size of video elements to decide whether to show the "Download this video" button; it does not read page content, form fields or browsing history, and sends nothing off the device.
 
 **webRequest, webRequestBlocking (Firefox only)**
-Firefox has no downloads.onDeterminingFilename event; inspecting the response headers (Content-Disposition, Content-Type, Content-Length) of top-level responses is the only way to recognise a download before it starts so it can be handed to Riptide instead.
+Firefox has no downloads.onDeterminingFilename event; inspecting the response headers (Content-Disposition, Content-Type, Content-Length) of top-level responses is the only way to recognise a download before it starts so it can be handed to Riptide instead. It is also used, without blocking, to notice that a page is playing video or audio (only the address and Content-Type of the response are looked at, nothing is stored or sent) so the toolbar badge and the "Download this video" button can appear.
 
 ## Remote code
 

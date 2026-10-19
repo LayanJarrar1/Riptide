@@ -47,7 +47,9 @@
       "id": 14,
       "body": { "type": "remove", "download_id": 2, "delete_file": true },
       "json": "{\"id\":14,\"type\":\"remove\",\"download_id\":2,\"delete_file\":true}"
-    }
+    },
+    {"name": "probe_media", "id": 14, "body": {"type": "probe_media", "url": "https://www.youtube.com/watch?v=x", "cookies": "SID=1", "cookie_origin": "https://www.youtube.com"}, "json": "{\"id\":14,\"type\":\"probe_media\",\"url\":\"https://www.youtube.com/watch?v=x\",\"cookies\":\"SID=1\",\"cookie_origin\":\"https://www.youtube.com\"}"},
+    {"name": "add (media)", "id": 15, "body": {"type": "add", "request": {"url": "https://www.youtube.com/watch?v=x", "user_agent": "Mozilla/5.0", "secrets": {"cookies": "SID=1"}, "kind": "media", "media_format": "h720", "cookie_origin": "https://www.youtube.com"}}, "json": "{\"id\":15,\"type\":\"add\",\"request\":{\"url\":\"https://www.youtube.com/watch?v=x\",\"user_agent\":\"Mozilla/5.0\",\"secrets\":{\"cookies\":\"SID=1\"},\"kind\":\"media\",\"media_format\":\"h720\",\"cookie_origin\":\"https://www.youtube.com\"}}"}
   ],
   "responses": [
     {
@@ -99,7 +101,8 @@
       "name": "unknown fields are tolerated",
       "json": "{\"id\":8,\"type\":\"added\",\"download_id\":5,\"future_field\":true}",
       "expect": { "id": 8, "type": "added", "download_id": 5 }
-    }
+    },
+    {"name": "media_probed", "json": "{\"id\":9,\"type\":\"media_probed\",\"info\":{\"url\":\"https://www.youtube.com/watch?v=x\",\"id\":\"x\",\"title\":\"Clip\",\"uploader\":null,\"extractor\":\"youtube\",\"thumbnail\":null,\"duration\":61.5,\"is_live\":false,\"drm\":false,\"formats\":[],\"choices\":[{\"key\":\"best\",\"kind\":\"best\",\"height\":1080,\"ext\":\"mp4\",\"approx_size\":1000},{\"key\":\"audio-m4a\",\"kind\":\"audio\",\"height\":null,\"ext\":\"m4a\",\"approx_size\":null}]}}", "expect": {"id": 9, "type": "media_probed", "info": {"url": "https://www.youtube.com/watch?v=x", "id": "x", "title": "Clip", "uploader": null, "extractor": "youtube", "duration": 61.5, "is_live": false, "drm": false, "choices": [{"key": "best", "kind": "best", "height": 1080, "ext": "mp4", "approx_size": 1000}, {"key": "audio-m4a", "kind": "audio", "height": null, "ext": "m4a", "approx_size": null}]}}}
   ],
   "rejected": [
     { "name": "unknown type", "json": "{\"id\":1,\"type\":\"exec\",\"cmd\":\"calc\"}" },
@@ -107,6 +110,7 @@
     { "name": "unknown error code", "json": "{\"id\":1,\"type\":\"error\",\"code\":\"boom\",\"message\":\"x\"}" },
     { "name": "failed state without retryable", "json": "{\"id\":1,\"type\":\"downloads\",\"downloads\":[{\"id\":1,\"url\":\"u\",\"filename\":\"f\",\"state\":{\"state\":\"failed\"}}]}" },
     { "name": "not an object", "json": "[]" },
-    { "name": "not json", "json": "{" }
+    { "name": "not json", "json": "{" },
+    {"name": "media_probed without choices", "json": "{\"id\":9,\"type\":\"media_probed\",\"info\":{\"title\":\"x\"}}"}
   ]
 }

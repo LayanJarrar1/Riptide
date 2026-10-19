@@ -50,6 +50,8 @@ function fill(): void {
   $<HTMLInputElement>('altBypass').checked = settings.rules.altBypass;
   $<HTMLInputElement>('notify').checked = settings.notify;
   $<HTMLInputElement>('hoverBadge').checked = settings.hoverBadge;
+  $<HTMLInputElement>('videoButton').checked = settings.videoButton;
+  $<HTMLTextAreaElement>('videoNeverSites').value = settings.videoNeverSites.join('\n');
   $<HTMLSelectElement>('language').value = settings.language;
   $('about-host').textContent = tr('options.about.host', { host: HOST_NAME });
   $('about-id').textContent = tr('options.about.id', { id: browser.runtime.id });
@@ -75,6 +77,8 @@ function read(): Settings {
     language,
     notify: $<HTMLInputElement>('notify').checked,
     hoverBadge: $<HTMLInputElement>('hoverBadge').checked,
+    videoButton: $<HTMLInputElement>('videoButton').checked,
+    videoNeverSites: parseSiteList($<HTMLTextAreaElement>('videoNeverSites').value),
   });
 }
 

@@ -16,8 +16,17 @@ import { HostClient } from './host';
 import { resolveLang, t } from './i18n';
 import type { Lang, MessageKey } from './i18n';
 import { isMessage } from './messages';
-import type { HandoffManyReply, HandoffReply, Message, RecentItem, StatusReply } from './messages';
-import type { DownloadId, DownloadRequest } from './protocol';
+import type {
+  HandoffManyReply,
+  HandoffReply,
+  MediaProbeReply,
+  MediaQueryReply,
+  Message,
+  RecentItem,
+  StatusReply,
+} from './messages';
+import { MEDIA_HOSTS, classifyMediaResponse, cookieOriginOf, isMediaKey, withSite } from './media';
+import type { DownloadId, DownloadRequest, RequestBody } from './protocol';
 import {
   decide,
   filenameFromDisposition,
@@ -41,10 +50,15 @@ const BYPASS_ANY_MS = 1_500;
 const COLOR_CONNECTED = '#19C6B5';
 const COLOR_OFF = '#6D7B87';
 const COLOR_BADGE_TEXT = '#06201D';
+const COLOR_VIDEO = '#00D5E8';
+const MAX_SEEN_PER_TAB = 50;
+const PROBE_TIMEOUT_MS = 90_000;
 
 const MENU_LINK = 'riptide-link';
 const MENU_ALL = 'riptide-all';
 const MENU_SELECTION = 'riptide-selection';
+const MENU_VIDEO_PAGE = 'riptide-video-page';
+const MENU_VIDEO_LINK = 'riptide-video-link';
 
 const NOTIFY_NOT_RUNNING = 'riptide-not-running:';
 const NOTIFY_HOST_MISSING = 'riptide-host-missing';
@@ -63,6 +77,13 @@ let missingNotified = false;
 let listAvailable = true;
 const bypassUrls = new Map<string, number>();
 let lastAltClickAt = 0;
+
+/** What each tab has shown us: videos in the DOM (content script) and media on the wire (Firefox). */
+interface TabMedia {
+  dom: number;
+  seen: Set<string>;
+}
+const mediaTabs = new Map<number, TabMedia>();
 
 const host = new HostClient();
 host.onStatus = () => {
@@ -201,6 +222,143 @@ async function handoffMany(urls: string[], referrer: string | undefined): Promis
     await notifyUnavailable(last, { url: first });
   }
   return { ok, failed: failed + (urls.length - ok - failed), status: host.status };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Video pages: detection badge, quality menu, media add
+// ---------------------------------------------------------------------------------------------
+
+function tabMedia(tabId: number): TabMedia {
+  let m = mediaTabs.get(tabId);
+  if (!m) {
+    m = { dom: 0, seen: new Set() };
+    mediaTabs.set(tabId, m);
+  }
+  return m;
+}
+
+/** Badge counter for a tab: videos found there; falls back to the global badge at zero. */
+async function updateTabBadge(tabId: number): Promise<void> {
+  const m = mediaTabs.get(tabId);
+  const count = m ? Math.max(m.dom, m.seen.size) : 0;
+  try {
+    if (count > 0) {
+      await browser.action.setBadgeText({ tabId, text: String(Math.min(count, 99)) });
+      await browser.action.setBadgeBackgroundColor({ tabId, color: COLOR_VIDEO });
+      if (typeof browser.action.setBadgeTextColor === 'function') {
+        await browser.action.setBadgeTextColor({ tabId, color: COLOR_BADGE_TEXT });
+      }
+    } else {
+      const captured = await getSession('captured', 0);
+      await browser.action.setBadgeText({ tabId, text: captured > 0 ? String(captured) : '' });
+      await browser.action.setBadgeBackgroundColor({
+        tabId,
+        color: host.status === 'connected' ? COLOR_CONNECTED : COLOR_OFF,
+      });
+    }
+  } catch {
+    /* the tab is gone or badge APIs are unavailable */
+  }
+}
+
+/** The network showed a media response on a tab (Firefox `webRequest`; observation only). */
+function onMediaResponse(details: WebRequest.OnResponseStartedDetailsType): void {
+  if (details.tabId < 0 || details.statusCode < 200 || details.statusCode >= 300) return;
+  let contentType: string | undefined;
+  for (const h of details.responseHeaders ?? []) {
+    if (h.name.toLowerCase() === 'content-type') contentType = h.value;
+  }
+  if (!classifyMediaResponse(details.url, contentType)) return;
+  const m = tabMedia(details.tabId);
+  if (m.seen.size >= MAX_SEEN_PER_TAB) return;
+  const before = m.seen.size;
+  m.seen.add(details.url.split('#')[0] ?? details.url);
+  if (m.seen.size === before) return;
+  void updateTabBadge(details.tabId);
+  const hint: Message = { kind: 'media-hint' };
+  void browser.tabs.sendMessage(details.tabId, hint).catch(() => undefined);
+}
+
+if (IS_FIREFOX && browser.webRequest?.onResponseStarted) {
+  browser.webRequest.onResponseStarted.addListener(
+    onMediaResponse,
+    { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other'] },
+    ['responseHeaders'],
+  );
+}
+
+browser.tabs.onRemoved.addListener((tabId) => {
+  mediaTabs.delete(tabId);
+});
+browser.tabs.onUpdated.addListener((tabId, change) => {
+  if (change.status === 'loading' && change.url !== undefined) mediaTabs.delete(tabId); // new page
+});
+
+function answerText(res: { type: string; message?: string }): string {
+  return res.message ?? `unexpected answer: ${res.type}`;
+}
+
+/** Ask the app what a video page offers. Cookies of that page's origin only. */
+async function probeMedia(url: string): Promise<MediaProbeReply> {
+  const origin = cookieOriginOf(url);
+  if (origin === null) return { ok: false, status: host.status, error: 'not http(s)' };
+  const cookies = await cookieHeaderFor(url);
+  const body: RequestBody = { type: 'probe_media', url };
+  if (cookies) {
+    body.cookies = cookies;
+    body.cookie_origin = origin;
+  }
+  try {
+    const res = await host.request(body, PROBE_TIMEOUT_MS);
+    if (res.type === 'media_probed') return { ok: true, status: host.status, info: res.info };
+    if (res.type === 'error') {
+      const status = await host.ping();
+      return { ok: false, status, error: answerText(res) };
+    }
+    return { ok: false, status: host.status, error: answerText(res) };
+  } catch (e) {
+    return { ok: false, status: host.status === 'connected' ? 'app_not_running' : host.status, error: errorText(e) };
+  }
+}
+
+/** Add a video page with a quality key; cookies only for the page's own origin. */
+async function addMedia(url: string, quality: string, title: string | undefined): Promise<HandoffReply> {
+  const origin = cookieOriginOf(url);
+  if (origin === null || !isMediaKey(quality)) return { ok: false, status: host.status, error: 'invalid request' };
+  const request: DownloadRequest = {
+    url,
+    kind: 'media',
+    media_format: quality,
+    user_agent: navigator.userAgent,
+  };
+  const cookies = await cookieHeaderFor(url);
+  if (cookies) {
+    request.secrets = { cookies };
+    request.cookie_origin = origin;
+  }
+  const c: Candidate = { url, filename: title };
+  try {
+    const res = await host.request({ type: 'add', request });
+    if (res.type === 'added') {
+      await recordSent(c, res.download_id);
+      return { ok: true, status: host.status, download_id: res.download_id };
+    }
+    if (res.type === 'error') {
+      const status = await host.ping();
+      return { ok: false, status, error: res.message };
+    }
+    return { ok: false, status: host.status, error: answerText(res) };
+  } catch (e) {
+    return { ok: false, status: host.status === 'connected' ? 'app_not_running' : host.status, error: errorText(e) };
+  }
+}
+
+async function neverShowVideoOn(site: string): Promise<void> {
+  const s = normaliseSite(site);
+  if (!s) return;
+  const next: Settings = { ...settings, videoNeverSites: withSite(settings.videoNeverSites, s) };
+  settings = next;
+  await saveSettings(next);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -451,6 +609,19 @@ async function createMenus(): Promise<void> {
       contexts: ['link', 'image', 'video', 'audio'],
     });
     browser.contextMenus.create({ id: MENU_ALL, title: browser.i18n.getMessage('menuAll'), contexts: ['page'] });
+    const patterns = MEDIA_HOSTS.flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`]);
+    browser.contextMenus.create({
+      id: MENU_VIDEO_PAGE,
+      title: browser.i18n.getMessage('menuVideo'),
+      contexts: ['page', 'video'],
+      documentUrlPatterns: patterns,
+    });
+    browser.contextMenus.create({
+      id: MENU_VIDEO_LINK,
+      title: browser.i18n.getMessage('menuVideo'),
+      contexts: ['link'],
+      targetUrlPatterns: patterns,
+    });
     browser.contextMenus.create({
       id: MENU_SELECTION,
       title: browser.i18n.getMessage('menuSelection'),
@@ -475,6 +646,17 @@ async function onMenuClicked(info: Menus.OnClickData, tab: Tabs.Tab | undefined)
       /* the user can still click the link */
     }
     await notifyUnavailable(result, candidate);
+    return;
+  }
+  if (info.menuItemId === MENU_VIDEO_PAGE || info.menuItemId === MENU_VIDEO_LINK) {
+    const url = info.menuItemId === MENU_VIDEO_LINK ? info.linkUrl : (info.pageUrl ?? tab?.url);
+    if (!url || hostOf(url) === null || tab?.id === undefined) return;
+    const message: Message = { kind: 'show-video', url };
+    try {
+      await browser.tabs.sendMessage(tab.id, message);
+    } catch {
+      await notify(NOTIFY_RELOAD, tr('notify.reload.title'), tr('notify.reload.body'));
+    }
     return;
   }
   if (info.menuItemId === MENU_ALL || info.menuItemId === MENU_SELECTION) {
@@ -581,7 +763,27 @@ async function handleMessage(message: Message, sender: Runtime.MessageSender): P
     case 'never-ask':
       await neverAskFor(message.site);
       return undefined;
+    case 'media-found': {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return undefined;
+      tabMedia(tabId).dom = Math.max(0, Math.min(Math.trunc(message.count), 99));
+      await updateTabBadge(tabId);
+      return undefined;
+    }
+    case 'media-query': {
+      const tabId = sender.tab?.id;
+      return { seen: tabId === undefined ? 0 : (mediaTabs.get(tabId)?.seen.size ?? 0) } satisfies MediaQueryReply;
+    }
+    case 'media-probe':
+      return probeMedia(message.url);
+    case 'media-add':
+      return addMedia(message.url, message.quality, message.title?.slice(0, 200));
+    case 'video-never':
+      await neverShowVideoOn(message.site);
+      return undefined;
     case 'show-panel':
+    case 'show-video':
+    case 'media-hint':
       return undefined; // background -> content only
   }
 }

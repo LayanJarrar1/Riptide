@@ -6,6 +6,7 @@
   },
   "actionTitle": { "message": "Riptide", "description": "Toolbar button title" },
   "menuLink": { "message": "تنزيل عبر Riptide", "description": "Context menu on links and media" },
+  "menuVideo": { "message": "تنزيل هذا الفيديو عبر Riptide", "description": "Context menu on video pages and links to video sites" },
   "menuAll": { "message": "تنزيل كل روابط هذه الصفحة عبر Riptide", "description": "Context menu on the page" },
   "menuSelection": { "message": "تنزيل الروابط المحددة عبر Riptide", "description": "Context menu on a selection" }
 }

@@ -20,6 +20,9 @@
 //! * **Schema.** Only [`BROWSER_REQUEST_TYPES`] are accepted (`ping`, `probe`, `probe_media`,
 //!   `add`, `refresh` and the read-only `list`), and only if they parse as a [`riptide_ipc::Request`]. Everything
 //!   else is answered with an `error` (`bad_request`) and the session continues.
+//! * **Media requests** (`probe_media`, and `add` with `kind: "media"`) are validated field by
+//!   field in [`validate`]: `http(s)` URL only, a quality from the fixed key list, size limits,
+//!   cookies kept only for the page's own origin.
 //! * **App not running.** Requests get an `error` (`internal`, "the Riptide app is not
 //!   running"); the session continues. A `ping` first tries to start the app (see [`Launcher`])
 //!   and waits up to [`LAUNCH_WAIT`] for its endpoint.
@@ -39,6 +42,8 @@ use riptide_ipc::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncWrite};
+
+pub mod validate;
 
 pub use riptide_ipc::MAX_FRAME_BYTES;
 
@@ -258,13 +263,15 @@ pub fn check_request(frame: &Value) -> Result<Request, Response> {
             "request type not accepted from the browser",
         ));
     }
-    serde_json::from_value::<Request>(frame.clone()).map_err(|e| {
+    let mut request = serde_json::from_value::<Request>(frame.clone()).map_err(|e| {
         Response::error(
             id,
             ErrorCode::BadRequest,
             format!("malformed {kind} request: {e}"),
         )
-    })
+    })?;
+    validate::check_media(&mut request, frame)?;
+    Ok(request)
 }
 
 /// Starts the app when a `ping` finds it not running.
