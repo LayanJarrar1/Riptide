@@ -35,7 +35,7 @@ Nothing coming from a page is ever executed, shelled or used as a path.
 
 ```
 npm ci
-npm run build      # dist/chrome, dist/edge, dist/firefox (+ icons rendered from icons/riptide.svg)
+npm run build      # dist/chrome, dist/edge, dist/firefox (+ the brand-kit icons copied from brand/)
 npm run check      # tsc --noEmit && eslint .
 npm test           # node:test over src/**/*.test.ts (bundled with esbuild)
 npm run package    # build + dist/riptide-{chrome,edge,firefox,source}-<version>.zip for the stores
@@ -270,7 +270,7 @@ in the browser's extension storage.
 ```
 manifest/        base.json + chrome.json / edge.json / firefox.json overlays
 _locales/        manifest strings (en, ar)
-icons/           riptide.svg (PNGs are rendered at build time by scripts/make-icons.mjs)
+icons/           riptide.svg (brand-kit app icon; PNGs are copied from brand/ at build time by scripts/make-icons.mjs)
 src/
   protocol.ts    IPC schema mirror (+ fixtures and test)
   rules.ts       capture rules engine (+ test)
