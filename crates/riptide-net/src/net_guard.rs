@@ -285,6 +285,11 @@ impl NetGuard {
         if self.allow_private_redirects && !self.block_private {
             return Ok(());
         }
+        // http -> https (or a port change) on the very same host name gets the rule the start
+        // already had: a split-horizon or NAS host with mixed answers may redirect to itself
+        if !self.block_private && same_host_name(from, next) {
+            return Ok(());
+        }
         if self.block_private || !self.is_private_start(from).await {
             self.deny_private(next)
                 .await
@@ -299,8 +304,17 @@ impl NetGuard {
     /// blocking guard; combine it with [`NetGuard::check`] for IP-literal URLs, which never
     /// reach DNS. (Through an HTTP proxy the proxy resolves names, so this does not apply.)
     pub fn dns_resolver(&self) -> Arc<GuardedDns> {
+        self.dns_resolver_allowing(&[])
+    }
+
+    /// Like [`NetGuard::dns_resolver`], but the host names in `proxy_hosts` (the configured
+    /// proxy's own name, which the connector resolves through the same resolver) are resolved
+    /// without filtering. Only the proxy connection ever asks for those names; targets behind
+    /// a proxy are resolved by the proxy.
+    pub fn dns_resolver_allowing(&self, proxy_hosts: &[String]) -> Arc<GuardedDns> {
         Arc::new(GuardedDns {
             resolver: Arc::clone(&self.resolver),
+            allow: proxy_hosts.iter().map(|h| h.to_ascii_lowercase()).collect(),
         })
     }
 }
@@ -308,14 +322,33 @@ impl NetGuard {
 /// The `reqwest` resolver behind [`NetGuard::dns_resolver`].
 pub struct GuardedDns {
     resolver: Arc<dyn HostResolver>,
+    allow: std::collections::HashSet<String>,
+}
+
+/// Same host name (case-insensitive) or same IP literal, whatever scheme and port.
+fn same_host_name(a: &Url, b: &Url) -> bool {
+    match (a.host_str(), b.host_str()) {
+        (Some(x), Some(y)) => x
+            .trim_end_matches('.')
+            .eq_ignore_ascii_case(y.trim_end_matches('.')),
+        _ => false,
+    }
 }
 
 impl reqwest::dns::Resolve for GuardedDns {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let resolver = Arc::clone(&self.resolver);
+        let allow = self.allow.clone();
         Box::pin(async move {
             let host = name.as_str();
-            let addrs: Vec<SocketAddr> = if is_localhost_name(host) {
+            let addrs: Vec<SocketAddr> = if allow.contains(&host.to_ascii_lowercase()) {
+                resolver
+                    .resolve(host)
+                    .await?
+                    .into_iter()
+                    .map(|ip| SocketAddr::new(ip, 0))
+                    .collect()
+            } else if is_localhost_name(host) {
                 Vec::new()
             } else {
                 resolver
@@ -644,5 +677,63 @@ mod tests {
         assert!(strict.check_redirect(&public, &private).await.is_err());
         let message = Error::PrivateRedirect.to_string();
         assert!(message.contains("allow_private_redirects"), "{message}");
+    }
+
+    #[tokio::test]
+    async fn only_the_named_proxy_host_may_resolve_to_a_private_address() {
+        use reqwest::dns::Resolve;
+        use std::str::FromStr;
+        let table = Arc::new(StaticResolver(HashMap::from([
+            ("proxy.corp".to_string(), vec![ip("10.1.1.1")]),
+            ("rebind.example".to_string(), vec![ip("10.9.9.9")]),
+            ("ok.example".to_string(), vec![ip("93.184.216.34")]),
+        ])));
+        let guard = NetGuard::blocking().with_resolver(table);
+        let name = |s: &str| reqwest::dns::Name::from_str(s).unwrap();
+        // no proxy (default / system without a proxy): rebinding-style hosts are refused
+        let plain = guard.dns_resolver();
+        assert!(plain.resolve(name("rebind.example")).await.is_err());
+        assert!(plain.resolve(name("proxy.corp")).await.is_err());
+        assert!(plain.resolve(name("ok.example")).await.is_ok());
+        // with a proxy: its own name resolves, nothing else changes
+        let proxied = guard.dns_resolver_allowing(&["Proxy.Corp".to_string()]);
+        let got: Vec<IpAddr> = proxied
+            .resolve(name("proxy.corp"))
+            .await
+            .unwrap()
+            .map(|a| a.ip())
+            .collect();
+        assert_eq!(got, vec![ip("10.1.1.1")]);
+        assert!(proxied.resolve(name("rebind.example")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_mixed_answer_host_may_redirect_to_itself_but_not_to_another_private_host() {
+        let resolver: Arc<dyn HostResolver> = Arc::new(StaticResolver(HashMap::from([
+            (
+                "nas.example".to_string(),
+                vec![ip("93.184.216.34"), ip("192.168.1.5")],
+            ),
+            (
+                "other.example".to_string(),
+                vec![ip("93.184.216.34"), ip("10.0.0.9")],
+            ),
+        ])));
+        let guard = NetGuard::off().with_resolver(resolver.clone());
+        let http = Url::parse("http://nas.example/f").unwrap();
+        let https = Url::parse("https://NAS.example:5001/f").unwrap();
+        let other = Url::parse("https://other.example/f").unwrap();
+        assert!(guard.check_redirect(&http, &https).await.is_ok());
+        assert!(matches!(
+            guard.check_redirect(&http, &other).await,
+            Err(Error::PrivateRedirect)
+        ));
+        let allowed = NetGuard::off()
+            .with_resolver(resolver.clone())
+            .with_allow_private_redirects(true);
+        assert!(allowed.check_redirect(&http, &other).await.is_ok());
+        // a crawl guard keeps its hop-by-hop rule
+        let strict = NetGuard::blocking().with_resolver(resolver);
+        assert!(strict.check_redirect(&http, &https).await.is_err());
     }
 }

@@ -20,10 +20,16 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 
 fn public_guard() -> NetGuard {
-    let table = StaticResolver(HashMap::from([(
-        "public.test".to_string(),
-        vec!["93.184.216.34".parse::<IpAddr>().unwrap()],
-    )]));
+    let table = StaticResolver(HashMap::from([
+        (
+            "public.test".to_string(),
+            vec!["93.184.216.34".parse::<IpAddr>().unwrap()],
+        ),
+        (
+            "localhost".to_string(),
+            vec!["127.0.0.1".parse::<IpAddr>().unwrap()],
+        ),
+    ]));
     NetGuard::blocking().with_resolver(Arc::new(table))
 }
 
