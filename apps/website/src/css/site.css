@@ -44,10 +44,10 @@
   --ease-io: cubic-bezier(.65, 0, .35, 1);
   --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
   --ease: var(--ease-out);
-  --dur-1: 160ms;   /* hover, press */
+  --dur-1: 140ms;   /* hover, press, focus: never slower than 150 ms */
   --dur-2: 280ms;   /* toggles, small state changes */
   --dur-3: 560ms;   /* panels, chips */
-  --dur-4: 900ms;   /* entrances */
+  --dur-4: 700ms;   /* entrances: the longest one-shot, apart from the ribbon draw */
   --dur-5: 1500ms;  /* drawing the lanes */
   --stagger: 90ms;
 }
@@ -146,7 +146,7 @@ code { font-family: var(--mono); }
 .site-header.is-solid, .site-header.is-open { background: color-mix(in srgb, var(--bg) 98%, transparent); }
 .nav { height: 100%; display: flex; align-items: center; gap: 12px; }
 .brand { display: block; flex: none; }
-.brand-logo { height: 26px; width: auto; animation: mark-in 1.1s var(--ease-out) .05s both; }
+.brand-logo { height: 26px; width: auto; animation: mark-in .7s var(--ease-out) .05s both; }
 @keyframes mark-in { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0); } }
 .logo-dark { display: none; }
 .site-header[data-tone="dark"] .logo-light, :root[data-theme="dark"] .logo-light { display: none; }
@@ -200,20 +200,29 @@ code { font-family: var(--mono); }
 /* ---- Reveal system ----------------------------------------------------------------------- */
 .rise { animation: rise var(--dur-4) var(--ease-out) both; animation-delay: var(--d, 0s); }
 @keyframes rise { from { opacity: 0; transform: translate3d(0, 16px, 0); } }
-.anim .rv { transition: opacity var(--dur-4) var(--ease-out), transform var(--dur-4) var(--ease-out); transition-delay: calc(var(--i, 0) * var(--stagger)); }
-.anim .rv:not(.in):not(.mask) { opacity: 0; transform: translate3d(0, 28px, 0); }
-.rv .ln > span { transition: transform 1s var(--ease-out); }
-.anim .rv:not(.in) .ln > span, .anim .mask.rv:not(.in) .ln > span { transform: translateY(112%); }
+/* Hidden start states exist only once js/site.js finished initialising (html.js-ready), so a script error can never hide content.
+   Full motion slides reveals in; calm motion (the OS asks for less) keeps the same staggered reveals as plain opacity fades. */
+.rv .ln > span { transition: transform .7s var(--ease-out); }
+html.anim.js-ready .rv { transition: opacity var(--dur-4) var(--ease-out), transform var(--dur-4) var(--ease-out); transition-delay: calc(var(--i, 0) * var(--stagger)); }
+html.anim.js-ready .rv:not(.in):not(.mask) { opacity: 0; transform: translate3d(0, 28px, 0); }
+html.anim.js-ready .rv:not(.in) .ln > span, html.anim.js-ready .mask.rv:not(.in) .ln > span { transform: translateY(112%); }
+html.calm.js-ready .rv { transition: opacity var(--dur-4) var(--ease-out); transition-delay: calc(var(--i, 0) * var(--stagger)); }
+html.calm.js-ready .rv:not(.in):not(.mask) { opacity: 0; }
+html.calm .rv .ln > span { transition: opacity var(--dur-4) var(--ease-out); }
+html.calm.js-ready .rv:not(.in) .ln > span { opacity: 0; }
 .rv-all .rv { opacity: 1 !important; transform: none !important; }
 .rv-all .rv .ln > span { transform: none !important; }
 
 /* ---- Pinned stages ----------------------------------------------------------------------- */
+/* Only the logo chapter and the app chapter are pinned, only at 900px and wider and only with full motion; every other chapter
+   (and every chapter on phones or with calm motion) is a normal block whose animation plays once when it comes into view. */
 .pin { --p: 1; position: relative; overflow: hidden; }
-.anim .pin { position: sticky; top: 0; height: 100vh; height: 100svh; }
-.anim .ch { height: calc(100vh * (1 + var(--len, 1.5))); }
-#streams { --len: .9; } #app { --len: .7; } #speed { --len: .7; } #integrity { --len: .8; }
-.ch .pin { display: grid; align-items: center; padding-block: calc(var(--hh) + 12px) 16px; }
-html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
+.ch .pin { display: grid; align-items: center; padding-block: clamp(48px, 6vw, 88px); }
+#streams { --len: 1; } #app { --len: .6; }
+@media (min-width: 900px) {
+  html.anim #streams, html.anim #app { height: calc(100vh * (1 + var(--len))); }
+  html.anim #streams .pin, html.anim #app .pin { position: sticky; top: 0; height: 100vh; height: 100svh; padding-block: calc(var(--hh) + 12px) 16px; }
+}
 .ch-inner { position: relative; z-index: 1; display: grid; gap: clamp(16px, 2.6vw, 40px); align-items: center; }
 .ch-copy { display: grid; gap: clamp(10px, 1.2vw, 16px); align-content: start; justify-items: start; }
 .wash { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--wash); opacity: clamp(0, (var(--p) + .05) / -.45, 1); }
@@ -229,10 +238,6 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
   .integrity-grid { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
   .app-grid { grid-template-columns: minmax(0, .5fr) minmax(0, 1.5fr); }
 }
-@media (max-width: 899px) {
-  .anim #app, .anim #integrity { height: auto; }
-  .anim #app .pin, .anim #integrity .pin { position: relative; height: auto; overflow: visible; padding-block: 48px; }
-}
 
 /* ---- Hero -------------------------------------------------------------------------------- */
 /* The first screen fits short viewports: the type scale follows both width and height, the app window is sized from the
@@ -243,7 +248,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 72px 72px, linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 72px 72px; -webkit-mask-image: radial-gradient(ellipse 70% 70% at 70% 45%, #000, transparent 75%); mask-image: radial-gradient(ellipse 70% 70% at 70% 45%, #000, transparent 75%); }
 .hero-bg { position: absolute; inset: 0; pointer-events: none; }
 .hero-bg svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; }
-.hero-bg path { stroke-width: 14; stroke-dasharray: 1 1.01; animation: lane-draw 2.2s var(--ease-out) both; }
+.hero-bg path { stroke-width: 14; stroke-dasharray: 1 1.01; animation: lane-draw 1.4s var(--ease-out) both; }
 .hero-bg path:nth-child(1) { stroke: var(--cyan); opacity: .32; animation-delay: .1s; }
 .hero-bg path:nth-child(2) { stroke: var(--ocean); opacity: .24; animation-delay: .22s; }
 .hero-bg path:nth-child(3) { stroke: var(--deep-teal); opacity: .2; animation-delay: .34s; }
@@ -252,7 +257,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .hero-grid { position: relative; z-index: 1; max-width: 1680px; display: grid; gap: clamp(20px, 3vw, 40px); align-items: center; }
 .hero-copy { display: grid; gap: clamp(10px, 1.8vh, 18px); justify-items: start; align-content: center; }
 .hero-copy .display { font-size: var(--hf); line-height: 1.02; }
-.hero-copy .ln > span { animation: line-up 1.05s var(--ease-out) both; animation-delay: var(--d, 0s); }
+.hero-copy .ln > span { animation: line-up .7s var(--ease-out) both; animation-delay: var(--d, 0s); }
 @keyframes line-up { from { transform: translateY(112%); } }
 .hero-copy .lead { max-width: 34ch; }
 .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -278,7 +283,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .win { position: relative; margin: 0; border-radius: 12px; overflow: hidden; background: var(--card, #fff);
   box-shadow: 0 0 0 1px var(--line), 0 50px 90px -40px rgba(7, 26, 38, .55), 0 18px 36px -24px rgba(7, 26, 38, .4); }
 :root[data-theme="dark"] .win { box-shadow: 0 0 0 1px rgba(217, 248, 250, .16), 0 50px 100px -40px rgba(0, 213, 232, .3), 0 24px 40px -24px rgba(0, 0, 0, .8); }
-.win-hero { animation: win-in 1s var(--ease-out) .3s both; }
+.win-hero { animation: win-in .7s var(--ease-out) .3s both; }
 @media (min-width: 900px) { .hero-stage .fl-speed { inset-inline-end: 4%; top: -13%; } .hero-stage .fl-sha { inset-inline-end: 4%; bottom: -9%; } .win-hero { width: max(360px, min(100%, calc((100svh - var(--hh) - 130px) * 1.6))); width: round(down, max(360px, min(100%, calc((100svh - var(--hh) - 130px) * 1.6))), 2px); } .fl-speed { inset-inline-end: 4%; top: -13%; } .fl-sha { inset-inline-end: 4%; bottom: -9%; } }
 @keyframes win-in { from { opacity: 0; transform: translate3d(0, 40px, 0) rotateY(calc(var(--dir) * -10deg)) rotateX(8deg); } to { opacity: 1; transform: none; } }
 .win img { width: 100%; height: auto; aspect-ratio: 1040 / 660; }
@@ -383,8 +388,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .sim-state { color: var(--acc); font-weight: 650; white-space: nowrap; }
 .sim-conns { margin-inline-start: auto; white-space: nowrap; flex: none; color: var(--fg2); font-size: .75rem; }
 .spd { display: grid; gap: 0; min-width: 150px; padding: 8px 12px 6px; overflow: hidden; }
-.spd-l { font-family: var(--mono); font-size: .6875rem; letter-spacing: .12em; text-transform: uppercase; color: var(--fg2); }
-.font-arabic .spd-l { font-family: var(--font-ar); letter-spacing: 0; text-transform: none; font-size: .8125rem; }
+.spd-l { font-size: .75rem; font-weight: 600; color: var(--fg2); }
 .spd-n b { font-size: 1.5rem; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .spd-n small { font-size: .8125rem; color: var(--fg2); }
 .spd-g { width: 100%; height: 24px; overflow: hidden; fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -397,7 +401,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .sha-t { display: grid; line-height: 1.25; }
 .sha-t b { font-size: .8125rem; }
 .sha-t code { font-size: .6875rem; color: var(--fg2); }
-.js .sha:not(.is-on) { opacity: 0; transform: scale(.9) translateY(8px); }
+.js-ready .sha:not(.is-on) { opacity: 0; transform: scale(.9) translateY(8px); }
 @media (max-width: 899px) {
   .fl-dl { inset-inline-start: 2%; bottom: -10%; width: min(280px, 74%); }
   .fl-speed { top: -7%; inset-inline-end: 2%; }
@@ -416,7 +420,8 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 
 /* ---- Streams: the logo draw, then three lanes into one file ----------------------------- */
 .streams .pin, #streams .pin { --s1: 1; --s2: 1; --s3: 1; --r1: 0; --r2: 0; --r3: 0; --ms: 1; --mx: 0; --my: 0; --lg: 1; --l0: 1; --l1: 1; --l2: 1; --fc: 1; --msd: 1.45; }
-.anim #streams .pin { --s1: .3; --s2: .33; --s3: .37; --ms: calc(var(--msd) * 1.12); --mx: 265.5; --my: 22.7; --lg: 0; --l0: 0; --l1: 0; --l2: 0; --fc: 0; }
+html.anim.js-ready #streams .pin, html.calm.js-ready #streams .pin { --s1: .3; --s2: .33; --s3: .37; --ms: calc(var(--msd) * 1.12); --mx: 265.5; --my: 22.7; --lg: 0; --l0: 0; --l1: 0; --l2: 0; --fc: 0; }
+html.calm.js-ready #streams .pin { --mx: 0; --my: 0; }
 .st-visual { position: relative; container-type: inline-size; width: 100%; max-width: 780px; justify-self: center; direction: ltr; }
 .hl { width: 100%; }
 .hl-svg { width: 100%; height: auto; overflow: visible; }
@@ -490,8 +495,6 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 /* ---- Integrity ---------------------------------------------------------------------------- */
 .panels { display: grid; gap: clamp(10px, 1.2vw, 14px); }
 .panel { position: relative; display: grid; gap: 8px; padding: clamp(14px, 1.6vw, 20px); border-radius: 18px; background: var(--card); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
-.panel-tag { font-family: var(--mono); font-size: .6875rem; letter-spacing: .14em; text-transform: uppercase; color: var(--acc); }
-.font-arabic .panel-tag { font-family: var(--font-ar); letter-spacing: 0; font-size: .8125rem; text-transform: none; }
 .panel-h { font-size: clamp(1.25rem, 1rem + .8vw, 1.625rem); font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; }
 .font-arabic .panel-h { letter-spacing: 0; }
 .panel-p { color: var(--fg2); font-size: .9375rem; max-width: 52ch; }
@@ -555,7 +558,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .font-arabic .strikes li { font-weight: 700; letter-spacing: 0; line-height: 1.3; }
 .strikes span { background: linear-gradient(var(--cyan), var(--cyan)) no-repeat left 0 top 56% / 0 .09em; -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background-size .8s var(--ease-io) calc(.4s + var(--i) * .16s), color .8s calc(.4s + var(--i) * .16s); }
 [dir="rtl"] .strikes span { background-position: right 0 top 62%; }
-.in .strikes span, html:not(.anim) .strikes span, .rv-all .strikes span { background-size: 100% .09em; color: #a9c3cc; }
+.in .strikes span, html:not(.anim):not(.js-ready) .strikes span, .rv-all .strikes span { background-size: 100% .09em; color: #a9c3cc; }
 .bp-add { grid-column: span 5; background: var(--bg-ice); }
 :root[data-theme="dark"] .bp-add { background: var(--card); }
 .bp-langs { grid-column: span 7; min-height: 250px; align-content: end; }
@@ -598,14 +601,14 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .vs { display: grid; }
 .vs-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 12px 0; border-top: 1px solid var(--line); align-items: baseline; }
 .vs-row:last-child { border-bottom: 1px solid var(--line); }
-.vs-head { display: none; border-top: 0; padding-block: 0 12px; font-family: var(--mono); font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--fg2); }
+.vs-head { display: none; border-top: 0; padding-block: 0 12px; font-size: .8125rem; font-weight: 600; color: var(--fg2); }
 .font-arabic .vs-head { font-family: var(--font-ar); letter-spacing: 0; text-transform: none; font-size: .875rem; }
-.vs-f { font-family: var(--mono); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--fg2); }
+.vs-f { font-size: .875rem; font-weight: 600; color: var(--fg2); }
 .font-arabic .vs-f { font-family: var(--font-ar); letter-spacing: 0; text-transform: none; font-size: .875rem; }
 .vs-r { position: relative; padding-inline-start: 16px; font-size: clamp(1rem, .95rem + .35vw, 1.2rem); font-weight: 700; letter-spacing: -0.015em; }
 .vs-r::before { content: ""; position: absolute; inset-inline-start: 0; top: .2em; bottom: .2em; width: 4px; border-radius: 2px; background: linear-gradient(var(--cyan) 0 30%, transparent 30% 35%, var(--ocean) 35% 65%, transparent 65% 70%, var(--deep-teal) 70%); }
 .vs-p { padding-inline-start: 16px; color: var(--fg2); font-size: .9375rem; }
-.vs-head .vs-r { font-size: .75rem; font-weight: 600; letter-spacing: .12em; }
+.vs-head .vs-r { font-size: .8125rem; font-weight: 600; }
 .vs-head .vs-r::before { display: none; }
 .vs-head .vs-r, .vs-head span:last-child { color: var(--fg); }
 .footnote { margin-top: 12px; font-size: .875rem; color: var(--fg2); max-width: 60ch; }
@@ -631,7 +634,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .licenses a { color: var(--fg2); text-underline-offset: .2em; transition: color var(--dur-1); }
 .licenses a:hover { color: var(--fg); }
 .term { display: grid; gap: 6px; width: 100%; padding: 12px 14px; border-radius: 12px; background: rgba(0, 0, 0, .3); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); font-size: .8125rem; overflow-x: auto; }
-.term-l { font-family: var(--mono); font-size: .6875rem; letter-spacing: .12em; text-transform: uppercase; color: var(--fg2); }
+.term-l { font-size: .75rem; font-weight: 600; color: var(--fg2); }
 .font-arabic .term-l { font-family: var(--font-ar); letter-spacing: 0; text-transform: none; font-size: .8125rem; }
 .term code { white-space: nowrap; color: #fff; }
 .term .p { color: var(--cyan); margin-inline-end: 8px; }
@@ -660,26 +663,26 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 /* Rules: the three-lane band used as a divider */
 .rule { display: block; width: min(100%, 360px); height: 14px; background: linear-gradient(to bottom, var(--cyan) 0 4px, transparent 4px 5px, var(--ocean) 5px 9px, transparent 9px 10px, var(--deep-teal) 10px 14px); -webkit-mask-image: linear-gradient(90deg, #000 60%, transparent); mask-image: linear-gradient(90deg, #000 60%, transparent); transform-origin: 0 50%; }
 [dir="rtl"] .rule { transform-origin: 100% 50%; -webkit-mask-image: linear-gradient(270deg, #000 60%, transparent); mask-image: linear-gradient(270deg, #000 60%, transparent); }
-.anim .rule.rv:not(.in) { opacity: 1; transform: scaleX(0); }
-.anim .rule.rv { transition: transform 1.4s var(--ease-out); }
+html:is(.anim, .calm).js-ready .rule.rv:not(.in) { opacity: 1; transform: scaleX(0); }
+html:is(.anim, .calm) .rule.rv { transition: transform .7s var(--ease-out); }
 
 /* Download */
 .cta { overflow: hidden; }
 .dl-wrap { position: relative; width: 100%; max-width: 860px; }
-/* The three lanes arrive from the edge and end at the download cards (decorative, desktop only). */
-.cta-lines { position: absolute; inset-inline-start: calc(100% + 12px); top: -152px; width: 520px; pointer-events: none; }
-.cta-lines svg { width: 100%; height: auto; fill: none; overflow: visible; }
+/* The three lanes run UNDER the portable-zip card (card above, with a solid background) and leave from its end side, climbing off the edge of the band (decorative, desktop only). */
+.cta-lines { position: absolute; z-index: 0; inset-inline-start: calc(100% - 190px); top: calc(50% - 300px); width: 900px; height: 420px; pointer-events: none; }
+.cta-lines svg { display: block; width: 900px; height: 420px; fill: none; overflow: visible; }
 .cta-lines path { stroke-width: 14px; stroke-dasharray: 1 1.01; transition: stroke-dashoffset 2.4s var(--ease-out); }
 .cta-lines path:nth-child(1) { stroke: var(--cyan); opacity: .75; }
 .cta-lines path:nth-child(2) { stroke: var(--ocean); opacity: .65; transition-delay: .15s; }
 .cta-lines path:nth-child(3) { stroke: var(--ice); opacity: .35; transition-delay: .3s; }
-.anim .cta:not(.in) .cta-lines path { stroke-dashoffset: 1; }
+html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset: 1; }
 [dir="rtl"] .cta-lines svg { transform: scaleX(-1); }
 @media (max-width: 1099px) { .cta-lines { display: none; } }
 .cta-inner { position: relative; display: grid; gap: clamp(10px, 1.4vw, 16px); justify-items: start; }
-.dl-grid { display: grid; gap: 10px; width: 100%; margin-top: 4px; }
+.dl-grid { position: relative; z-index: 1; display: grid; gap: 10px; width: 100%; margin-top: 4px; }
 @media (min-width: 720px) { .dl-grid { grid-template-columns: 1.2fr 1fr; } }
-.dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: center; padding: 14px 18px; border-radius: 16px; text-decoration: none; background: rgba(217, 248, 250, .06); box-shadow: inset 0 0 0 1px var(--line); transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3); }
+.dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: center; padding: 14px 18px; border-radius: 16px; text-decoration: none; background: linear-gradient(rgba(217, 248, 250, .06), rgba(217, 248, 250, .06)), var(--bg); box-shadow: inset 0 0 0 1px var(--line); transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3); }
 .dl:hover { transform: translateY(-4px); box-shadow: inset 0 0 0 1.5px var(--cyan); }
 .dl:active { transform: translateY(-1px) scale(.99); }
 .dl-main { background: var(--cyan); color: var(--abyss); box-shadow: none; }
@@ -732,18 +735,40 @@ html:not(.anim) .ch .pin { padding-block: clamp(56px, 7vw, 96px); }
 .nf-block .h3 { color: #fff; }
 .nf-block p { color: var(--fg2); }
 
-/* ---- Reduced motion and phones ------------------------------------------------------------ */
-/* The head script sets html[data-motion] from the OS setting or the visitor's own Animations switch (never the raw media query),
-   so forcing motion on with an OS "reduce" setting leaves no reduce-only rule behind. Reduced = instant states plus a 200 ms opacity fade on the hero. */
-html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { animation: none !important; transition: none !important; }
-html[data-motion="reduced"] .hero .rise { animation: fade-soft .2s ease-out both !important; animation-delay: 0s !important; }
+/* ---- Reduced motion, lite level and phones ------------------------------------------------ */
+/* html[data-motion] comes from the OS setting or the visitor's own Animations switch (never the raw media query), so forcing motion
+   on with an OS "reduce" setting leaves no reduce-only rule behind. Calm keeps every non-spatial animation (fades, progress bars
+   filling, counters, the SHA-256 digest resolving, the stroke draws, the hero simulation) and drops the spatial ones: parallax, the 3D
+   tilt, large slides, scroll-scrubbed pinned stages and endless loops. */
 @keyframes fade-soft { from { opacity: 0; } }
+html.calm .rise, html.calm .fl-in, html.calm .win-hero { animation-name: fade-soft; }
+html.calm .hero-copy .ln > span { animation-name: fade-soft; }
+html.calm .win-app, html.calm .hero .par, html.calm .hero .fl { transform: none; }
+html.calm .rt-d .rt-pg b::after, html.calm .spd-g g, html.calm .dot::after, html.calm .ln-flow, html.calm .vbars i, html.calm .path::after { animation: none; }
+html.calm .pin .mask .ln > span { transform: none; opacity: var(--t1); }
+html.calm .pin .mask .ln:nth-child(2) > span { opacity: var(--t2); }
+html.calm .pin .fade { transform: none; }
+/* Lite level (weak device, data saver, or a session the frame monitor measured as slow): same content, less work. */
+html[data-level="lite"] .win-app, html[data-level="lite"] .hero .par, html[data-level="lite"] .hero .fl { transform: none; }
+html[data-level="lite"] .rt-d .rt-pg b::after, html[data-level="lite"] .spd-g g, html[data-level="lite"] .dot::after, html[data-level="lite"] .ln-flow, html[data-level="lite"] .vbars i { animation: none; }
+html[data-level="lite"] .hero-bg path:nth-child(3) { display: none; }
+html[data-level="lite"] .win { box-shadow: 0 0 0 1px var(--line), 0 18px 36px -24px rgba(7, 26, 38, .4); }
+/* Opening animations wait for the page font (head script adds html.ready); without JS they simply run. */
+.js:not(.ready) :is(.rise, .hero-copy .ln > span, .win-hero, .fl-in, .brand-logo, .hero-bg path, .rt-pg b) { animation-play-state: paused; }
+/* A hidden tab runs nothing. */
+html.tab-hidden *, html.tab-hidden *::before, html.tab-hidden *::after { animation-play-state: paused !important; }
+/* The one-time hint for visitors whose system asks for reduced motion. It floats under the header, so it never moves the layout. */
+.mo-hint { position: absolute; z-index: 2; top: calc(100% + 8px); inset-inline-end: var(--gutter); display: flex; align-items: center; gap: 10px; max-width: min(420px, calc(100vw - 2 * var(--gutter))); padding: 10px 10px 10px 14px; border-radius: 14px; background: var(--card, #fff); color: var(--fg); box-shadow: 0 0 0 1px var(--line), 0 18px 40px -18px rgba(7, 26, 38, .45); animation: fade-soft var(--dur-3) var(--ease-out) both; }
+.mo-hint[hidden] { display: none; }
+.mo-hint p { margin: 0; font-size: .8125rem; line-height: 1.4; }
+.mo-hint .btn { flex: none; }
+:root[data-theme="dark"] .mo-hint { background: #0d2837; box-shadow: 0 0 0 1px rgba(217, 248, 250, .18), 0 18px 40px -18px rgba(0, 0, 0, .8); }
 @media (max-width: 699px) {
   #streams .pin { --msd: 1.7; }
   .hero-bg path:nth-child(3) { display: none; }
 }
 /* Pause the endless loops while their chapter is off-screen (js/site.js toggles .off). */
-.off .ln-flow, .off .dot::after, .off .vbars i, .off .spd-g g { animation-play-state: paused; }
+.off .ln-flow, .off .dot::after, .off .vbars i, .off .spd-g g, .off .rt-d .rt-pg b::after { animation-play-state: paused; }
 
 /* Off-screen chapters skip style, layout and paint until they come near (pinned chapters have an
    explicit height, so offsets stay exact; the unpinned blocks remember their last size). */

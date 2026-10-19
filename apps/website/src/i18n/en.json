@@ -23,7 +23,11 @@
     "theme": "Switch between light and dark",
     "menu": "Menu",
     "source": "GitHub",
-    "githubLabel": "Riptide on GitHub"
+    "githubLabel": "Riptide on GitHub",
+    "motionHintLabel": "Animation setting",
+    "motionHint": "Animations are reduced because your system asks for less motion. Turn them on?",
+    "motionOn": "On",
+    "motionDismiss": "Dismiss"
   },
   "hero": {
     "status": "Alpha {n} for Windows 10 and 11",
@@ -219,7 +223,6 @@
     "titleB": "Lose nothing.",
     "lead": "Progress is saved every second. Only a matching checksum makes a download Completed.",
     "resume": {
-      "tag": "A / Resume",
       "h": "Exact resume",
       "p": "Riptide continues at the saved byte. If the file changed on the server, it starts over.",
       "file": "ubuntu-24.04.iso",
@@ -231,7 +234,6 @@
       "label": "Simulation: a power cut stops a download, and it resumes from the same byte."
     },
     "verify": {
-      "tag": "B / Verify",
       "h": "Verified, then renamed",
       "p": "The .rtpart file is hashed and compared. Only a match becomes the final file.",
       "file": "ubuntu-24.04.iso",

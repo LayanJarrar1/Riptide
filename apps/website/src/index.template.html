@@ -37,8 +37,8 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Riptide","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 10, Windows 11","description":"{{meta.description}}","url":"{{siteUrl}}","downloadUrl":"{{releasesUrl}}","license":"https://www.gnu.org/licenses/gpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
   <script>
     // Before first paint: light is the default whatever the OS prefers; only a saved choice
-    // switches to dark. `anim` turns on the scroll story (the OS setting, or the visitor's own Animations choice); `rv-all`
-    // is a failsafe that shows every reveal if the script never runs.
+    // switches to dark. `anim` is the full scroll story, `calm` the reduced one (fades, progress and counters, no parallax,
+    // no pinned scrubbing); which one follows the OS setting unless the visitor chose.
     (function () {
       var d = document.documentElement;
       d.classList.add('js');
@@ -54,14 +54,25 @@
       // data-motion: the saved or ?motion= choice wins; otherwise follow the OS setting.
       full = mo === 'on' ? true : mo === 'off' ? false : !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
       d.dataset.motion = full ? 'full' : 'reduced';
-      if (full) d.classList.add('anim');
+      d.classList.add(full ? 'anim' : 'calm');
+      // Motion level: 'lite' on weak devices, data-saver or after the frame monitor measured a slow session (js/site.js).
+      var lite = false;
+      try {
+        var nv = navigator, cn = nv.connection;
+        lite = sessionStorage.getItem('riptide-lite') === '1' || (nv.hardwareConcurrency > 0 && nv.hardwareConcurrency <= 2) || (nv.deviceMemory > 0 && nv.deviceMemory <= 2) || !!(cn && cn.saveData);
+      } catch (e) { /* default level */ }
+      d.dataset.level = lite ? 'lite' : 'full';
       try {
         var t = localStorage.getItem('riptide-theme');
         if (t === 'light' || t === 'dark') d.dataset.theme = t;
       } catch (e) { /* storage blocked: stay light */ }
       var m = document.querySelector('meta[name="theme-color"]');
       if (m && d.dataset.theme === 'dark') m.setAttribute('content', '#071a26');
-      setTimeout(function () { d.classList.add('rv-all'); }, 4000);
+      // `ready` releases the opening animations once the page font is in (or after 1.2 s); `rv-all` is the failsafe that shows every reveal if the script never finished initialising.
+      var go = function () { d.classList.add('ready'); };
+      try { document.fonts.load('700 1em ' + (d.lang === 'ar' ? '"IBM Plex Sans Arabic"' : 'Inter')).then(go, go); } catch (e) { go(); }
+      setTimeout(go, 1200);
+      setTimeout(function () { if (!d.classList.contains('js-ready')) d.classList.add('rv-all'); }, 4000);
     })();
   </script>
 </head>
@@ -100,6 +111,7 @@
         </div>
       </div>
     </nav>
+    <div class="mo-hint" hidden role="group" aria-label="{{nav.motionHintLabel}}"><p>{{nav.motionHint}}</p><button class="btn btn-primary btn-sm mo-on" type="button">{{nav.motionOn}}</button><button class="icon-btn mo-x" type="button" aria-label="{{nav.motionDismiss}}">{{{svg close}}}</button></div>
   </header>
 
   <main id="main">
@@ -289,7 +301,6 @@
           </div>
           <div class="panels">
             <div class="panel rs" data-phase="done" role="img" aria-label="{{integrity.resume.label}}">
-              <p class="panel-tag">{{integrity.resume.tag}}</p>
               <h3 class="panel-h">{{integrity.resume.h}}</h3>
               <p class="panel-p">{{integrity.resume.p}}</p>
               <div class="rs-head" aria-hidden="true">
@@ -306,7 +317,6 @@
               <div class="rs-cut" aria-hidden="true"></div>
             </div>
             <div class="panel vf" role="img" aria-label="{{integrity.verify.label}}">
-              <p class="panel-tag">{{integrity.verify.tag}}</p>
               <h3 class="panel-h">{{integrity.verify.h}}</h3>
               <p class="panel-p">{{integrity.verify.p}}</p>
               <div class="vf-body" aria-hidden="true">
@@ -444,7 +454,7 @@
         <h2 class="display mask rv" id="download-title"><span class="ln"><span>{{download.title}}</span></span></h2>
         <p class="lead">{{download.lead}}</p>
         <div class="dl-wrap">
-          <div class="cta-lines" aria-hidden="true"><svg viewBox="0 0 440 260" focusable="false"><path pathLength="1" d="M460 20 H 400 C 280 20 260 200 140 200 H -20"/><path pathLength="1" d="M460 39 H 400 C 280 39 260 200 140 200 H -20"/><path pathLength="1" d="M460 58 H 400 C 280 58 260 200 140 200 H -20"/></svg></div>
+          <div class="cta-lines" aria-hidden="true"><svg viewBox="0 -300 900 420" width="900" height="420" focusable="false"><path pathLength="1" d="M0 -19 H170 C330 -19 360 -209 520 -209 H920"/><path pathLength="1" d="M0 0 H170 C330 0 360 -190 520 -190 H920"/><path pathLength="1" d="M0 19 H170 C330 19 360 -171 520 -171 H920"/></svg></div>
           <div class="dl-grid">
           <a class="dl dl-main" href="{{installerUrl}}">
             <span class="dl-ico" aria-hidden="true">{{{svg download}}}</span>

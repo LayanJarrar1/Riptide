@@ -8,6 +8,7 @@ Needs Python Playwright (`pip install playwright`). Uses the installed Microsoft
 Exit code 0 when every check passes, 1 otherwise.
 """
 import os
+import re
 import sys
 from urllib.parse import urljoin, urlparse
 
@@ -125,23 +126,283 @@ with sync_playwright() as p:
                 check(f'no console errors {w}x{h} {lang} {theme}', not page.errors, '; '.join(page.errors)[:160])
                 ctx.close()
 
-    # Reduced motion: no pinning, everything visible, simulation shows its final state
+    # ---- Calm motion (the OS asks for less): alive, but no parallax, no pinning, no endless loops ----
     for lang, url in PAGES:
         ctx, page = new_page(browser, 1440, 900, reduced=True)
         page.goto(url, wait_until='load')
-        page.wait_for_timeout(600)
-        tag = f'[{lang} reduced-motion]'
-        check(f'{tag} no anim class', not page.evaluate("document.documentElement.classList.contains('anim')"))
+        page.wait_for_timeout(1800)
+        tag = f'[{lang} calm]'
+        check(f'{tag} calm class, no anim class', page.evaluate("[document.documentElement.classList.contains('calm'), document.documentElement.classList.contains('anim')]") == [True, False])
+        check(f'{tag} js-ready and fonts-ready set', page.evaluate("[document.documentElement.classList.contains('js-ready'), document.documentElement.classList.contains('ready')]") == [True, True])
         sticky = page.evaluate("Array.from(document.querySelectorAll('.pin')).filter(e => getComputedStyle(e).position === 'sticky').length")
         check(f'{tag} nothing pinned', sticky == 0, str(sticky))
-        hidden = page.evaluate("Array.from(document.querySelectorAll('.rv, .hero-copy .rise, .hero-copy .ln > span')).filter(e => { const c = getComputedStyle(e); return c.opacity === '0' || c.visibility === 'hidden'; }).length")
-        check(f'{tag} all content visible without animation', hidden == 0, str(hidden))
-        anims = page.evaluate("document.getAnimations().filter(a => { const t = a.effect.getTiming(); return !(t.duration <= 200 && t.iterations === 1); }).length")
-        check(f'{tag} no running animations (only <=200 ms fades allowed)', anims == 0, str(anims))
-        check(f'{tag} data-motion is reduced by default', page.evaluate("document.documentElement.dataset.motion") == 'reduced')
-        check(f'{tag} hero shows the completed simulation and verified chip', page.is_visible('.sha') and page.evaluate("getComputedStyle(document.querySelector('.sha')).opacity") == '1')
-        check(f'{tag} CTA visible and clickable', page.is_visible('.hero .btn-primary'))
+        check(f'{tag} CTA and headline visible without scrolling', page.is_visible('.hero .btn-primary') and page.is_visible('h1'))
+        # alive: the hero simulation counts, and fades are running or done
+        a = page.inner_text('[data-o="pct"]') + page.inner_text('[data-o="speed"]')
+        page.wait_for_timeout(1500)
+        b = page.inner_text('[data-o="pct"]') + page.inner_text('[data-o="speed"]')
+        check(f'{tag} hero simulation counts', a != b, f'{a} -> {b}')
+        check(f'{tag} app preview progress bars animate (fill)', page.evaluate("document.getAnimations().some(a => a.animationName === 'rt-fill')") or page.evaluate("getComputedStyle(document.querySelector('.rt-d .rt-pg b')).transform") != 'none')
+        # no spatial or endless motion
+        page.evaluate("window.scrollTo(0, 400)")
+        page.wait_for_timeout(500)
+        hp = page.evaluate("document.getElementById('hero').style.getPropertyValue('--hp')")
+        par = page.evaluate("getComputedStyle(document.querySelector('.hero .par')).transform")
+        check(f'{tag} no hero parallax', hp in ('', '0') and par == 'none', f'{hp!r} {par!r}')
+        loops = page.evaluate("document.getAnimations().filter(a => a.effect && a.effect.getTiming().iterations === Infinity && a.playState === 'running').map(a => a.animationName)")
+        check(f'{tag} no endless loops running', not loops, str(loops))
+        # reveals are opacity fades: scrolling through shows everything, nothing translated
+        total = page.evaluate("document.documentElement.scrollHeight")
+        for y in range(0, total, 450):
+            page.evaluate(f"window.scrollTo(0, {y})")
+            page.wait_for_timeout(120)
+        page.wait_for_timeout(1500)
+        hidden = page.evaluate("Array.from(document.querySelectorAll('.rv, .hero-copy .rise')).filter(e => getComputedStyle(e).opacity === '0').length")
+        check(f'{tag} every reveal ends visible after scrolling through', hidden == 0, str(hidden))
+        moved = page.evaluate("Array.from(document.querySelectorAll('.rv.in')).filter(e => { const t = getComputedStyle(e).transform; return t !== 'none' && t !== 'matrix(1, 0, 0, 1, 0, 0)'; }).length")
+        check(f'{tag} reveals use no translation', moved == 0, str(moved))
+        # one-shot chapters finished (SHA digest resolved, race at 100 %)
+        try:
+            page.wait_for_function("document.querySelector('#speed .pin').style.getPropertyValue('--p') === '1' && document.querySelector('#integrity .pin').style.getPropertyValue('--p') === '1'", timeout=9000)
+        except Exception:
+            pass
+        fin = page.evaluate("[document.querySelector('#speed [data-o=pct]').textContent, document.querySelector('#integrity [data-o=ok]').textContent.length > 20, document.querySelector('#speed .pin').style.getPropertyValue('--p')]")
+        check(f'{tag} one-shot chapters reach their end state', fin[0] == '100%' and fin[1] and fin[2] == '1', str(fin))
+        check(f'{tag} no console errors', not page.errors, '; '.join(page.errors)[:200])
         ctx.close()
+
+    # ---- First-visit hint when the OS reduces motion ----
+    for lang, url in PAGES:
+        ctx, page = new_page(browser, 1440, 900, reduced=True)
+        page.goto(url, wait_until='load')
+        page.wait_for_timeout(500)
+        tag = f'[{lang} hint]'
+        check(f'{tag} shown on first visit', page.is_visible('.mo-hint'))
+        box = page.evaluate("(() => { const r = document.querySelector('.mo-hint').getBoundingClientRect(); const h = document.querySelector('.site-header').getBoundingClientRect(); return [r.top >= h.bottom - 1, r.right <= innerWidth && r.left >= 0]; })()")
+        check(f'{tag} sits under the header inside the viewport', box == [True, True], str(box))
+        shift = page.evaluate("document.querySelector('h1').getBoundingClientRect().top")
+        page.click('.mo-x')
+        check(f'{tag} dismiss hides it', not page.is_visible('.mo-hint'))
+        check(f'{tag} dismiss causes no layout shift', abs(page.evaluate("document.querySelector('h1').getBoundingClientRect().top") - shift) < 0.5)
+        page.reload(wait_until='load')
+        page.wait_for_timeout(300)
+        check(f'{tag} dismissal persists', not page.is_visible('.mo-hint'))
+        ctx.close()
+        ctx, page = new_page(browser, 1440, 900, reduced=True)
+        page.goto(url, wait_until='load')
+        page.click('.mo-on')
+        page.wait_for_load_state('load')
+        page.wait_for_timeout(400)
+        check(f'{tag} "On" turns full motion on', page.evaluate("[document.documentElement.dataset.motion, localStorage.getItem('riptide-motion')]") == ['full', 'on'])
+        check(f'{tag} not shown once a choice exists', not page.is_visible('.mo-hint'))
+        ctx.close()
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE, wait_until='load')
+    check('[hint] never shown without an OS reduce setting', not page.is_visible('.mo-hint'))
+    ctx.close()
+
+    # ---- Pinned stage budget and numbered labels ----
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(500)
+    ch = page.evaluate("Array.from(document.querySelectorAll('main > section.ch')).map(s => [s.id, getComputedStyle(s.querySelector('.pin')).position, (s.offsetHeight - innerHeight) / innerHeight])")
+    pinned = {c[0]: c[2] for c in ch if c[1] == 'sticky'}
+    check('[stages] only the logo and app chapters are pinned', set(pinned) == {'streams', 'app'}, str(ch))
+    check('[stages] streams stage scrolls <= 1.3 viewport heights', 0.8 <= pinned.get('streams', 9) <= 1.3, str(pinned))
+    check('[stages] app stage scrolls <= 0.8 viewport heights', pinned.get('app', 9) <= 0.8, str(pinned))
+    ctx.close()
+    ctx, page = new_page(browser, 390, 844)
+    page.goto(BASE + '?motion=on', wait_until='load')
+    sticky = page.evaluate("Array.from(document.querySelectorAll('.pin')).filter(e => getComputedStyle(e).position === 'sticky').length")
+    check('[stages] nothing is pinned on phones, even with full motion', sticky == 0, str(sticky))
+    ctx.close()
+    for lang, url in PAGES:
+        for path, label in (('', 'home'), ('privacy/', 'privacy'), ('404.html', '404')):
+            ctx, page = new_page(browser)
+            page.goto((url if path == '' else url + path) if path != '404.html' else BASE + '404.html', wait_until='load')
+            html = page.content()
+            texts = page.evaluate("Array.from(document.querySelectorAll('.eyebrow, h1, h2, h3, .h2, .h3, .lg-t, .panel-tag')).map(e => e.textContent.trim())")
+            bad = [t for t in texts if re.match(r'^\d{1,2}\s*/\s*\S', t)]
+            check(f'[{lang} {label}] no "NN /" numbered labels', not bad, str(bad))
+            nxt = re.findall(r'Next release|الإصدار القادم', html)
+            check(f'[{lang} {label}] no "Next release" tags', not nxt, str(nxt))
+            if label == 'home':
+                numbered = page.evaluate("Array.from(document.querySelectorAll('.lg-n, .dot')).filter(e => e.textContent.trim() !== '').length")
+                check(f'[{lang} home] annotation markers carry no numbers', numbered == 0)
+                legend = page.evaluate("Array.from(document.querySelectorAll('.legend .lg-t')).map(e => e.textContent)")
+                check(f'[{lang} home] annotations exclude batch/queues ({len(legend)} left)', len(legend) == 2 and not any(('Batch' in t or 'Queues' in t or 'دفعة' in t or 'قوائم' in t) for t in legend), str(legend))
+                eb = page.locator('.eyebrow').count()
+                check(f'[{lang} home] only the status badges remain as labels ({eb})', eb == 2)
+            ctx.close()
+
+    # ---- Download band: the stream line runs under the cards (z-order), never over them, and is gone on narrow screens ----
+    for lang, url in PAGES:
+        for w, h_ in ((1920, 1080), (1440, 900), (1366, 768), (1280, 720), (768, 1024), (390, 844)):
+            ctx, page = new_page(browser, w, h_)
+            page.goto(url, wait_until='load')
+            page.evaluate("window.scrollTo(0, document.getElementById('download').getBoundingClientRect().top + scrollY - 60)")
+            page.wait_for_timeout(1200)
+            if w >= 1100:
+                res = page.evaluate("""() => Array.from(document.querySelectorAll('.dl')).map((e) => {
+                  const b = e.getBoundingClientRect(); const rtl = document.dir === 'rtl';
+                  return [rtl ? b.left + 3 : b.right - 3, rtl ? b.right - 3 : b.left + 3].map((x) => { const t = document.elementFromPoint(x, b.top + b.height / 2); return !!t && e.contains(t); });
+                })""")
+                z = page.evaluate("(() => { const l = getComputedStyle(document.querySelector('.cta-lines')); const g = getComputedStyle(document.querySelector('.dl-grid')); return [l.zIndex, g.zIndex]; })()")
+                check(f'[{lang} band {w}] stream line is under both cards at both edges (elementFromPoint)', all(all(r) for r in res) and len(res) == 2, str(res))
+                check(f'[{lang} band {w}] cards stack above the stream', int(z[1]) > int(z[0]), str(z))
+                ov = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                check(f'[{lang} band {w}] no horizontal overflow', ov <= 0, str(ov))
+            else:
+                shown = page.evaluate("getComputedStyle(document.querySelector('.cta-lines')).display")
+                check(f'[{lang} band {w}] stream is hidden on narrow screens', shown == 'none', shown)
+            ctx.close()
+
+    # ---- Reliability of the scroll engine (full motion) ----
+    def p_of(page, sel='#streams .pin'):
+        return page.evaluate(f"parseFloat(document.querySelector('{sel}').style.getPropertyValue('--p'))")
+
+    def expected(page, sel='#streams'):
+        return page.evaluate(f"""(() => {{ const s = document.querySelector('{sel}'); const top = s.getBoundingClientRect().top + scrollY; const len = s.offsetHeight - innerHeight; const raw = scrollY < top ? (scrollY - top) / innerHeight : Math.min(1, (scrollY - top) / len); return raw < 0 ? raw : Math.min(1, raw / 0.85); }})()""")
+
+    def stage_y(page, frac, sel='#streams'):
+        y = page.evaluate(f"(() => {{ const s = document.querySelector('{sel}'); return s.getBoundingClientRect().top + scrollY + (s.offsetHeight - innerHeight) * {frac}; }})()")
+        page.evaluate(f"window.scrollTo(0, {y})")
+        page.wait_for_timeout(900)
+
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(600)
+    stage_y(page, 0.5)
+    p1, e1 = p_of(page), expected(page)
+    check('[engine] progress follows the scroll position (eased value settles)', abs(p1 - e1) < 0.02, f'{p1} vs {e1}')
+    stage_y(page, 0.95)
+    p2 = p_of(page)
+    check('[engine] stage reaches its end state before the pin releases (>= 95 % of the stage)', p2 == 1.0, str(p2))
+    stage_y(page, 0.0)
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(900)
+    check('[engine] scrolling back up reverses to the start', p_of(page) <= 0, str(p_of(page)))
+    # smoothing is on the value only: after a jump the value is still moving a frame later, native scroll is instant
+    page.evaluate("window.scrollTo(0, 0)")
+    y = page.evaluate("(() => { const s = document.querySelector('#streams'); return s.getBoundingClientRect().top + scrollY + (s.offsetHeight - innerHeight) * 0.5; })()")
+    page.evaluate(f"window.scrollTo(0, {y})")
+    check('[engine] native scroll position is exact immediately (no scroll-jacking)', abs(page.evaluate("scrollY") - y) < 1)
+    # mid-page reload
+    stage_y(page, 0.5)
+    before = (p_of(page), page.evaluate("getComputedStyle(document.querySelector('#streams .pin')).getPropertyValue('--ms')"))
+    page.reload(wait_until='load')
+    page.wait_for_timeout(1500)
+    after = (p_of(page), page.evaluate("getComputedStyle(document.querySelector('#streams .pin')).getPropertyValue('--ms')"))
+    check('[engine] mid-page reload restores the stage state', abs(before[0] - after[0]) < 0.03 and after[0] == after[0], f'{before} -> {after}')
+    # back/forward (navigate away and back)
+    page.goto(BASE + 'privacy/', wait_until='load')
+    page.go_back(wait_until='load')
+    page.wait_for_timeout(1500)
+    pb = p_of(page)
+    check('[engine] back/forward restores the stage state', abs(pb - expected(page)) < 0.03 and pb == pb, f'{pb} vs {expected(page)}')
+    # anchor jump
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(300)
+    page.click('.nav-links a[href="#integrity"]')
+    page.wait_for_timeout(5500)
+    cur = page.evaluate("[document.querySelector('#integrity [data-o=ok]').textContent.length > 20, document.querySelector('#integrity .pin').style.getPropertyValue('--p')]")
+    check('[engine] anchor jump lands on a finished chapter', cur[0] and cur[1] == '1', str(cur))
+    # resize 1440 -> 390 -> 1440
+    stage_y(page, 0.5)
+    page.set_viewport_size({'width': 390, 'height': 844})
+    page.wait_for_timeout(1200)
+    mid = page.evaluate("[document.querySelector('#streams').dataset.mode, getComputedStyle(document.querySelector('#streams .pin')).position]")
+    check('[engine] phone width unpins the stage', mid[1] != 'sticky', str(mid))
+    ov = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    check('[engine] no overflow after shrinking', ov <= 0, str(ov))
+    page.set_viewport_size({'width': 1440, 'height': 900})
+    page.wait_for_timeout(1200)
+    stage_y(page, 0.5)
+    p3, e3 = p_of(page), expected(page)
+    check('[engine] stage progress is right again after 1440 -> 390 -> 1440', abs(p3 - e3) < 0.03 and p3 == p3, f'{p3} vs {e3}')
+    clamped = page.evaluate("Array.from(document.querySelectorAll('.pin')).every(p => { const v = parseFloat(p.style.getPropertyValue('--p')); return !(v > 1.0001) && !(v < -1.0001); })")
+    check('[engine] every progress value stays in [-1, 1]', clamped)
+    check('[engine] no console errors across the sequence', not page.errors, '; '.join(page.errors)[:200])
+    ctx.close()
+
+    # hidden tab pauses the simulation and resumes cleanly
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(2500)
+    page.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange'));")
+    page.wait_for_timeout(300)
+    a = page.inner_text('[data-o="pct"]') + page.inner_text('[data-o="speed"]')
+    page.wait_for_timeout(1500)
+    b = page.inner_text('[data-o="pct"]') + page.inner_text('[data-o="speed"]')
+    check('[tab] simulation pauses while the tab is hidden', a == b and page.evaluate("document.documentElement.classList.contains('tab-hidden')"), f'{a} {b}')
+    page.evaluate("Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange'));")
+    page.wait_for_timeout(1500)
+    c = page.inner_text('[data-o="pct"]') + page.inner_text('[data-o="speed"]')
+    check('[tab] simulation resumes when the tab is visible', c != b and not page.evaluate("document.documentElement.classList.contains('tab-hidden')"), f'{b} {c}')
+    check('[tab] no console errors', not page.errors)
+    ctx.close()
+
+    # ---- Adaptive performance ----
+    for label, script in (('hardwareConcurrency <= 2', "Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 });"),
+                          ('deviceMemory <= 2', "Object.defineProperty(navigator, 'deviceMemory', { get: () => 2 });"),
+                          ('saveData', "Object.defineProperty(navigator, 'connection', { get: () => ({ saveData: true }) });")):
+        ctx = browser.new_context(viewport={'width': 1440, 'height': 900})
+        ctx.add_init_script(script)
+        page = ctx.new_page()
+        page.goto(BASE + '?motion=on', wait_until='load')
+        check(f'[lite] starts in lite on {label}', page.evaluate("document.documentElement.dataset.level") == 'lite')
+        ctx.close()
+    ctx, page = new_page(browser, 1440, 900)
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(500)
+    check('[lite] normal device starts at the full level', page.evaluate("document.documentElement.dataset.level") == 'full')
+    cdp = ctx.new_cdp_session(page)
+    cdp.send('Emulation.setCPUThrottlingRate', {'rate': 20})
+    # keep scrolling with some main-thread load so frames are slow
+    for i in range(70):
+        page.evaluate(f"window.scrollBy(0, 40); (() => {{ const t = performance.now(); while (performance.now() - t < 12); }})()")
+        page.wait_for_timeout(20)
+    page.wait_for_timeout(500)
+    lvl = page.evaluate("[document.documentElement.dataset.level, sessionStorage.getItem('riptide-lite')]")
+    check('[lite] sustained slow frames switch to lite and remember it', lvl == ['lite', '1'], str(lvl))
+    cdp.send('Emulation.setCPUThrottlingRate', {'rate': 1})
+    shown = page.evaluate("Array.from(document.querySelectorAll('h1, h2')).every(e => getComputedStyle(e).display !== 'none')")
+    check('[lite] content stays visible and usable', shown and page.is_visible('.site-header'))
+    page.reload(wait_until='load')
+    check('[lite] lite is remembered for the session', page.evaluate("document.documentElement.dataset.level") == 'lite')
+    check('[lite] no console errors', not page.errors, '; '.join(page.errors)[:200])
+    ctx.close()
+
+    # ---- Robustness: no layout shift, script failure, missing IntersectionObserver ----
+    ctx, page = new_page(browser, 1440, 900)
+    page.add_init_script("window.__cls = 0; new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__cls += e.value; }).observe({ type: 'layout-shift', buffered: true });")
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(1500)
+    total = page.evaluate("document.documentElement.scrollHeight")
+    for y in range(0, total, 500):
+        page.evaluate(f"window.scrollTo(0, {y})")
+        page.wait_for_timeout(100)
+    page.wait_for_timeout(500)
+    cls = page.evaluate("window.__cls")
+    check('[load] cumulative layout shift stays under 0.02', cls < 0.02, str(cls))
+    ctx.close()
+    ctx, page = new_page(browser, 1440, 900)
+    page.route('**/js/site.js*', lambda route: route.abort())
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(4600)
+    vis = page.evaluate("[document.documentElement.classList.contains('js-ready'), Array.from(document.querySelectorAll('.rv')).filter(e => getComputedStyle(e).opacity === '0').length]")
+    check('[failsafe] script missing: nothing is hidden (reveals forced visible)', vis == [False, 0] and page.is_visible('h1') and page.is_visible('.hero .btn-primary'), str(vis))
+    ctx.close()
+    ctx = browser.new_context(viewport={'width': 1440, 'height': 900})
+    ctx.add_init_script("delete window.IntersectionObserver;")
+    page = ctx.new_page()
+    page.goto(BASE + '?motion=on', wait_until='load')
+    page.wait_for_timeout(500)
+    page.evaluate("window.scrollTo(0, 3000)")
+    page.wait_for_timeout(800)
+    fin = page.evaluate("[Array.from(document.querySelectorAll('.rv')).filter(e => getComputedStyle(e).opacity === '0').length, document.documentElement.classList.contains('rv-all')]")
+    check('[fallback] without IntersectionObserver every final state is visible', fin == [0, True], str(fin))
+    ctx.close()
 
     # Header never overlaps the hero, and the first screen fits short viewports
     for w, h in VIEWPORTS:

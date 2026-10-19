@@ -46,7 +46,7 @@ apps/website/
     i18n/ar.json             every Arabic string (same keys, same shape)
     icons/*.svg              inline icons, inserted with {{{svg name}}}; hero-logo.svg is the brand-kit logo with reveal masks
     assets/fonts/            Inter (variable, Latin subset) and IBM Plex Sans Arabic (Arabic + Latin subset), OFL
-    assets/screenshots/      shot-list-<lang>-<theme>.webp captured from the desktop build at 1440x900 (+ `-960`, `-720` variants), and crop-drawer / crop-add panels cut from the details and add-download captures
+    assets/screenshots/      app-<lang>-<theme>-<width>.webp: the app list captured from the desktop build at a 1040x660 viewport at device scales 0.54 to 2 (560 to 2080 px wide, so the browser rarely resamples), plus crop-drawer / crop-add panels cut from the details and add-download captures
     assets/riptide-logo-light.svg, riptide-logo-dark.svg   brand kit logos, cropped to their artwork
     assets/favicon.svg       the brand kit app icon
     assets/og-en.png, og-ar.png, apple-touch-icon.png   rendered from og/og.html
@@ -62,40 +62,68 @@ app window rises, then the floating simulation card, speed readout and SHA-256 c
 buttons depends on it finishing. The only script in the hero is the labelled download simulation (`js/site.js`, section 4),
 which pauses when the hero is off-screen.
 
-Four chapters are `position: sticky` stages (`#streams`, `#app`, `#speed`, `#integrity`): each `section.ch` is taller than the
-viewport and holds a `.pin` stage. One passive scroll listener schedules at most one `requestAnimationFrame`; the frame turns
-the scroll position into a progress value per chapter (negative while it scrolls in, 0 to 1 while pinned) and writes it as
-`--p` on the stage. CSS derives everything else with `calc()`/`clamp()`; only `transform`, `opacity`, `stroke-dashoffset` and
-`clip-path` change. The first measurement waits for the first scroll (or 4 s of idle time), so loading never forces layout.
+Two chapters are `position: sticky` stages, and only on desktop (900px and wider) with full motion: `#streams` (about 100 vh of
+scroll) and `#app` (about 60 vh). The scroll loop turns the scroll position into a progress value per stage (negative while it
+scrolls in, 0 to 1 while pinned, reaching 1 at 85 % of the stage so there is a resting moment before the next section) and
+writes it as `--p`. The value is eased toward the scroll position (a light lerp, factor 0.15 per frame, snapping when the delta
+is tiny); only the value is smoothed, scrolling itself stays native. One `requestAnimationFrame` loop runs while something
+moves and sleeps otherwise. CSS derives everything else with `calc()`/`clamp()`; only `transform`, `opacity`,
+`stroke-dashoffset` and `clip-path` change.
+
+`#speed`, `#integrity`, and every chapter on phones or in calm motion are not pinned: each plays once, by time (2 to 6 s),
+when it comes into view (an IntersectionObserver), and is then left at its end state.
 
 - `#streams`: the three streams draw the brand logo (masks, original fills), then the same three lanes continue out of the
   R's stem and merge into one file chip. Reading order: streams in, one exact file out.
-- `#app`: the real window flattens from a tilt while four numbered annotations arrive (positions live in `i18n/*.json`
+- `#app`: the real window flattens from a tilt while two plain-dot annotations arrive (positions live in `i18n/*.json`
   under `app.callouts`, per language, because the Arabic screenshot is mirrored).
-- `#speed`: eight connections with work stealing, a deterministic simulation scrubbed by scroll.
+- `#speed`: eight connections with work stealing, a deterministic simulation.
 - `#integrity`: power cut and exact resume, then the SHA-256 digest resolves.
 
-On phones (`max-width: 899px`) `#app` and `#integrity` are not pinned and show their end state; `prefers-reduced-motion` and
-no-JS show every end state with nothing pinned. Scrolling itself is native: no smooth-scroll library, no scroll-jacking, no
-custom cursor. Motion tokens (`--ease-*`, `--dur-*`, `--stagger`) are at the top of `site.css`.
+Scrolling itself is native: no smooth-scroll library, no scroll-jacking, no custom cursor. Motion tokens (`--ease-*`, `--dur-*`,
+`--stagger`) are at the top of `site.css`; hover and focus feedback is at most 150 ms, every one-shot animation at most 700 ms (the
+hero ribbon draw is the one decorative exception), the rest is scroll-scrubbed or an ambient loop that pauses off-screen.
 
-Chapter lengths live in `site.css` (`#speed { --len: .7; }` and so on, in viewport heights of pinned scroll; each chapter is 170-190 vh in total).
-
-### Motion switch
+### Motion modes and levels
 
 The head script resolves `html[data-motion="full|reduced"]` before first paint: `?motion=on|off` (stored, then removed from the URL) wins, then the saved
-`riptide-motion` choice from the header's Animations button (`aria-pressed`), then the OS `prefers-reduced-motion`. `html.anim` is only set for `full`.
-CSS and JS key off that attribute (`motion.enabled()` in `site.js`), never off the raw media query, so forcing motion on with an OS "reduce" setting
-leaves no reduce-only rule behind. Reduced mode shows end states, with a 200 ms opacity fade on the hero.
+`riptide-motion` choice from the header's Animations button (`aria-pressed`), then the OS `prefers-reduced-motion`. Full sets `html.anim`, reduced sets `html.calm`.
+
+- Full is the whole story (parallax, 3D tilt, pinned scrubbed stages, slides).
+- Calm ("reduce, don't remove") keeps everything non-spatial: opacity reveals with their stagger, the app preview's progress bars
+  filling, counters, the SHA-256 digest resolving, stroke draws, the hero simulation. It drops parallax, the tilt, large slides,
+  scrubbed pinned stages and endless loops. When the OS asks for reduced motion and the visitor has not chosen yet, a small
+  dismissible hint under the header offers "Turn them on?" (`riptide-motion-hint` remembers a dismissal).
+- `html[data-level="lite"]` (separate from the mode) drops parallax, the tilt, ambient loops and the third ribbon lane and shortens the
+  simulations. It starts on `hardwareConcurrency <= 2`, `deviceMemory <= 2` or `saveData`, and a frame-time monitor in the engine loop
+  switches to it (and remembers it for the session in `sessionStorage`) when the median frame stays above 32 ms while moving.
+
+Robustness: the engine re-measures on resize, orientation change, font load and image load, restores on bfcache `pageshow`, hash jumps
+and back/forward, pauses everything in a hidden tab, and clamps every progress value. Hidden start states in the CSS only exist under
+`html.js-ready`, which `site.js` adds after a successful init (any error in `site.js` removes it and forces every reveal visible), so
+a script failure never hides content; without JS the CSS shows every end state.
 
 The header is the top layer (`z-index: 100`, near-opaque tone background plus blur) and the hero cards sit inside the hero stage; the e2e check asserts both.
+
+## Releasing
+
+The page links to one release. To point it at a new build, change the one line in `build.mjs`:
+
+```js
+const RELEASE_VERSION = '0.1.0-alpha.3';   // e.g. '0.1.0-alpha.4'
+```
+
+The hero badge ("Alpha {n}"), the download section badge, the installer and portable file names, the tag in every download URL
+and the SHA256SUMS link all derive from it. Do this only after the assets exist on the GitHub release (installer
+`Riptide_<version>_x64-setup.exe`, portable zip `Riptide-<version>-portable.zip`, `SHA256SUMS.txt`), then run `node apps/website/build.mjs`
+and the e2e check.
 
 ## Checks
 
 `apps/website/e2e/check.py <base-url>` (Python Playwright, Edge by default) runs against a served build: nav and download
 links, theme persistence, language switch, mobile menu, console errors, third-party requests, no video, no filter or blend on
 the logo, native scroll, horizontal overflow at 1920x1080, 1440x900, 768x1024 and 390x844 in both languages and themes,
-reduced-motion and no-JS states, the header/hero no-overlap assertion at seven viewports, CTAs above the fold at 1366x768 and 1350x530, and the Animations override (`?motion=on` animates under an OS reduce setting and persists).
+calm-motion and no-JS states, the first-visit hint, the engine (progress follows scroll, reload, back/forward, anchor jumps, resize 1440 to 390 to 1440, hidden tab, CPU throttling to lite, no IntersectionObserver, script failure, layout shift), pinned stage budgets, no numbered labels or "Next release" tags, the header/hero no-overlap assertion at seven viewports, CTAs above the fold at 1366x768 and 1350x530, and the Animations override (`?motion=on` animates under an OS reduce setting and persists).
 
 ## Template syntax
 
