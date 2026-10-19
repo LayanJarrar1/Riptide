@@ -1,7 +1,7 @@
 //! File name sanitising: nothing a server sends is ever used as a path.
 //!
 //! [`sanitize_filename`] turns any string into a name that is safe on Windows, macOS and Linux:
-//! last path component only, no control characters or reserved punctuation, no reserved device
+//! last path component only, no control, bidi or zero-width characters, no reserved punctuation or device
 //! names, no leading/trailing dots or spaces, NFC-normalised, at most [`MAX_FILENAME_BYTES`].
 //! It is idempotent and never returns an empty string.
 
@@ -17,6 +17,21 @@ pub const FALLBACK_FILENAME: &str = "download";
 
 /// Characters Windows refuses in file names (plus `/`, which every OS treats as a separator).
 const FORBIDDEN: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+/// True for Unicode bidirectional controls and zero-width characters. They are invisible but can
+/// reorder or hide parts of a name (`invoice<RLO>fdp.exe` displays as `invoiceexe.pdf`), so none
+/// survive. Real Arabic letters, Arabic-Indic digits and combining marks are not in this set.
+fn is_invisible_format_char(c: char) -> bool {
+    matches!(
+        c,
+        '\u{061C}'                  // Arabic letter mark
+        | '\u{200B}'..='\u{200F}'   // zero-width space/non-joiner/joiner, LRM, RLM
+        | '\u{202A}'..='\u{202E}'   // embeddings and overrides
+        | '\u{2060}'                // word joiner
+        | '\u{2066}'..='\u{2069}'   // isolates
+        | '\u{FEFF}' // BOM / zero-width no-break space
+    )
+}
 
 /// Device names Windows reserves regardless of extension.
 const RESERVED: &[&str] = &[
@@ -45,7 +60,7 @@ pub fn sanitize_filename(raw: &str) -> String {
     // 3. drop control characters and reserved punctuation
     let mut cleaned: String = last
         .chars()
-        .filter(|c| !c.is_control() && !FORBIDDEN.contains(c))
+        .filter(|c| !c.is_control() && !is_invisible_format_char(*c) && !FORBIDDEN.contains(c))
         .collect();
 
     // 4. no leading/trailing dots or spaces (Windows strips them silently, which hides ".." tricks)
@@ -182,6 +197,37 @@ mod tests {
     }
 
     #[test]
+    fn bidi_and_zero_width_characters_are_stripped() {
+        // a right-to-left override would make "invoice<RLO>fdp.exe" look like a PDF
+        assert_eq!(
+            sanitize_filename("invoice\u{202E}txt.exe"),
+            "invoicetxt.exe"
+        );
+        assert_eq!(
+            sanitize_filename("a\u{2066}b\u{2069}c\u{202A}d\u{202C}.pdf"),
+            "abcd.pdf"
+        );
+        assert_eq!(
+            sanitize_filename("x\u{200E}y\u{200F}z\u{061C}.txt"),
+            "xyz.txt"
+        );
+        assert_eq!(
+            sanitize_filename("\u{FEFF}na\u{200B}me\u{2060}.txt"),
+            "name.txt"
+        );
+        // ZWJ inside an emoji sequence is dropped; the pieces stay
+        assert_eq!(
+            sanitize_filename("\u{1F468}\u{200D}\u{1F469}.png"),
+            "\u{1F468}\u{1F469}.png"
+        );
+        assert_eq!(sanitize_filename("\u{202E}\u{200B}"), "download");
+        // Arabic letters, Arabic-Indic digits and combining marks are untouched
+        let arabic = "تقرير\u{0652}-\u{0661}\u{0662}\u{0663}.pdf";
+        assert_eq!(sanitize_filename(arabic), arabic);
+        assert_eq!(sanitize_filename("تقرير\u{202B}٢٠٢٥.pdf"), "تقرير٢٠٢٥.pdf");
+    }
+
+    #[test]
     fn long_names_keep_their_extension() {
         let long = format!("{}.tar.gz", "ع".repeat(300));
         let out = sanitize_filename(&long);
@@ -219,7 +265,12 @@ mod tests {
             let out = sanitize_filename(&raw);
             prop_assert!(!out.is_empty());
             prop_assert!(out.len() <= MAX_FILENAME_BYTES, "{} bytes", out.len());
-            prop_assert!(!out.chars().any(|c| c.is_control() || FORBIDDEN.contains(&c)), "{out:?}");
+            prop_assert!(
+                !out.chars().any(|c| c.is_control()
+                    || is_invisible_format_char(c)
+                    || FORBIDDEN.contains(&c)),
+                "{out:?}"
+            );
             prop_assert!(!out.starts_with(['.', ' ']) && !out.ends_with(['.', ' ']), "{out:?}");
             let stem = out.split('.').next().unwrap_or("").to_ascii_uppercase();
             prop_assert!(!RESERVED.contains(&stem.as_str()), "{out:?}");
@@ -227,6 +278,27 @@ mod tests {
             // a path built from it never escapes the directory
             let joined = Path::new("/base").join(&out);
             prop_assert_eq!(joined.parent(), Some(Path::new("/base")));
+        }
+
+        #[test]
+        fn invisible_noise_never_changes_a_clean_name(
+            stem in "[a-zA-Z0-9\u{0621}-\u{064A}\u{0660}-\u{0669}_-]{1,30}",
+            ext in "[a-z0-9]{1,5}",
+            noise in proptest::collection::vec(
+                prop_oneof![
+                    Just('\u{202E}'), Just('\u{202A}'), Just('\u{2066}'), Just('\u{2069}'),
+                    Just('\u{200E}'), Just('\u{200F}'), Just('\u{061C}'), Just('\u{200B}'),
+                    Just('\u{200D}'), Just('\u{2060}'), Just('\u{FEFF}')
+                ],
+                0..6,
+            ),
+        ) {
+            prop_assume!(!RESERVED.contains(&stem.to_ascii_uppercase().as_str()));
+            let clean = format!("{stem}.{ext}");
+            let n: String = noise.iter().collect();
+            let noisy = format!("{n}{stem}{n}.{ext}");
+            prop_assert_eq!(sanitize_filename(&noisy), clean.clone());
+            prop_assert_eq!(sanitize_filename(&clean), clean.clone());
         }
 
         #[test]
