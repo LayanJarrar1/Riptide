@@ -104,8 +104,10 @@ export class HostClient {
       } else if (r.type === 'error') {
         this.setStatus('app_not_running');
       }
-    } catch {
-      /* status already updated by the disconnect / timeout path */
+    } catch (e) {
+      // A disconnect already updated the status. A timeout does not, and an `unknown` status
+      // would hide that the app never answered.
+      if (e instanceof HostError && this.status === 'unknown') this.setStatus(e.status);
     }
     return this.status;
   }

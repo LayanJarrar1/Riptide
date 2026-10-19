@@ -28,9 +28,6 @@ import type {
   StatusReply,
 } from './messages';
 import { MAX_BATCH, mapLimit, mayCarryCookies, sanitiseBatch } from './links';
-  RecentItem,
-  StatusReply,
-} from './messages';
 import { MEDIA_HOSTS, classifyMediaResponse, cookieOriginOf, isMediaKey, withSite } from './media';
 import type { DownloadId, DownloadRequest, RequestBody } from './protocol';
 import {
@@ -59,6 +56,8 @@ const COLOR_BADGE_TEXT = '#06201D';
 const COLOR_VIDEO = '#00D5E8';
 const MAX_SEEN_PER_TAB = 50;
 const PROBE_TIMEOUT_MS = 90_000;
+/** "Open Riptide": the host waits up to 10 s for the app's pipe after launching it. */
+const OPEN_APP_TIMEOUT_MS = 15_000;
 
 const MENU_LINK = 'riptide-link';
 const MENU_ALL = 'riptide-all';
@@ -83,13 +82,6 @@ let paused = false;
 let missingNotified = false;
 let listAvailable = true;
 const bypass = new BypassTracker();
-
-/** What each tab has shown us: videos in the DOM (content script) and media on the wire (Firefox). */
-interface TabMedia {
-  dom: number;
-  seen: Set<string>;
-}
-const mediaTabs = new Map<number, TabMedia>();
 
 /** What each tab has shown us: videos in the DOM (content script) and media on the wire (Firefox). */
 interface TabMedia {
@@ -393,143 +385,6 @@ async function neverShowVideoOn(site: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Video pages: detection badge, quality menu, media add
-// ---------------------------------------------------------------------------------------------
-
-function tabMedia(tabId: number): TabMedia {
-  let m = mediaTabs.get(tabId);
-  if (!m) {
-    m = { dom: 0, seen: new Set() };
-    mediaTabs.set(tabId, m);
-  }
-  return m;
-}
-
-/** Badge counter for a tab: videos found there; falls back to the global badge at zero. */
-async function updateTabBadge(tabId: number): Promise<void> {
-  const m = mediaTabs.get(tabId);
-  const count = m ? Math.max(m.dom, m.seen.size) : 0;
-  try {
-    if (count > 0) {
-      await browser.action.setBadgeText({ tabId, text: String(Math.min(count, 99)) });
-      await browser.action.setBadgeBackgroundColor({ tabId, color: COLOR_VIDEO });
-      if (typeof browser.action.setBadgeTextColor === 'function') {
-        await browser.action.setBadgeTextColor({ tabId, color: COLOR_BADGE_TEXT });
-      }
-    } else {
-      const captured = await getSession('captured', 0);
-      await browser.action.setBadgeText({ tabId, text: captured > 0 ? String(captured) : '' });
-      await browser.action.setBadgeBackgroundColor({
-        tabId,
-        color: host.status === 'connected' ? COLOR_CONNECTED : COLOR_OFF,
-      });
-    }
-  } catch {
-    /* the tab is gone or badge APIs are unavailable */
-  }
-}
-
-/** The network showed a media response on a tab (Firefox `webRequest`; observation only). */
-function onMediaResponse(details: WebRequest.OnResponseStartedDetailsType): void {
-  if (details.tabId < 0 || details.statusCode < 200 || details.statusCode >= 300) return;
-  let contentType: string | undefined;
-  for (const h of details.responseHeaders ?? []) {
-    if (h.name.toLowerCase() === 'content-type') contentType = h.value;
-  }
-  if (!classifyMediaResponse(details.url, contentType)) return;
-  const m = tabMedia(details.tabId);
-  if (m.seen.size >= MAX_SEEN_PER_TAB) return;
-  const before = m.seen.size;
-  m.seen.add(details.url.split('#')[0] ?? details.url);
-  if (m.seen.size === before) return;
-  void updateTabBadge(details.tabId);
-  const hint: Message = { kind: 'media-hint' };
-  void browser.tabs.sendMessage(details.tabId, hint).catch(() => undefined);
-}
-
-if (IS_FIREFOX && browser.webRequest?.onResponseStarted) {
-  browser.webRequest.onResponseStarted.addListener(
-    onMediaResponse,
-    { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other'] },
-    ['responseHeaders'],
-  );
-}
-
-browser.tabs.onRemoved.addListener((tabId) => {
-  mediaTabs.delete(tabId);
-});
-browser.tabs.onUpdated.addListener((tabId, change) => {
-  if (change.status === 'loading' && change.url !== undefined) mediaTabs.delete(tabId); // new page
-});
-
-function answerText(res: { type: string; message?: string }): string {
-  return res.message ?? `unexpected answer: ${res.type}`;
-}
-
-/** Ask the app what a video page offers. Cookies of that page's origin only. */
-async function probeMedia(url: string): Promise<MediaProbeReply> {
-  const origin = cookieOriginOf(url);
-  if (origin === null) return { ok: false, status: host.status, error: 'not http(s)' };
-  const cookies = await cookieHeaderFor(url);
-  const body: RequestBody = { type: 'probe_media', url };
-  if (cookies) {
-    body.cookies = cookies;
-    body.cookie_origin = origin;
-  }
-  try {
-    const res = await host.request(body, PROBE_TIMEOUT_MS);
-    if (res.type === 'media_probed') return { ok: true, status: host.status, info: res.info };
-    if (res.type === 'error') {
-      const status = await host.ping();
-      return { ok: false, status, error: answerText(res) };
-    }
-    return { ok: false, status: host.status, error: answerText(res) };
-  } catch (e) {
-    return { ok: false, status: host.status === 'connected' ? 'app_not_running' : host.status, error: errorText(e) };
-  }
-}
-
-/** Add a video page with a quality key; cookies only for the page's own origin. */
-async function addMedia(url: string, quality: string, title: string | undefined): Promise<HandoffReply> {
-  const origin = cookieOriginOf(url);
-  if (origin === null || !isMediaKey(quality)) return { ok: false, status: host.status, error: 'invalid request' };
-  const request: DownloadRequest = {
-    url,
-    kind: 'media',
-    media_format: quality,
-    user_agent: navigator.userAgent,
-  };
-  const cookies = await cookieHeaderFor(url);
-  if (cookies) {
-    request.secrets = { cookies };
-    request.cookie_origin = origin;
-  }
-  const c: Candidate = { url, filename: title };
-  try {
-    const res = await host.request({ type: 'add', request });
-    if (res.type === 'added') {
-      await recordSent(c, res.download_id);
-      return { ok: true, status: host.status, download_id: res.download_id };
-    }
-    if (res.type === 'error') {
-      const status = await host.ping();
-      return { ok: false, status, error: res.message };
-    }
-    return { ok: false, status: host.status, error: answerText(res) };
-  } catch (e) {
-    return { ok: false, status: host.status === 'connected' ? 'app_not_running' : host.status, error: errorText(e) };
-  }
-}
-
-async function neverShowVideoOn(site: string): Promise<void> {
-  const s = normaliseSite(site);
-  if (!s) return;
-  const next: Settings = { ...settings, videoNeverSites: withSite(settings.videoNeverSites, s) };
-  settings = next;
-  await saveSettings(next);
-}
-
-// ---------------------------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------------------------
 
@@ -582,8 +437,9 @@ async function neverAskFor(site: string): Promise<void> {
 }
 
 async function openApp(): Promise<HostStatus> {
-  // `ping` is the only "open" there is: the host decides whether to launch the app.
-  return host.ping();
+  // `ping` is the only "open" there is: the host decides whether to launch the app and waits up
+  // to 10 s for its pipe, so give the answer longer than that (cold start of the webview).
+  return host.ping(OPEN_APP_TIMEOUT_MS);
 }
 
 browser.notifications.onClicked.addListener((id) => {
@@ -829,7 +685,6 @@ async function onMenuClicked(info: Menus.OnClickData, tab: Tabs.Tab | undefined)
     return;
   }
   if (info.menuItemId === MENU_ALL || info.menuItemId === MENU_SELECTION || info.menuItemId === MENU_IMAGES) {
-  if (info.menuItemId === MENU_ALL || info.menuItemId === MENU_SELECTION) {
     if (tab?.id === undefined) return;
     const mode: PanelMode =
       info.menuItemId === MENU_SELECTION ? 'selection' : info.menuItemId === MENU_IMAGES ? 'images' : 'all';
