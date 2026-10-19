@@ -1,4 +1,4 @@
-﻿[workspace]
+[workspace]
 resolver = "2"
 members = [
     "crates/riptide-core",
@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 edition = "2021"
 rust-version = "1.85"
 repository = "https://github.com/LayanJarrar1/Riptide"

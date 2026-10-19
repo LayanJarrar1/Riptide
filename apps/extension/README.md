@@ -51,6 +51,45 @@ images, permission justifications and the step-by-step for each store are in `st
 `scripts/verify-dist.mjs`, which checks every manifest is valid MV3 JSON, every referenced file
 exists, the locales share one key set and both extension ids are documented here.
 
+## Install in Chrome (three steps) / التثبيت في كروم
+
+Branded Chrome (137+) ignores `--load-extension`, and a silent install needs admin policies, so
+Riptide ships the extension as a folder you load once. No store account, no admin rights.
+
+**Easiest:** run `scripts\install-extension.ps1` (repository) or `install-extension.ps1` in the
+portable folder. It copies the extension to `%LOCALAPPDATA%\Riptide\extension\chrome`, repairs the
+browser bridge registration if needed, copies that path to the clipboard and opens
+`chrome://extensions`. `-Browser edge` does the same for Edge, `-Uninstall` undoes it, and running
+it again after an update refreshes the files. The app also has the same helper in
+*Settings → Integration → Install the extension in Chrome or Edge*.
+
+1. Open `chrome://extensions` and turn on **Developer mode** (top right).
+2. Press **Load unpacked**.
+3. Pick the `extension\chrome` folder (installer: `%LOCALAPPDATA%\Riptide\extension\chrome`;
+   portable zip: the `extension\chrome` folder next to `riptide-desktop.exe`; repository:
+   `apps/extension/dist/chrome`).
+
+The card must show the id `dcoeaodjhaibfchhcbfdkekpcacofnhm`; that is the id the bridge trusts.
+Pin the Riptide icon from the puzzle-piece menu. After updating Riptide, press the reload arrow on
+the card. If Chrome says "Developer mode extensions" on start, choose *Keep*.
+
+**بالعربية:**
+
+لا يسمح كروم (الإصدار 137 فأحدث) بتثبيت إضافة غير منشورة تلقائيًا، لذلك يوفّر ريبتايد الإضافة كمجلد
+تحمّله مرة واحدة، دون حساب متجر ودون صلاحيات مدير.
+
+**الأسهل:** شغّل `scripts\install-extension.ps1` (من المستودع) أو `install-extension.ps1` من مجلد النسخة المحمولة.
+ينسخ الإضافة إلى `%LOCALAPPDATA%\Riptide\extension\chrome`، ويُصلح تسجيل الجسر عند الحاجة، وينسخ المسار إلى الحافظة،
+ويفتح `chrome://extensions`. نفس المساعد موجود في التطبيق: *الإعدادات ← التكامل ← تثبيت الإضافة في كروم أو إيدج*.
+
+1. افتح `chrome://extensions` وفعّل **وضع المطوّر (Developer mode)** أعلى الصفحة.
+2. اضغط **تحميل إضافة غير مضغوطة (Load unpacked)**.
+3. اختر مجلد `extension\chrome` (النسخة المثبّتة: `%LOCALAPPDATA%\Riptide\extension\chrome`،
+   النسخة المحمولة: المجلد `extension\chrome` بجانب `riptide-desktop.exe`).
+
+يجب أن تعرض البطاقة المعرّف `dcoeaodjhaibfchhcbfdkekpcacofnhm`. ثبّت أيقونة ريبتايد من قائمة الإضافات (قطعة الأحجية).
+بعد تحديث ريبتايد اضغط سهم إعادة التحميل على البطاقة.
+
 ## Load unpacked
 
 | Browser | Steps |

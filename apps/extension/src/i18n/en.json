@@ -103,7 +103,6 @@
   "video.err.not_running": "Riptide is not running. Start it and try again.",
   "video.err.host_missing": "Riptide is not installed, or browser integration is off (Settings → Integration).",
   "video.err.unknown": "Riptide could not read this page.",
-
   "options.videoButton": "Show a “Download this video” button on video pages",
   "options.videoNeverSites": "Sites where the video button is turned off",
   "options.hoverBadge": "Show a Riptide badge when hovering a file link",
