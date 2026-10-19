@@ -161,7 +161,7 @@ mod tests {
         let b = l
             .next(&err("[youtube] x: Sign in to confirm your age."))
             .unwrap();
-        assert_eq!(b.clients, PlayerClients::AndroidVr);
+        assert_eq!(b.clients, PlayerClients::TvEmbedded);
         // a private video has nothing left to try
         let mut p = Ladder::new(YT, true, None);
         assert!(
@@ -185,7 +185,7 @@ mod tests {
             .next(&err("[youtube] x: Sign in to confirm your age."))
             .unwrap();
         assert!(!a.cookies, "goes down the ladder instead");
-        assert_eq!(a.clients, PlayerClients::AndroidVr);
+        assert_eq!(a.clients, PlayerClients::TvEmbedded);
         let mut private = Ladder::new(YT, false, None);
         assert!(private
             .next(&err(
@@ -217,19 +217,20 @@ mod tests {
             }
         );
         let b = l.next(&reload()).unwrap();
-        assert_eq!(b.clients, PlayerClients::AndroidVr);
+        assert_eq!(b.clients, PlayerClients::TvEmbedded);
         assert!(!b.cookies);
     }
 
     #[test]
-    fn the_ladder_visits_each_client_once_and_stops_at_four_attempts() {
+    fn the_ladder_visits_each_client_once_and_stays_within_the_attempt_cap() {
         let mut l = Ladder::new(YT, false, None);
         let mut seen = vec![l.current().clients];
         while let Some(a) = l.next(&reload()) {
             seen.push(a.clients);
         }
         assert_eq!(seen, PlayerClients::LADDER.to_vec());
-        assert_eq!(l.used(), MAX_ATTEMPTS);
+        assert_eq!(l.used(), 2, "default, then tv_embedded, then nothing left");
+        assert!(l.used() <= MAX_ATTEMPTS);
         // the cap also holds when cookies and clients both move
         let mut m = Ladder::new(
             YT,
@@ -253,10 +254,10 @@ mod tests {
             false,
             Some(Attempt {
                 cookies: false,
-                clients: PlayerClients::TvMweb,
+                clients: PlayerClients::TvEmbedded,
             }),
         );
-        assert_eq!(l.current().clients, PlayerClients::TvMweb);
+        assert_eq!(l.current().clients, PlayerClients::TvEmbedded);
         assert_eq!(l.next(&reload()).unwrap().clients, PlayerClients::Default);
     }
 

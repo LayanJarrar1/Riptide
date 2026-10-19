@@ -193,17 +193,13 @@ async fn refused_page_succeeds_on_the_second_client_and_the_download_reuses_it()
         .iter()
         .map(|(m, _, c)| (m.as_str(), c.as_deref()))
         .collect();
-    let android = Some("youtube:player_client=android_vr");
+    let tv = Some("youtube:player_client=tv_embedded");
     assert_eq!(
         shape,
-        [("probe", None), ("probe", android), ("download", android)],
+        [("probe", None), ("probe", tv), ("download", tv)],
         "{r:?}"
     );
     assert!(r.iter().all(|(_, cookies, _)| !cookies));
-    // and the third step of the ladder works the same way
-    let r = run_ok("needclient-tv", "e-ladder-tv").await;
-    assert_eq!(r.len(), 4, "{r:?}");
-    assert_eq!(r[3].2.as_deref(), Some("youtube:player_client=tv,mweb"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -225,7 +221,7 @@ async fn a_final_refusal_surfaces_the_friendly_class_and_never_logs_cookie_value
     assert!(error.contains("page needs to be reloaded"), "{error}");
     assert!(error.contains("JavaScript runtime"), "{error}");
     assert!(retryable, "a site refusal is worth another try later");
-    assert_eq!(runs("e-refuse").len(), 4, "bounded at four attempts");
+    assert_eq!(runs("e-refuse").len(), 2, "default, then tv_embedded");
     let stored = engine
         .get(id)
         .await

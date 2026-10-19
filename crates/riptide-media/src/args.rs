@@ -50,40 +50,28 @@ pub fn check_url(raw: &str) -> Result<Url> {
 /// youtube:player_client=...`). A fixed set: the value on the command line comes from this enum
 /// and from nowhere else, never from page, browser or user text.
 ///
-/// The ladder order was measured against yt-dlp 2026.08.19 without a JavaScript runtime: the
-/// default clients work for most videos. When they answer "The page needs to be reloaded.",
-/// `android_vr` still lists formats (its https formats need a PO token, so a download may end
-/// in HTTP 403 and move on); `tv,mweb` and `web_safari,tv` come last because on this build
-/// they fail the same way without a JavaScript runtime, but they may work from other networks
-/// or once a runtime is available. All four names are accepted by yt-dlp 2026.08.19.
+/// Measured against yt-dlp 2026.08.19 on `Ng274mLQ7-c` (probe and a 6 s clip download): `default`
+/// and `tv_embedded` work; `android`/`android_vr` list one format (and `android_vr` downloads end
+/// in HTTP 403, PO token); `tv`, `tv_simply`, `web`, `web_embedded`, `web_creator`, `ios`, `mweb`
+/// and `web_safari` fail the probe. A JavaScript runtime changes none of that. yt-dlp skips clients
+/// that cannot use cookies once cookies are sent, which is why cookies are never sent first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerClients {
     /// yt-dlp's own choice (no extractor argument).
     Default,
-    /// `android_vr`.
-    AndroidVr,
-    /// `tv,mweb`.
-    TvMweb,
-    /// `web_safari,tv`.
-    WebSafariTv,
+    /// `tv_embedded`.
+    TvEmbedded,
 }
 
 impl PlayerClients {
     /// Every step, in the order the fallback ladder tries them.
-    pub const LADDER: [PlayerClients; 4] = [
-        PlayerClients::Default,
-        PlayerClients::AndroidVr,
-        PlayerClients::TvMweb,
-        PlayerClients::WebSafariTv,
-    ];
+    pub const LADDER: [PlayerClients; 2] = [PlayerClients::Default, PlayerClients::TvEmbedded];
 
     /// Stable key (stored in the per-download flags, shown in logs).
     pub fn key(self) -> &'static str {
         match self {
             PlayerClients::Default => "default",
-            PlayerClients::AndroidVr => "android_vr",
-            PlayerClients::TvMweb => "tv_mweb",
-            PlayerClients::WebSafariTv => "web_safari_tv",
+            PlayerClients::TvEmbedded => "tv_embedded",
         }
     }
 
@@ -96,9 +84,7 @@ impl PlayerClients {
     pub fn extractor_args(self) -> Option<&'static str> {
         match self {
             PlayerClients::Default => None,
-            PlayerClients::AndroidVr => Some("youtube:player_client=android_vr"),
-            PlayerClients::TvMweb => Some("youtube:player_client=tv,mweb"),
-            PlayerClients::WebSafariTv => Some("youtube:player_client=web_safari,tv"),
+            PlayerClients::TvEmbedded => Some("youtube:player_client=tv_embedded"),
         }
     }
 }
@@ -319,11 +305,11 @@ mod tests {
                 cookies: None,
                 rate_limit: None,
                 proxy: None,
-                clients: PlayerClients::TvMweb,
+                clients: PlayerClients::TvEmbedded,
             };
             for list in [
                 download_args(&r),
-                probe_args(&url, None, PlayerClients::AndroidVr),
+                probe_args(&url, None, PlayerClients::TvEmbedded),
             ] {
                 let s = strings(&list);
                 for f in FORBIDDEN {
@@ -346,19 +332,11 @@ mod tests {
         };
         assert_eq!(find(probe_args(&url, None, PlayerClients::Default)), None);
         assert_eq!(
-            find(probe_args(&url, None, PlayerClients::AndroidVr)).as_deref(),
-            Some("youtube:player_client=android_vr")
-        );
-        assert_eq!(
-            find(probe_args(&url, None, PlayerClients::TvMweb)).as_deref(),
-            Some("youtube:player_client=tv,mweb")
-        );
-        assert_eq!(
-            find(probe_args(&url, None, PlayerClients::WebSafariTv)).as_deref(),
-            Some("youtube:player_client=web_safari,tv")
+            find(probe_args(&url, None, PlayerClients::TvEmbedded)).as_deref(),
+            Some("youtube:player_client=tv_embedded")
         );
         // the argument comes before the `--` separator, and the ladder keys round-trip
-        let a = strings(&probe_args(&url, None, PlayerClients::TvMweb));
+        let a = strings(&probe_args(&url, None, PlayerClients::TvEmbedded));
         let sep = a.iter().position(|x| x == "--").unwrap();
         assert!(a.iter().position(|x| x == "--extractor-args").unwrap() < sep);
         for c in PlayerClients::LADDER {

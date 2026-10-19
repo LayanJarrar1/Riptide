@@ -11,8 +11,8 @@
 //!
 //! Refusal scenarios, picked by words in the URL (probe and download alike):
 //! `reloadcookies` fails with "The page needs to be reloaded." when `--cookies` is passed;
-//! `needclient` fails the same way unless `player_client=android_vr` (the ladder's second step)
-//! is passed, `needclient-tv` unless `player_client=tv,mweb` (the third); `agegate` fails with
+//! `needclient` fails the same way unless `player_client=tv_embedded` (the ladder's second step)
+//! is passed; `agegate` fails with
 //! "Sign in to confirm your age" unless `--cookies` is passed; `alwaysrefuse` always fails with
 //! the reload error after the "No supported JavaScript runtime" warning. A `log=NAME` query
 //! parameter makes every run append one JSON line (mode, argv, whether cookies were passed) to
@@ -138,11 +138,7 @@ fn refuse_if_scenario(args: &Args) {
     if url.contains("reloadcookies") && cookies {
         fail(reload);
     }
-    if url.contains("needclient-tv") {
-        if !clients.contains("player_client=tv,mweb") {
-            fail(reload);
-        }
-    } else if url.contains("needclient") && !clients.contains("player_client=android_vr") {
+    if url.contains("needclient") && !clients.contains("player_client=tv_embedded") {
         fail(reload);
     }
     if url.contains("agegate") && !cookies {

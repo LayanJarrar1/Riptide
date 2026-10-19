@@ -336,28 +336,18 @@ async fn refused_probe_climbs_the_client_ladder() {
         )
         .await
         .unwrap();
-    assert_eq!(attempt.clients, riptide_media::PlayerClients::AndroidVr);
+    assert_eq!(attempt.clients, riptide_media::PlayerClients::TvEmbedded);
     let r = runs("probe-ladder");
     assert_eq!(r.len(), 2);
     assert_eq!(extractor_args(&r[0]), None);
     assert_eq!(
         extractor_args(&r[1]).as_deref(),
-        Some("youtube:player_client=android_vr")
+        Some("youtube:player_client=tv_embedded")
     );
-    let (_, attempt) = y
-        .probe_resilient(
-            "https://www.youtube.com/watch?v=needclient-tv&log=probe-ladder2",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-    assert_eq!(attempt.clients, riptide_media::PlayerClients::TvMweb);
-    assert_eq!(runs("probe-ladder2").len(), 3);
 }
 
 #[tokio::test]
-async fn a_page_that_always_refuses_stops_after_four_attempts_with_a_friendly_class() {
+async fn a_page_that_always_refuses_stops_when_the_ladder_is_spent_with_a_friendly_class() {
     let y = fake();
     let e = y
         .probe(
@@ -366,7 +356,7 @@ async fn a_page_that_always_refuses_stops_after_four_attempts_with_a_friendly_cl
         )
         .await
         .unwrap_err();
-    assert_eq!(runs("probe-always").len(), 4);
+    assert_eq!(runs("probe-always").len(), 2);
     assert_eq!(e.class(), riptide_media::ErrorClass::Refused);
     assert!(e.is_retryable());
     let text = e.to_string();
