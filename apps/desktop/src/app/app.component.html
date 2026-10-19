@@ -145,11 +145,19 @@
   </footer>
 </div>
 
-<app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+<!-- dialogs are separate chunks: fetched when first wanted (the big ones are also prefetched when idle) -->
+@defer (when ui.addOpen(); prefetch on idle) {
+  <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+}
 @if (batchDialog(); as dialog) {
   <ng-container *ngComponentOutlet="dialog" />
 }
-<app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
-<app-exit-confirm-dialog />
-<app-post-action-dialog />
+@defer (when ui.shortcutsOpen(); prefetch on idle) {
+  <app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
+}
+<!-- these two open on events from the engine, so they are mounted as soon as the first paint is done -->
+@defer (on idle) {
+  <app-exit-confirm-dialog />
+  <app-post-action-dialog />
+}
 <app-toasts />

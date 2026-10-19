@@ -210,8 +210,10 @@ const FRESH_MS = 600;
       </div>
     </section>
 
-    @if (store.details(); as details) {
-      <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+    @defer (when store.details() !== null; prefetch on idle) {
+      @if (store.details(); as details) {
+        <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+      }
     }
 
     <app-menu [open]="menu().open" [items]="menuItems()" [x]="menu().x" [y]="menu().y" (selected)="onMenu($event)" (closed)="closeMenu()" />
@@ -232,9 +234,13 @@ const FRESH_MS = 600;
       </ng-container>
     </app-dialog>
 
-    <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
+    @defer (when restartTarget() !== null) {
+      <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
+    }
 
-    <app-move-to-queue-dialog [targets]="moveTargets()" (chosen)="confirmMove($event)" (closed)="moveTargets.set(null)" />
+    @defer (when moveTargets() !== null) {
+      <app-move-to-queue-dialog [targets]="moveTargets()" (chosen)="confirmMove($event)" (closed)="moveTargets.set(null)" />
+    }
   `,
   styles: `
     :host {

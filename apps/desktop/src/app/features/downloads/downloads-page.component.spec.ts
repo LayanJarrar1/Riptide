@@ -243,6 +243,8 @@ describe('DownloadsPageComponent', () => {
     it('"Move to queue…" moves the selection to the chosen queue', async () => {
       contextMenuOn(rows()[1]);
       chooseMenu('Move to queue…');
+      await fixture.whenStable();
+      fixture.detectChanges();
       const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
       expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Move to queue');
       const radios = Array.from(dialog?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? []);
