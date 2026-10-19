@@ -144,18 +144,24 @@
       el.appendChild(document.createElement('i'));
       return el;
     };
-    lanes.forEach((lane) => lane.querySelectorAll('.pc').forEach((n) => n.remove()));
-    filebar.textContent = '';
-    pieces.forEach((pc) => {
-      const a = make(pc), b = make(pc);
-      lanes[pc.c].insertBefore(a, lanes[pc.c].querySelector('.hd'));
-      filebar.appendChild(b);
-      pc.els = [a.firstChild, b.firstChild];
-      pc.last = -1;
-    });
+    // Built on first use, so page load never pays for it.
+    let built = false;
+    const build = () => {
+      built = true;
+      lanes.forEach((lane) => lane.querySelectorAll('.pc').forEach((n) => n.remove()));
+      filebar.textContent = '';
+      pieces.forEach((pc) => {
+        const a = make(pc), b = make(pc);
+        lanes[pc.c].insertBefore(a, lanes[pc.c].querySelector('.hd'));
+        filebar.appendChild(b);
+        pc.els = [a.firstChild, b.firstChild];
+        pc.last = -1;
+      });
+    };
     const heads = lanes.map((lane) => lane.querySelector('.hd'));
     scenes.speed = {
       update(p) {
+        if (!built) build();
         const T = clamp(p / 0.82) * tEnd;
         let sum = 0, active = 0;
         pieces.forEach((pc) => {
@@ -250,10 +256,12 @@
     if (anim) {
       for (const m of metrics) {
         if (!m.name) continue;
+        const off = y + vh <= m.top || y >= m.top + m.h;
+        // Off-screen scenes are skipped, except the hero: it owns the header logo, so after a
+        // jump past it (anchor link, reload mid-page) it is parked at its end state.
+        if (off && m.name !== 'hero') continue;
         const len = m.h - vh;
-        // Off-screen scenes are parked at their start or end state, so a jump (anchor link,
-        // reload mid-page) never leaves them half-way, e.g. the header logo still hidden.
-        let p = y + vh <= m.top ? -1 : y >= m.top + m.h ? 1 : y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
+        let p = off ? 1 : y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
         p = r4(p);
         if (p === m.p) continue;
         m.p = p;
@@ -268,11 +276,14 @@
     header.classList.toggle('is-solid', anim ? y > heroEnd - 2 : y > 8);
   }
   const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } };
-  const remeasure = () => { measure(); metrics.forEach((m) => { m.p = NaN; }); schedule(); };
+  const remeasure = () => { if (!ready) return; measure(); metrics.forEach((m) => { m.p = NaN; }); schedule(); };
 
-  measure();
-  frame();
-  window.addEventListener('scroll', schedule, { passive: true });
+  // The first measurement waits for the first paint (the CSS already shows the hero's start
+  // state), so loading never forces an extra layout of the whole page.
+  let ready = false;
+  const start = () => { if (!ready) { ready = true; measure(); frame(); } };
+  requestAnimationFrame(() => setTimeout(start, 0));
+  window.addEventListener('scroll', () => { if (ready) schedule(); else start(); }, { passive: true });
   window.addEventListener('resize', remeasure);
   window.addEventListener('load', remeasure);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);

@@ -218,6 +218,8 @@ html:not(.anim) .ch .pin { padding-block: clamp(96px, 12vw, 168px); }
 .scroll-cue { position: absolute; z-index: 1; inset-inline: 0; bottom: 22px; display: grid; justify-items: center; gap: 8px; font-size: .8125rem; font-weight: 600; color: var(--fg2); opacity: calc(1 - var(--q) * 12); }
 .scroll-cue i { width: 2px; height: 34px; border-radius: 2px; background: linear-gradient(var(--cyan), transparent); transform-origin: top; animation: cue 1.8s var(--ease) infinite; }
 @keyframes cue { 0% { transform: scaleY(0); } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+.anim .hero-pin { --s1: .3; --s2: .33; --s3: .37; --ms: calc(var(--msd) * 1.12); }
+.anim body:has(.hero) .site-header { --hd: 0; }
 html:not(.anim) .scroll-cue, html:not(.anim) .hero-tag { display: none; }
 html:not(.anim) .hero-pin { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; padding-bottom: 48px; }
 html:not(.anim) .hl-fly { position: relative; inset: auto; }
@@ -483,3 +485,7 @@ td:not(.is-r) .yes { background: transparent; color: var(--fg); box-shadow: inse
   :root[data-theme="dark"] .flow-far { filter: none; }
   .win { transform: translateY(calc((1 - var(--w3)) * 6vh)) scale(calc(.9 + var(--w3) * .1)); box-shadow: 0 0 0 1px var(--line), 0 24px 50px -24px rgba(0, 0, 0, .6); }
 }
+
+/* Off-screen chapters skip style, layout and paint until they come near (pinned chapters have an
+   explicit height, so offsets stay exact; the unpinned blocks remember their last size). */
+.ch, .block, .site-footer { content-visibility: auto; contain-intrinsic-size: auto 900px; }
