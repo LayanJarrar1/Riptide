@@ -1,7 +1,7 @@
 /*
  * Riptide website. Vanilla JS, no dependencies, no network.
  *
- * 1. Theme toggle (saved choice, otherwise follows the system).
+ * 1. Theme toggle (light by default; the saved choice wins).
  * 2. Mobile navigation.
  * 3. The hero "current": segment stripes flow and assemble into a finished download bar.
  * 4. "How it works" animations run only while their panel is on screen.
@@ -17,9 +17,11 @@
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const isRtl = root.dir === 'rtl';
 
-  // ---- 1. Theme (dark first; the visitor can switch to light and the choice is remembered) --
+  // ---- 1. Theme (light by default; the visitor can switch to dark and the choice is remembered)
   function applyTheme(theme, persist) {
     root.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#071a26' : '#ffffff');
     if (persist) {
       try { localStorage.setItem('riptide-theme', theme); } catch (e) { /* storage blocked */ }
     }

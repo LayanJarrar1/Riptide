@@ -1,21 +1,27 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{en.notFound.title}} · Riptide</title>
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#071a26" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#ffffff">
   <link rel="icon" href="{{base}}assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{base}}css/site.css?v={{v}}">
   <script>
+    // Before first paint: light is the default whatever the OS prefers; only a saved choice
+    // switches to dark. `js` enables the scroll reveals; `rv-all` is a failsafe that shows them.
     (function () {
+      var d = document.documentElement;
+      d.classList.add('js');
       try {
-        var saved = localStorage.getItem('riptide-theme');
-        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
-      } catch (e) { /* stay light */ }
+        var t = localStorage.getItem('riptide-theme');
+        if (t === 'light' || t === 'dark') d.dataset.theme = t;
+      } catch (e) { /* storage blocked: stay light */ }
+      var m = document.querySelector('meta[name="theme-color"]');
+      if (m && d.dataset.theme === 'dark') m.setAttribute('content', '#071a26');
+      setTimeout(function () { d.classList.add('rv-all'); }, 4000);
     })();
   </script>
 </head>

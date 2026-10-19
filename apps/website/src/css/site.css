@@ -1,8 +1,8 @@
 /*
  * Riptide website. Plain CSS, no build step beyond copying.
  *
- * Dark first: the page ships with data-theme="dark" (Abyss); the :root tokens are the light
- * theme and [data-theme="dark"] overrides what changes. Colours come from the brand kit:
+ * Light first: the page ships with data-theme="light"; the :root tokens are the light
+ * theme and [data-theme="dark"] (Abyss) overrides what changes. Colours come from the brand kit:
  * Abyss #071A26, Deep Teal #075C69, Riptide Cyan #00D5E8, Ocean Blue #168BFF, Soft Ice #D9F8FA.
  * Flat surfaces, one cyan accent, crisp borders and small shadows; no gradients.
  * Every direction-aware rule uses logical properties so the Arabic page mirrors without a
@@ -83,7 +83,7 @@
   --header-height: 68px;
 }
 
-/* ---- Tokens (dark: the default) ------------------------------------------------------- */
+/* ---- Tokens (dark: opt-in) ------------------------------------------------------- */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
