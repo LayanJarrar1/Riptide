@@ -244,6 +244,8 @@ html:not(.anim) .ch .pin { padding-block: clamp(88px, 11vw, 152px); }
 @media (min-width: 900px) {
   .hero-grid { grid-template-columns: minmax(0, calc(var(--hf) * 10)) minmax(0, 1fr); }
 }
+@media (min-width: 1900px) { .hero { --hf: 5.25rem; } .hero-grid { max-width: 1880px; } }
+@media (min-width: 2300px) { .hero { --hf: 6.5rem; } .hero-grid { max-width: 2400px; } .brand-logo { height: 36px; } }
 @media (max-width: 899px) {
   .hero { --hf: clamp(2.1rem, 1rem + 4.6vw, 3.6rem); padding-bottom: clamp(88px, 16vw, 130px); }
   .hero-stage { width: min(100%, 680px); margin-inline: auto; }
@@ -317,6 +319,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(88px, 11vw, 152px); }
   .fl-speed { top: -7%; inset-inline-end: 2%; }
   .fl-sha { bottom: auto; top: 30%; inset-inline-end: 2%; }
 }
+@media (max-width: 420px) { .sim-ico { display: none; } .sim-head { grid-template-columns: minmax(0, 1fr) auto; } }
 @media (max-width: 560px) {
   .hero { padding-top: calc(var(--hh) + 14px); }
   .hero-copy { gap: 14px; }

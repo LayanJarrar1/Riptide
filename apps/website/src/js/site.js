@@ -340,9 +340,10 @@
   // never forces an extra layout of the whole page.
   let ready = false;
   const start = () => { if (!ready) { ready = true; measure(); frame(); } };
-  // Measured once the page has loaded and the opening choreography is under way (idle time), or on the first scroll.
-  const whenIdle = () => (window.requestIdleCallback ? requestIdleCallback(start, { timeout: 1500 }) : setTimeout(start, 600));
-  if (document.readyState === 'complete') whenIdle(); else window.addEventListener('load', () => setTimeout(whenIdle, 500));
+  // Nothing needs measuring until the visitor scrolls (the CSS already shows every start state), so the first
+  // layout read waits for the first scroll event; a reload mid-page or an anchor jump fires one immediately.
+  // If nobody has scrolled a few seconds in, do it in idle time so the first scroll is not the one that pays.
+  window.addEventListener('load', () => setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(start) : start()), 4000));
   window.addEventListener('scroll', () => { if (ready) schedule(); else start(); }, { passive: true });
   window.addEventListener('resize', remeasure);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);
