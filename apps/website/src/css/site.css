@@ -476,3 +476,10 @@ td:not(.is-r) .yes { background: transparent; color: var(--fg); box-shadow: inse
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Phones: keep the logo story, drop the heavier layers (glow filters, second flow layer, deep 3D tilt, giant words). */
+@media (max-width: 699px) {
+  .flow-near, .big-words { display: none; }
+  :root[data-theme="dark"] .flow-far { filter: none; }
+  .win { transform: translateY(calc((1 - var(--w3)) * 6vh)) scale(calc(.9 + var(--w3) * .1)); box-shadow: 0 0 0 1px var(--line), 0 24px 50px -24px rgba(0, 0, 0, .6); }
+}
