@@ -2,16 +2,17 @@
  * Riptide website. Vanilla JS, no dependencies, no network.
  *
  * 1. Theme toggle (light by default; a saved choice wins) and the mobile menu.
- * 2. One scroll loop: a passive scroll listener schedules at most one requestAnimationFrame,
- *    which computes a progress value per pinned scene from cached offsets and writes it as
- *    --p (plus a few derived values for the hero). CSS turns those into transforms, opacity,
- *    stroke-dashoffset and clip-path. Nothing reads layout inside the frame.
- * 3. Scenes: hero logo (streams draw the R, the wordmark rises, the logo lands in the header),
- *    the eight-connection race, the power cut and resume, the SHA-256 check.
- * 4. Reveals and counters for the unpinned blocks (IntersectionObserver).
+ * 2. One scroll loop: a passive scroll listener schedules at most one requestAnimationFrame, which turns the
+ *    scroll position into a progress value per pinned chapter (written as --p on its stage) and the hero's
+ *    parallax value (--hp). CSS derives every transform, opacity, stroke-dashoffset and clip-path from those.
+ *    Offsets are measured on load, resize and font load, never inside the frame.
+ * 3. Chapters: the stream-to-file logo draw, the eight-connection race, the power cut and resume, the
+ *    SHA-256 check. All deterministic, so scrolling back up plays everything in reverse.
+ * 4. The hero download simulation (labelled "Simulation" on the page), paused when off-screen.
+ * 5. Reveals, current-section highlight in the nav, and pausing of endless loops off-screen.
  *
- * html.anim is set in <head> unless the visitor prefers reduced motion. Without it this file
- * only wires the theme and menu; the CSS shows every end state and nothing is pinned.
+ * html.anim is set in <head> unless the visitor prefers reduced motion. Without it this file only wires
+ * the theme and menu; the CSS shows every end state and nothing is pinned.
  */
 (function () {
   'use strict';
@@ -29,7 +30,9 @@
   if (themeButton) {
     themeButton.addEventListener('click', () => {
       const theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.classList.add('theme-anim');
       root.dataset.theme = theme;
+      setTimeout(() => root.classList.remove('theme-anim'), 520);
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', theme === 'dark' ? '#071a26' : '#ffffff');
       try { localStorage.setItem('riptide-theme', theme); } catch (e) { /* storage blocked */ }
@@ -48,55 +51,102 @@
   }
 
   const main = document.getElementById('main');
-  if (!header || !main || !document.querySelector('.hero')) {
+  const hero = document.getElementById('hero');
+  if (!header || !main || !hero) {
     if (header) header.classList.add('is-solid');
     return;
   }
 
-  // ---- 3. Scenes --------------------------------------------------------------------------
+  // ---- 4. Hero simulation -----------------------------------------------------------------
+  // A pretend download that loops: runs, verifies, completes, starts over. Static "completed" markup
+  // is what visitors without motion see.
+  (function () {
+    const sim = hero.querySelector('[data-sim]');
+    const spd = hero.querySelector('[data-o="speed"]');
+    const sha = hero.querySelector('[data-o="sha"]');
+    if (!sim || !anim) return;
+    const pct = sim.querySelector('[data-o="pct"]');
+    const state = sim.querySelector('[data-o="state"]');
+    const fills = Array.from(sim.querySelectorAll('.sim-bar b'));
+    const doneText = state.textContent;
+    const stateText = { run: '', ver: '' };
+    const lang = root.lang === 'ar';
+    stateText.run = lang ? 'جارٍ التحميل' : 'Downloading';
+    stateText.ver = lang ? 'جارٍ التحقق' : 'Verifying';
+    // Eight connections with different speeds; the file is done when the slowest one finishes.
+    const rates = [1, 0.78, 0.9, 0.66, 0.97, 0.72, 0.84, 0.6];
+    const DL = 9, VERIFY = 1.1, HOLD = 4.2;
+    let t0 = performance.now() + 1500;
+    let first = true;
+    let running = false;
+    let timer = 0;
+    let last = '';
+    sha.classList.remove('is-on');
+    const draw = (now) => {
+      let t = (now - t0) / 1000;
+      if (t < 0) t = 0;
+      const start = first ? 0.4 : 0; // the first loop is already underway when the page opens
+      const dl = clamp(start + (1 - start) * (t / DL));
+      let phase = 'run';
+      if (t >= DL + VERIFY) phase = 'done'; else if (t >= DL) phase = 'ver';
+      let sum = 0;
+      fills.forEach((el, i) => {
+        const x = phase === 'run' ? clamp(dl * (1 + (rates[i] - 0.6) * 0.7)) : 1;
+        sum += x;
+        const s = `scaleX(${r4(x)})`;
+        if (el.__s !== s) { el.style.transform = s; el.__s = s; }
+      });
+      const p = Math.min(100, Math.floor((sum / fills.length) * 100));
+      const speed = phase === 'run' ? 21.4 + 2.4 * Math.sin(t * 2.3) + 0.9 * Math.sin(t * 7.1) : 0;
+      const key = phase + p + (spd ? speed.toFixed(1) : '');
+      if (key !== last) {
+        last = key;
+        pct.textContent = `${phase === 'run' ? p : 100}%`;
+        state.textContent = phase === 'run' ? stateText.run : phase === 'ver' ? stateText.ver : doneText;
+        spd.textContent = phase === 'run' ? speed.toFixed(1) : '0.0';
+        sha.classList.toggle('is-on', phase === 'done');
+      }
+      if (t > DL + VERIFY + HOLD) { first = false; t0 = now + 600; last = ''; sha.classList.remove('is-on'); fills.forEach((el) => { el.style.transform = 'scaleX(0)'; el.__s = ''; }); }
+    };
+    const tick = () => { draw(performance.now()); };
+    const start = () => { if (!running && !document.hidden) { running = true; timer = setInterval(tick, 100); } };
+    const stop = () => { running = false; clearInterval(timer); };
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((es) => { es.forEach((e) => (e.isIntersecting ? start() : stop())); }).observe(sim);
+    } else start();
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+  })();
+
+  // ---- 3. Chapters ------------------------------------------------------------------------
   const scenes = {};
 
-  // Hero: the three streams of the real mark are revealed through masks (never recoloured),
-  // spiral into place, the wordmark rises, then the whole logo flies into the header slot.
+  // Streams: the three streams draw the real mark (revealed through masks, never recoloured), the wordmark
+  // rises, then the same three lanes run down out of the R's stem into one file.
   (function () {
-    const pin = document.querySelector('.hero-pin');
-    const fly = pin.querySelector('.hl-fly');
-    const hl = pin.querySelector('.hl');
-    const brand = header.querySelector('.brand');
-    let msd = 1.8;
+    const pin = document.querySelector('#streams .pin');
+    if (!pin) return;
     const set = (k, v) => pin.style.setProperty(k, v);
-    scenes.hero = {
-      measure() {
-        msd = parseFloat(getComputedStyle(pin).getPropertyValue('--msd')) || 1.8;
-        const b = brand.getBoundingClientRect();
-        const w = hl.offsetWidth;
-        set('--fx', r4(b.left + b.width / 2 - pin.clientWidth / 2));
-        set('--fy', r4(b.top + b.height / 2 - pin.clientHeight / 2));
-        set('--fs', r4(b.width / w));
-      },
+    const msd = parseFloat(getComputedStyle(pin).getPropertyValue('--msd')) || 1.45;
+    let lastMsd = msd;
+    scenes.streams = {
       update(p) {
-        const q = clamp(p);
+        const q = clamp(p / 0.56) * 0.8;
         const spin = easeIO(clamp(q / 0.5));
+        const m = parseFloat(getComputedStyle(pin).getPropertyValue('--msd')) || lastMsd;
+        lastMsd = m;
         for (let i = 0; i < 3; i++) {
           const base = [0.3, 0.33, 0.37][i];
           set(`--s${i + 1}`, r4(base + (1 - base) * easeOut(clamp((q - 0.02 - i * 0.05) / 0.42))));
           set(`--r${i + 1}`, r4(-Math.sin(Math.PI * clamp(q / 0.52)) * (22 + 16 * i)));
         }
         const lg = easeIO(clamp((q - 0.56) / 0.16));
-        const draw = msd * (1.12 - 0.12 * spin);
-        const f = easeIO(clamp((q - 0.8) / 0.2));
-        const hd = clamp((q - 0.975) / 0.025);
-        set('--q', r4(q));
-        set('--h', r4(clamp(q / 0.14)));
-        set('--c', r4(easeIO(clamp((q - 0.04) / 0.3))));
+        const draw = m * (1.12 - 0.12 * spin);
         set('--ms', r4(draw + (1 - draw) * lg));
         set('--mx', r4(265.5 * (1 - lg)));
         set('--my', r4(22.7 * (1 - lg)));
         set('--lg', r4(clamp((q - 0.6) / 0.16)));
-        set('--ta', r4(clamp((q - 0.68) / 0.06) * (1 - clamp((q - 0.79) / 0.04))));
-        set('--f', r4(f));
-        fly.style.opacity = String(1 - hd);
-        header.style.setProperty('--hd', String(hd));
+        for (let i = 0; i < 3; i++) set(`--l${i}`, r4(easeIO(clamp((p - 0.58 - i * 0.05) / 0.3))));
+        set('--fc', r4(easeOut(clamp((p - 0.88) / 0.1))));
       },
     };
   })();
@@ -135,7 +185,6 @@
       }
     }
     const tEnd = t;
-    // Build the DOM: one element per piece in its lane, and a copy in the file bar.
     const make = (pc) => {
       const el = document.createElement('span');
       el.className = pc.t0 > 0 ? 'pc stolen' : 'pc';
@@ -144,7 +193,6 @@
       el.appendChild(document.createElement('i'));
       return el;
     };
-    // Built on first use, so page load never pays for it.
     let built = false;
     const build = () => {
       built = true;
@@ -185,43 +233,38 @@
     };
   })();
 
-  // Resume: download, power cut, resume from the same byte, complete.
+  // Integrity: power cut and exact resume, then the digest resolves and the check draws.
   (function () {
-    const section = document.getElementById('resume');
+    const section = document.getElementById('integrity');
     if (!section) return;
     const rs = section.querySelector('.rs');
+    const vf = section.querySelector('.vf');
     const fill = rs.querySelector('.rs-fill');
     const bytes = rs.querySelector('[data-o="bytes"]');
+    const ok = vf.querySelector('[data-o="ok"]');
+    const scr = vf.querySelector('[data-o="scr"]');
+    const hash = ok.textContent.trim();
+    const hex = '0123456789abcdef';
     const TOTAL = 5046586572, CUT = 0.62;
     const nf = new Intl.NumberFormat('en-US');
     rs.querySelector('[data-o="at"]').textContent = nf.format(Math.round(CUT * TOTAL));
-    scenes.resume = {
+    scenes.integrity = {
       update(p) {
+        const a = clamp(p / 0.56);
         let f, phase, cut = 0;
-        if (p < 0.4) { f = CUT * easeIO(clamp(p / 0.4)); phase = 'run'; }
-        else if (p < 0.52) { f = CUT; phase = 'cut'; cut = clamp((p - 0.4) / 0.025) * (1 - clamp((p - 0.45) / 0.05)) * 0.9; }
-        else if (p < 0.92) { f = CUT + (1 - CUT) * easeIO(clamp((p - 0.58) / 0.34)); phase = 'res'; }
+        if (a < 0.4) { f = CUT * easeIO(clamp(a / 0.4)); phase = 'run'; }
+        else if (a < 0.52) { f = CUT; phase = 'cut'; cut = clamp((a - 0.4) / 0.025) * (1 - clamp((a - 0.45) / 0.05)) * 0.9; }
+        else if (a < 0.92) { f = CUT + (1 - CUT) * easeIO(clamp((a - 0.58) / 0.34)); phase = 'res'; }
         else { f = 1; phase = 'done'; }
         if (rs.dataset.phase !== phase) rs.dataset.phase = phase;
         rs.style.setProperty('--cut', String(r4(cut)));
         fill.style.transform = `scaleX(${r4(f)})`;
         bytes.textContent = nf.format(Math.round(f * TOTAL));
-      },
-    };
-  })();
 
-  // Verify: the digest resolves left to right out of scrambled hex.
-  (function () {
-    const section = document.getElementById('verified');
-    if (!section) return;
-    const ok = section.querySelector('[data-o="ok"]');
-    const scr = section.querySelector('[data-o="scr"]');
-    const hash = ok.textContent.trim();
-    const hex = '0123456789abcdef';
-    scenes.verify = {
-      update(p) {
-        const n = Math.round(clamp((p + 0.1) / 0.5) * hash.length);
-        const seed = Math.floor(p * 120);
+        const v = clamp((p - 0.5) / 0.46);
+        vf.style.setProperty('--v', String(r4(v)));
+        const n = Math.round(clamp(v / 0.5) * hash.length);
+        const seed = Math.floor(v * 120);
         let s = '';
         for (let i = n; i < hash.length; i++) s += hex[(i * 7 + seed * 13 + ((i * i) % 11)) & 15];
         ok.textContent = hash.slice(0, n);
@@ -232,86 +275,95 @@
 
   // ---- 2. The scroll loop -----------------------------------------------------------------
   const sections = Array.from(main.children).filter((el) => el.tagName === 'SECTION');
+  const navLinks = Array.from(header.querySelectorAll('.nav-links a'));
+  const navTargets = navLinks.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
   let metrics = [];
   let vh = window.innerHeight;
-  let heroEnd = 0;
+  let heroH = 1;
 
   function measure() {
     vh = window.innerHeight;
     const y = window.scrollY;
+    heroH = hero.offsetHeight || 1;
     metrics = sections.map((el) => {
       const r = el.getBoundingClientRect();
       const name = el.dataset.scene;
-      return { el, top: r.top + y, h: r.height, tone: el.dataset.tone || 'light', name, scene: scenes[name], pin: el.querySelector('.pin'), p: NaN };
+      const pin = el.querySelector('.pin');
+      const pinned = !!pin && getComputedStyle(pin).position === 'sticky';
+      return { el, top: r.top + y, h: r.height, tone: el.dataset.tone || 'light', name, scene: scenes[name], pin, pinned, p: NaN };
     });
-    heroEnd = metrics.length ? metrics[0].top + metrics[0].h - vh : 0;
-    if (anim) scenes.hero.measure();
   }
 
   let ticking = false;
   let tone = '';
+  let current = -2;
   function frame() {
     ticking = false;
     const y = window.scrollY;
-    if (anim) {
-      for (const m of metrics) {
-        if (!m.name) continue;
-        const off = y + vh <= m.top || y >= m.top + m.h;
-        // Off-screen scenes are skipped, except the hero: it owns the header logo, so after a
-        // jump past it (anchor link, reload mid-page) it is parked at its end state.
-        if (off && m.name !== 'hero') continue;
-        const len = m.h - vh;
-        let p = off ? 1 : y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
-        p = r4(p);
-        if (p === m.p) continue;
-        m.p = p;
-        if (m.pin && m.name !== 'hero') m.pin.style.setProperty('--p', String(p));
-        if (m.scene) m.scene.update(p);
-      }
+    if (y <= heroH) hero.style.setProperty('--hp', String(r4(clamp(y / heroH))));
+    for (const m of metrics) {
+      if (!m.name || m.name === 'hero') continue;
+      if (!anim) continue;
+      const off = y + vh <= m.top || y >= m.top + m.h;
+      // Off-screen chapters are skipped, but parked at their end state once passed, so a jump past one
+      // (anchor link, reload mid-page) shows it finished.
+      if (off && m.p === (y >= m.top ? 1 : 0)) continue;
+      const len = m.h - vh;
+      let p;
+      if (!m.pinned) p = 1;
+      else if (off) p = y >= m.top ? 1 : -1;
+      else p = y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
+      p = r4(p);
+      if (p === m.p) continue;
+      m.p = p;
+      if (m.pin) m.pin.style.setProperty('--p', String(p));
+      if (m.scene && !(off && p === -1)) m.scene.update(clamp(p));
+      else if (m.scene) m.scene.update(0);
     }
     const probe = y + 34;
     let t = 'light';
     for (const m of metrics) if (probe >= m.top && probe < m.top + m.h) { t = m.tone; break; }
     if (t !== tone) { tone = t; header.dataset.tone = t; }
-    header.classList.toggle('is-solid', anim ? y > heroEnd - 2 : y > 8);
+    header.classList.toggle('is-solid', y > 8);
+
+    // Current section in the nav.
+    let idx = -1;
+    navTargets.forEach((el, i) => { if (el) { const top = el.getBoundingClientRect().top; if (top <= vh * 0.4) idx = i; } });
+    const last = navTargets[idx];
+    if (last && last.getBoundingClientRect().bottom < vh * 0.4) idx = -1;
+    if (idx !== current) { current = idx; navLinks.forEach((a, i) => { if (i === idx) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); }); }
   }
   const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } };
   const remeasure = () => { if (!ready) return; measure(); metrics.forEach((m) => { m.p = NaN; }); schedule(); };
 
-  // The first measurement waits for the first paint (the CSS already shows the hero's start
-  // state), so loading never forces an extra layout of the whole page.
+  // The first measurement waits for the first paint (the CSS already shows every start state), so loading
+  // never forces an extra layout of the whole page.
   let ready = false;
   const start = () => { if (!ready) { ready = true; measure(); frame(); } };
-  requestAnimationFrame(() => setTimeout(start, 0));
+  // Measured once the page has loaded and the opening choreography is under way (idle time), or on the first scroll.
+  const whenIdle = () => (window.requestIdleCallback ? requestIdleCallback(start, { timeout: 1500 }) : setTimeout(start, 600));
+  if (document.readyState === 'complete') whenIdle(); else window.addEventListener('load', () => setTimeout(whenIdle, 500));
   window.addEventListener('scroll', () => { if (ready) schedule(); else start(); }, { passive: true });
   window.addEventListener('resize', remeasure);
-  window.addEventListener('load', remeasure);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);
   if ('ResizeObserver' in window) {
-    let last = 0;
-    new ResizeObserver(() => { const h = document.body.scrollHeight; if (h !== last) { last = h; remeasure(); } }).observe(document.body);
+    let lastH = 0;
+    new ResizeObserver(() => { const h = document.body.scrollHeight; if (h !== lastH) { lastH = h; remeasure(); } }).observe(document.body);
   }
 
-  // ---- 4. Reveals and counters ------------------------------------------------------------
-  if (!anim || !('IntersectionObserver' in window)) return;
-  const count = (el) => {
-    const to = Number(el.dataset.count) || 0;
-    const from = to === 0 ? 9 : 0;
-    const t0 = performance.now();
-    const step = (now) => {
-      const k = easeOut(clamp((now - t0) / 1300));
-      el.textContent = String(Math.round(from + (to - from) * k));
-      if (k < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  };
+  // ---- 5. Reveals, and pausing of endless loops off-screen ---------------------------------
+  if (!('IntersectionObserver' in window)) return;
+  const loops = new IntersectionObserver((entries) => {
+    entries.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting));
+  }, { rootMargin: '120px 0px' });
+  document.querySelectorAll('.ch, .bp-video, .hero').forEach((el) => loops.observe(el));
+  if (!anim) return;
   const io = new IntersectionObserver((entries) => {
     entries.forEach((e) => {
       if (!e.isIntersecting) return;
       e.target.classList.add('in');
-      e.target.querySelectorAll('[data-count]').forEach(count);
       io.unobserve(e.target);
     });
-  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.2 });
+  }, { rootMargin: '0px 0px -10% 0px', threshold: 0.15 });
   document.querySelectorAll('.rv, .cta').forEach((el) => io.observe(el));
 })();
