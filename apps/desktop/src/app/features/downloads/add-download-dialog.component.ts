@@ -7,6 +7,7 @@ import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, isMediaUrl, MediaChoice, MediaProbe, ProbeResult } from '../../model/download';
+import { parseMediaError } from '../../model/media-error';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -67,6 +68,17 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
               <app-icon name="alert" [size]="14" />
               {{ i18n.t(e) }}{{ result() ? ' ' + i18n.t('add.mediaPlainFallback') : '' }}
             </span>
+            <span class="help media-actions">
+              <button type="button" class="link" (click)="retryProbe()">{{ i18n.t('add.mediaTryAgain') }}</button>
+              @if (mediaDetails(); as details) {
+                <button type="button" class="link" [attr.aria-expanded]="showDetails()" (click)="showDetails.set(!showDetails())">
+                  {{ i18n.t('add.mediaDetails') }}
+                </button>
+              }
+            </span>
+            @if (showDetails() && mediaDetails(); as details) {
+              <code class="media-details" dir="ltr">{{ details }}</code>
+            }
           } @else if (media()) {
             <span class="help preview">
               <app-icon name="bolt" [size]="14" class="ok" />
@@ -384,6 +396,32 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       color: var(--color-warning);
     }
 
+    .media-actions {
+      gap: 12px;
+    }
+
+    .media-actions .link {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--color-accent);
+      font: inherit;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .media-details {
+      display: block;
+      max-inline-size: 100%;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm, 6px);
+      background: var(--color-surface-2);
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+
     .preview {
       color: var(--color-text-secondary);
     }
@@ -615,6 +653,9 @@ export class AddDownloadDialogComponent {
   protected readonly choiceKey = signal('best');
   /** i18n key of why the page is not a downloadable video; `null` when there is no problem. */
   protected readonly mediaError = signal<string | null>(null);
+  /** yt-dlp's own error line (plain text, at most 300 characters) behind the "Details" link. */
+  protected readonly mediaDetails = signal<string | null>(null);
+  protected readonly showDetails = signal(false);
 
   private probeToken = 0;
   /** `true` once the user typed a name, so a quality change no longer rewrites it. */
@@ -839,7 +880,9 @@ export class AddDownloadDialogComponent {
       return;
     }
     // an HTML page that is not a video is no error worth showing; a known video site is
-    this.mediaError.set(outcome !== null && (knownVideo || plain === null) ? outcome.error : null);
+    const shown = outcome !== null && 'error' in outcome && (knownVideo || plain === null) ? outcome : null;
+    this.mediaError.set(shown === null ? null : shown.error);
+    this.mediaDetails.set(shown === null || shown.details.length === 0 ? null : shown.details);
     if (plain !== null) {
       if (this.filename().trim().length === 0) {
         this.filename.set(plain.filename);
@@ -849,12 +892,17 @@ export class AddDownloadDialogComponent {
     }
   }
 
-  private async fetchMedia(url: string): Promise<{ probe: MediaProbe } | { error: string }> {
+  private async fetchMedia(url: string): Promise<{ probe: MediaProbe } | { error: string; details: string }> {
     try {
       return { probe: await this.engine.probeMedia(url) };
     } catch (error: unknown) {
-      return { error: mediaErrorKey(error) };
+      return { error: mediaErrorKey(error), details: parseMediaError(error).details };
     }
+  }
+
+  /** "Try again" after a video error: asks the engine about the same address once more. */
+  protected retryProbe(): void {
+    this.setUrl(this.url());
   }
 
   private showMedia(m: MediaProbe): void {
@@ -885,6 +933,8 @@ export class AddDownloadDialogComponent {
   private clearMedia(): void {
     this.media.set(null);
     this.mediaError.set(null);
+    this.mediaDetails.set(null);
+    this.showDetails.set(false);
     this.choiceKey.set('best');
     this.filenameEdited = false;
   }
@@ -923,6 +973,13 @@ function safeTitle(title: string): string {
 /** Maps the engine's refusal to a translated, friendly message key. */
 export function mediaErrorKey(error: unknown): string {
   const text = String(error instanceof Error ? error.message : error).toLowerCase();
+  const refusal = parseMediaError(error).kind;
+  if (refusal === 'login') {
+    return 'add.mediaLogin';
+  }
+  if (refusal === 'refused') {
+    return 'add.mediaRefused';
+  }
   if (text.includes('not installed') || text.includes('was not found')) {
     return 'add.mediaNoTools';
   }

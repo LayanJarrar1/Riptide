@@ -9,6 +9,7 @@
 import { dirOf, formatBytes } from '../i18n';
 import type { Lang, MessageKey } from '../i18n';
 import { buildMenu, isSubstantialVideo, isVideoPageUrl } from '../media';
+import { parseMediaError } from '../media-error';
 import type { MenuRow } from '../media';
 import type { HandoffReply, MediaProbeReply, Message } from '../messages';
 import { hostOf, listMatches } from '../rules';
@@ -65,6 +66,9 @@ const CSS = `
 .rt-pbody { overflow: auto; padding: 6px; }
 .rt-pmsg { padding: 14px 10px; color: #c7d1d9; line-height: 1.5; }
 .rt-pmsg.rt-err { color: #ffb4af; }
+.rt-details { display: block; margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: rgb(255 255 255 / 6%); color: #a9b5bf;
+  font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; user-select: text; direction: ltr; text-align: left; }
+.rt-details[hidden] { display: none; }
 .rt-h { padding: 8px 10px 4px; color: #6d7b87; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .rt-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 8px 10px; border: 0;
   border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
@@ -290,9 +294,21 @@ export function initVideo(ctx: VideoContext): VideoUi {
 
   function errorText(r: { status?: string; error?: string }): string {
     if (r.status === 'host_missing') return tr('video.err.host_missing');
-    if (r.status === 'connected' && r.error) return r.error; // the app's own, specific message
+    if (r.status === 'connected' && r.error) {
+      const { kind, details } = parseMediaError(r.error);
+      if (kind === 'login') return tr('video.err.login');
+      if (kind === 'refused') return tr('video.err.refused');
+      return details || tr('video.err.unknown'); // the app's own, specific message
+    }
     if (r.status === 'app_not_running' || r.status === 'unknown') return tr('video.err.not_running');
     return r.error || tr('video.err.unknown');
+  }
+
+  /** yt-dlp's own line for a tagged refusal, shown only after "Details" is pressed. */
+  function errorDetails(r: { status?: string; error?: string }): string {
+    if (r.status !== 'connected' || !r.error) return '';
+    const { kind, details } = parseMediaError(r.error);
+    return kind === null ? '' : details;
   }
 
   function rowLabel(row: MenuRow): string {
@@ -350,6 +366,18 @@ export function initVideo(ctx: VideoContext): VideoUi {
 
   function renderFailure(reply: { status?: string; error?: string }): void {
     setMessage(errorText(reply), true);
+    const details = errorDetails(reply);
+    if (details && popBody) {
+      const shown = h('code', { className: 'rt-details', textContent: details });
+      shown.hidden = true;
+      const toggle = h('button', { className: 'rt-link', type: 'button', textContent: tr('video.details') });
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.addEventListener('click', () => {
+        shown.hidden = !shown.hidden;
+        toggle.setAttribute('aria-expanded', String(!shown.hidden));
+      });
+      popBody.append(h('div', { className: 'rt-pmsg' }, [toggle, shown]));
+    }
     footer(true);
     const src = directSource();
     if (src && popBody) {

@@ -13,6 +13,13 @@ describe('mediaErrorKey', () => {
     expect(mediaErrorKey('live streams are not supported')).toBe('add.mediaLive');
     expect(mediaErrorKey('anything else')).toBe('add.mediaUnsupported');
   });
+
+  it('shows the friendly refusal messages instead of the raw yt-dlp line', () => {
+    expect(mediaErrorKey('[rt:refused] [youtube] x: The page needs to be reloaded.')).toBe('add.mediaRefused');
+    expect(mediaErrorKey('[rt:login] [youtube] x: Sign in to confirm your age.')).toBe('add.mediaLogin');
+    // the tag decides even when the raw text mentions a live stream
+    expect(mediaErrorKey('[rt:refused] is live')).toBe('add.mediaRefused');
+  });
 });
 
 /** Lets the chained promises of the probe and the submit settle. */

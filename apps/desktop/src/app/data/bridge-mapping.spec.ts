@@ -6,6 +6,7 @@ import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
 import type { Segment } from '../tauri/bridge/Segment';
 import {
   emptyHistory,
+  errorDetailOf,
   failureKindOf,
   finalPath,
   HISTORY_LENGTH,
@@ -87,6 +88,13 @@ describe('bridge-mapping', () => {
       expect(failureKindOf('disk full')).toBe('disk');
       expect(failureKindOf('not enough space on D:')).toBe('disk');
       expect(failureKindOf('connection reset by peer')).toBe('network');
+    });
+
+    it('tagged video refusals win over the words in their raw text', () => {
+      expect(failureKindOf('[rt:refused] unable to download video data: HTTP Error 403: Forbidden')).toBe('refused');
+      expect(failureKindOf('[rt:login] [youtube] x: Sign in to confirm your age.')).toBe('login');
+      expect(errorDetailOf('[rt:refused] [youtube] x: The page needs to be reloaded.')).toBe('[youtube] x: The page needs to be reloaded.');
+      expect(errorDetailOf('')).toBeNull();
     });
 
     it('checksum wins over the other words and no text means network', () => {

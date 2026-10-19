@@ -14,6 +14,7 @@ import {
   ProbeResult,
   Segment as UiSegment,
 } from '../model/download';
+import { parseMediaError } from '../model/media-error';
 import type { Download } from '../tauri/bridge/Download';
 import type { DownloadRequest } from '../tauri/bridge/DownloadRequest';
 import type { DownloadState } from '../tauri/bridge/DownloadState';
@@ -50,6 +51,11 @@ export function toUiState(state: DownloadState): UiDownloadState {
  */
 export function failureKindOf(error: string | null | undefined): FailureKind {
   const text = (error ?? '').toLowerCase();
+  // a tagged video refusal first: its raw text may say "403" without the link having expired
+  const tagged = parseMediaError(error ?? '').kind;
+  if (tagged !== null) {
+    return tagged;
+  }
   if (text.includes('checksum')) {
     return 'checksum';
   }
@@ -63,6 +69,12 @@ export function failureKindOf(error: string | null | undefined): FailureKind {
     return 'disk';
   }
   return 'network';
+}
+
+/** The plain-text details of a failed video download (yt-dlp's own line), `null` when there are none. */
+export function errorDetailOf(error: string | null | undefined): string | null {
+  const details = parseMediaError(error ?? '').details;
+  return details.length === 0 ? null : details;
 }
 
 /** A byte count, `null` when the engine does not know it. */
@@ -136,6 +148,7 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     startedAt: toMillis(d.started_at),
     completedAt: toMillis(d.completed_at),
     failure: state === 'failed' ? failureKindOf(d.error) : null,
+    errorDetail: state === 'failed' && d.kind === 'media' ? errorDetailOf(d.error) : null,
     checksum: d.checksum_expected === null ? null : { algo: d.checksum_expected.algo, hex: d.checksum_expected.hex },
   };
 }
