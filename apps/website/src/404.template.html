@@ -1,20 +1,20 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{en.notFound.title}} · Riptide</title>
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#071a26" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <link rel="icon" href="{{base}}assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{base}}css/site.css?v={{v}}">
   <script>
     (function () {
       try {
         var saved = localStorage.getItem('riptide-theme');
-        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : (dark ? 'dark' : 'light');
+        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
       } catch (e) { /* stay light */ }
     })();
   </script>
@@ -22,8 +22,9 @@
 <body class="not-found">
   <main class="container not-found-main">
     <a class="brand" href="{{base}}">
-      {{{svg mark}}}
-      <span class="brand-name">Riptide</span>
+      <img class="brand-logo logo-light" src="{{base}}assets/riptide-logo-light.svg" alt="Riptide" width="690" height="254">
+      <img class="brand-logo logo-dark" src="{{base}}assets/riptide-logo-dark.svg" alt="Riptide" width="690" height="254">
+      
     </a>
     <section class="not-found-block font-latin" lang="en" dir="ltr">
       <h1>{{en.notFound.title}}</h1>

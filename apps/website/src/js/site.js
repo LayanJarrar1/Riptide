@@ -15,10 +15,9 @@
 
   const root = document.documentElement;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
   const isRtl = root.dir === 'rtl';
 
-  // ---- 1. Theme (light by default; dark when the system asks for it or the visitor opts in) --
+  // ---- 1. Theme (dark first; the visitor can switch to light and the choice is remembered) --
   function applyTheme(theme, persist) {
     root.dataset.theme = theme;
     if (persist) {
@@ -30,11 +29,6 @@
   if (themeButton) {
     themeButton.addEventListener('click', () => applyTheme(root.dataset.theme === 'dark' ? 'light' : 'dark', true));
   }
-  prefersDark.addEventListener('change', (e) => {
-    let saved = null;
-    try { saved = localStorage.getItem('riptide-theme'); } catch (err) { /* ignore */ }
-    if (!saved) applyTheme(e.matches ? 'dark' : 'light', false);
-  });
 
   // ---- 2. Mobile navigation ---------------------------------------------------------------
   const header = document.querySelector('.site-header');
@@ -47,7 +41,7 @@
     navToggle.addEventListener('click', () => setOpen(navToggle.getAttribute('aria-expanded') !== 'true'));
     header.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
-    window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => { if (e.matches) setOpen(false); });
+    window.matchMedia('(min-width: 1100px)').addEventListener('change', (e) => { if (e.matches) setOpen(false); });
   }
 
   // ---- 3. The current ---------------------------------------------------------------------
@@ -409,7 +403,7 @@
       index = (i + triggers.length) % triggers.length;
       const source = triggers[index].querySelector('img');
       const caption = triggers[index].closest('figure').querySelector('figcaption');
-      img.src = source.currentSrc || source.src;
+      img.src = source.dataset.full || source.currentSrc || source.src;
       img.alt = source.alt;
       cap.textContent = caption ? caption.textContent : '';
     }
