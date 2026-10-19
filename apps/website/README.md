@@ -107,16 +107,20 @@ The header is the top layer (`z-index: 100`, near-opaque tone background plus bl
 
 ## Releasing
 
-The page links to one release. To point it at a new build, change the one line in `build.mjs`:
+The page links to one release (currently v0.1.0-alpha.4). To point it at a new build, change the one constant in `build.mjs`:
 
 ```js
-const RELEASE_VERSION = '0.1.0-alpha.3';   // e.g. '0.1.0-alpha.4'
+const RELEASE_VERSION = '0.1.0-alpha.4';   // next build: '0.1.0-alpha.5'
 ```
 
 The hero badge ("Alpha {n}"), the download section badge, the installer and portable file names, the tag in every download URL
-and the SHA256SUMS link all derive from it. Do this only after the assets exist on the GitHub release (installer
+the SHA256SUMS link and the "All releases" link (`releases/tag/v<version>`) all derive from it. Do this only after the assets exist on the GitHub release (installer
 `Riptide_<version>_x64-setup.exe`, portable zip `Riptide-<version>-portable.zip`, `SHA256SUMS.txt`), then run `node apps/website/build.mjs`
 and the e2e check.
+
+Deploy: GitHub Pages is published by `.github/workflows/pages.yml` on every push to `main` that touches `apps/website`. It needs the
+repository to be public (or a plan that includes Pages for private repositories) and Settings, Pages, Source set to "GitHub Actions".
+Merge the site PR only after the release exists, so the download links are live the moment the page is.
 
 ## Checks
 

@@ -25,12 +25,13 @@ const REPO_URL = 'https://github.com/LayanJarrar1/Riptide';
 const REPO_SLUG = 'LayanJarrar1/Riptide';
 // The release the site points at. To switch to a new build, change this one line (see README, "Releasing"):
 // the hero badge, the installer and portable names, the tag in every download URL and the checksums link follow it.
-const RELEASE_VERSION = '0.1.0-alpha.3';
+const RELEASE_VERSION = '0.1.0-alpha.4';
 const RELEASE_TAG = `v${RELEASE_VERSION}`;
 const ALPHA_N = (RELEASE_VERSION.match(/alpha\.(\d+)/) || [, ''])[1];
 const INSTALLER_FILE = `Riptide_${RELEASE_VERSION}_x64-setup.exe`;
 const PORTABLE_FILE = `Riptide-${RELEASE_VERSION}-portable.zip`;
 const RELEASES_URL = `${REPO_URL}/releases`;
+const RELEASE_URL = `${RELEASES_URL}/tag/${RELEASE_TAG}`;
 const INSTALLER_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${INSTALLER_FILE}`;
 const PORTABLE_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${PORTABLE_FILE}`;
 const SUMS_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/SHA256SUMS.txt`;
@@ -184,7 +185,7 @@ function build() {
 
   const icons = loadIcons();
   const version = shortHash(join(SRC, 'css', 'site.css'), join(SRC, 'js', 'site.js'));
-  // `{n}` in a string is the pre-release number of RELEASE_VERSION ("Alpha {n}" -> "Alpha 3").
+  // `{n}` in a string is the pre-release number of RELEASE_VERSION ("Alpha {n}" -> "Alpha 4").
   const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8').replaceAll('{n}', ALPHA_N))]));
 
   for (const lang of LANGUAGES) {
@@ -196,6 +197,7 @@ function build() {
       repo: REPO_URL,
       repoSlug: REPO_SLUG,
       releasesUrl: RELEASES_URL,
+      releaseUrl: RELEASE_URL,
       installerUrl: INSTALLER_URL,
       // The speed chapter's eight lanes, each owning an equal slice of the file (the no-JS end state).
       lanes8: Array.from({ length: 8 }, (_, i) => ({ a: String(i / 8), b: String((i + 1) / 8) })),

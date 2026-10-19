@@ -68,6 +68,14 @@ with sync_playwright() as p:
         check(f'{tag} download links point to release assets ({len(dl)})', ok, str(dl[:3]))
         hero_dl = page.eval_on_selector('.hero .btn-primary', 'e => e.href')
         check(f'{tag} hero CTA is the installer', hero_dl.endswith('x64-setup.exe'), hero_dl)
+        REL = 'https://github.com/LayanJarrar1/Riptide/releases'
+        check(f'{tag} hero CTA is the alpha.4 installer', hero_dl == f'{REL}/download/v0.1.0-alpha.4/Riptide_0.1.0-alpha.4_x64-setup.exe', hero_dl)
+        links = page.eval_on_selector_all('a[href]', 'els => els.map(e => e.href)')
+        for want in (f'{REL}/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip', f'{REL}/download/v0.1.0-alpha.4/SHA256SUMS.txt', f'{REL}/tag/v0.1.0-alpha.4'):
+            check(f'{tag} links to {want.split("/")[-1]}', want in links)
+        body = page.content()
+        check(f'{tag} no leftover alpha 3', not re.search(r'alpha[ .\-]?3|ألفا 3', body, re.I))
+        check(f'{tag} badges say alpha 4', ('Alpha 4' in body) if lang == 'en' else ('ألفا 4' in body))
         check(f'{tag} extension block says coming soon', page.locator('.store').count() >= 2)
         check(f'{tag} FAQ has at most 5 entries', 1 <= page.locator('details.faq-item').count() <= 5)
 
