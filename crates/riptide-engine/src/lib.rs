@@ -84,6 +84,7 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 
 pub mod disk;
+pub mod motw;
 pub mod queues;
 
 pub use disk::free_space;
@@ -154,6 +155,15 @@ pub struct EngineSettings {
     /// Which proxy new connections use.
     #[serde(default)]
     pub proxy: ProxySettings,
+    /// Windows: mark finished downloads as coming from the internet (the NTFS
+    /// `Zone.Identifier` stream browsers write), so SmartScreen and Office warn before an
+    /// executable or macro document opens. On by default; see [`motw`]. Ignored elsewhere.
+    #[serde(default = "default_true")]
+    pub mark_of_the_web: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// How the engine reaches the network.
@@ -281,6 +291,7 @@ impl Default for EngineSettings {
             category_dirs: BTreeMap::new(),
             global_speed_limit: None,
             proxy: ProxySettings::default(),
+            mark_of_the_web: true,
         }
     }
 }
@@ -1720,6 +1731,7 @@ impl Engine {
             }
         });
 
+        let final_url = probed.final_url.to_string();
         let result = transfer(client, ctx, plan, cfg, tx, stop.clone(), limiter).await;
         let _ = forwarder.await;
 
@@ -1733,6 +1745,7 @@ impl Engine {
                 if current != DownloadState::Verifying {
                     self.transition(id, DownloadState::Verifying, None).await?;
                 }
+                self.mark_downloaded(&path, &secrets, Some(final_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;
@@ -1741,6 +1754,25 @@ impl Engine {
             Ok(Outcome::Stopped { segments }) => self.stopped(id, reason, segments).await,
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// Writes the Mark-of-the-Web stream on a file this run just finished (never on files that
+    /// were already on disk), unless the user turned it off. Best effort; see [`motw`]. The
+    /// referrer comes from the stored `Referer` header, and only its sanitised form is written.
+    async fn mark_downloaded(&self, path: &Path, secrets: &Secrets, host_url: Option<String>) {
+        if !self.settings().mark_of_the_web {
+            return;
+        }
+        let referrer = secrets
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("referer"))
+            .map(|(_, v)| v.clone());
+        let path = path.to_path_buf();
+        let _ = tokio::task::spawn_blocking(move || {
+            motw::mark_from_internet(&path, referrer.as_deref(), host_url.as_deref())
+        })
+        .await;
     }
 
     /// Applies the state a stop asked for.
@@ -1942,6 +1974,7 @@ impl Engine {
 
         match result? {
             MediaOutcome::Completed { path, size } => {
+                let page_url = record.url.clone();
                 self.transition(id, DownloadState::Verifying, None).await?;
                 let mut done = self.get(id).await?.ok_or(Error::NotFound(id))?;
                 if let Some(name) = path.file_name() {
@@ -1958,6 +1991,7 @@ impl Engine {
                     eta_secs: Some(0),
                     connections: 1,
                 });
+                self.mark_downloaded(&path, &secrets, Some(page_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;

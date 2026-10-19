@@ -42,4 +42,10 @@ global_speed_limit: number | null,
 /**
  * Which proxy new connections use.
  */
-proxy: ProxySettings, };
+proxy: ProxySettings, 
+/**
+ * Windows: mark finished downloads as coming from the internet (the NTFS
+ * `Zone.Identifier` stream browsers write), so SmartScreen and Office warn before an
+ * executable or macro document opens. On by default; see [`motw`]. Ignored elsewhere.
+ */
+mark_of_the_web: boolean, };

@@ -21,6 +21,8 @@ export interface Settings {
   readonly clipboardMonitor: boolean;
   readonly browserIntegration: boolean;
   readonly notifyOnComplete: boolean;
+  /** Windows: mark finished downloads as coming from the internet (Mark-of-the-Web). Engine-side. */
+  readonly markDownloads: boolean;
   readonly proxyMode: 'system' | 'none' | 'manual';
   readonly proxyUrl: string;
   readonly checkUpdates: boolean;
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clipboardMonitor: true,
   browserIntegration: false,
   notifyOnComplete: true,
+  markDownloads: true,
   proxyMode: 'system',
   proxyUrl: '',
   checkUpdates: true,
@@ -172,6 +175,7 @@ export class SettingsService {
         perHost: engine.per_host,
         categoryDirs,
         speedLimitBps: engine.global_speed_limit ?? null,
+        markDownloads: engine.mark_of_the_web ?? true,
         proxyMode: engine.proxy.mode,
         proxyUrl: engine.proxy.url,
       }));
@@ -215,7 +219,8 @@ export class SettingsService {
       JSON.stringify(known.category_dirs ?? {}) === JSON.stringify(category_dirs) &&
       (known.global_speed_limit ?? null) === global_speed_limit &&
       known.proxy.mode === proxy.mode &&
-      known.proxy.url === proxy.url
+      known.proxy.url === proxy.url &&
+      (known.mark_of_the_web ?? true) === current.markDownloads
     ) {
       return;
     }
@@ -228,6 +233,7 @@ export class SettingsService {
       category_dirs,
       global_speed_limit,
       proxy,
+      mark_of_the_web: current.markDownloads,
     };
     try {
       await this.invoke<void>('set_engine_settings', { settings });

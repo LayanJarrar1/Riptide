@@ -23,7 +23,7 @@ class FakeBridge {
   readonly records = new Map<number, BridgeDownload>();
   readonly segments = new Map<number, BridgeSegment[]>();
   readonly calls: Call[] = [];
-  settings: EngineSettings = { default_dir: 'C:\\dl', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' } };
+  settings: EngineSettings = { default_dir: 'C:\\dl', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true };
   /** What `find_duplicate` answers; `null` = nothing like it. */
   duplicate: BridgeDownload | null = null;
   probeAnswer: ProbeInfo = { final_url: 'https://x/final.iso', filename: 'final.iso', size: 10, supports_ranges: true, content_type: null, resumable: true };

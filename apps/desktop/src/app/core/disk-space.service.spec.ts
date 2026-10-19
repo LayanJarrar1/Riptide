@@ -19,7 +19,7 @@ async function settle(): Promise<void> {
 }
 
 describe('DiskSpaceService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' } };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true };
   let calls: Call[];
   let free: number;
 
