@@ -12,10 +12,11 @@
   <a href="#license"><img alt="License: GPL-3.0 app, MIT or Apache-2.0 engine" src="https://img.shields.io/badge/license-GPL--3.0%20%C2%B7%20MIT%20%2F%20Apache--2.0-6b8683?style=flat-square"></a>
 </p>
 
-<h3 align="center">Download faster. Every byte, verified.<br>Free, open source, no ads, no admin rights.</h3>
+<h3 align="center">Download faster. Every byte verified.<br>A free, open-source download manager. Parallel connections, exact resume, SHA-256 checks.</h3>
 
 <p align="center">
   <a href="#download"><b>Download</b></a> ·
+  <a href="https://layanjarrar1.github.io/Riptide/">Website</a> ·
   <a href="#whats-new-in-alpha-4">What's new</a> ·
   <a href="#browser-extension">Browser extension</a> ·
   <a href="#features">Features</a> ·
@@ -45,16 +46,14 @@ No license fee. No ads, nag screens or trial timers. No account. No telemetry. N
 
 ## What's new in alpha 4
 
-| | |
-|---|---|
-| **Video pages** | Paste a YouTube or Vimeo link (or any site yt-dlp supports) and pick a quality, down to audio-only M4A or MP3. Pause and resume work like any other download. |
-| **Queues and a scheduler** | Make as many queues as you like, each with its own limit. Run one only at night, on certain days, or at a set time, and choose what happens when it finishes: exit, sleep, hibernate, shut down or run a program, with a 30 second countdown to cancel. |
-| **Batch downloads** | Type `file[001-120].zip` or `img_[a-z].jpg` and see every address before you add them. Import or export a plain list of links. |
-| **Site grabber** | Point it at a page, choose how deep to go and which file types you want, and tick what to download. It respects `robots.txt` and is polite to servers. |
-| **"Download this video" in the browser** | A small button appears on video pages. Click it, pick a quality, and Riptide does the rest. Right-click any page to download all links, selected links or all images, with a checklist. |
-| **Update notifications** | A system notification when a new version exists (once per version), a badge in Settings, and a "What's new" note after you update. Turn it off any time. |
-| **Faster start** | The interface loads about 130 kB less before the first paint. |
-| **New look** | The Riptide brand: new logo, icons and website. |
+- **Video pages** from YouTube, Vimeo and more, with a quality picker (down to 144p, or audio only as M4A or MP3)
+- **Queues with schedules** and finish actions: exit, sleep, hibernate, shut down or run a program
+- **Batch downloads** from patterns such as `file[001-120].zip`, and a **site grabber** that respects `robots.txt`
+- **Browser extension:** download this video, all or selected links and all images, capture rules, and a one-click install helper for Chrome and Edge
+- **Update notifications**, a badge in Settings and a "What's new" link after updating
+- **New look:** the Riptide brand, with a new logo, icons and website
+
+Full notes: [release 0.1.0-alpha.4](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.4).
 
 <table>
   <tr>
@@ -89,6 +88,10 @@ Live streams, playlists and DRM-protected videos are refused. Only download what
 **Requirements:** Windows 10 or 11, 64-bit. WebView2 is already part of Windows.
 All builds and their SHA-256 checksums are on the [Releases page](https://github.com/LayanJarrar1/Riptide/releases).
 
+**Always up to date.** Riptide checks GitHub Releases at most once a day (you can turn it off in Settings) and shows a
+notification when a new version exists. One click installs it, and updates are signed. That check is the only network
+call besides your downloads.
+
 > [!TIP]
 > The alpha is not code-signed yet, so Windows SmartScreen may warn the first time. Choose **More info** →
 > **Run anyway**. Every file's SHA-256 is listed in `SHA256SUMS.txt` on the release.
@@ -103,15 +106,17 @@ If anything goes wrong, the browser simply downloads the file itself; nothing is
 - **Right-click** *Download with Riptide* on any link, image, video or audio, or grab **all links**, **selected links** or **all images** on a page.
 - **A video button** on video pages with a quality picker, and a small button on direct file links.
 
-### Install it in Chrome (3 steps)
+### Chrome or Edge: install in 3 steps
 
-The extension is not in the Chrome Web Store yet, so Chrome needs it loaded once by hand. It takes under a minute.
+The extension is not in the Chrome Web Store or Edge Add-ons yet (store listings are coming), so load it once by hand.
 
-1. Install Riptide (above) and start it once. It registers the browser bridge for you, without admin rights.
-2. In Riptide open **Settings → Integration** and choose **Open extension folder**. (The folder is `%LOCALAPPDATA%\Riptide\extension\chrome`; from the portable zip it is the `extension\chrome` folder next to the app.)
-3. In Chrome open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick that folder.
+1. In Riptide open **Settings → Integration** and press **Open extension folder**.
+2. In the browser open `chrome://extensions` (`edge://extensions` in Edge) and turn on **Developer mode**.
+3. Press **Load unpacked** and pick that folder.
 
-Edge works the same way (`edge://extensions`, folder `extension\edge`). Firefox: `about:debugging` → *This Firefox* →
+The folder is `extension\chrome` (or `extension\edge`) inside the Riptide install folder, by default `%LOCALAPPDATA%\Riptide`; for the portable zip it sits next to the app.
+
+Firefox: `about:debugging` → *This Firefox* →
 *Load Temporary Add-on* → `extension\firefox\manifest.json`. Building it yourself: `cd apps/extension && npm ci && npm run build`.
 Permissions, privacy and how it talks to the app: [`apps/extension/README.md`](apps/extension/README.md).
 
@@ -139,6 +144,7 @@ Permissions, privacy and how it talks to the app: [`apps/extension/README.md`](a
 - **Checksum verification** (MD5, SHA-1, SHA-256), and *Restart from the beginning* when you need a clean copy.
 
 **Organised**
+- Video pages through yt-dlp, batch downloads from patterns or pasted lists, and a site grabber that crawls to a chosen depth.
 - Queues with schedules and finish actions, categories by file type with their own folders, duplicate detection
   before adding, and real free-space checks with a warning when a file won't fit.
 - Search, sort, filter, multi-select, a details drawer, and full keyboard control (press `?` for shortcuts).
@@ -150,7 +156,7 @@ Permissions, privacy and how it talks to the app: [`apps/extension/README.md`](a
 - The browser can only ask: the extension talks to a small local helper that accepts a short list of message
   types and checks who is calling. Nothing from a web page is ever executed.
 - No admin rights, no account, no telemetry. The only network traffic is your downloads and, if you leave it on,
-  one update check against GitHub Releases.
+  one update check against GitHub Releases, at most once a day.
 
 **Yours**
 - Arabic and English everywhere, auto-detected and switchable live, with a mirrored RTL layout and
@@ -282,13 +288,15 @@ scripts/check.ps1      the quality gate
 `file[001-120].zip`، وجامع الملفات الذي يمرّ على موقع كامل ويحترم `robots.txt`، وزرّ «حمّل هذا الفيديو» في المتصفح،
 وإشعارات بالتحديثات الجديدة.
 
+**محدَّث دائمًا:** يتحقق ريبتايد من إصدارات GitHub مرة واحدة في اليوم على الأكثر (ويمكنك إيقاف ذلك من الإعدادات)، ويُشعرك حين يتوفر إصدار جديد، وبنقرة واحدة يثبّته. التحديثات موقَّعة، وهذا الفحص هو الاتصال الوحيد غير تنزيلاتك.
+
 **التحميل:** [المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide_0.1.0-alpha.4_x64-setup.exe) ·
 [النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip) ·
 [دليل الاستخدام بالعربية](guide/ar.md)
 
-**تثبيت الإضافة في كروم:** ١) ثبّت ريبتايد وشغّله مرة واحدة. ٢) من **الإعدادات ← التكامل** اختر **فتح مجلد الإضافة**.
-٣) في كروم افتح `chrome://extensions` وفعّل **وضع المطوّر** ثم **تحميل إضافة غير مضغوطة** واختر المجلد. الإضافة
-ليست في متجر كروم بعد، ولذلك تحتاج هذه الخطوة مرة واحدة فقط.
+**تثبيت الإضافة في Chrome أو Edge بثلاث خطوات:** ١) في ريبتايد افتح **الإعدادات ← التكامل** واضغط **فتح مجلد الإضافة**.
+٢) في المتصفح افتح `chrome://extensions` (أو `edge://extensions` في Edge) وفعّل **وضع المطوّر**.
+٣) اضغط **تحميل إضافة غير مضغوطة** واختر ذلك المجلد. الإضافة ليست في المتاجر بعد (قريبًا)، ولذلك تحتاج هذه الخطوات مرة واحدة فقط.
 
 > **ملاحظة:** هذه نسخة تجريبية (Alpha) للتجربة والإبلاغ عن الأخطاء، وليست نهائية بعد.
 
@@ -302,7 +310,7 @@ contributions right now. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Security
 
 The desktop app, CLI, IPC crate, native host and browser extension are licensed under
 **GPL-3.0-or-later** ([`LICENSE`](LICENSE)). The engine crates (`riptide-core`, `riptide-net`,
-`riptide-store`, `riptide-engine`, `riptide-log`, `riptide-testserver`) are dual-licensed
+`riptide-store`, `riptide-engine`, `riptide-media`, `riptide-crawl`, `riptide-log`, `riptide-testserver`) are dual-licensed
 **MIT OR Apache-2.0** ([`LICENSE-MIT`](LICENSE-MIT), [`LICENSE-APACHE`](LICENSE-APACHE)).
 
 Built on [Tauri](https://tauri.app), [Angular](https://angular.dev), [tokio](https://tokio.rs),
