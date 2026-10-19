@@ -56,6 +56,8 @@ const COLOR_BADGE_TEXT = '#06201D';
 const COLOR_VIDEO = '#00D5E8';
 const MAX_SEEN_PER_TAB = 50;
 const PROBE_TIMEOUT_MS = 90_000;
+/** "Open Riptide": the host waits up to 10 s for the app's pipe after launching it. */
+const OPEN_APP_TIMEOUT_MS = 15_000;
 
 const MENU_LINK = 'riptide-link';
 const MENU_ALL = 'riptide-all';
@@ -435,8 +437,9 @@ async function neverAskFor(site: string): Promise<void> {
 }
 
 async function openApp(): Promise<HostStatus> {
-  // `ping` is the only "open" there is: the host decides whether to launch the app.
-  return host.ping();
+  // `ping` is the only "open" there is: the host decides whether to launch the app and waits up
+  // to 10 s for its pipe, so give the answer longer than that (cold start of the webview).
+  return host.ping(OPEN_APP_TIMEOUT_MS);
 }
 
 browser.notifications.onClicked.addListener((id) => {
