@@ -41,7 +41,7 @@ pub use limiter::{CapObserver, HostLimiter, HostPermit};
 pub use probe::{probe, Probe};
 pub use proxy::{ProxyChoice, ProxyUrl};
 pub use rate::RateLimiter;
-pub use redirect::{parse_http_url, strip_query, Origin, MAX_REDIRECTS};
+pub use redirect::{parse_http_url, split_userinfo, strip_query, Origin, MAX_REDIRECTS};
 pub use retry::RetryPolicy;
 pub use speed::SpeedMeter;
 pub use transfer::{transfer, Outcome, TransferConfig, TransferEvent, TransferPlan};

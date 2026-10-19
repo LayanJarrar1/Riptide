@@ -511,6 +511,9 @@ struct Prepared {
 /// Validates `request` and builds the record [`Engine::add`] inserts.
 fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<Prepared> {
     let url = riptide_net::parse_http_url(&request.url)?;
+    // `user:password@` in the link is a credential, not part of the address: the record keeps
+    // the clean URL and the secrets table gets the credentials (hard rule 4)
+    let (clean_url, url_auth) = riptide_net::split_userinfo(&url);
     let media_selection = match request.kind {
         DownloadKind::Http => None,
         DownloadKind::Media => {
@@ -551,7 +554,11 @@ fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<P
         .unwrap_or_else(|| settings.dir_for(category));
     let mut d = Download::new(
         DownloadId(0),
-        request.url.clone(),
+        if url_auth.is_some() {
+            clean_url.to_string()
+        } else {
+            request.url.clone()
+        },
         filename,
         dir,
         now_millis(),
@@ -576,6 +583,9 @@ fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<P
 
     // referrer and user agent ride along as same-origin headers (the record has no columns)
     let mut secrets = request.secrets.clone().unwrap_or_default();
+    if let (Some((username, password)), None) = (url_auth, &secrets.auth) {
+        secrets.auth = Some(riptide_core::Credentials { username, password });
+    }
     if let Some(r) = &request.referrer {
         secrets.headers.push(("Referer".into(), r.clone()));
     }
@@ -673,7 +683,7 @@ pub struct BatchOutcome {
 
 /// `url` without its fragment, for duplicate comparison; `None` if it does not parse.
 fn comparable_url(url: &str) -> Option<String> {
-    let mut parsed = Url::parse(url).ok()?;
+    let mut parsed = riptide_net::split_userinfo(&Url::parse(url).ok()?).0;
     parsed.set_fragment(None);
     Some(parsed.into())
 }
@@ -898,13 +908,18 @@ impl Engine {
         referrer: Option<&str>,
     ) -> Result<ProbeInfo> {
         let parsed = riptide_net::parse_http_url(url)?;
-        let mut ctx = RequestContext::new(&parsed).with_referrer(referrer);
-        if let Some(s) = secrets {
-            ctx = ctx.with_secrets(s);
+        let (clean, url_auth) = riptide_net::split_userinfo(&parsed);
+        let mut ctx = RequestContext::new(&clean).with_referrer(referrer);
+        let mut merged = secrets.cloned().unwrap_or_default();
+        if let (Some((username, password)), None) = (url_auth, &merged.auth) {
+            merged.auth = Some(riptide_core::Credentials { username, password });
         }
-        let p = probe(&self.client(), url, &ctx).await?;
+        if !merged.is_empty() {
+            ctx = ctx.with_secrets(&merged);
+        }
+        let p = probe(&self.client(), clean.as_str(), &ctx).await?;
         Ok(ProbeInfo {
-            final_url: p.final_url.to_string(),
+            final_url: riptide_net::split_userinfo(&p.final_url).0.to_string(),
             filename: p.filename.clone(),
             size: p.size,
             supports_ranges: p.supports_ranges,
@@ -1110,7 +1125,7 @@ impl Engine {
         filename: Option<&str>,
         dir: Option<&Path>,
     ) -> Result<Option<Download>> {
-        let mut wanted = url.clone();
+        let mut wanted = riptide_net::split_userinfo(url).0;
         wanted.set_fragment(None);
         let wanted: String = wanted.into();
         let filename = filename
@@ -1245,7 +1260,8 @@ impl Engine {
         referrer: Option<&str>,
         secrets: Option<Secrets>,
     ) -> Result<()> {
-        riptide_net::parse_http_url(url)?;
+        let parsed = riptide_net::parse_http_url(url)?;
+        let (clean_url, url_auth) = riptide_net::split_userinfo(&parsed);
         let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
         if matches!(
             before.state,
@@ -1266,12 +1282,16 @@ impl Engine {
         };
 
         let mut fresh = self.get(id).await?.ok_or(Error::NotFound(id))?;
-        fresh.url = url.to_string();
+        fresh.url = if url_auth.is_some() {
+            clean_url.to_string()
+        } else {
+            url.to_string()
+        };
         fresh.final_url = None;
         fresh.error = None;
         let referrer = referrer.map(str::to_string);
         db(&self.inner.store, move |s| {
-            let changed = secrets.is_some() || referrer.is_some();
+            let changed = secrets.is_some() || referrer.is_some() || url_auth.is_some();
             let old = s.secrets(id)?.unwrap_or_default();
             let mut next = match secrets {
                 Some(mut new) => {
@@ -1291,6 +1311,9 @@ impl Engine {
                 }
                 None => old,
             };
+            if let (Some((username, password)), None) = (url_auth, &next.auth) {
+                next.auth = Some(riptide_core::Credentials { username, password });
+            }
             if let Some(r) = referrer {
                 next.headers
                     .retain(|(k, _)| !k.eq_ignore_ascii_case("referer"));
@@ -1594,7 +1617,7 @@ impl Engine {
             segments.clear();
         }
 
-        record.final_url = Some(probed.final_url.to_string());
+        record.final_url = Some(riptide_net::split_userinfo(&probed.final_url).0.to_string());
         record.size = probed.size;
         record.supports_ranges = probed.supports_ranges;
         record.etag = probed.etag.clone();
@@ -1846,7 +1869,10 @@ impl Engine {
             }
         }
         if !info.url.is_empty() {
-            record.final_url = Some(info.url.clone());
+            record.final_url = Some(Url::parse(&info.url).map_or_else(
+                |_| info.url.clone(),
+                |u| riptide_net::split_userinfo(&u).0.to_string(),
+            ));
         }
         record.size = info
             .choices
