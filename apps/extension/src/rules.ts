@@ -39,6 +39,8 @@ export interface Rules {
   types: Record<FileTypeKey, boolean>;
   /** Extra extensions (lower-case, no dot) to capture. */
   customExtensions: string[];
+  /** Extensions (lower-case, no dot) that always stay in the browser, even if their group is on. */
+  ignoreExtensions: string[];
   /** If non-empty, capture only on these sites (host patterns, see `siteMatches`). */
   allowSites: string[];
   /** Never capture on these sites. */
@@ -58,6 +60,7 @@ export const DEFAULT_RULES: Readonly<Rules> = Object.freeze({
   minSize: MIB,
   types: { archives: true, video: true, audio: true, programs: true, documents: true, images: false },
   customExtensions: [],
+  ignoreExtensions: [],
   allowSites: [],
   denySites: [],
   altBypass: true,
@@ -90,6 +93,7 @@ export type SkipReason =
   | 'site_denied'
   | 'site_not_allowed'
   | 'type'
+  | 'ignored_type'
   | 'too_small';
 
 /** Why a download was taken. */
@@ -320,6 +324,7 @@ export function normaliseRules(input: unknown): Rules {
     minSize: typeof minSize === 'number' && Number.isFinite(minSize) && minSize >= 0 ? Math.floor(minSize) : DEFAULT_RULES.minSize,
     types,
     customExtensions: stringList(raw['customExtensions'], normaliseExtension),
+    ignoreExtensions: stringList(raw['ignoreExtensions'], normaliseExtension),
     allowSites: stringList(raw['allowSites'], normaliseSite),
     denySites: stringList(raw['denySites'], normaliseSite),
     altBypass: typeof raw['altBypass'] === 'boolean' ? raw['altBypass'] : DEFAULT_RULES.altBypass,
@@ -335,7 +340,7 @@ export function normaliseRules(input: unknown): Rules {
  * Decide whether to capture. `paused` is the session-level "pause capture" toggle in the popup.
  *
  * Order: scheme, master switch, pause, never-ask sites, Alt bypass, deny list, allow list,
- * file type, size. Explicit user actions (context menu, hover badge) do not go through here.
+ * ignored extensions, file type, size. Explicit user actions (context menu, hover badge) do not go through here.
  */
 export function decide(rules: Rules, c: Candidate, paused = false): Decision {
   const host = hostOf(c.url);
@@ -350,6 +355,7 @@ export function decide(rules: Rules, c: Candidate, paused = false): Decision {
   }
 
   const ext = extensionOf(c.filename || filenameFromUrl(c.url));
+  if (ext && rules.ignoreExtensions.includes(ext)) return { take: false, reason: 'ignored_type' };
   let reason: TakeReason;
   if (wantsExtension(rules, ext)) {
     reason = 'extension';

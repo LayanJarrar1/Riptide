@@ -5,8 +5,8 @@
  * 1. Alt tracking: an Alt-click on a link tells the background to let the browser keep that
  *    download ("hold Alt to bypass").
  * 2. Hover badge: hovering a direct file link shows a small "Download with Riptide" button.
- * 3. Link panel: on "Download all / selected links" the background asks us to collect the
- *    candidates and show a checklist.
+ * 3. Link checklist (`./links.ts`): on "Download all / selected links / images" the background
+ *    asks us to collect the candidates and show a checklist.
  *
  * Nothing from the page is executed; only `href` strings are sent to the background.
  */
@@ -15,17 +15,22 @@ import browser from 'webextension-polyfill';
 import { dirOf, resolveLang, t } from '../i18n';
 import type { Lang, MessageKey } from '../i18n';
 import { isMessage } from '../messages';
-import type { HandoffManyReply, HandoffReply, Message } from '../messages';
-import { extensionOf, hostOf, isDirectFileLink } from '../rules';
+import type { HandoffReply, Message } from '../messages';
+import { hostOf, isDirectFileLink } from '../rules';
 import { DEFAULT_SETTINGS, normaliseSettings } from '../settings';
 import type { Settings } from '../settings';
+import { initLinks } from './links';
+import { initVideo } from './video';
+import type { VideoUi } from './video';
 
 let settings: Settings = DEFAULT_SETTINGS;
 let lang: Lang = 'en';
+let video: VideoUi | null = null;
 
 function applySettings(raw: unknown): void {
   settings = normaliseSettings(raw);
   lang = resolveLang(settings.language, browser.i18n.getUILanguage());
+  video?.refresh();
 }
 
 void browser.storage.local.get('settings').then((got) => applySettings(got['settings']));
@@ -85,34 +90,12 @@ const CSS = `
 .rt-badge[data-state="sent"] { background: #3ddc97; }
 .rt-badge[data-state="failed"] { background: #f2665f; color: #fff; }
 .rt-badge svg { width: 12px; height: 12px; flex: none; }
-.rt-scrim { position: fixed; inset: 0; background: rgb(0 0 0 / 45%); display: flex; align-items: center; justify-content: center; }
-.rt-panel { width: min(560px, calc(100vw - 32px)); max-height: min(80vh, 720px); display: flex; flex-direction: column;
-  background: #10161b; border: 1px solid rgb(255 255 255 / 10%); border-radius: 14px; box-shadow: 0 20px 60px rgb(0 0 0 / 55%); overflow: hidden; }
-.rt-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid rgb(255 255 255 / 8%); }
-.rt-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
-.rt-close { border: 0; background: transparent; color: #a9b5bf; font: inherit; font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
-.rt-close:hover { background: rgb(255 255 255 / 7%); color: #e9eef2; }
-.rt-tools { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid rgb(255 255 255 / 8%); flex-wrap: wrap; }
-.rt-tools input[type="search"] { flex: 1; min-width: 140px; padding: 7px 10px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 14%);
-  background: #161e25; color: #e9eef2; font: inherit; }
-.rt-tools label { display: inline-flex; align-items: center; gap: 6px; color: #a9b5bf; cursor: pointer; }
-.rt-list { flex: 1; overflow: auto; padding: 6px 8px; }
 .rt-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
 .rt-item:hover { background: rgb(255 255 255 / 4%); }
 .rt-item input { flex: none; accent-color: #19c6b5; }
 .rt-item .rt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rt-item .rt-url { display: block; color: #6d7b87; font-size: 11px; overflow: hidden; text-overflow: ellipsis; direction: ltr; unicode-bidi: isolate; text-align: start; }
 .rt-item .rt-ext { flex: none; padding: 2px 7px; border-radius: 999px; background: rgb(25 198 181 / 12%); color: #5ae0d1; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-.rt-empty { padding: 32px; text-align: center; color: #6d7b87; }
-.rt-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid rgb(255 255 255 / 8%); }
-.rt-foot .rt-status { flex: 1; color: #a9b5bf; }
-.rt-btn { padding: 8px 14px; border-radius: 8px; border: 1px solid rgb(255 255 255 / 14%); background: #161e25; color: #e9eef2; font: inherit; font-weight: 600; cursor: pointer; }
-.rt-btn:hover { background: #1d272f; }
-.rt-btn.rt-primary { background: #19c6b5; border-color: #19c6b5; color: #06201d; }
-.rt-btn.rt-primary:hover { background: #5ae0d1; }
-.rt-btn:disabled { opacity: 0.5; cursor: default; }
-@media (prefers-reduced-motion: no-preference) { .rt-panel { animation: rt-in 140ms ease-out; } }
-@keyframes rt-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
 `;
 
 const RIPTIDE_ICON =
@@ -246,157 +229,32 @@ document.addEventListener(
 window.addEventListener('scroll', hideBadge, { passive: true, capture: true });
 
 // ---------------------------------------------------------------------------------------------
-// 3. Link panel
+// 3. Link checklist (all links / selected links / images) lives in ./links.ts
 // ---------------------------------------------------------------------------------------------
 
-interface LinkCandidate {
-  url: string;
-  text: string;
-  ext: string;
-  direct: boolean;
-}
+const links = initLinks({ root, lang: () => lang, tr, send, hideBadge });
 
-function collectLinks(selectionOnly: boolean): LinkCandidate[] {
-  const ranges: Range[] = [];
-  if (selectionOnly) {
-    const sel = window.getSelection();
-    for (let i = 0; i < (sel?.rangeCount ?? 0); i++) {
-      const r = sel?.getRangeAt(i);
-      if (r && !r.collapsed) ranges.push(r);
-    }
-  }
-  const seen = new Map<string, LinkCandidate>();
-  for (const a of document.querySelectorAll<HTMLAnchorElement>('a[href]')) {
-    const url = a.href;
-    if (hostOf(url) === null || seen.has(url)) continue;
-    if (selectionOnly && !ranges.some((r) => r.intersectsNode(a))) continue;
-    const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim() || a.getAttribute('download') || '';
-    seen.set(url, {
-      url,
-      text,
-      ext: extensionOf(url),
-      direct: isDirectFileLink(url, settings.rules) || a.hasAttribute('download'),
-    });
-  }
-  return [...seen.values()];
-}
+video = initVideo({
+  root,
+  settings: () => settings,
+  lang: () => lang,
+  tr,
+  send,
+});
 
-let panelScrim: HTMLDivElement | null = null;
-
-function closePanel(): void {
-  panelScrim?.remove();
-  panelScrim = null;
-}
-
-function showPanel(selectionOnly: boolean): void {
-  closePanel();
-  hideBadge();
-  const links = collectLinks(selectionOnly);
-  const anyDirect = links.some((l) => l.direct);
-
-  const title = el('h2', { textContent: tr(selectionOnly ? 'panel.title.selection' : 'panel.title.all') });
-  const close = el('button', { className: 'rt-close', type: 'button', textContent: '×', title: tr('panel.close') });
-  const filter = el('input', { type: 'search', placeholder: tr('panel.filter') });
-  const directOnly = el('input', { type: 'checkbox' });
-  directOnly.checked = anyDirect;
-  const selectAll = el('input', { type: 'checkbox' });
-  selectAll.checked = true;
-  const list = el('div', { className: 'rt-list' });
-  const status = el('span', { className: 'rt-status' });
-  const cancel = el('button', { className: 'rt-btn', type: 'button', textContent: tr('panel.cancel') });
-  const go = el('button', { className: 'rt-btn rt-primary', type: 'button' });
-
-  const checks = new Map<string, HTMLInputElement>();
-  const rows: { link: LinkCandidate; row: HTMLLabelElement; box: HTMLInputElement }[] = [];
-  for (const link of links) {
-    const box = el('input', { type: 'checkbox' });
-    box.checked = true;
-    const name = el('span', { className: 'rt-name' }, [
-      link.text || link.url,
-      el('span', { className: 'rt-url', textContent: link.url }),
-    ]);
-    const row = el('label', { className: 'rt-item' }, [box, name]);
-    if (link.ext) row.append(el('span', { className: 'rt-ext', textContent: link.ext }));
-    box.addEventListener('change', updateCount);
-    checks.set(link.url, box);
-    rows.push({ link, row, box });
-    list.append(row);
-  }
-  if (links.length === 0) list.append(el('div', { className: 'rt-empty', textContent: tr('panel.empty') }));
-
-  function visible(): typeof rows {
-    const q = filter.value.trim().toLowerCase();
-    return rows.filter(({ link }) => {
-      if (directOnly.checked && !link.direct) return false;
-      return !q || link.url.toLowerCase().includes(q) || link.text.toLowerCase().includes(q);
-    });
-  }
-
-  function applyFilter(): void {
-    const shown = new Set(visible());
-    for (const r of rows) r.row.style.display = shown.has(r) ? '' : 'none';
-    updateCount();
-  }
-
-  function selected(): string[] {
-    return visible()
-      .filter((r) => r.box.checked)
-      .map((r) => r.link.url);
-  }
-
-  function updateCount(): void {
-    const n = selected().length;
-    go.textContent = tr('panel.download', { n });
-    go.disabled = n === 0;
-  }
-
-  filter.addEventListener('input', applyFilter);
-  directOnly.addEventListener('change', applyFilter);
-  selectAll.addEventListener('change', () => {
-    for (const r of visible()) r.box.checked = selectAll.checked;
-    updateCount();
-  });
-  close.addEventListener('click', closePanel);
-  cancel.addEventListener('click', closePanel);
-  go.addEventListener('click', () => {
-    void (async () => {
-      const urls = selected();
-      go.disabled = true;
-      cancel.disabled = true;
-      const result = await send<HandoffManyReply>({ kind: 'handoff-many', urls, referrer: location.href });
-      const ok = result?.ok ?? 0;
-      const failed = result?.failed ?? urls.length;
-      status.textContent = failed === 0 ? tr('panel.done', { n: ok }) : tr('panel.partial', { ok, failed });
-      cancel.disabled = false;
-      cancel.textContent = tr('panel.close');
-      if (failed === 0) setTimeout(closePanel, 1_600);
-    })();
-  });
-
-  const panel = el('div', { className: 'rt-panel' }, [
-    el('div', { className: 'rt-head' }, [title, close]),
-    el('div', { className: 'rt-tools' }, [
-      filter,
-      el('label', {}, [directOnly, tr('panel.direct_only')]),
-      el('label', {}, [selectAll, tr('panel.select_all')]),
-    ]),
-    list,
-    el('div', { className: 'rt-foot' }, [status, cancel, go]),
-  ]);
-  panel.dir = dirOf(lang);
-  panel.addEventListener('click', (e) => e.stopPropagation());
-  panelScrim = el('div', { className: 'rt-scrim' }, [panel]);
-  panelScrim.addEventListener('click', closePanel);
-  root().appendChild(panelScrim);
-  applyFilter();
-  filter.focus();
-}
-
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && panelScrim) closePanel();
+video = initVideo({
+  root,
+  settings: () => settings,
+  lang: () => lang,
+  tr,
+  send,
 });
 
 browser.runtime.onMessage.addListener((message: unknown) => {
-  if (isMessage(message) && message.kind === 'show-panel') showPanel(message.selectionOnly);
+  if (!isMessage(message)) return undefined;
+  if (message.kind === 'show-panel') links.show(message.mode);
+  if (message.kind === 'show-panel') showPanel(message.selectionOnly);
+  else if (message.kind === 'show-video') video?.show(message.url);
+  else if (message.kind === 'media-hint') video?.hint();
   return undefined;
 });

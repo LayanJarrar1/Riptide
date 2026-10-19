@@ -31,6 +31,26 @@ pub const STABLE_ENDPOINT: &str =
 pub const BETA_ENDPOINT: &str =
     "https://github.com/LayanJarrar1/Riptide/releases/download/channel-beta/latest-beta.json";
 
+/// GitHub release page of `version`, or `None` when it is not a plain semver string (the value
+/// comes from the webview and ends up in a URL we open).
+pub fn release_url(version: &str) -> Option<String> {
+    let ok = !version.is_empty()
+        && version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'));
+    ok.then(|| format!("https://github.com/LayanJarrar1/Riptide/releases/tag/v{version}"))
+}
+
+/// Opens the release page of `version` in the default browser ("What's new").
+#[tauri::command]
+pub fn open_release_page<R: Runtime>(app: AppHandle<R>, version: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = release_url(&version).ok_or_else(|| "invalid version".to_string())?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Which releases the user wants to be offered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -139,6 +159,17 @@ pub async fn install_update<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn release_url_accepts_only_plain_versions() {
+        assert_eq!(
+            release_url("0.1.0-alpha.3").as_deref(),
+            Some("https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.3")
+        );
+        assert_eq!(release_url(""), None);
+        assert_eq!(release_url("1.0/../x"), None);
+        assert_eq!(release_url("1.0 --flag"), None);
+    }
 
     #[test]
     fn channels_parse_from_the_ui_names_and_point_at_the_repo() {

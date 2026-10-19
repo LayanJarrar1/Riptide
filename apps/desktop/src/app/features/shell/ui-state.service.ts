@@ -10,6 +10,10 @@ export class UiState {
   readonly addOpen = signal(false);
   /** Link to pre-fill when the dialog opens (refresh-link flow, clipboard). */
   readonly addUrl = signal<string | null>(null);
+  /** The batch-download dialog (pattern or list). */
+  readonly batchOpen = signal(false);
+  /** The site grabber dialog (crawl a site for files). */
+  readonly grabberOpen = signal(false);
   /** The keyboard-shortcuts dialog. */
   readonly shortcutsOpen = signal(false);
   /** Incremented whenever something asks the search box to take focus. */
@@ -28,6 +32,22 @@ export class UiState {
   closeAdd(): void {
     this.addOpen.set(false);
     this.addUrl.set(null);
+  }
+
+  openBatch(): void {
+    this.batchOpen.set(true);
+  }
+
+  closeBatch(): void {
+    this.batchOpen.set(false);
+  }
+
+  openGrabber(): void {
+    this.grabberOpen.set(true);
+  }
+
+  closeGrabber(): void {
+    this.grabberOpen.set(false);
   }
 
   openShortcuts(): void {

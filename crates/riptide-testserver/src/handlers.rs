@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
-use axum::extract::{Query, Request, State};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -18,7 +18,7 @@ use flate2::Compression;
 use md5::{Digest as _, Md5};
 
 use crate::content::{self, Delivery, CHUNK_SIZE, DEFAULT_SEED, DEFAULT_SIZE, LAST_MODIFIED};
-use crate::state::{InFlightGuard, ServerState, Shared};
+use crate::state::{InFlightGuard, RequestRecord, ServerState, Shared};
 
 type Params = HashMap<String, String>;
 type App = State<Arc<ServerState>>;
@@ -50,7 +50,7 @@ fn internal(msg: impl Into<String>) -> HttpError {
 }
 
 /// A `text/plain; charset=utf-8` response.
-fn plain(status: StatusCode, body: impl Into<String>) -> Response {
+pub(crate) fn plain(status: StatusCode, body: impl Into<String>) -> Response {
     let mut resp = Response::new(Body::from(body.into()));
     *resp.status_mut() = status;
     resp.headers_mut().insert(
@@ -116,10 +116,10 @@ fn param_bool(q: &Params, key: &str, default: bool) -> Result<bool, HttpError> {
 // ---------------------------------------------------------------------------------------------
 
 /// What is being served.
-struct Resource {
-    seed: u64,
-    size: u64,
-    etag: String,
+pub(crate) struct Resource {
+    pub(crate) seed: u64,
+    pub(crate) size: u64,
+    pub(crate) etag: String,
     /// Advertise `Accept-Ranges: bytes` and honour `Range`.
     ranges: bool,
     /// Send `Content-Length`. `false` makes hyper use chunked transfer encoding.
@@ -127,11 +127,11 @@ struct Resource {
     /// Added to the declared `Content-Length` (`/wrong-length`).
     length_delta: i64,
     /// Extra response headers (appended after the common ones).
-    extra: Vec<(HeaderName, HeaderValue)>,
+    pub(crate) extra: Vec<(HeaderName, HeaderValue)>,
 }
 
 impl Resource {
-    fn new(seed: u64, size: u64) -> Self {
+    pub(crate) fn new(seed: u64, size: u64) -> Self {
         Self {
             seed,
             size,
@@ -152,7 +152,7 @@ impl Resource {
 
 /// How the body is shaped on the wire.
 #[derive(Default)]
-struct Shaping {
+pub(crate) struct Shaping {
     bps: Option<u64>,
     drop_after: Option<u64>,
     flips: Vec<u64>,
@@ -252,7 +252,12 @@ fn range_not_satisfiable(res: &Resource) -> HandlerResult {
 }
 
 /// Serves `res` honouring `Range`, `If-Range` and `HEAD`, with the body shaped by `shaping`.
-fn serve(method: &Method, headers: &HeaderMap, res: Resource, shaping: Shaping) -> HandlerResult {
+pub(crate) fn serve(
+    method: &Method,
+    headers: &HeaderMap,
+    res: Resource,
+    shaping: Shaping,
+) -> HandlerResult {
     let size = res.size;
     let (status, start, end) = if res.ranges {
         match parse_range(headers, size) {
@@ -347,6 +352,7 @@ pub(crate) async fn index(State(st): App) -> Response {
          /cd/arabic               Content-Disposition with an RFC 5987 Arabic filename\n\
          /cd/evil                 Content-Disposition with traversal, CON, %01 and trailing dot/space\n\
          /corrupt?flip=           flips N bits, ETag and Content-Length unchanged\n\
+         /site/, /robots.txt      crawlable site: depth 3, loops, off-site link, 404, big pages, files\n\
          /echo-headers            request headers as JSON\n",
         st.origin(),
         st.alt_origin(),
@@ -956,12 +962,49 @@ pub(crate) async fn echo_headers(headers: HeaderMap) -> Response {
 }
 
 /// Logs one line per request (method, path without the query string, status).
-pub(crate) async fn log_request(req: Request, next: Next) -> Response {
+pub(crate) async fn log_request(State(st): App, req: Request, next: Next) -> Response {
     let method = req.method().clone();
     let path = req.uri().path().to_owned();
+    st.shared().record(RequestRecord {
+        origin: st.origin().to_owned(),
+        method: method.to_string(),
+        target: req
+            .uri()
+            .path_and_query()
+            .map_or_else(|| path.clone(), |pq| pq.as_str().to_owned()),
+        has_cookie: req.headers().contains_key(header::COOKIE),
+        has_authorization: req.headers().contains_key(header::AUTHORIZATION),
+    });
     let resp = next.run(req).await;
     tracing::info!(%method, %path, status = resp.status().as_u16(), "request");
     resp
+}
+
+/// `/batch/<name>` - `fileNNN.zip` (001-120) and `img_<a-z>.jpg`; every other name is `404`.
+/// Each name has its own seed and a default size ([`crate::batch::item`]); `?size=` overrides
+/// the size. Ranges, `ETag` and `HEAD` behave like `/ok`.
+pub(crate) async fn batch_item(
+    Path(name): Path<String>,
+    method: Method,
+    Query(q): Query<Params>,
+    headers: HeaderMap,
+) -> HandlerResult {
+    let Some(item) = crate::batch::item(&name) else {
+        return Ok(plain(
+            StatusCode::NOT_FOUND,
+            format!(
+                "no batch item named {name:?}
+"
+            ),
+        ));
+    };
+    let size = param_u64(&q, "size", item.size)?;
+    serve(
+        &method,
+        &headers,
+        Resource::new(item.seed, size),
+        Shaping::default(),
+    )
 }
 
 #[cfg(test)]

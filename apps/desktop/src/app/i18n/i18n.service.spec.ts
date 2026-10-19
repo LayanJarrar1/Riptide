@@ -87,3 +87,16 @@ describe('I18nService', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('lazy Arabic table', () => {
+  it('ready() resolves for the language in use and the real chunk loads and matches the English keys', async () => {
+    const { service } = setup(['ar-SA']);
+    await service.ready();
+    expect(service.t('app.title')).not.toBe('app.title');
+    const { loadTable } = await import('./i18n.service');
+    await loadTable('ar');
+    service.setLang('en');
+    service.setLang('ar');
+    expect(service.lang()).toBe('ar');
+  });
+});

@@ -9,8 +9,11 @@ import {
   NgZone,
   OnInit,
   signal,
+  Type,
+  untracked,
   viewChild,
 } from '@angular/core';
+import { NgComponentOutlet } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -24,6 +27,9 @@ import { AddDownloadDialogComponent } from './features/downloads/add-download-di
 import { CompletionToastService } from './features/downloads/completion-toast.service';
 import { DesktopShellService } from './features/shell/desktop-shell.service';
 import { CATEGORY_ICONS } from './features/downloads/download-row.component';
+import { PostActionDialogComponent } from './features/queues/post-action-dialog.component';
+import { PostActionCountdown } from './features/queues/post-action-countdown.service';
+import { QueuesNavComponent } from './features/queues/queues-nav.component';
 import { ExitConfirmDialogComponent } from './features/shell/exit-confirm-dialog.component';
 import { ShortcutsDialogComponent } from './features/shell/shortcuts-dialog.component';
 import { UiState } from './features/shell/ui-state.service';
@@ -61,6 +67,7 @@ const BOOT_MS = 900;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AddDownloadDialogComponent,
+    NgComponentOutlet,
     ButtonComponent,
     IconComponent,
     RouterLink,
@@ -68,6 +75,8 @@ const BOOT_MS = 900;
     RouterOutlet,
     ShortcutsDialogComponent,
     ExitConfirmDialogComponent,
+    PostActionDialogComponent,
+    QueuesNavComponent,
     SparklineComponent,
     TickerDirective,
     ToastsComponent,
@@ -85,7 +94,7 @@ export class AppComponent implements OnInit {
   protected readonly ui = inject(UiState);
   protected readonly format = inject(FormatService);
   private readonly router = inject(Router);
-  private readonly updates = inject(UpdateService);
+  protected readonly updates = inject(UpdateService);
   private readonly searchRef = viewChild<ElementRef<HTMLInputElement>>('search');
 
   protected readonly views = LIST_VIEWS;
@@ -100,6 +109,10 @@ export class AppComponent implements OnInit {
   protected readonly speedFormat = (n: number): string => this.format.speed(n);
 
   private readonly url = signal(this.router.url);
+  /** The batch dialog's class once its chunk has loaded. */
+  protected readonly batchDialog = signal<Type<unknown> | null>(null);
+  /** The site grabber dialog's class once its chunk has loaded. */
+  protected readonly grabberDialog = signal<Type<unknown> | null>(null);
 
   /** Only categories that have at least one download are listed. */
   protected readonly visibleCategories = computed<readonly CategoryKey[]>(() => {
@@ -126,6 +139,8 @@ export class AppComponent implements OnInit {
     // starts watching the engine for completions (it shows the "is complete" toast)
     inject(CompletionToastService);
     inject(DesktopShellService);
+    // listens for finished queues; the dialog shows its countdown
+    inject(PostActionCountdown);
 
     this.router.events
       .pipe(
@@ -133,6 +148,20 @@ export class AppComponent implements OnInit {
         takeUntilDestroyed(),
       )
       .subscribe((e) => this.url.set(e.urlAfterRedirects));
+
+    // the batch dialog is its own chunk: fetched the first time it is asked for
+    effect(() => {
+      if (this.ui.batchOpen() && untracked(this.batchDialog) === null) {
+        void import('./features/downloads/batch-download-dialog.component').then((m) => this.batchDialog.set(m.BatchDownloadDialogComponent));
+      }
+    });
+
+    // so is the site grabber
+    effect(() => {
+      if (this.ui.grabberOpen() && untracked(this.grabberDialog) === null) {
+        void import('./features/grabber/site-grabber-dialog.component').then((m) => this.grabberDialog.set(m.SiteGrabberDialogComponent));
+      }
+    });
 
     effect(() => {
       // every request bumps the counter; focus on each bump (skip the initial value)
@@ -151,7 +180,8 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     void this.tauri.loadAppInfo();
     // at most once a day and only while enabled in Settings (the one non-download call)
-    void this.updates.startupCheck();
+    this.updates.startChecks();
+    void this.updates.announceUpdated();
   }
 
   protected onSearch(event: Event): void {
@@ -165,6 +195,11 @@ export class AppComponent implements OnInit {
 
   protected goView(view: ListView): void {
     this.store.setView(view);
+    void this.router.navigateByUrl('/');
+  }
+
+  protected goQueue(queue: number): void {
+    this.store.setQueue(queue);
     void this.router.navigateByUrl('/');
   }
 
@@ -194,7 +229,11 @@ export class AppComponent implements OnInit {
     }
     if (event.key === 'n' || event.key === 'N') {
       event.preventDefault();
-      this.ui.openAdd();
+      if (event.shiftKey) {
+        this.ui.openBatch();
+      } else {
+        this.ui.openAdd();
+      }
     } else if (event.key === 'f' || event.key === 'F') {
       event.preventDefault();
       void this.router.navigateByUrl('/').then(() => this.ui.focusSearch());

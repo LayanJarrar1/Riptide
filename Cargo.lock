@@ -3871,6 +3871,8 @@ dependencies = [
  "clap",
  "rand 0.9.5",
  "riptide-core",
+ "riptide-crawl",
+ "riptide-engine",
  "riptide-ipc",
  "riptide-log",
  "riptide-net",
@@ -3898,11 +3900,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "riptide-crawl"
+version = "0.1.0-alpha.3"
+dependencies = [
+ "futures",
+ "html5ever",
+ "percent-encoding",
+ "proptest",
+ "reqwest 0.12.28",
+ "riptide-core",
+ "riptide-net",
+ "riptide-testserver",
+ "serde",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "riptide-desktop"
 version = "0.1.0-alpha.3"
 dependencies = [
  "dirs 6.0.0",
  "riptide-core",
+ "riptide-crawl",
  "riptide-engine",
  "riptide-host",
  "riptide-ipc",
@@ -3922,8 +3945,10 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
  "url",
+ "windows-sys 0.59.0",
  "winreg",
 ]
 
@@ -3935,6 +3960,7 @@ dependencies = [
  "hex",
  "reqwest 0.12.28",
  "riptide-core",
+ "riptide-crawl",
  "riptide-media",
  "riptide-net",
  "riptide-store",
@@ -3965,6 +3991,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
  "windows-sys 0.59.0",
 ]
 

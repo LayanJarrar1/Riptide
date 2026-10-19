@@ -273,6 +273,20 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       padding-inline-end: 96px;
     }
 
+    /*
+     * The path field is forced LTR (paths and URLs read left to right) while its icon and
+     * button follow the page direction, so in RTL they sit on the opposite physical sides.
+     * Without this the Browse button covers the start of the path.
+     */
+    :host-context([dir='rtl']) .input-wrap .input[dir='ltr'] {
+      padding-inline-start: 12px;
+      padding-inline-end: 34px;
+    }
+
+    :host-context([dir='rtl']) .input-wrap:has(.input-action) .input[dir='ltr'] {
+      padding-inline-start: 96px;
+    }
+
     .probe-spinner {
       position: absolute;
       inset-inline-end: 10px;

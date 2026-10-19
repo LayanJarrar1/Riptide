@@ -55,6 +55,14 @@ export function isValidProxyUrl(raw: string): boolean {
         <p class="page-sub">{{ i18n.t('settings.subtitle') }}</p>
       </header>
 
+      @if (updates.badgeVersion(); as version) {
+        <a class="update-banner" href="#about" role="status" (click)="goAbout($event)">
+          <span class="update-dot" aria-hidden="true"></span>
+          <span>{{ i18n.t('settings.updateBanner').replace('{version}', version) }}</span>
+          <span class="update-banner-link">{{ i18n.t('settings.updateBannerLink') }}</span>
+        </a>
+      }
+
       <section class="section" id="appearance">
         <h2 class="section-title">{{ i18n.t('settings.appearance') }}</h2>
         <div class="setting">
@@ -510,6 +518,30 @@ export function isValidProxyUrl(raw: string): boolean {
       gap: var(--space-3);
     }
 
+    .update-banner {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2, 8px);
+      padding: 10px 14px;
+      margin-block-end: 16px;
+      border: 1px solid var(--color-accent);
+      border-radius: var(--radius-md, 8px);
+      color: var(--color-text);
+      text-decoration: none;
+    }
+
+    .update-dot {
+      inline-size: 8px;
+      block-size: 8px;
+      border-radius: 50%;
+      background: var(--color-accent);
+    }
+
+    .update-banner-link {
+      margin-inline-start: auto;
+      color: var(--color-accent);
+    }
+
     .update-card .setting-name {
       color: var(--color-accent);
     }
@@ -674,6 +706,11 @@ export class SettingsPageComponent {
     } catch {
       this.toasts.show('danger', this.i18n.t('toast.updateCheckFailed'));
     }
+  }
+
+  protected goAbout(event: Event): void {
+    event.preventDefault();
+    document.getElementById('about')?.scrollIntoView({ block: 'start' });
   }
 
   protected installUpdate(): void {

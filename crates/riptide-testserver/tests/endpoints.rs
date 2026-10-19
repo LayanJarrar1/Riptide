@@ -828,3 +828,320 @@ async fn bad_query_parameter_is_400() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+// ------------------------------------------------------------------------------------------------
+// /batch/<name>
+// ------------------------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn batch_items_serve_per_name_bytes_and_404_outside_the_pattern() {
+    let srv = TestServer::spawn().await;
+    let client = no_redirects();
+    let mut sizes = std::collections::HashSet::new();
+    for name in [
+        "file001.zip",
+        "file042.zip",
+        "file120.zip",
+        "img_a.jpg",
+        "img_z.jpg",
+    ] {
+        let item = riptide_testserver::batch_item(name).unwrap();
+        sizes.insert(item.size);
+        let resp = client
+            .get(srv.url(&format!("/batch/{name}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{name}");
+        assert_eq!(header_str(&resp, "accept-ranges"), Some("bytes"));
+        assert_eq!(
+            header_str(&resp, "etag"),
+            Some(etag(item.seed, item.size).as_str())
+        );
+        let body = resp.bytes().await.unwrap();
+        assert_eq!(body.len() as u64, item.size, "{name}");
+        assert_eq!(
+            sha256_hex(&body),
+            expected_sha256_hex(item.seed, item.size),
+            "{name}"
+        );
+    }
+    assert!(sizes.len() > 1, "items should differ in size");
+
+    // ranges work like /ok
+    let item = riptide_testserver::batch_item("file007.zip").unwrap();
+    let resp = client
+        .get(srv.url("/batch/file007.zip"))
+        .header(header::RANGE, "bytes=10-19")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        resp.bytes().await.unwrap().as_ref(),
+        &expected_bytes(item.seed, 20)[10..20]
+    );
+
+    // size override
+    let resp = client
+        .get(srv.url("/batch/file007.zip?size=100"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bytes().await.unwrap().len(), 100);
+
+    // outside the pattern: missing items
+    for name in [
+        "file000.zip",
+        "file121.zip",
+        "file1.zip",
+        "file0001.zip",
+        "img_A.jpg",
+        "img_ab.jpg",
+        "other.bin",
+        "file001.zip.bak",
+    ] {
+        let resp = client
+            .get(srv.url(&format!("/batch/{name}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{name}");
+    }
+    // distinct names, distinct bytes
+    assert_ne!(
+        riptide_testserver::batch_item("file001.zip").unwrap().seed,
+        riptide_testserver::batch_item("file002.zip").unwrap().seed
+    );
+}
+
+// ------------------------------------------------------------------------------------------------
+// /site/ and /robots.txt
+// ------------------------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn robots_txt_disallows_the_private_folder() {
+    let srv = TestServer::spawn().await;
+    let body = following()
+        .get(srv.url("/robots.txt"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(body.contains("User-agent: *"), "{body}");
+    assert!(body.contains("Disallow: /site/private/"), "{body}");
+}
+
+#[tokio::test]
+async fn site_pages_link_to_the_other_origin_and_loop_back() {
+    let srv = TestServer::spawn().await;
+    let resp = following().get(srv.url("/site/")).send().await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(header_str(&resp, "content-type")
+        .unwrap()
+        .starts_with("text/html"));
+    let html = resp.text().await.unwrap();
+    assert!(
+        html.contains(&srv.url_on_alt("/site/offsite/page")),
+        "{html}"
+    );
+    assert!(html.contains("docs/") && html.contains("missing.html"));
+
+    // the deepest page links back to the start; the alt origin serves the same site
+    let deep = following()
+        .get(srv.url("/site/docs/deep/appendix.html"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(deep.contains("href=\"../../\""), "{deep}");
+    let alt_index = following()
+        .get(srv.url_on_alt("/site/"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(
+        alt_index.contains(&srv.url("/site/offsite/page")),
+        "links point at the *other* origin"
+    );
+}
+
+#[tokio::test]
+async fn site_files_are_deterministic_and_have_ranges() {
+    let srv = TestServer::spawn().await;
+    for (path, size) in riptide_testserver::SITE_FILES {
+        let resp = following()
+            .get(srv.url(&format!("/site/{path}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{path}");
+        assert_eq!(
+            header_str(&resp, "content-length"),
+            Some(size.to_string().as_str())
+        );
+        assert_eq!(header_str(&resp, "accept-ranges"), Some("bytes"));
+        assert!(header_str(&resp, "etag").is_some());
+        let body = resp.bytes().await.unwrap();
+        assert_eq!(
+            sha256_hex(&body),
+            riptide_testserver::site_file_sha256_hex(path).unwrap(),
+            "{path}"
+        );
+    }
+    let csv = following()
+        .get(srv.url("/site/download?id=1"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(header_str(&csv, "content-type"), Some("text/csv"));
+    assert_eq!(
+        header_str(&csv, "content-disposition"),
+        Some("attachment; filename=\"export.csv\"")
+    );
+    let head = following()
+        .head(srv.url("/site/files/report.pdf"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(header_str(&head, "content-type"), Some("application/pdf"));
+}
+
+#[tokio::test]
+async fn site_has_a_404_and_pages_over_five_mib() {
+    let srv = TestServer::spawn().await;
+    let missing = following()
+        .get(srv.url("/site/missing.html"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+    let big = following()
+        .get(srv.url("/site/big.html"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(header_str(&big, "content-length"), Some("6291456"));
+    assert_eq!(big.bytes().await.unwrap().len(), 6 * 1024 * 1024);
+
+    let chunked = following()
+        .get(srv.url("/site/big-chunked.html"))
+        .send()
+        .await
+        .unwrap();
+    assert!(chunked.headers().get("content-length").is_none());
+    assert_eq!(chunked.bytes().await.unwrap().len(), 6 * 1024 * 1024);
+}
+
+#[tokio::test]
+async fn requests_are_logged_with_secret_header_presence_only() {
+    let srv = TestServer::spawn().await;
+    let c = following();
+    c.get(srv.url("/ok?size=1")).send().await.unwrap();
+    c.get(srv.url_on_alt("/ok?size=1"))
+        .header("cookie", "a=b")
+        .header("authorization", "Bearer x")
+        .send()
+        .await
+        .unwrap();
+    let log = srv.state().requests();
+    assert_eq!(log.len(), 2);
+    assert_eq!(log[0].origin, srv.base_url());
+    assert_eq!(log[0].target, "/ok?size=1");
+    assert!(!log[0].has_cookie && !log[0].has_authorization);
+    assert_eq!(log[1].origin, srv.alt_url());
+    assert!(log[1].has_cookie && log[1].has_authorization);
+    srv.state().clear_requests();
+    assert!(srv.state().requests().is_empty());
+// /batch/<name>
+// ------------------------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn batch_items_serve_per_name_bytes_and_404_outside_the_pattern() {
+    let srv = TestServer::spawn().await;
+    let client = no_redirects();
+    let mut sizes = std::collections::HashSet::new();
+    for name in [
+        "file001.zip",
+        "file042.zip",
+        "file120.zip",
+        "img_a.jpg",
+        "img_z.jpg",
+    ] {
+        let item = riptide_testserver::batch_item(name).unwrap();
+        sizes.insert(item.size);
+        let resp = client
+            .get(srv.url(&format!("/batch/{name}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{name}");
+        assert_eq!(header_str(&resp, "accept-ranges"), Some("bytes"));
+        assert_eq!(
+            header_str(&resp, "etag"),
+            Some(etag(item.seed, item.size).as_str())
+        );
+        let body = resp.bytes().await.unwrap();
+        assert_eq!(body.len() as u64, item.size, "{name}");
+        assert_eq!(
+            sha256_hex(&body),
+            expected_sha256_hex(item.seed, item.size),
+            "{name}"
+        );
+    }
+    assert!(sizes.len() > 1, "items should differ in size");
+
+    // ranges work like /ok
+    let item = riptide_testserver::batch_item("file007.zip").unwrap();
+    let resp = client
+        .get(srv.url("/batch/file007.zip"))
+        .header(header::RANGE, "bytes=10-19")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        resp.bytes().await.unwrap().as_ref(),
+        &expected_bytes(item.seed, 20)[10..20]
+    );
+
+    // size override
+    let resp = client
+        .get(srv.url("/batch/file007.zip?size=100"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bytes().await.unwrap().len(), 100);
+
+    // outside the pattern: missing items
+    for name in [
+        "file000.zip",
+        "file121.zip",
+        "file1.zip",
+        "file0001.zip",
+        "img_A.jpg",
+        "img_ab.jpg",
+        "other.bin",
+        "file001.zip.bak",
+    ] {
+        let resp = client
+            .get(srv.url(&format!("/batch/{name}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{name}");
+    }
+    // distinct names, distinct bytes
+    assert_ne!(
+        riptide_testserver::batch_item("file001.zip").unwrap().seed,
+        riptide_testserver::batch_item("file002.zip").unwrap().seed
+    );
+}

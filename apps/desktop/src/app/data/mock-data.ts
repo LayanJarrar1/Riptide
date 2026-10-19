@@ -265,6 +265,7 @@ export function seedDownloads(now: number, seed = 7): Download[] {
       state: s.state,
       category: categoryOf(filename),
       queueId: s.queueId ?? 1,
+      queuePosition: i,
       priority: s.priority ?? 'normal',
       connections,
       segments,

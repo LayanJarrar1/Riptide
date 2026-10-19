@@ -39,10 +39,14 @@ riptide-ipc = { workspace = true }
 riptide-log = { workspace = true }
 riptide-net = { workspace = true }
 riptide-media = { workspace = true }
+riptide-crawl = { workspace = true }
+tokio-util = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 # HKCU Native Messaging keys; a safe wrapper over the registry API (no `unsafe` in this crate)
 winreg = "0.56"
+# SetSuspendState (sleep / hibernate); the only unsafe call, isolated in src/power.rs
+windows-sys = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

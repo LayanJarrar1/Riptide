@@ -1,9 +1,10 @@
-import { inject, Injectable, InjectionToken, signal } from '@angular/core';
+import { computed, DestroyRef, inject, Injectable, InjectionToken, NgZone, signal } from '@angular/core';
 
 import { Settings, SettingsService } from '../features/settings/settings.service';
 import { I18nService } from '../i18n/i18n.service';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../tauri/tauri-bridge';
 import { ToastService } from '../ui/toast.service';
+import { NOW } from './clock';
 import { PREFERENCE_STORE } from './preferences';
 
 /** An available update, as `check_update` reports it (`src-tauri/src/updater.rs`). */
@@ -23,11 +24,28 @@ export const LAST_UPDATE_CHECK_KEY = 'riptide.updates.lastCheck';
 /** Automatic checks happen at most this often. */
 export const AUTO_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+/** `localStorage` key of the newest version the user has already been told about. */
+export const LAST_ANNOUNCED_KEY = 'riptide.updates.announced';
+
+/** `localStorage` key of the version that ran last (for the one-time "Updated to" toast). */
+export const LAST_RUN_VERSION_KEY = 'riptide.updates.lastRunVersion';
+
+/** How often the running app wakes up to ask whether an automatic check is due. */
+export const WAKE_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Whether the window is visible and focused; specs provide a fake. */
+export const WINDOW_FOCUSED = new InjectionToken<() => boolean>('riptide.window.focused', {
+  providedIn: 'root',
+  factory: () => () => typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus(),
+});
+
 /** The clock; specs provide a fixed one. */
 export const NOW = new InjectionToken<() => number>('riptide.now', {
   providedIn: 'root',
-  factory: () => () => Date.now(),
+  factory: () => () => typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus(),
 });
+
+export { NOW } from './clock';
 
 /**
  * Self-update. The only network call that is not a download (privacy): nothing happens unless
@@ -45,9 +63,15 @@ export class UpdateService {
   private readonly now = inject(NOW);
   private readonly i18n = inject(I18nService);
   private readonly toasts = inject(ToastService);
+  private readonly focused = inject(WINDOW_FOCUSED);
+  private readonly zone = inject(NgZone);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly status = signal<UpdateStatus>('idle');
   readonly available = signal<UpdateInfo | null>(null);
+
+  /** The version to badge (Settings nav item, "Update available" line), or `null`. */
+  readonly badgeVersion = computed(() => this.available()?.version ?? null);
 
   /** Asks the selected channel for a newer version. Resolves with it, or `null`. */
   async check(channel: Settings['channel'] = this.settings.settings().channel): Promise<UpdateInfo | null> {
@@ -96,18 +120,82 @@ export class UpdateService {
   }
 
   /**
-   * The start-up check (at most once a day, only while enabled): an available update shows a
-   * toast with "Update and restart". Called once by the app shell.
+   * Runs the automatic check when due (the once-a-day gate decides) and tells the user about a
+   * version they have not been told about yet: a toast with "Update and restart" while the
+   * window is focused, a system notification while it is hidden or in the background. The
+   * same version is never announced twice.
    */
-  async startupCheck(): Promise<void> {
+  async checkAndAnnounce(): Promise<void> {
     const info = await this.autoCheck();
-    if (info !== null) {
-      this.toasts.show(
-        'info',
-        this.i18n.t('toast.updateAvailable').replace('{version}', info.version),
-        { label: this.i18n.t('settings.updateRestart'), run: () => void this.installOrToast() },
-        15_000,
-      );
+    if (info === null || this.store.get(LAST_ANNOUNCED_KEY) === info.version) {
+      return;
+    }
+    this.store.set(LAST_ANNOUNCED_KEY, info.version);
+    const text = this.i18n.t('toast.updateAvailable').replace('{version}', info.version);
+    if (this.focused()) {
+      this.toasts.show('info', text, { label: this.i18n.t('settings.updateRestart'), run: () => void this.installOrToast() }, 15_000);
+      return;
+    }
+    try {
+      await this.invoke<void>('notify_update', { title: text, body: this.i18n.t('notify.updateBody') });
+    } catch (error: unknown) {
+      console.warn('[updates] notification failed', error);
+    }
+  }
+
+  /**
+   * Called once by the app shell: checks now (if due), again every hour (the daily gate keeps
+   * it to one request a day) and whenever the window regains focus. Stops with the caller.
+   */
+  startChecks(): void {
+    if (!this.tauri) {
+      return;
+    }
+    void this.checkAndAnnounce();
+    const wake = (): void => void this.checkAndAnnounce();
+    const timer = this.zone.runOutsideAngular(() => setInterval(wake, WAKE_INTERVAL_MS));
+    globalThis.addEventListener('focus', wake);
+    this.destroyRef.onDestroy(() => {
+      clearInterval(timer);
+      globalThis.removeEventListener('focus', wake);
+    });
+  }
+
+  /**
+   * On the first start after the version changed, a one-time "Updated to {version}" toast with a
+   * "What's new" action that opens the release page. A fresh install only records the version.
+   */
+  async announceUpdated(): Promise<void> {
+    if (!this.tauri) {
+      return;
+    }
+    let version: string;
+    try {
+      version = (await this.invoke<{ version: string }>('app_info')).version;
+    } catch {
+      return;
+    }
+    const previous = this.store.get(LAST_RUN_VERSION_KEY);
+    if (previous === version) {
+      return;
+    }
+    this.store.set(LAST_RUN_VERSION_KEY, version);
+    if (previous === null) {
+      return;
+    }
+    this.toasts.show(
+      'success',
+      this.i18n.t('toast.updated').replace('{version}', version),
+      { label: this.i18n.t('toast.whatsNew'), run: () => void this.openReleasePage(version) },
+      12_000,
+    );
+  }
+
+  private async openReleasePage(version: string): Promise<void> {
+    try {
+      await this.invoke<void>('open_release_page', { version });
+    } catch (error: unknown) {
+      console.warn('[updates] release page not opened', error);
     }
   }
 
