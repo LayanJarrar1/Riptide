@@ -24,7 +24,7 @@ serving the site under load.
 The build fails (exit code 1) when a page still contains a `{{ }}` token, a local `href`/`src`
 does not resolve to a file, an `<img>` is missing `alt`, `width` or `height`, a font referenced
 from the stylesheet is missing, a structural tag is left unclosed, a page loads an image, script,
-stylesheet or frame from another origin, or a size budget is exceeded (HTML 80 KiB, CSS 64 KiB, JS
+stylesheet or frame from another origin, or a size budget is exceeded (HTML 80 KiB, CSS 76 KiB, JS
 40 KiB, images 260 KiB, fonts 110 KiB, whole `dist/` 3 MiB).
 
 `SITE_URL` sets the public origin used for canonical, `hreflang` and Open Graph URLs (default:
@@ -114,7 +114,7 @@ const RELEASE_VERSION = '0.1.0-alpha.4';   // next build: '0.1.0-alpha.5'
 ```
 
 The hero badge ("Alpha {n}"), the download section badge, the installer and portable file names, the tag in every download URL
-the SHA256SUMS link and the "All releases" link (`releases/tag/v<version>`) all derive from it. Do this only after the assets exist on the GitHub release (installer
+the SHA256SUMS link, the "All releases" link (`releases/tag/v<version>`), the version shown on the buttons, in "What's new in …" and in the footer all derive from it. The "What's new" list itself (`download.new.items` in both i18n files) is edited by hand for each release. Do this only after the assets exist on the GitHub release (installer
 `Riptide_<version>_x64-setup.exe`, portable zip `Riptide-<version>-portable.zip`, `SHA256SUMS.txt`), then run `node apps/website/build.mjs`
 and the e2e check.
 

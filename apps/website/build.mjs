@@ -47,7 +47,7 @@ const SITE_URL = (process.env.SITE_URL || 'https://layanjarrar1.github.io/Riptid
 const BASE_PATH = new URL(SITE_URL).pathname;
 
 // Size budgets in bytes (uncompressed). The build fails when something grows past them.
-const BUDGET = { html: 80 * 1024, css: 72 * 1024, js: 40 * 1024, image: 260 * 1024, font: 110 * 1024, total: 3 * 1024 * 1024 };
+const BUDGET = { html: 80 * 1024, css: 76 * 1024, js: 40 * 1024, image: 260 * 1024, font: 110 * 1024, total: 3 * 1024 * 1024 };
 
 const LANGUAGES = [
   { code: 'en', out: '', root: '' },
@@ -185,8 +185,8 @@ function build() {
 
   const icons = loadIcons();
   const version = shortHash(join(SRC, 'css', 'site.css'), join(SRC, 'js', 'site.js'));
-  // `{n}` in a string is the pre-release number of RELEASE_VERSION ("Alpha {n}" -> "Alpha 4").
-  const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8').replaceAll('{n}', ALPHA_N))]));
+  // `{n}` in a string is the pre-release number of RELEASE_VERSION ("Alpha {n}" -> "Alpha 4"); `{v}` is the full version.
+  const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8').replaceAll('{n}', ALPHA_N).replaceAll('{v}', RELEASE_VERSION))]));
 
   for (const lang of LANGUAGES) {
     const table = tables[lang.code];
@@ -196,6 +196,7 @@ function build() {
       v: version,
       repo: REPO_URL,
       repoSlug: REPO_SLUG,
+      version: RELEASE_VERSION,
       releasesUrl: RELEASES_URL,
       releaseUrl: RELEASE_URL,
       installerUrl: INSTALLER_URL,

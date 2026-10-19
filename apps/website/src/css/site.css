@@ -704,6 +704,25 @@ html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset
 .stores a:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1.5px var(--cyan); }
 .stores a span, .store span { font-size: .8125rem; font-weight: 500; color: var(--fg2); }
 
+/* Alpha 4: the primary button shows the version; the "more" row under the feature panels; what's new / always up to date; the Chrome install steps. */
+.btn .ver, .dl-t .ver { font-family: var(--mono); font-size: .75rem; font-weight: 500; opacity: .8; }
+.more { display: grid; gap: clamp(12px, 1.6vw, 20px); margin-top: clamp(12px, 1.6vw, 20px); }
+@media (min-width: 800px) { .more { grid-template-columns: repeat(3, 1fr); } }
+.more li { display: grid; gap: 8px; align-content: start; padding: clamp(16px, 2vw, 24px); border-radius: 20px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); }
+.more p { color: var(--fg2); font-size: .9375rem; }
+.more code { justify-self: start; font-family: var(--mono); font-size: .8125rem; padding: 2px 8px; border-radius: 8px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.upd-grid { display: grid; gap: clamp(16px, 2.4vw, 32px); width: 100%; max-width: 860px; margin-top: clamp(10px, 1.6vw, 20px); }
+@media (min-width: 720px) { .upd-grid { grid-template-columns: 1.1fr 1fr; } }
+.whats-new, .always-up { display: grid; gap: 8px; align-content: start; justify-items: start; }
+.whats-new ul { display: grid; gap: 4px; }
+.whats-new li { position: relative; padding-inline-start: 18px; color: var(--fg2); font-size: .9375rem; }
+.whats-new li::before { content: ""; position: absolute; inset-inline-start: 0; top: .6em; width: 8px; height: 2px; border-radius: 2px; background: var(--cyan); }
+.always-up p { color: var(--fg2); font-size: .9375rem; max-width: 44ch; }
+.steps { display: grid; gap: 6px; max-width: 60ch; }
+.steps h4 { font-size: .9375rem; font-weight: 700; }
+.steps ol { display: grid; gap: 4px; padding-inline-start: 1.4em; list-style: decimal; color: var(--fg2); font-size: .9375rem; }
+.steps li::marker { color: var(--cyan); font-weight: 700; }
+
 /* ---- Footer ------------------------------------------------------------------------------ */
 .site-footer { padding-block: 32px 24px; border-top: 1px solid var(--line); }
 .footer-grid { display: grid; gap: 16px; }
