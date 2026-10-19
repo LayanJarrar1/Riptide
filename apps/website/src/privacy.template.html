@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="{{root}}css/site.css?v={{v}}">
   <script>
     // Before first paint: light is the default whatever the OS prefers; only a saved choice
-    // switches to dark. `js` enables the scroll reveals; `rv-all` is a failsafe that shows them.
+    // switches to dark.
     (function () {
       var d = document.documentElement;
       d.classList.add('js');
@@ -34,22 +34,21 @@
       } catch (e) { /* storage blocked: stay light */ }
       var m = document.querySelector('meta[name="theme-color"]');
       if (m && d.dataset.theme === 'dark') m.setAttribute('content', '#071a26');
-      setTimeout(function () { d.classList.add('rv-all'); }, 4000);
     })();
   </script>
 </head>
-<body>
+<body class="page-plain tone-light">
   <a class="skip-link" href="#main">{{nav.skip}}</a>
 
-  <header class="site-header" id="top">
-    <nav class="nav container" aria-label="{{nav.menu}}">
+  <header class="site-header" id="top" data-tone="light">
+    <nav class="nav wrap" aria-label="{{nav.menu}}">
       <a class="brand" href="{{home}}">
         <img class="brand-logo logo-light" src="{{root}}assets/riptide-logo-light.svg" alt="{{nav.brand}}" width="690" height="254">
-        <img class="brand-logo logo-dark" src="{{root}}assets/riptide-logo-dark.svg" alt="{{nav.brand}}" width="690" height="254">
+        <img class="brand-logo logo-dark" src="{{root}}assets/riptide-logo-dark.svg" alt="" width="690" height="254">
       </a>
-      <div class="nav-actions legal-actions">
+      <div class="nav-actions" style="margin-inline-start:auto">
         <a class="nav-lang" href="{{altHref}}" lang="{{altLang}}" hreflang="{{altLang}}" aria-label="{{nav.switchLangLabel}}">{{nav.switchLang}}</a>
-        <button class="theme-toggle" type="button" aria-label="{{nav.theme}}">
+        <button class="icon-btn theme-toggle" type="button" aria-label="{{nav.theme}}">
           {{{svg sun}}}
           {{{svg moon}}}
         </button>
@@ -57,9 +56,14 @@
     </nav>
   </header>
 
-  <main id="main" class="container legal">
-    <h1>{{privacy.title}}</h1>
-    <p class="legal-updated">{{privacy.updated}}</p>
+  <main id="main">
+    <section class="tone-teal legal-hero">
+      <div class="wrap">
+        <h1 class="h2">{{privacy.title}}</h1>
+        <p class="legal-updated">{{privacy.updated}}</p>
+      </div>
+    </section>
+    <div class="wrap legal">
     <p class="legal-lede">{{privacy.lede}}</p>
     {{#each privacy.sections}}
     <section class="legal-section" id="{{id}}">
@@ -69,15 +73,13 @@
       {{/each}}
     </section>
     {{/each}}
+    </div>
   </main>
 
-  <footer class="site-footer">
-    <div class="container footer-grid">
+  <footer class="site-footer tone-dark">
+    <div class="wrap footer-grid">
       <div class="footer-brand">
-        <a class="brand" href="{{home}}">
-          <img class="brand-logo logo-light" src="{{root}}assets/riptide-logo-light.svg" alt="{{nav.brand}}" width="690" height="254">
-        <img class="brand-logo logo-dark" src="{{root}}assets/riptide-logo-dark.svg" alt="{{nav.brand}}" width="690" height="254">
-        </a>
+        <img class="footer-logo" src="{{root}}assets/riptide-logo-dark.svg" alt="{{nav.brand}}" width="690" height="254">
         <p>{{footer.tagline}}</p>
       </div>
       <ul class="footer-links">
@@ -88,10 +90,7 @@
         <li><a href="./" aria-current="page">{{footer.privacy}}</a></li>
         <li><a href="{{altHref}}" lang="{{altLang}}" hreflang="{{altLang}}">{{nav.switchLang}}</a></li>
       </ul>
-      <p class="footer-meta">
-        <span>{{footer.license}}</span>
-        <span>{{footer.made}}</span>
-      </p>
+      <p class="footer-meta"><span>{{footer.license}}</span><span>{{footer.made}}</span></p>
     </div>
   </footer>
 
