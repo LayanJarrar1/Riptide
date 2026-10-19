@@ -456,6 +456,9 @@ struct Inner {
     shutting_down: AtomicBool,
     /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
     media: RwLock<Option<YtDlp>>,
+    /// Serialises the choice of an on-disk file name, so two downloads that start at the same
+    /// moment can never settle on the same name (and share one part file).
+    name_lock: tokio::sync::Mutex<()>,
 }
 
 /// The runtime. Cheap to clone; all clones share one state.
@@ -689,6 +692,41 @@ fn comparable_url(url: &str) -> Option<String> {
 }
 
 impl Engine {
+    /// Picks the on-disk name for a download that starts from zero and saves it before anyone
+    /// else can pick: a name is taken when the file exists, or when another download of this
+    /// engine (queued, running, paused or failed with its part file kept) already claims it.
+    /// Without the claims two downloads starting together both saw "free" and wrote into one
+    /// part file. This download's own stale part file is deliberately not a claim: it is reused.
+    async fn reserve_file_name(&self, record: &mut Download) -> Result<()> {
+        let _guard = self.inner.name_lock.lock().await;
+        let id = record.id;
+        let claimed: Vec<(PathBuf, String)> = self
+            .list()
+            .await?
+            .into_iter()
+            .filter(|d| {
+                d.id != id
+                    && !matches!(d.state, DownloadState::Completed | DownloadState::Cancelled)
+            })
+            .map(|d| (d.dir, d.filename.to_lowercase()))
+            .collect();
+        let taken = |p: &Path| {
+            p.exists()
+                || p.file_name().is_some_and(|n| {
+                    let n = n.to_string_lossy().to_lowercase();
+                    claimed
+                        .iter()
+                        .any(|(dir, name)| *name == n && p.parent() == Some(dir.as_path()))
+                })
+        };
+        let unique = riptide_core::unique_path(&record.dir, &record.filename, taken);
+        if let Some(name) = unique.file_name() {
+            record.filename = name.to_string_lossy().into_owned();
+        }
+        let to_save = record.clone();
+        db(&self.inner.store, move |s| s.update_download(&to_save)).await
+    }
+
     /// Opens the store, loads settings, re-queues downloads a crash left active, and starts
     /// the scheduler.
     pub async fn open(config: EngineConfig) -> Result<Engine> {
@@ -776,6 +814,7 @@ impl Engine {
             settings: RwLock::new(settings),
             shutting_down: AtomicBool::new(false),
             media: RwLock::new(None),
+            name_lock: tokio::sync::Mutex::new(()),
         });
         let engine = Engine { inner };
         tokio::spawn(engine.clone().scheduler());
@@ -1052,9 +1091,12 @@ impl Engine {
             .unwrap_or_else(|p| p.into_inner().clone())
     }
 
-    /// Pauses a queued or running download.
+    /// Pauses a queued or running download. For a running one it returns once the transfer
+    /// has stopped and the record is `Paused`, so a `resume` right after is never ignored.
     pub async fn pause(&self, id: DownloadId) -> Result<()> {
-        if self.stop_running(id, StopReason::Pause) {
+        if let Some(running) = self.take_running(id, StopReason::Pause) {
+            running.stop.cancel();
+            let _ = running.task.await;
             return Ok(());
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
@@ -1079,7 +1121,9 @@ impl Engine {
 
     /// Cancels a download; the row stays, the part file is deleted.
     pub async fn cancel(&self, id: DownloadId) -> Result<()> {
-        if self.stop_running(id, StopReason::Cancel) {
+        if let Some(running) = self.take_running(id, StopReason::Cancel) {
+            running.stop.cancel();
+            let _ = running.task.await;
             return Ok(());
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
@@ -1639,10 +1683,7 @@ impl Engine {
         }
         if segments.is_empty() {
             // a fresh start must not clobber a file that is already there
-            let unique = riptide_core::unique_path(&record.dir, &record.filename, |p| p.exists());
-            if let Some(name) = unique.file_name() {
-                record.filename = name.to_string_lossy().into_owned();
-            }
+            self.reserve_file_name(&mut record).await?;
         }
         // the bucket is the truth while running: `set_speed_limit` may have changed it after
         // the record was read
@@ -1863,10 +1904,7 @@ impl Engine {
                     record.dir = self.settings().dir_for(category);
                 }
             }
-            let unique = riptide_core::unique_path(&record.dir, &record.filename, |p| p.exists());
-            if let Some(name) = unique.file_name() {
-                record.filename = name.to_string_lossy().into_owned();
-            }
+            self.reserve_file_name(&mut record).await?;
         }
         if !info.url.is_empty() {
             record.final_url = Some(Url::parse(&info.url).map_or_else(

@@ -477,3 +477,36 @@ async fn pause_and_resume_at_random_offsets_is_byte_exact() {
         engine.shutdown().await;
     }
 }
+
+/// `pause` returns when the transfer has really stopped: the record is `Paused` at once and an
+/// immediate `resume` is never swallowed (it used to be ignored while the state was still
+/// `Downloading`, leaving the download paused for good).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pause_returns_paused_and_an_immediate_resume_is_not_lost() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let size = 4 * MIB;
+    let id = engine
+        .add(w.request(&format!("/slow?bps={MIB}&size={size}")))
+        .await
+        .unwrap();
+    for _ in 0..10 {
+        wait_for(
+            &mut rx,
+            T,
+            |e| matches!(e, Event::Progress { id: i, .. } if *i == id),
+        )
+        .await;
+        engine.pause(id).await.unwrap();
+        let state = engine.get(id).await.unwrap().unwrap().state;
+        if state == DownloadState::Completed {
+            break; // finished before this pause: nothing left to test
+        }
+        assert_eq!(state, DownloadState::Paused);
+        engine.resume(id).await.unwrap();
+    }
+    let p = wait_completed_in(&mut rx, id, T).await;
+    assert_complete(&engine, id, &p, &w.downloads(), DEFAULT_SEED, size).await;
+    engine.shutdown().await;
+}

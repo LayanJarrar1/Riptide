@@ -361,3 +361,40 @@ async fn a_request_name_override_is_sanitised_too() {
     }
     engine.shutdown().await;
 }
+
+/// Many downloads that resolve to the same file name at the same moment get distinct names and
+/// the right bytes each; nothing is overwritten.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn simultaneous_same_name_downloads_get_distinct_files() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let mut ids = Vec::new();
+    for i in 0..8u64 {
+        let size = 100_000 + i * 1000;
+        let id = engine
+            .add(w.request(&format!("/file/same.zip?size={size}&seed={}", 500 + i)))
+            .await
+            .unwrap();
+        ids.push((id, size, 500 + i));
+    }
+    // completions arrive in any order: collect them all, then check each against its own seed
+    let mut done = std::collections::HashMap::new();
+    while done.len() < ids.len() {
+        let ev = wait_for(&mut rx, std::time::Duration::from_secs(120), |e| {
+            matches!(e, riptide_core::Event::Completed { .. })
+        })
+        .await;
+        if let riptide_core::Event::Completed { id, path } = ev {
+            done.insert(id, path);
+        }
+    }
+    let mut names = std::collections::HashSet::new();
+    for (id, size, seed) in ids {
+        let p = done.remove(&id).unwrap();
+        assert!(names.insert(p.clone()), "{} used twice", p.display());
+        assert_complete(&engine, id, &p, &w.downloads(), seed, size).await;
+    }
+    assert_eq!(names.len(), 8);
+    engine.shutdown().await;
+}

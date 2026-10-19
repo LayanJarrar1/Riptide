@@ -515,3 +515,33 @@ async fn credentials_in_the_url_move_to_secrets_and_never_stay_in_the_record() {
     );
     engine.shutdown().await;
 }
+
+/// Servers that refuse `HEAD`, answer 404/403 or keep a link behind a cookie.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn head_refused_and_http_error_statuses() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    complete(&w, &engine, "/nohead?size=1500000", 1_500_000).await;
+
+    for (n, path) in [
+        "/does-not-exist",
+        "/needs-cookie?size=1000",
+        "/needs-referer?size=1000",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = engine
+            .add(DownloadRequest {
+                filename: Some(format!("err{n}.bin")),
+                ..w.request(path)
+            })
+            .await
+            .unwrap();
+        let retryable = wait_failed(&mut rx, id, Duration::from_secs(60)).await;
+        assert!(!retryable, "{path}: a client error is not retried forever");
+        assert!(!w.downloads().join(format!("err{n}.bin")).exists());
+    }
+    engine.shutdown().await;
+}

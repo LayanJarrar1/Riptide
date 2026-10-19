@@ -350,7 +350,8 @@ pub(crate) async fn index(State(st): App) -> Response {
          /ok                      ranges, ETag, Last-Modified, Content-Length, If-Range, 416\n\
          /file/<name.ext>         like /ok with the name in the path; ?ct= sets Content-Type, ?cd= Content-Disposition\n\
          /noranges                ignores Range, always 200, no Accept-Ranges\n\
-         /nolength                chunked transfer, no Content-Length\n\
+         /nohead                  like /ok, HEAD answers 405
+\n         /nolength                chunked transfer, no Content-Length\n\
          /slow?bps=               throttled bandwidth (bytes per second), ranges like /ok\n\
          /drop?after=             closes the connection after N body bytes\n\
          /flaky?rate=             5xx or connection reset with probability rate (deterministic PRNG)\n\
@@ -1158,4 +1159,21 @@ mod tests {
         q.insert("size".into(), "ten".into());
         assert!(param_u64(&q, "size", 1).is_err());
     }
+}
+
+/// `/nohead` — like `/ok` but `HEAD` is refused with `405` (many real servers do this).
+pub(crate) async fn nohead(
+    method: Method,
+    Query(q): Query<Params>,
+    headers: HeaderMap,
+) -> HandlerResult {
+    if method == Method::HEAD {
+        return Ok(plain(StatusCode::METHOD_NOT_ALLOWED, "HEAD is not allowed"));
+    }
+    serve(
+        &method,
+        &headers,
+        Resource::from_params(&q)?,
+        Shaping::default(),
+    )
 }

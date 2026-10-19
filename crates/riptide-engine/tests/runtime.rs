@@ -608,10 +608,13 @@ async fn find_duplicate_matches_the_url_without_fragment_or_the_name_in_the_fold
         })
         .await
         .unwrap();
-    wait_completed(&mut rx, again).await;
+    // the paused download already claims "dup.bin": the newcomer yields and gets "dup (1).bin",
+    // so resuming the first one later still lands on its own name and nothing is overwritten
+    let newcomer = wait_completed(&mut rx, again).await;
+    assert_eq!(newcomer.file_name().unwrap(), "dup (1).bin");
     engine.resume(id).await.unwrap();
     let path = wait_completed(&mut rx, id).await;
-    assert_eq!(path.file_name().unwrap(), "dup (1).bin");
+    assert_eq!(path.file_name().unwrap(), "dup.bin");
     engine.shutdown().await;
 }
 
