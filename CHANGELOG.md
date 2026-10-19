@@ -29,6 +29,21 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 - A runtime with a queue (`max_active`), scheduler, settings, and an event stream.
 - Logging with daily rotation and secret redaction; portable mode (`portable.txt` next to the executable keeps data in `data\`).
 
+**Site grabber** (`riptide-crawl`, `Engine::crawl`)
+
+- Crawl from a start page to a depth (0 = that page only) over same host, same domain or any
+  site; files linked from off-site are listed, off-site pages are never read.
+- HTML only (the `html5ever` tokenizer): `a`, `area`, `img`/`source` (+ `srcset`), `video`,
+  `audio`, `track`, `embed`, `object`, `iframe`, `link rel=alternate|next|...`, `meta refresh`,
+  `<base href>`. No JavaScript.
+- `robots.txt` obeyed (`riptide` and `*` groups, `Allow`/`Disallow` with `*` and `$`,
+  `Crawl-delay`), at most 2 requests in flight per host with a minimum gap, hard caps on pages
+  (500), files (5 000), bytes per page (5 MiB) and time (10 min), cancellation.
+- Include/exclude globs, file-type and size filters, loop-safe de-duplication, sync mode
+  (`ETag`/`Last-Modified` against a previous result). Cookies and credentials go to the start
+  origin only.
+- `riptide-testserver` serves a crawlable `/site/`, `/robots.txt` and keeps a request log.
+
 **Desktop app (Windows)**
 
 - Downloads list with virtual scrolling, segmented progress bars, sort, search, status and
@@ -49,6 +64,8 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 - `riptide fetch` (standalone download with resume), `riptide bench` (1 vs 8 vs 32 connections),
   `riptide ping`, `riptide paths`; help in Arabic and English.
+- `riptide grab <url> --depth N --types video,documents --same-domain [--list]`: crawl a site,
+  list or download the files it links to; help in Arabic and English.
 
 **Project**
 
