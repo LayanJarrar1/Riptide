@@ -512,3 +512,187 @@ async fn pause_returns_paused_and_an_immediate_resume_is_not_lost() {
     assert_complete(&engine, id, &p, &w.downloads(), DEFAULT_SEED, size).await;
     engine.shutdown().await;
 }
+
+/// `refresh_url` racing a `pause` must never leave the record `Downloading` with no task.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn refresh_during_pause_leaves_a_consistent_state() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let size = 4 * MIB;
+    for round in 0..4 {
+        let mut rx = engine.subscribe();
+        let path = format!("/slow?bps={MIB}&size={size}&seed={}", 300 + round);
+        let id = engine
+            .add(DownloadRequest {
+                filename: Some(format!("refresh{round}.bin")),
+                ..w.request(&path)
+            })
+            .await
+            .unwrap();
+        wait_for(
+            &mut rx,
+            T,
+            |e| matches!(e, Event::Progress { id: i, .. } if *i == id),
+        )
+        .await;
+        let fresh_url = w.server.url(&path);
+        let (a, b) = tokio::join!(
+            engine.pause(id),
+            engine.refresh_url(id, &fresh_url, None, None)
+        );
+        a.unwrap();
+        b.unwrap();
+        // consistent: either a live task owns a "Downloading" record, or nothing claims to run
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let state = engine.get(id).await.unwrap().unwrap().state;
+        let has_task = engine.running_ids().contains(&id);
+        assert!(
+            !(matches!(state, DownloadState::Downloading | DownloadState::Probing) && !has_task),
+            "round {round}: {state:?} with no task"
+        );
+        if state == DownloadState::Paused {
+            engine.resume(id).await.unwrap();
+        }
+        let p = wait_completed_in(&mut rx, id, T).await;
+        assert_complete(&engine, id, &p, &w.downloads(), 300 + round, size).await;
+    }
+    engine.shutdown().await;
+}
+
+/// `remove` while a pause is in flight waits for the old task; a same-name download added at
+/// once afterwards is byte-exact and does not share a part file with the removed one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn remove_while_pause_in_flight_then_same_name_add_is_byte_exact() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let size = 3 * MIB;
+    let mut rx = engine.subscribe();
+    let first = engine
+        .add(DownloadRequest {
+            filename: Some("same.bin".into()),
+            ..w.request(&format!("/slow?bps={MIB}&size={size}&seed=11"))
+        })
+        .await
+        .unwrap();
+    wait_for(
+        &mut rx,
+        T,
+        |e| matches!(e, Event::Progress { id: i, .. } if *i == first),
+    )
+    .await;
+    let (a, b) = tokio::join!(engine.pause(first), engine.remove(first, true));
+    a.unwrap();
+    b.unwrap();
+    assert!(!engine.running_ids().contains(&first));
+    let second = engine
+        .add(DownloadRequest {
+            filename: Some("same.bin".into()),
+            ..w.request(&format!("/ok?size={size}&seed=22"))
+        })
+        .await
+        .unwrap();
+    let p = wait_completed_in(&mut rx, second, T).await;
+    assert_eq!(p.file_name().unwrap(), "same.bin");
+    assert_complete(&engine, second, &p, &w.downloads(), 22, size).await;
+    engine.shutdown().await;
+}
+
+/// `pause_all` with a long queue pauses the queued items without ever starting (probing) one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pause_all_with_a_long_queue_never_probes_queued_items() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let mut ids = Vec::new();
+    for i in 0..40 {
+        ids.push(
+            engine
+                .add(DownloadRequest {
+                    filename: Some(format!("q{i}.bin")),
+                    ..w.request(&format!("/slow?bps={MIB}&size={}&seed={i}", 8 * MIB))
+                })
+                .await
+                .unwrap(),
+        );
+    }
+    wait_for(&mut rx, T, |e| matches!(e, Event::Progress { .. })).await;
+    let before: std::collections::HashSet<_> = engine.running_ids().into_iter().collect();
+    assert!(!before.is_empty() && before.len() < 40);
+    let mut late = engine.subscribe();
+    engine.pause_all().await.unwrap();
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let mut started_later = 0;
+    while let Ok(ev) = late.try_recv() {
+        if let Event::Probed { id, .. } = ev {
+            if !before.contains(&id) {
+                started_later += 1;
+            }
+        }
+    }
+    assert_eq!(
+        started_later, 0,
+        "queued items were probed during pause_all"
+    );
+    assert!(engine.running_ids().is_empty());
+    for id in ids {
+        assert_eq!(
+            engine.get(id).await.unwrap().unwrap().state,
+            DownloadState::Paused
+        );
+    }
+    engine.shutdown().await;
+}
+
+/// A server-chosen name ending in `.rtpart` never lands on another download's part file, and
+/// the same folder spelled with another case (Windows) still counts as the same folder.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn rtpart_names_are_reserved_and_folder_spelling_does_not_split_claims() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let a = engine
+        .add(DownloadRequest {
+            filename: Some("x.zip".into()),
+            start_paused: true,
+            ..w.request("/ok?size=50000&seed=1")
+        })
+        .await
+        .unwrap();
+    let b = engine
+        .add(w.request("/ok?size=60000&seed=2"))
+        .await
+        .unwrap();
+    // b's name is chosen by the server/URL; give it the dangerous one via the request
+    engine.remove(b, true).await.unwrap();
+    let b = engine
+        .add(DownloadRequest {
+            filename: Some("x.zip.rtpart".into()),
+            ..w.request("/ok?size=60000&seed=2")
+        })
+        .await
+        .unwrap();
+    let pb = wait_completed_in(&mut rx, b, T).await;
+    assert!(!pb.to_string_lossy().to_lowercase().ends_with(".rtpart"));
+    assert_complete(&engine, b, &pb, &w.downloads(), 2, 60000).await;
+    if cfg!(windows) {
+        let upper = PathBuf::from(w.downloads().to_string_lossy().to_uppercase());
+        let c = engine
+            .add(DownloadRequest {
+                filename: Some("x.zip".into()),
+                dir: Some(upper),
+                ..w.request("/ok?size=70000&seed=3")
+            })
+            .await
+            .unwrap();
+        let pc = wait_completed_in(&mut rx, c, T).await;
+        assert_ne!(
+            pc.file_name().unwrap().to_string_lossy().to_lowercase(),
+            "x.zip",
+            "the paused download's claim on x.zip was ignored"
+        );
+    }
+    engine.resume(a).await.unwrap();
+    let pa = wait_completed_in(&mut rx, a, T).await;
+    assert_complete(&engine, a, &pa, &w.downloads(), 1, 50000).await;
+    engine.shutdown().await;
+}

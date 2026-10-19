@@ -402,3 +402,37 @@ async fn killed_during_the_content_range_fallback_restarts_clean() {
         assert!(!riptide_net::part_path_for(&out).exists());
     }
 }
+
+/// `riptide fetch http://user:pass@host/...` works, but the password never reaches the
+/// downloads table that the desktop app shares.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn fetch_with_userinfo_never_stores_the_password() {
+    let server = TestServer::spawn().await;
+    let url = server
+        .url("/needs-auth/basic?size=5000")
+        .replace("http://", "http://user:pass@");
+    let tmp = tempfile::tempdir().unwrap();
+    let data_dir = tmp.path().join("data");
+    let out = tmp.path().join("auth.bin");
+    let output = riptide(&data_dir, &["fetch", &url, "-o", out.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        !stderr.contains("pass@"),
+        "password in the output: {stderr}"
+    );
+    assert_eq!(std::fs::metadata(&out).unwrap().len(), 5000);
+    let store = riptide_store::Store::open(data_dir.join("riptide.sqlite")).unwrap();
+    let rows = store.list_downloads().unwrap();
+    assert!(!rows.is_empty());
+    for d in rows {
+        for text in [Some(d.url.clone()), d.final_url.clone(), d.error.clone()]
+            .into_iter()
+            .flatten()
+        {
+            assert!(!text.contains("pass"), "password stored: {text}");
+        }
+    }
+}

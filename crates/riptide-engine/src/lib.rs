@@ -422,10 +422,30 @@ fn delete_partials(d: &Download) {
     }
 }
 
+/// A folder compared the way the file system does: separators folded, trailing slash dropped,
+/// case ignored on Windows.
+fn dir_key(dir: &Path) -> String {
+    let s = dir
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    if cfg!(windows) {
+        s.to_lowercase()
+    } else {
+        s
+    }
+}
+
+/// How long `pause` / `cancel` / `remove` wait for a transfer to stop.
+const STOP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 struct Running {
     stop: CancellationToken,
     reason: Arc<Mutex<StopReason>>,
     task: JoinHandle<()>,
+    /// Turns `true` when the task has ended and left the `running` map.
+    done: tokio::sync::watch::Receiver<bool>,
     /// The download's own bandwidth bucket (its `speed_limit`), shared by its connections.
     limit: Arc<RateLimiter>,
     /// Queue the download counts against; kept current by `move_to_queue` / `delete_queue`.
@@ -700,7 +720,7 @@ impl Engine {
     async fn reserve_file_name(&self, record: &mut Download) -> Result<()> {
         let _guard = self.inner.name_lock.lock().await;
         let id = record.id;
-        let claimed: Vec<(PathBuf, String)> = self
+        let claimed: Vec<(String, String)> = self
             .list()
             .await?
             .into_iter()
@@ -708,15 +728,21 @@ impl Engine {
                 d.id != id
                     && !matches!(d.state, DownloadState::Completed | DownloadState::Cancelled)
             })
-            .map(|d| (d.dir, d.filename.to_lowercase()))
+            .map(|d| (dir_key(&d.dir), d.filename.to_lowercase()))
             .collect();
+        // a name that is another download's part file would be opened as that part file
+        if record.filename.to_lowercase().ends_with(".rtpart") {
+            record.filename.push('_');
+        }
         let taken = |p: &Path| {
             p.exists()
                 || p.file_name().is_some_and(|n| {
                     let n = n.to_string_lossy().to_lowercase();
-                    claimed
-                        .iter()
-                        .any(|(dir, name)| *name == n && p.parent() == Some(dir.as_path()))
+                    let parent = p.parent().map(dir_key);
+                    claimed.iter().any(|(dir, name)| {
+                        Some(dir) == parent.as_ref()
+                            && (*name == n || format!("{name}.rtpart") == n)
+                    })
                 })
         };
         let unique = riptide_core::unique_path(&record.dir, &record.filename, taken);
@@ -1094,9 +1120,7 @@ impl Engine {
     /// Pauses a queued or running download. For a running one it returns once the transfer
     /// has stopped and the record is `Paused`, so a `resume` right after is never ignored.
     pub async fn pause(&self, id: DownloadId) -> Result<()> {
-        if let Some(running) = self.take_running(id, StopReason::Pause) {
-            running.stop.cancel();
-            let _ = running.task.await;
+        if self.stop_and_wait(id, StopReason::Pause).await? {
             return Ok(());
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
@@ -1121,9 +1145,7 @@ impl Engine {
 
     /// Cancels a download; the row stays, the part file is deleted.
     pub async fn cancel(&self, id: DownloadId) -> Result<()> {
-        if let Some(running) = self.take_running(id, StopReason::Cancel) {
-            running.stop.cancel();
-            let _ = running.task.await;
+        if self.stop_and_wait(id, StopReason::Cancel).await? {
             return Ok(());
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
@@ -1137,10 +1159,7 @@ impl Engine {
     /// Removes a download from the list, stopping it first; `delete_file` also removes the
     /// finished file. The part file always goes.
     pub async fn remove(&self, id: DownloadId, delete_file: bool) -> Result<()> {
-        if let Some(running) = self.take_running(id, StopReason::Remove) {
-            running.stop.cancel();
-            let _ = running.task.await;
-        }
+        self.stop_and_wait(id, StopReason::Remove).await?;
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
         delete_partials(&d);
         if delete_file && d.state == DownloadState::Completed {
@@ -1198,10 +1217,7 @@ impl Engine {
     /// state does not change (it was `Paused` or `Queued`) or the record is reborn from a
     /// terminal state, [`Event::Added`] is emitted again so listeners re-read the record.
     pub async fn restart(&self, id: DownloadId) -> Result<()> {
-        if let Some(running) = self.take_running(id, StopReason::Restart) {
-            running.stop.cancel();
-            let _ = running.task.await;
-        }
+        self.stop_and_wait(id, StopReason::Restart).await?;
         let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
         let was_paused = before.state == DownloadState::Paused;
 
@@ -1316,14 +1332,7 @@ impl Engine {
                 id.0, before.state
             ))));
         }
-        let was_running = match self.take_running(id, StopReason::Pause) {
-            Some(running) => {
-                running.stop.cancel();
-                let _ = running.task.await;
-                true
-            }
-            None => false,
-        };
+        let was_running = self.stop_and_wait(id, StopReason::Pause).await?;
 
         let mut fresh = self.get(id).await?.ok_or(Error::NotFound(id))?;
         fresh.url = if url_auth.is_some() {
@@ -1391,13 +1400,21 @@ impl Engine {
 
     /// Pauses every queued or running download.
     pub async fn pause_all(&self) -> Result<()> {
-        for d in self.list().await? {
-            if matches!(
-                d.state,
-                DownloadState::Queued | DownloadState::Probing | DownloadState::Downloading
-            ) {
-                self.pause(d.id).await?;
+        let all = self.list().await?;
+        let active = self.running_ids();
+        // queued items first, so no slot freed below can start (and probe) one of them
+        for d in &all {
+            if d.state == DownloadState::Queued && !active.contains(&d.id) {
+                self.transition(d.id, DownloadState::Paused, None).await?;
             }
+        }
+        // then stop every running transfer together and wait for all of them
+        let waits: Vec<_> = active
+            .into_iter()
+            .filter_map(|id| self.signal_stop(id, StopReason::Pause))
+            .collect();
+        for rx in waits {
+            Self::wait_done(rx).await?;
         }
         Ok(())
     }
@@ -1488,13 +1505,38 @@ impl Engine {
         }
     }
 
-    fn take_running(&self, id: DownloadId, reason: StopReason) -> Option<Running> {
-        let mut map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
-        let r = map.remove(&id)?;
+    /// Marks the running task with `reason`, cancels it and returns its completion signal. The
+    /// entry stays in the `running` map until the task has really ended.
+    fn signal_stop(
+        &self,
+        id: DownloadId,
+        reason: StopReason,
+    ) -> Option<tokio::sync::watch::Receiver<bool>> {
+        let map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
+        let r = map.get(&id)?;
         if let Ok(mut current) = r.reason.lock() {
             *current = reason;
         }
-        Some(r)
+        r.stop.cancel();
+        Some(r.done.clone())
+    }
+
+    async fn wait_done(mut done: tokio::sync::watch::Receiver<bool>) -> Result<()> {
+        // a dropped sender also means the task is gone
+        match tokio::time::timeout(STOP_TIMEOUT, done.wait_for(|d| *d)).await {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::Core(riptide_core::Error::Invalid(
+                "the transfer did not stop in time; try again".into(),
+            ))),
+        }
+    }
+
+    /// Stops the running task of `id` (if any) and waits until it has ended. `true` if one ran.
+    async fn stop_and_wait(&self, id: DownloadId, reason: StopReason) -> Result<bool> {
+        match self.signal_stop(id, reason) {
+            Some(rx) => Self::wait_done(rx).await.map(|()| true),
+            None => Ok(false),
+        }
     }
 
     /// Starts queued downloads while slots are free; sleeps until something changes.
@@ -1558,11 +1600,13 @@ impl Engine {
         let limit = Arc::new(RateLimiter::new(next.speed_limit));
         let task_limit = Arc::clone(&limit);
         // the map lock is held across the spawn so the task's own `remove` cannot run first
+        let (done_tx, done_rx) = tokio::sync::watch::channel(false);
         let mut running = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
         let task = tokio::spawn(async move {
             engine
                 .run_download(id, task_stop, task_reason, task_limit)
                 .await;
+            let _ = done_tx.send(true);
         });
         running.insert(
             id,
@@ -1570,6 +1614,7 @@ impl Engine {
                 stop,
                 reason,
                 task,
+                done: done_rx,
                 limit,
                 queue_id: next.queue_id,
             },
@@ -1599,11 +1644,16 @@ impl Engine {
                 .transition(id, DownloadState::Failed { retryable }, Some(e.to_string()))
                 .await;
         }
-        self.inner
-            .running
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(&id);
+        {
+            let mut map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
+            // only this task's own entry (a successor may already have been inserted)
+            if map
+                .get(&id)
+                .is_some_and(|r| Arc::ptr_eq(&r.reason, &reason))
+            {
+                map.remove(&id);
+            }
+        }
         self.inner.wake.notify_one();
     }
 
