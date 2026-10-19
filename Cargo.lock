@@ -3973,6 +3973,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "ts-rs",
  "url",
  "windows-sys 0.59.0",

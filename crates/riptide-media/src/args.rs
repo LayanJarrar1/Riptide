@@ -46,14 +46,73 @@ pub fn check_url(raw: &str) -> Result<Url> {
     Ok(url)
 }
 
+/// The YouTube player clients Riptide may ask yt-dlp to use (`--extractor-args
+/// youtube:player_client=...`). A fixed set: the value on the command line comes from this enum
+/// and from nowhere else, never from page, browser or user text.
+///
+/// Measured against yt-dlp 2026.08.19 on `Ng274mLQ7-c` (probe and a 6 s clip download): `default`
+/// and `tv_embedded` work; `android`/`android_vr` list one format (and `android_vr` downloads end
+/// in HTTP 403, PO token); `tv`, `tv_simply`, `web`, `web_embedded`, `web_creator`, `ios`, `mweb`
+/// and `web_safari` fail the probe. A JavaScript runtime changes none of that. yt-dlp skips clients
+/// that cannot use cookies once cookies are sent, which is why cookies are never sent first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlayerClients {
+    /// yt-dlp's own choice (no extractor argument).
+    Default,
+    /// `tv_embedded`.
+    TvEmbedded,
+}
+
+impl PlayerClients {
+    /// Every step, in the order the fallback ladder tries them.
+    pub const LADDER: [PlayerClients; 2] = [PlayerClients::Default, PlayerClients::TvEmbedded];
+
+    /// Stable key (stored in the per-download flags, shown in logs).
+    pub fn key(self) -> &'static str {
+        match self {
+            PlayerClients::Default => "default",
+            PlayerClients::TvEmbedded => "tv_embedded",
+        }
+    }
+
+    /// Inverse of [`PlayerClients::key`].
+    pub fn parse(key: &str) -> Option<PlayerClients> {
+        Self::LADDER.into_iter().find(|c| c.key() == key)
+    }
+
+    /// The `--extractor-args` value, or `None` for the default clients.
+    pub fn extractor_args(self) -> Option<&'static str> {
+        match self {
+            PlayerClients::Default => None,
+            PlayerClients::TvEmbedded => Some("youtube:player_client=tv_embedded"),
+        }
+    }
+}
+
+/// `true` for the YouTube family of hosts, the only ones the client ladder applies to.
+pub fn is_youtube_host(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    ["youtube.com", "youtu.be", "youtube-nocookie.com"]
+        .iter()
+        .any(|h| host == *h || host.ends_with(&format!(".{h}")))
+}
+
+fn push_clients(a: &mut Vec<OsString>, clients: PlayerClients) {
+    if let Some(v) = clients.extractor_args() {
+        a.push("--extractor-args".into());
+        a.push(v.into());
+    }
+}
+
 /// `yt-dlp -J` for one page.
-pub fn probe_args(url: &Url, cookies: Option<&Path>) -> Vec<OsString> {
+pub fn probe_args(url: &Url, cookies: Option<&Path>, clients: PlayerClients) -> Vec<OsString> {
     let mut a: Vec<OsString> = COMMON.iter().map(OsString::from).collect();
     a.push("-J".into());
     if let Some(c) = cookies {
         a.push("--cookies".into());
         a.push(c.into());
     }
+    push_clients(&mut a, clients);
     a.push("--".into());
     a.push(url.as_str().into());
     a
@@ -78,6 +137,8 @@ pub struct RunArgs<'a> {
     pub rate_limit: Option<u64>,
     /// `--proxy` URL.
     pub proxy: Option<&'a str>,
+    /// YouTube player clients (see [`PlayerClients`]).
+    pub clients: PlayerClients,
 }
 
 /// The format selector and sort for a quality. Video prefers H.264 in MP4 with AAC (M4A) at the
@@ -156,6 +217,7 @@ pub fn download_args(r: &RunArgs<'_>) -> Vec<OsString> {
         a.push("--proxy".into());
         a.push(p.into());
     }
+    push_clients(&mut a, r.clients);
     a.extend(selection_args(r.selection));
     a.push("-P".into());
     a.push(r.dir.into());
@@ -202,6 +264,7 @@ mod tests {
             cookies: Some(Path::new("C:/tmp/c.txt")),
             rate_limit: Some(1000),
             proxy: Some("socks5://127.0.0.1:9050"),
+            clients: PlayerClients::Default,
         };
         let a = strings(&download_args(&r));
         let n = a.len();
@@ -242,8 +305,12 @@ mod tests {
                 cookies: None,
                 rate_limit: None,
                 proxy: None,
+                clients: PlayerClients::TvEmbedded,
             };
-            for list in [download_args(&r), probe_args(&url, None)] {
+            for list in [
+                download_args(&r),
+                probe_args(&url, None, PlayerClients::TvEmbedded),
+            ] {
                 let s = strings(&list);
                 for f in FORBIDDEN {
                     assert!(!s.iter().any(|a| a == f), "{f} in {s:?}");
@@ -252,5 +319,40 @@ mod tests {
         }
         let a = strings(&selection_args(MediaSelection::AudioMp3));
         assert!(a.contains(&"-x".to_string()) && a.contains(&"mp3".to_string()));
+    }
+
+    #[test]
+    fn player_clients_become_fixed_extractor_args() {
+        let url = check_url("https://www.youtube.com/watch?v=x").unwrap();
+        let find = |a: Vec<OsString>| -> Option<String> {
+            let a = strings(&a);
+            a.windows(2)
+                .find(|w| w[0] == "--extractor-args")
+                .map(|w| w[1].clone())
+        };
+        assert_eq!(find(probe_args(&url, None, PlayerClients::Default)), None);
+        assert_eq!(
+            find(probe_args(&url, None, PlayerClients::TvEmbedded)).as_deref(),
+            Some("youtube:player_client=tv_embedded")
+        );
+        // the argument comes before the `--` separator, and the ladder keys round-trip
+        let a = strings(&probe_args(&url, None, PlayerClients::TvEmbedded));
+        let sep = a.iter().position(|x| x == "--").unwrap();
+        assert!(a.iter().position(|x| x == "--extractor-args").unwrap() < sep);
+        for c in PlayerClients::LADDER {
+            assert_eq!(PlayerClients::parse(c.key()), Some(c));
+        }
+        assert_eq!(PlayerClients::parse("web --exec calc"), None);
+        assert_eq!(PlayerClients::LADDER[0], PlayerClients::Default);
+    }
+
+    #[test]
+    fn only_the_youtube_family_gets_the_ladder() {
+        assert!(is_youtube_host("www.youtube.com"));
+        assert!(is_youtube_host("youtu.be"));
+        assert!(is_youtube_host("m.YouTube.com"));
+        assert!(!is_youtube_host("notyoutube.com"));
+        assert!(!is_youtube_host("youtube.com.evil.test"));
+        assert!(!is_youtube_host("vimeo.com"));
     }
 }

@@ -64,7 +64,7 @@ export const CATEGORY_KEYS: readonly CategoryKey[] = [
 export type Priority = 'low' | 'normal' | 'high';
 
 /** Why a download failed, for the status text and the retry affordance. */
-export type FailureKind = 'network' | 'checksum' | 'expired' | 'disk' | 'server';
+export type FailureKind = 'network' | 'checksum' | 'expired' | 'disk' | 'server' | 'login' | 'refused';
 
 /** One download as the UI sees it. */
 export interface Download {
@@ -92,6 +92,8 @@ export interface Download {
   readonly startedAt: number | null;
   readonly completedAt: number | null;
   readonly failure: FailureKind | null;
+  /** For a refused video: yt-dlp's own error line (plain text, at most 300 characters), shown behind "Details". */
+  readonly errorDetail?: string | null;
   /** This download's own cap in bytes per second; `null` or absent = unlimited. */
   readonly speedLimitBps?: number | null;
   /** Expected digest, if the user gave one. */

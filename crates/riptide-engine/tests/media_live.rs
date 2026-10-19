@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use riptide_core::{DownloadKind, DownloadRequest, DownloadState, Event, MediaChoiceKind};
 use riptide_engine::{Engine, EngineConfig};
-use riptide_media::YtDlp;
+use riptide_media::{Attempt, PlayerClients, YtDlp};
 use tokio::sync::broadcast;
 
 const DEFAULT_URL: &str = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
@@ -147,4 +147,86 @@ async fn real_video_probes_pauses_resumes_and_merges() {
         "no partial files left"
     );
     engine.shutdown().await;
+}
+
+/// For each reference video and each rung of the player-client ladder (`default`,
+/// `tv_embedded`): probes without cookies, then downloads a real 6 second clip, and prints which
+/// rungs worked. Run it on a machine where the field test failed with "The page needs to be
+/// reloaded." to see which rung works there:
+///
+/// ```text
+/// RIPTIDE_YTDLP=... RIPTIDE_FFMPEG=... cargo test -p riptide-engine --test media_live ///   real_videos_report_the_working_strategy -- --ignored --nocapture
+/// ```
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "network: real yt-dlp against real video pages"]
+async fn real_videos_report_the_working_strategy() {
+    let ffmpeg = tool("RIPTIDE_FFMPEG");
+    let exe = tool("RIPTIDE_YTDLP");
+    let tools = YtDlp::new(exe.clone(), Some(ffmpeg.clone()));
+    eprintln!("yt-dlp {}", tools.version().await.unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let mut failures = Vec::new();
+    for id in ["aqz-KE-bpKQ", "Ng274mLQ7-c"] {
+        let url = format!("https://www.youtube.com/watch?v={id}");
+        // what the engine itself would pick (no cookies, ladder from the top)
+        match tools.probe_resilient(&url, None, None).await {
+            Ok((info, attempt)) => eprintln!(
+                "{id}: engine strategy: clients={} cookies={} ({} choices)",
+                attempt.clients.key(),
+                attempt.cookies,
+                info.choices.len()
+            ),
+            Err(e) => eprintln!("{id}: engine strategy: FAILED: {e}"),
+        }
+        let mut worked = Vec::new();
+        for clients in PlayerClients::LADDER {
+            // the rung on its own: probe, then a real 6 s clip (smallest format, merged by ffmpeg)
+            let single = Attempt {
+                cookies: false,
+                clients,
+            };
+            let probe_ok = matches!(
+                tools.probe_resilient(&url, None, Some(single)).await,
+                Ok((_, a)) if a == single
+            );
+            let out = dir.path().join(format!("{id}-{}.%(ext)s", clients.key()));
+            let mut cmd = std::process::Command::new(&exe);
+            cmd.args(["--ignore-config", "--no-playlist", "--no-color"])
+                .args(["-f", "wv*+wa/w", "--merge-output-format", "mp4"])
+                .args(["--download-sections", "*0-6", "--ffmpeg-location"])
+                .arg(&ffmpeg);
+            if let Some(extra) = clients.extractor_args() {
+                cmd.args(["--extractor-args", extra]);
+            }
+            cmd.arg("-o").arg(&out).arg("--").arg(&url);
+            let clip = cmd.output().unwrap();
+            let clip_ok = clip.status.success()
+                && std::fs::read_dir(dir.path()).unwrap().flatten().any(|e| {
+                    let n = e.file_name().to_string_lossy().into_owned();
+                    n.starts_with(&format!("{id}-{}.", clients.key()))
+                        && n.ends_with(".mp4")
+                        && e.metadata().is_ok_and(|m| m.len() > 10_000)
+                });
+            eprintln!(
+                "{id}: rung {:<12} probe={} clip={}",
+                clients.key(),
+                if probe_ok { "ok" } else { "FAILED" },
+                if clip_ok { "ok" } else { "FAILED" }
+            );
+            if !clip_ok {
+                let err = String::from_utf8_lossy(&clip.stderr);
+                if let Some(line) = err.lines().rev().find(|l| l.starts_with("ERROR")) {
+                    eprintln!("    {line}");
+                }
+            }
+            if probe_ok && clip_ok {
+                worked.push(clients.key());
+            }
+        }
+        eprintln!("{id}: working rungs: {worked:?}");
+        if worked.is_empty() {
+            failures.push(id);
+        }
+    }
+    assert!(failures.is_empty(), "no rung worked for {failures:?}");
 }

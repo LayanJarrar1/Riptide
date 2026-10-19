@@ -6,6 +6,7 @@ import { TAURI_AVAILABLE, TAURI_INVOKE } from '../tauri/tauri-bridge';
 import { ToastService } from '../ui/toast.service';
 import { NOW } from './clock';
 import { PREFERENCE_STORE } from './preferences';
+import { effectiveChannel } from './update-channel';
 
 /** An available update, as `check_update` reports it (`src-tauri/src/updater.rs`). */
 export interface UpdateInfo {
@@ -80,7 +81,9 @@ export class UpdateService {
       return null;
     }
     try {
-      const info = await this.invoke<UpdateInfo | null>('check_update', { channel });
+      // a pre-release build only ever finds updates on the beta feed, whatever was saved
+      const channelToAsk = effectiveChannel(channel, await this.runningVersion());
+      const info = await this.invoke<UpdateInfo | null>('check_update', { channel: channelToAsk });
       this.available.set(info ?? null);
       this.status.set(info ? 'available' : 'none');
       return info ?? null;
@@ -89,6 +92,15 @@ export class UpdateService {
       this.available.set(null);
       this.status.set('error');
       throw error;
+    }
+  }
+
+  /** The running version, `null` when the backend cannot say. */
+  private async runningVersion(): Promise<string | null> {
+    try {
+      return (await this.invoke<{ version: string }>('app_info')).version;
+    } catch {
+      return null;
     }
   }
 
