@@ -14,6 +14,7 @@ riptide-core = { workspace = true }
 riptide-net = { workspace = true }
 riptide-store = { workspace = true }
 riptide-media = { workspace = true }
+riptide-crawl = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
