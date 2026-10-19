@@ -52,7 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   proxyMode: 'system',
   proxyUrl: '',
   checkUpdates: true,
-  channel: 'stable',
+  // alpha: all releases are pre-releases; switch back to stable at the first stable release
+  channel: 'beta',
 };
 
 /**
