@@ -22,12 +22,12 @@
       "volatile": false,
       "license": "Unlicense OR MIT; open-source release artifact",
       "last_result": {
-        "date": "2026-10-19T20:34:54.939Z",
+        "date": "2026-10-19T20:45:12.954Z",
         "status": "pass",
         "class": null,
         "bytes": 2058893,
         "sha256": "d0f534024c42afd6cb4d38907c25cd2b249b79bbe6cc1dbee8e3e37c2b6e25a1",
-        "seconds": 2,
+        "seconds": 1.1,
         "notes": "saved as ripgrep-14.1.1-x86_64-pc-windows-msvc.zip; sha256 matches the published value"
       }
     },
@@ -47,12 +47,12 @@
       "volatile": true,
       "license": "Unlicense OR MIT",
       "last_result": {
-        "date": "2026-10-19T20:34:59.585Z",
+        "date": "2026-10-19T20:45:16.547Z",
         "status": "pass",
         "class": null,
         "bytes": 581402,
         "sha256": "4dad02a2f9c8c3c8d89434e47337aa654cb0e2aa50e806589132f186bf5c2b66",
-        "seconds": 1.7,
+        "seconds": 1.5,
         "notes": "saved as ripgrep-14.1.1.tar.gz"
       }
     },
@@ -72,12 +72,12 @@
       "volatile": true,
       "license": "MIT; open-source licence text",
       "last_result": {
-        "date": "2026-10-19T20:35:03.809Z",
+        "date": "2026-10-19T20:45:20.547Z",
         "status": "pass",
         "class": null,
         "bytes": 2001,
         "sha256": "62dfe4bdd76e08992c09cf335b2374b3e6acd4f2b959b4971760727d9b785ab4",
-        "seconds": 1,
+        "seconds": 0.6,
         "notes": "saved as LICENSE.txt; name differs from the expectation (LICENSE)"
       }
     },
@@ -97,13 +97,13 @@
       "volatile": false,
       "license": "Public domain (Commons file Example.jpg)",
       "last_result": {
-        "date": "2026-10-19T20:35:07.363Z",
+        "date": "2026-10-19T20:45:23.684Z",
         "status": "pass",
         "class": null,
         "bytes": 9022,
         "sha256": "99bd915a3819b1fee3722328ae904dde5459e9b15d56abd98b903c770a2f582c",
-        "seconds": 0.9,
-        "notes": "saved as Example.jpg"
+        "seconds": 0.6,
+        "notes": "saved as Example.jpg; observed SHA-256 equals the previous run"
       }
     },
     {
@@ -122,13 +122,13 @@
       "volatile": false,
       "license": "Public domain (Commons file Example.jpg)",
       "last_result": {
-        "date": "2026-10-19T20:35:10.752Z",
+        "date": "2026-10-19T20:45:26.801Z",
         "status": "pass",
         "class": null,
         "bytes": 9022,
         "sha256": "99bd915a3819b1fee3722328ae904dde5459e9b15d56abd98b903c770a2f582c",
-        "seconds": 1.4,
-        "notes": "saved as Example.jpg"
+        "seconds": 0.9,
+        "notes": "saved as Example.jpg; observed SHA-256 equals the previous run"
       }
     },
     {
@@ -151,12 +151,12 @@
       "volatile": false,
       "license": "Public domain text (Project Gutenberg edition of an 1865 work)",
       "last_result": {
-        "date": "2026-10-19T20:35:14.700Z",
+        "date": "2026-10-19T20:45:30.266Z",
         "status": "pass",
         "class": null,
         "bytes": 60973,
         "sha256": "270f41201dd3fd1a3902e9f42957554861772b94a4474bfb76fa3364abe46c3e",
-        "seconds": 8.4,
+        "seconds": 4.5,
         "notes": "saved as alice30h.zip; sha1 matches the published value"
       }
     },
@@ -176,13 +176,13 @@
       "volatile": false,
       "license": "Public domain (ebook 11)",
       "last_result": {
-        "date": "2026-10-19T20:35:25.707Z",
+        "date": "2026-10-19T20:45:37.315Z",
         "status": "pass",
         "class": null,
         "bytes": 174311,
         "sha256": "01b38ea4c710a84bc18d0bd41271a5a1a92b94e97b2812f4dece97d4a694725e",
-        "seconds": 1.3,
-        "notes": "saved as pg11.txt"
+        "seconds": 1.2,
+        "notes": "saved as pg11.txt; observed SHA-256 equals the previous run"
       }
     },
     {
@@ -200,13 +200,13 @@
       "volatile": false,
       "license": "Public domain (ebook 11)",
       "last_result": {
-        "date": "2026-10-19T20:35:29.523Z",
+        "date": "2026-10-19T20:45:41.062Z",
         "status": "pass",
         "class": null,
         "bytes": 136756,
         "sha256": "08a2de3a58226311915bd87056e59ed4ee49a284dcb5e722fef415bca4032a4b",
-        "seconds": 1.7,
-        "notes": "saved as pg11.epub"
+        "seconds": 1.4,
+        "notes": "saved as pg11.epub; observed SHA-256 equals the previous run"
       }
     },
     {
@@ -225,12 +225,12 @@
       "volatile": true,
       "license": "US government work, public domain",
       "last_result": {
-        "date": "2026-10-19T20:35:33.712Z",
+        "date": "2026-10-19T20:45:45.012Z",
         "status": "pass",
         "class": null,
         "bytes": 3018,
         "sha256": "8b4ea1dc0aa49c48156a0cb97b0406f252d55b49395c8151e461414c9a4ba005",
-        "seconds": 1.1,
+        "seconds": 0.3,
         "notes": "saved as significant_month.csv"
       }
     },
@@ -250,13 +250,13 @@
       "volatile": false,
       "license": "W3C test resource published for testing",
       "last_result": {
-        "date": "2026-10-19T20:35:37.330Z",
+        "date": "2026-10-19T20:45:47.818Z",
         "status": "pass",
         "class": null,
         "bytes": 13264,
         "sha256": "3df79d34abbca99308e79cb94461c1893582604d68329a41fd4bec1885e6adb4",
-        "seconds": 0.1,
-        "notes": "saved as dummy.pdf"
+        "seconds": 0.2,
+        "notes": "saved as dummy.pdf; observed SHA-256 equals the previous run"
       }
     },
     {
@@ -275,13 +275,13 @@
       "volatile": false,
       "license": "Provided by OVHcloud for network testing",
       "last_result": {
-        "date": "2026-10-19T20:35:39.943Z",
+        "date": "2026-10-19T20:45:50.497Z",
         "status": "pass",
         "class": null,
         "bytes": 1048576,
         "sha256": "30e14955ebf1352266dc2ff8067e68104607e750abb9d3b36582b8af909fcb58",
         "seconds": 0.7,
-        "notes": "saved as 1Mb.dat"
+        "notes": "saved as 1Mb.dat; observed SHA-256 equals the previous run"
       }
     },
     {
@@ -304,13 +304,13 @@
       "volatile": false,
       "license": "MIT",
       "last_result": {
-        "date": "2026-10-19T20:35:43.131Z",
-        "status": "fail",
-        "class": "checksum-mismatch",
-        "bytes": 31402,
-        "sha256": "4170848bcbc6bd33ed54c8d10ae062fba466f9f3ff889403536d70e60b9e1839",
-        "seconds": 0.2,
-        "notes": "saved as jquery.min.js; sha256 4170848bcbc6bd33ed54c8d10ae062fba466f9f3ff889403536d70e60b9e1839 != published fc9a93dd241f6b045cbff0481cf4e1901becd0e12fb45166a8f17f95823f0b1a"
+        "date": "2026-10-19T20:45:53.741Z",
+        "status": "pass",
+        "class": null,
+        "bytes": 87533,
+        "sha256": "fc9a93dd241f6b045cbff0481cf4e1901becd0e12fb45166a8f17f95823f0b1a",
+        "seconds": 0.1,
+        "notes": "saved as jquery.min.js; sha256 matches the published value"
       }
     },
     {
@@ -332,12 +332,12 @@
       "volatile": false,
       "license": "MIT",
       "last_result": {
-        "date": "2026-10-19T20:35:45.914Z",
+        "date": "2026-10-19T20:45:56.434Z",
         "status": "pass",
         "class": null,
         "bytes": 87533,
         "sha256": "fc9a93dd241f6b045cbff0481cf4e1901becd0e12fb45166a8f17f95823f0b1a",
-        "seconds": 0.2,
+        "seconds": 0.1,
         "notes": "saved as jquery.min.js; sha256 matches the published value"
       }
     }

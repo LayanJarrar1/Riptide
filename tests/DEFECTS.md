@@ -1,0 +1,51 @@
+# Defect log: download compatibility and integrity matrix
+
+Severity: P0 = silent wrong bytes or data loss, P1 = secrets / security rule broken or a failure
+with no way out, P2 = wrong state or poor behaviour that has a workaround.
+Method: for each failure the cause was found first (reproduced, traced to the line, fixed once at
+the root, then the targeted test and the whole affected suites re-run), following the
+`systematic-debugging` skill. The `security-best-practices` skill covers Python / JS / Go only, so
+for the Rust code its principles were applied by hand: no secret in storage or logs (D-01), treat
+every server value as hostile (D-04), least surprise on shared state (D-02).
+
+## Product defects (fixed)
+
+| ID | Sev | Symptom | Root cause | Fix commit | Test |
+|---|---|---|---|---|---|
+| D-01 | P1 | `http://user:password@host/file` stored the password in clear text in `downloads.url` and `final_url` (and in `probe()` output); `strip_query` kept it in error messages. Breaks hard rule 4. | `prepare_add` copied `request.url` verbatim; credentials in the URL were never moved to the `secrets` table. | `a71159f` | `matrix_network::credentials_in_the_url_move_to_secrets_and_never_stay_in_the_record`, `redirect::tests::userinfo_is_split_off_and_redacted_from_logs` |
+| D-02 | P0 | Eight downloads that resolve to the same name at the same moment: one `.rtpart` shared by all, the file reported `Completed` held another download's bytes (size 102 000 instead of 100 000, wrong SHA-256). | Name uniqueness (`unique_path`) only looked at the final file, and every probe ran concurrently: all saw "free". | `3ecacc2` | `matrix_names::simultaneous_same_name_downloads_get_distinct_files` (red before the fix) |
+| D-03 | P2 | `pause()` then an immediate `resume()` left the download `Paused` forever (resume ignored because the state was still `Downloading`). Showed up as a flaky random pause/resume test. | `pause`/`cancel` only signalled the task and returned. | `3ecacc2` | `matrix_local::pause_returns_paused_and_an_immediate_resume_is_not_lost`, `::pause_and_resume_at_random_offsets_is_byte_exact` |
+| D-04 | P0 | jsDelivr (`jquery.min.js`) was saved as 31 402 of 87 533 bytes and reported `Completed`. Found by the first real run of the public-source runner. | Cloudflare answers `Range` with `Content-Range: bytes 0-31401/31402` (the compressed size) but sends the whole 87 533-byte body. The segment task stopped at the announced end and never noticed the extra bytes. | `978df0e` | `matrix_network::server_sending_more_bytes_than_its_content_range_is_downloaded_whole` (red before the fix: 333 333 of 1 000 000 bytes), public source `jsdelivr-jquery` |
+| D-05 | P2 | After such a restart, or after any download of unknown length, the record kept the probed size (or none) instead of the file's size. | The engine never reconciled `size` with the finished file. | `978df0e` | `matrix_sizes::tiny_sizes_through_every_server_mode`, `matrix_network::complete` |
+| D-06 | P2 | A link without a file extension and with Content-Type `text/csv`, `application/xml`, `image/svg+xml`, `audio/wav`, EPUB, DOCX, XLSX, PPTX or MSIX was saved with no extension, so it landed in the wrong category and could not be opened. | `extension_for` knew only 20 types. | `f3c53aa` | `matrix_names::names_types_and_categories_are_sanitised_and_bytes_exact` (the `noext-*` rows) |
+
+Behaviour change worth a reviewer's eye (D-02): a download that is queued, paused or failed now
+*claims* its file name. A newcomer with the same name yields and gets `name (1).ext`, so the first
+download keeps `name.ext`. `runtime::find_duplicate_matches_the_url_without_fragment_or_the_name_in_the_folder`
+was adjusted to this (before, the paused one yielded when the newcomer finished first).
+
+## Test-environment and external issues (not product defects)
+
+| ID | What happened | Resolution |
+|---|---|---|
+| T-01 | First runs of the new tables failed on wrong expectations of mine: a leading dot is trimmed on purpose (`.hidden` becomes `hidden`); in a quoted `filename` a backslash is a quote escape (RFC 6266), so `..\..\x.exe` becomes `Windowsx.exe`, always inside the folder; two table rows resolved to the same name (`blob`, the punctuation row) and the engine correctly added ` (1)`; `/redirect?n=20` is 21 redirect responses (the last hop points at the file) so the limit is `n=19`; a checksum failure keeps its `.rtpart` for inspection (documented design). | Expectations corrected, rationale in comments. |
+| T-02 | `/expires` does not cut running bodies, so a plain slow download never expired. | The test pauses, waits past the expiry and resumes; the test server got an optional `?bps=`. |
+| T-03 | The machine ran out of disk twice while building test binaries (LNK1318 / LNK1140, debug PDBs of 20 test executables). | Not product related. Later builds used `CARGO_PROFILE_DEV_DEBUG=0` and `CARGO_INCREMENTAL=0`. |
+| T-04 | `more_than_four_gibibytes` first failed on my assertion (a segment *starting* beyond 2^32; the planner's last segment starts before it and *ends* beyond it). The download itself was byte-exact. | Assertion changed to "a segment ends beyond `u32::MAX`". |
+| T-05 | jsDelivr's compressed-size `Content-Range` is an external-server quirk, but the product must not trust it, hence D-04. | Fixed in the product; the quirk is emulated by `/range-lie`. |
+
+## Observations (no change made)
+
+- Error text for local failures is raw OS text prefixed with `io:` (for example `io: The system
+  cannot find the path specified. (os error 3)`). Accurate, not friendly; a UI mapping would help.
+- When the destination `.rtpart` is locked by another program the download fails (retryable) and
+  resumes cleanly once the lock is gone; it does not pick another name.
+- Disk full could not be simulated (no write-injection seam, VHD needs administrator rights).
+- A one-byte file served with an honest `Content-Range` cannot be told apart from a lying server
+  (nothing follows the byte); the guard is for ranges longer than one byte.
+
+## Flakiness
+
+No test is quarantined. One flake appeared (random pause/resume, about 1 run in 4 before the fix)
+and was traced to D-03; after the fix 20+ consecutive runs of `matrix_local` passed. The random
+test prints its seed and accepts `RIPTIDE_SEED` to replay the input sequence (timings still vary).

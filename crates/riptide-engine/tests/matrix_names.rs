@@ -306,6 +306,7 @@ async fn names_types_and_categories_are_sanitised_and_bytes_exact() {
     let mut failures = Vec::new();
     let all = cases();
     let total = all.len();
+    eprintln!("{total} name/type/category cases");
     for (n, c) in all.into_iter().enumerate() {
         let size = 2048 + (n as u64 % 7) * 1000;
         let sep = if c.url.contains('?') { '&' } else { '?' };

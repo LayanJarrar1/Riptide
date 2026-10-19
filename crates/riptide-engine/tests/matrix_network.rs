@@ -567,7 +567,7 @@ async fn server_sending_more_bytes_than_its_content_range_is_downloaded_whole() 
     complete(
         &w,
         &engine,
-        &format!("/range-lie?size=3000000&lie=1200000"),
+        "/range-lie?size=3000000&lie=1200000",
         3_000_000,
     )
     .await;
