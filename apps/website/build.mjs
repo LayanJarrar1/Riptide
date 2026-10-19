@@ -193,8 +193,8 @@ function build() {
       repoSlug: REPO_SLUG,
       releasesUrl: RELEASES_URL,
       installerUrl: INSTALLER_URL,
-      blocks24: Array.from({ length: 24 }, (_, i) => i),
-      blocks64: Array.from({ length: 64 }, (_, i) => i),
+      // The speed chapter's eight lanes, each owning an equal slice of the file (the no-JS end state).
+      lanes8: Array.from({ length: 8 }, (_, i) => ({ a: String(i / 8), b: String((i + 1) / 8) })),
       installerFile: INSTALLER_FILE,
       portableUrl: PORTABLE_URL,
       portableFile: PORTABLE_FILE,

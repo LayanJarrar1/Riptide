@@ -1,39 +1,40 @@
 /*
  * Riptide website. Vanilla JS, no dependencies, no network.
  *
- * 1. Theme toggle (light by default; the saved choice wins).
- * 2. Mobile navigation.
- * 3. Simulated downloads (hero card and "How it works"), pausing animations off screen,
- *    staggered scroll reveals.
- * 4. "How it works" step animations run only while their panel is on screen.
- * 5. Screenshot lightbox on the native <dialog>.
+ * 1. Theme toggle (light by default; a saved choice wins) and the mobile menu.
+ * 2. One scroll loop: a passive scroll listener schedules at most one requestAnimationFrame,
+ *    which computes a progress value per pinned scene from cached offsets and writes it as
+ *    --p (plus a few derived values for the hero). CSS turns those into transforms, opacity,
+ *    stroke-dashoffset and clip-path. Nothing reads layout inside the frame.
+ * 3. Scenes: hero logo (streams draw the R, the wordmark rises, the logo lands in the header),
+ *    the eight-connection race, the power cut and resume, the SHA-256 check.
+ * 4. Reveals and counters for the unpinned blocks (IntersectionObserver).
  *
- * The hero R is pure SVG + CSS and needs no script. Every animation respects
- * prefers-reduced-motion: simulations show their end state and the CSS is never started.
+ * html.anim is set in <head> unless the visitor prefers reduced motion. Without it this file
+ * only wires the theme and menu; the CSS shows every end state and nothing is pinned.
  */
 (function () {
   'use strict';
 
   const root = document.documentElement;
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const isRtl = root.dir === 'rtl';
+  const anim = root.classList.contains('anim');
+  const dir = root.dir === 'rtl' ? -1 : 1;
+  const clamp = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const r4 = (v) => Math.round(v * 10000) / 10000;
 
-  // ---- 1. Theme (light by default; the visitor can switch to dark and the choice is remembered)
-  function applyTheme(theme, persist) {
-    root.dataset.theme = theme;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#071a26' : '#ffffff');
-    if (persist) {
-      try { localStorage.setItem('riptide-theme', theme); } catch (e) { /* storage blocked */ }
-    }
-    document.dispatchEvent(new CustomEvent('riptide:theme', { detail: theme }));
-  }
+  // ---- 1. Theme and menu ------------------------------------------------------------------
   const themeButton = document.querySelector('.theme-toggle');
   if (themeButton) {
-    themeButton.addEventListener('click', () => applyTheme(root.dataset.theme === 'dark' ? 'light' : 'dark', true));
+    themeButton.addEventListener('click', () => {
+      const theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = theme;
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#071a26' : '#ffffff');
+      try { localStorage.setItem('riptide-theme', theme); } catch (e) { /* storage blocked */ }
+    });
   }
-
-  // ---- 2. Mobile navigation ---------------------------------------------------------------
   const header = document.querySelector('.site-header');
   const navToggle = document.querySelector('.nav-toggle');
   if (header && navToggle) {
@@ -42,195 +43,262 @@
       navToggle.setAttribute('aria-expanded', String(open));
     };
     navToggle.addEventListener('click', () => setOpen(navToggle.getAttribute('aria-expanded') !== 'true'));
-    header.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
+    header.querySelectorAll('.nav-menu a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
-    window.matchMedia('(min-width: 1100px)').addEventListener('change', (e) => { if (e.matches) setOpen(false); });
   }
 
-  // ---- 3. Simulated downloads (hero card, How it works) ----------------------------------
-  // A pure simulation: N blocks stand for ranges of one file, C connections fill them, and a
-  // connection that runs out takes half of the largest range still left (work stealing). It
-  // runs only while on screen and the tab is visible; with reduced motion it shows the end state.
-  const nf = new Intl.NumberFormat(root.lang === 'ar' ? 'ar-u-nu-latn' : 'en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const pf = new Intl.NumberFormat(root.lang === 'ar' ? 'ar-u-nu-latn' : 'en', { style: 'percent', maximumFractionDigits: 0 });
+  const main = document.getElementById('main');
+  if (!header || !main || !document.querySelector('.hero')) {
+    if (header) header.classList.add('is-solid');
+    return;
+  }
 
-  function startSim(el) {
-    const blocks = Array.from(el.querySelectorAll('.blk'));
-    const N = blocks.length;
-    const C = Number(el.dataset.conns) || 8;
-    const total = Number(el.dataset.size) || 4.7;
-    const out = {};
-    el.querySelectorAll('[data-o]').forEach((n) => { out[n.dataset.o] = n; });
-    const stealText = el.dataset.steal || '';
-    const text = { run: el.dataset.tRun, verify: el.dataset.tVerify, done: el.dataset.tDone, start: el.dataset.tStart };
-    const set = (k, v) => { if (out[k] && out[k].textContent !== v) out[k].textContent = v; };
+  // ---- 3. Scenes --------------------------------------------------------------------------
+  const scenes = {};
 
-    let filled, conns, phase, clock, running = false, raf = 0, last = 0, stealAt = 0;
-
-    function reset() {
-      blocks.forEach((b) => { b.classList.remove('on', 'hd'); });
-      filled = new Array(N).fill(false);
-      const per = N / C;
-      conns = [];
-      for (let i = 0; i < C; i++) {
-        conns.push({ pos: i * per, end: (i + 1) * per, rate: (N / C / 7) * (0.55 + 0.9 * (((i * 5) % 8) / 7)), idle: false });
-      }
-      phase = 'run'; clock = 0; stealAt = 0;
-      el.classList.remove('is-verifying', 'is-done');
-      render(true);
-      set('event', text.start || ' ');
-    }
-
-    function render() {
-      let n = 0;
-      for (let i = 0; i < N; i++) if (filled[i]) n++;
-      const f = n / N;
-      set('bytes', `${nf.format(total * f)} / ${nf.format(total)} GB`);
-      set('pct', pf.format(f));
-      set('state', phase === 'run' ? text.run : phase === 'verify' ? text.verify : text.done);
-    }
-
-    function fill(i) {
-      if (i >= 0 && i < N && !filled[i]) { filled[i] = true; blocks[i].classList.add('on'); }
-    }
-
-    function stepRun(dt) {
-      const heads = new Set();
-      for (let c = 0; c < conns.length; c++) {
-        const k = conns[c];
-        if (k.idle) continue;
-        const wobble = 1 + 0.25 * Math.sin(clock * 1.7 + c * 2.1);
-        const from = Math.floor(k.pos);
-        k.pos = Math.min(k.end, k.pos + k.rate * wobble * dt);
-        for (let i = from; i < Math.floor(k.pos); i++) fill(i);
-        if (k.pos >= k.end - 1e-6) {
-          // finished: steal half of the largest remaining range
-          let victim = -1, most = 0;
-          for (let v = 0; v < conns.length; v++) {
-            const rem = conns[v].end - conns[v].pos;
-            if (v !== c && !conns[v].idle && rem > most) { most = rem; victim = v; }
-          }
-          if (victim >= 0 && most >= 4) {
-            const v = conns[victim];
-            const mid = Math.ceil(v.pos + most / 2);
-            k.pos = mid; k.end = v.end; v.end = mid;
-            if (stealText && clock - stealAt > 0.8) {
-              set('event', stealText.replace('%a', String(c + 1)).replace('%b', String(victim + 1)));
-              stealAt = clock;
-            }
-          } else k.idle = true;
+  // Hero: the three streams of the real mark are revealed through masks (never recoloured),
+  // spiral into place, the wordmark rises, then the whole logo flies into the header slot.
+  (function () {
+    const pin = document.querySelector('.hero-pin');
+    const fly = pin.querySelector('.hl-fly');
+    const hl = pin.querySelector('.hl');
+    const brand = header.querySelector('.brand');
+    let msd = 1.8;
+    const set = (k, v) => pin.style.setProperty(k, v);
+    scenes.hero = {
+      measure() {
+        msd = parseFloat(getComputedStyle(pin).getPropertyValue('--msd')) || 1.8;
+        const b = brand.getBoundingClientRect();
+        const w = hl.offsetWidth;
+        set('--fx', r4(b.left + b.width / 2 - pin.clientWidth / 2));
+        set('--fy', r4(b.top + b.height / 2 - pin.clientHeight / 2));
+        set('--fs', r4(b.width / w));
+      },
+      update(p) {
+        const q = clamp(p);
+        const spin = easeIO(clamp(q / 0.5));
+        for (let i = 0; i < 3; i++) {
+          const base = [0.3, 0.33, 0.37][i];
+          set(`--s${i + 1}`, r4(base + (1 - base) * easeOut(clamp((q - 0.02 - i * 0.05) / 0.42))));
+          set(`--r${i + 1}`, r4(-Math.sin(Math.PI * clamp(q / 0.52)) * (22 + 16 * i)));
         }
-        if (!k.idle) heads.add(Math.min(N - 1, Math.floor(k.pos)));
+        const lg = easeIO(clamp((q - 0.56) / 0.16));
+        const draw = msd * (1.12 - 0.12 * spin);
+        const f = easeIO(clamp((q - 0.8) / 0.2));
+        const hd = clamp((q - 0.975) / 0.025);
+        set('--q', r4(q));
+        set('--h', r4(clamp(q / 0.14)));
+        set('--c', r4(easeIO(clamp((q - 0.04) / 0.3))));
+        set('--ms', r4(draw + (1 - draw) * lg));
+        set('--mx', r4(265.5 * (1 - lg)));
+        set('--my', r4(22.7 * (1 - lg)));
+        set('--lg', r4(clamp((q - 0.6) / 0.16)));
+        set('--ta', r4(clamp((q - 0.68) / 0.06) * (1 - clamp((q - 0.79) / 0.04))));
+        set('--f', r4(f));
+        fly.style.opacity = String(1 - hd);
+        header.style.setProperty('--hd', String(hd));
+      },
+    };
+  })();
+
+  // Speed: a deterministic work-stealing schedule, computed once, scrubbed by scroll.
+  (function () {
+    const section = document.getElementById('speed');
+    if (!section) return;
+    const lanes = Array.from(section.querySelectorAll('.lane-track'));
+    const filebar = section.querySelector('.filebar');
+    const out = {};
+    section.querySelectorAll('[data-o]').forEach((n) => { out[n.dataset.o] = n; });
+    const rates = [1, 0.62, 0.86, 0.5, 0.94, 0.7, 0.56, 0.8];
+    const conns = rates.map((rate, c) => ({ rate, pos: c / 8, end: (c + 1) / 8, done: Infinity, pieces: [] }));
+    const pieces = [];
+    const addPiece = (k, a, b, t0) => { const pc = { c: k, a, b, t0, rate: conns[k].rate }; conns[k].pieces.push(pc); pieces.push(pc); return pc; };
+    conns.forEach((k, c) => { k.cur = addPiece(c, k.pos, k.end, 0); });
+    let t = 0;
+    for (let guard = 0; guard < 200; guard++) {
+      let next = -1, dt = Infinity;
+      conns.forEach((k, c) => { if (k.done === Infinity) { const d = (k.end - k.pos) / k.rate; if (d < dt) { dt = d; next = c; } } });
+      if (next < 0) break;
+      t += dt;
+      conns.forEach((k) => { if (k.done === Infinity) k.pos = Math.min(k.end, k.pos + k.rate * dt); });
+      const k = conns[next];
+      let victim = -1, most = 0;
+      conns.forEach((v, c) => { const rem = v.end - v.pos; if (c !== next && v.done === Infinity && rem > most) { most = rem; victim = c; } });
+      if (victim >= 0 && most > 0.03) {
+        const v = conns[victim];
+        const mid = v.pos + most / 2;
+        k.cur = addPiece(next, mid, v.end, t);
+        k.pos = mid; k.end = v.end;
+        v.end = mid; v.cur.b = mid;
+      } else {
+        k.done = t;
       }
-      for (let i = 0; i < N; i++) blocks[i].classList.toggle('hd', heads.has(i) && !filled[i]);
-      if (filled.every(Boolean)) { phase = 'verify'; clock = 0; el.classList.add('is-verifying'); blocks.forEach((b) => b.classList.remove('hd')); }
     }
-
-    function frame(now) {
-      raf = 0;
-      if (!running) return;
-      const dt = Math.min(0.1, (now - last) / 1000);
-      last = now;
-      clock += dt;
-      if (phase === 'run') stepRun(dt);
-      else if (phase === 'verify' && clock > 1.2) { phase = 'done'; clock = 0; el.classList.remove('is-verifying'); el.classList.add('is-done'); }
-      else if (phase === 'done' && clock > 3.6) { reset(); }
-      render();
-      raf = requestAnimationFrame(frame);
-    }
-    function play() {
-      if (running || reduceMotion.matches) return;
-      running = true; last = performance.now();
-      if (!raf) raf = requestAnimationFrame(frame);
-    }
-    function pause() { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-
-    reset();
-    if (reduceMotion.matches) {
-      blocks.forEach((b, i) => { filled[i] = true; b.classList.add('on'); });
-      phase = 'done'; el.classList.add('is-done'); render(); set('event', ' ');
-      return;
-    }
-    let visible = true;
-    const sync = () => (visible && !document.hidden ? play() : pause());
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver((entries) => { visible = entries[entries.length - 1].isIntersecting; sync(); }, { rootMargin: '80px' }).observe(el);
-    }
-    document.addEventListener('visibilitychange', sync);
-    sync();
-  }
-  document.querySelectorAll('[data-sim]').forEach(startSim);
-
-  // The hero stage and the band pause their CSS animations while off screen.
-  if ('IntersectionObserver' in window) {
-    const pausable = document.querySelectorAll('.stage, .band');
-    const po = new IntersectionObserver((entries) => {
-      for (const e of entries) e.target.classList.toggle('is-off', !e.isIntersecting);
-    }, { rootMargin: '60px' });
-    pausable.forEach((n) => po.observe(n));
-  }
-
-  // ---- 3b. Scroll reveals (staggered inside [data-stagger] groups) ------------------------
-  const reveals = document.querySelectorAll('.reveal');
-  if (reveals.length) {
-    document.querySelectorAll('[data-stagger]').forEach((group) => {
-      Array.from(group.children).forEach((child, i) => child.style.setProperty('--i', String(Math.min(i, 6))));
+    const tEnd = t;
+    // Build the DOM: one element per piece in its lane, and a copy in the file bar.
+    const make = (pc) => {
+      const el = document.createElement('span');
+      el.className = pc.t0 > 0 ? 'pc stolen' : 'pc';
+      el.style.setProperty('--a', String(pc.a));
+      el.style.setProperty('--b', String(pc.b));
+      el.appendChild(document.createElement('i'));
+      return el;
+    };
+    lanes.forEach((lane) => lane.querySelectorAll('.pc').forEach((n) => n.remove()));
+    filebar.textContent = '';
+    pieces.forEach((pc) => {
+      const a = make(pc), b = make(pc);
+      lanes[pc.c].insertBefore(a, lanes[pc.c].querySelector('.hd'));
+      filebar.appendChild(b);
+      pc.els = [a.firstChild, b.firstChild];
+      pc.last = -1;
     });
-    if ('IntersectionObserver' in window && !reduceMotion.matches) {
-      const ro = new IntersectionObserver((entries) => {
-        for (const e of entries) if (e.isIntersecting) { e.target.classList.add('is-in'); ro.unobserve(e.target); }
-      }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
-      reveals.forEach((n) => ro.observe(n));
-    } else {
-      reveals.forEach((n) => n.classList.add('is-in'));
-    }
-  }
+    const heads = lanes.map((lane) => lane.querySelector('.hd'));
+    scenes.speed = {
+      update(p) {
+        const T = clamp(p / 0.82) * tEnd;
+        let sum = 0, active = 0;
+        pieces.forEach((pc) => {
+          const f = r4(clamp(((T - pc.t0) * pc.rate) / (pc.b - pc.a)));
+          sum += f * (pc.b - pc.a);
+          if (f !== pc.last) { pc.last = f; pc.els[0].style.transform = pc.els[1].style.transform = `scaleX(${f})`; }
+        });
+        conns.forEach((k, c) => {
+          const on = T > 0 && T < k.done;
+          if (k.done > T) active++;
+          let x = k.pieces[0].a;
+          for (const pc of k.pieces) if (pc.t0 <= T) x = Math.min(pc.b, pc.a + (T - pc.t0) * pc.rate);
+          heads[c].style.opacity = on ? '1' : '0';
+          heads[c].style.transform = `translate3d(${r4(x * 100 * dir)}%,0,0)`;
+        });
+        const pct = Math.round(sum * 100);
+        out.pct.textContent = `${pct}%`;
+        out.gb.textContent = `${(4.7 * sum).toFixed(2)} / 4.70 GB`;
+        out.active.textContent = String(active);
+      },
+    };
+  })();
 
-  // ---- 4. Step animations only while visible ----------------------------------------------
-  const visuals = document.querySelectorAll('.step-visual');
-  if (visuals.length && 'IntersectionObserver' in window && !reduceMotion.matches) {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) e.target.classList.toggle('in-view', e.isIntersecting);
-    }, { threshold: 0.3 });
-    visuals.forEach((v) => io.observe(v));
-  } else {
-    visuals.forEach((v) => v.classList.add('in-view'));
-  }
+  // Resume: download, power cut, resume from the same byte, complete.
+  (function () {
+    const section = document.getElementById('resume');
+    if (!section) return;
+    const rs = section.querySelector('.rs');
+    const fill = rs.querySelector('.rs-fill');
+    const bytes = rs.querySelector('[data-o="bytes"]');
+    const TOTAL = 5046586572, CUT = 0.62;
+    const nf = new Intl.NumberFormat('en-US');
+    rs.querySelector('[data-o="at"]').textContent = nf.format(Math.round(CUT * TOTAL));
+    scenes.resume = {
+      update(p) {
+        let f, phase, cut = 0;
+        if (p < 0.4) { f = CUT * easeIO(clamp(p / 0.4)); phase = 'run'; }
+        else if (p < 0.52) { f = CUT; phase = 'cut'; cut = clamp((p - 0.4) / 0.025) * (1 - clamp((p - 0.45) / 0.05)) * 0.9; }
+        else if (p < 0.92) { f = CUT + (1 - CUT) * easeIO(clamp((p - 0.58) / 0.34)); phase = 'res'; }
+        else { f = 1; phase = 'done'; }
+        if (rs.dataset.phase !== phase) rs.dataset.phase = phase;
+        rs.style.setProperty('--cut', String(r4(cut)));
+        fill.style.transform = `scaleX(${r4(f)})`;
+        bytes.textContent = nf.format(Math.round(f * TOTAL));
+      },
+    };
+  })();
 
-  // ---- 5. Lightbox ------------------------------------------------------------------------
-  const lightbox = document.getElementById('lightbox');
-  const triggers = Array.from(document.querySelectorAll('.shot-open'));
-  if (lightbox && triggers.length && typeof lightbox.showModal === 'function') {
-    const img = lightbox.querySelector('#lightbox-img');
-    const cap = lightbox.querySelector('#lightbox-cap');
-    let index = 0;
-    let opener = null;
+  // Verify: the digest resolves left to right out of scrambled hex.
+  (function () {
+    const section = document.getElementById('verified');
+    if (!section) return;
+    const ok = section.querySelector('[data-o="ok"]');
+    const scr = section.querySelector('[data-o="scr"]');
+    const hash = ok.textContent.trim();
+    const hex = '0123456789abcdef';
+    scenes.verify = {
+      update(p) {
+        const n = Math.round(clamp((p + 0.1) / 0.5) * hash.length);
+        const seed = Math.floor(p * 120);
+        let s = '';
+        for (let i = n; i < hash.length; i++) s += hex[(i * 7 + seed * 13 + ((i * i) % 11)) & 15];
+        ok.textContent = hash.slice(0, n);
+        scr.textContent = s;
+      },
+    };
+  })();
 
-    function show(i) {
-      index = (i + triggers.length) % triggers.length;
-      const source = triggers[index].querySelector('img');
-      const caption = triggers[index].closest('figure').querySelector('figcaption');
-      img.src = source.dataset.full || source.currentSrc || source.src;
-      img.alt = source.alt;
-      cap.textContent = caption ? caption.textContent : '';
-    }
-    function open(i, button) {
-      opener = button;
-      show(i);
-      lightbox.showModal();
-      lightbox.querySelector('.lightbox-close').focus();
-    }
-    triggers.forEach((button, i) => button.addEventListener('click', () => open(i, button)));
-    lightbox.querySelector('.lightbox-close').addEventListener('click', () => lightbox.close());
-    lightbox.querySelector('.lightbox-prev').addEventListener('click', () => show(index - 1));
-    lightbox.querySelector('.lightbox-next').addEventListener('click', () => show(index + 1));
-    lightbox.addEventListener('click', (e) => { if (e.target === lightbox) lightbox.close(); });
-    lightbox.addEventListener('keydown', (e) => {
-      const forward = isRtl ? 'ArrowLeft' : 'ArrowRight';
-      const back = isRtl ? 'ArrowRight' : 'ArrowLeft';
-      if (e.key === forward) { e.preventDefault(); show(index + 1); }
-      if (e.key === back) { e.preventDefault(); show(index - 1); }
+  // ---- 2. The scroll loop -----------------------------------------------------------------
+  const sections = Array.from(main.children).filter((el) => el.tagName === 'SECTION');
+  let metrics = [];
+  let vh = window.innerHeight;
+  let heroEnd = 0;
+
+  function measure() {
+    vh = window.innerHeight;
+    const y = window.scrollY;
+    metrics = sections.map((el) => {
+      const r = el.getBoundingClientRect();
+      const name = el.dataset.scene;
+      return { el, top: r.top + y, h: r.height, tone: el.dataset.tone || 'light', name, scene: scenes[name], pin: el.querySelector('.pin'), p: NaN };
     });
-    lightbox.addEventListener('close', () => { img.removeAttribute('src'); if (opener) opener.focus(); });
+    heroEnd = metrics.length ? metrics[0].top + metrics[0].h - vh : 0;
+    if (anim) scenes.hero.measure();
   }
+
+  let ticking = false;
+  let tone = '';
+  function frame() {
+    ticking = false;
+    const y = window.scrollY;
+    if (anim) {
+      for (const m of metrics) {
+        if (!m.name || y + vh <= m.top || y >= m.top + m.h) continue;
+        const len = m.h - vh;
+        let p = y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
+        p = r4(p);
+        if (p === m.p) continue;
+        m.p = p;
+        if (m.pin && m.name !== 'hero') m.pin.style.setProperty('--p', String(p));
+        if (m.scene) m.scene.update(p);
+      }
+    }
+    const probe = y + 34;
+    let t = 'light';
+    for (const m of metrics) if (probe >= m.top && probe < m.top + m.h) { t = m.tone; break; }
+    if (t !== tone) { tone = t; header.dataset.tone = t; }
+    header.classList.toggle('is-solid', anim ? y > heroEnd - 2 : y > 8);
+  }
+  const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } };
+  const remeasure = () => { measure(); metrics.forEach((m) => { m.p = NaN; }); schedule(); };
+
+  measure();
+  frame();
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', remeasure);
+  window.addEventListener('load', remeasure);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);
+  if ('ResizeObserver' in window) {
+    let last = 0;
+    new ResizeObserver(() => { const h = document.body.scrollHeight; if (h !== last) { last = h; remeasure(); } }).observe(document.body);
+  }
+
+  // ---- 4. Reveals and counters ------------------------------------------------------------
+  if (!anim || !('IntersectionObserver' in window)) return;
+  const count = (el) => {
+    const to = Number(el.dataset.count) || 0;
+    const from = to === 0 ? 9 : 0;
+    const t0 = performance.now();
+    const step = (now) => {
+      const k = easeOut(clamp((now - t0) / 1300));
+      el.textContent = String(Math.round(from + (to - from) * k));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('in');
+      e.target.querySelectorAll('[data-count]').forEach(count);
+      io.unobserve(e.target);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.2 });
+  document.querySelectorAll('.rv, .cta').forEach((el) => io.observe(el));
 })();
