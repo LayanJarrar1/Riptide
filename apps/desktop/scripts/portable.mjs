@@ -6,13 +6,15 @@
 //     riptide-desktop.exe
 //     riptide-host.exe      Native Messaging host, found by the app next to itself
 //     yt-dlp.exe, ffmpeg.exe video support (pinned, see fetch-media-tools.mjs) + licenses/
+//     extension\chrome, extension\edge   the built browser extension (Load unpacked)
+//     install-extension.ps1 one-click helper for Chrome / Edge (copies, registers, opens)
 //     portable.txt          data goes to .\data, nothing under %LOCALAPPDATA%
 //
 // and zips it as target/portable/Riptide-<version>-portable.zip (bsdtar, shipped with Windows
 // 10+). Plain Node, no dependencies.
 
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,6 +56,17 @@ copyFileSync(join(desktop, 'src-tauri', 'THIRD-PARTY-NOTICES.txt'), join(folder,
 for (const tool of ['yt-dlp', 'ffmpeg']) {
   copyFileSync(join(binaries, `${tool}-LICENSE.txt`), join(folder, 'licenses', `${tool}-LICENSE.txt`));
 }
+// the browser extension (built by scripts/stage-extension.mjs) and its installer script
+for (const browser of ['chrome', 'edge']) {
+  const from = join(repo, 'apps', 'extension', 'dist', browser);
+  if (!existsSync(join(from, 'manifest.json'))) {
+    console.error(`portable: ${from} is missing; run \`node scripts/stage-extension.mjs\``);
+    process.exit(1);
+  }
+  cpSync(from, join(folder, 'extension', browser), { recursive: true });
+}
+copyFileSync(join(repo, 'scripts', 'install-extension.ps1'), join(folder, 'install-extension.ps1'));
+
 writeFileSync(
   join(folder, 'portable.txt'),
   'Riptide portable: settings, database and logs live in the data folder next to this file.\r\n',

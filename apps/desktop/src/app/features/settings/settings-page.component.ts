@@ -1,6 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
-import { BrowserIntegrationService } from '../../core/browser-integration.service';
+import {
+  BrowserIntegrationService,
+  ExtensionBrowser,
+  ExtensionBrowserName,
+} from '../../core/browser-integration.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
 import { UpdateService } from '../../core/update.service';
 import { I18nService, Lang, LANGS } from '../../i18n/i18n.service';
@@ -158,6 +162,29 @@ export function isValidProxyUrl(raw: string): boolean {
             <span class="browser-state">{{ i18n.t(browserStateKey()) }}</span>
             <button appButton variant="secondary" type="button" [disabled]="browser.busy()" (click)="toggleBrowser()">{{ i18n.t(browser.connected() ? 'settings.browserRemove' : 'settings.browserInstall') }}</button>
           </div>
+        </div>
+        <div class="setting column ext-card" id="extension">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.ext') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.extDesc') }}</span>
+          </div>
+          <ol class="ext-steps">
+            <li>{{ i18n.t('settings.extStep1') }}</li>
+            <li>{{ i18n.t('settings.extStep2') }}</li>
+            <li>{{ i18n.t('settings.extStep3') }}</li>
+          </ol>
+          @for (b of extBrowsers(); track b.browser) {
+            <div class="ext-browser">
+              <span class="ext-name">{{ i18n.t(b.browser === 'chrome' ? 'settings.extChrome' : 'settings.extEdge') }}</span>
+              <span class="dot" [class.is-on]="browser.bridgeRegistered(b.browser)"></span>
+              <span class="browser-state">{{ i18n.t(browser.bridgeRegistered(b.browser) ? 'settings.extBridgeOn' : 'settings.extBridgeOff') }}</span>
+              <span class="ext-actions">
+                <button appButton variant="secondary" type="button" [disabled]="!tauriAvailable || !b.folderFound" (click)="openExtensionFolder(b.browser)">{{ i18n.t('settings.extOpenFolder') }}</button>
+                <button appButton variant="secondary" type="button" [disabled]="!tauriAvailable || !b.installed" (click)="openExtensionsPage(b.browser)">{{ i18n.t(b.browser === 'chrome' ? 'settings.extOpenChrome' : 'settings.extOpenEdge') }}</button>
+              </span>
+            </div>
+          }
+          <p class="ext-id">{{ i18n.t('settings.extId') }} <code class="num" dir="ltr">{{ extId() }}</code></p>
         </div>
         <div class="setting">
           <div class="setting-text">
@@ -504,6 +531,44 @@ export function isValidProxyUrl(raw: string): boolean {
       font-size: var(--text-sm);
     }
 
+    .ext-steps {
+      margin: 0;
+      padding-inline-start: var(--space-5);
+      color: var(--color-text-secondary);
+      font-size: var(--text-sm);
+      line-height: 1.7;
+    }
+
+    .ext-browser {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+    }
+
+    .ext-name {
+      min-inline-size: 7rem;
+      font-weight: 500;
+    }
+
+    .ext-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-inline-start: auto;
+    }
+
+    .ext-id {
+      margin: 0;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+
+    .ext-id code {
+      user-select: all;
+      unicode-bidi: isolate;
+    }
+
     .about-actions {
       display: flex;
       align-items: center;
@@ -561,8 +626,18 @@ export class SettingsPageComponent {
     return this.browser.hostMissing() ? 'settings.browserNoHost' : 'settings.browserOff';
   });
 
+  /** Chrome and Edge rows; both are listed even before the backend answered. */
+  protected readonly extBrowsers = computed<readonly ExtensionBrowser[]>(
+    () =>
+      this.browser.extension()?.browsers ??
+      (['chrome', 'edge'] as const).map((name) => ({ browser: name, installed: false, folder: '', folderFound: false })),
+  );
+
+  protected readonly extId = computed(() => this.browser.extension()?.id ?? 'dcoeaodjhaibfchhcbfdkekpcacofnhm');
+
   constructor() {
     void this.browser.refresh();
+    void this.browser.refreshExtension();
     void this.loadVideoInfo();
   }
 
@@ -646,6 +721,18 @@ export class SettingsPageComponent {
 
   protected toggle(key: (typeof this.toggles)[number]['key'], event: Event): void {
     this.settings.patch({ [key]: (event.target as HTMLInputElement).checked });
+  }
+
+  protected async openExtensionFolder(name: ExtensionBrowserName): Promise<void> {
+    if (!(await this.browser.openExtensionFolder(name))) {
+      this.toasts.show('danger', this.i18n.t('toast.extFolderFailed'));
+    }
+  }
+
+  protected async openExtensionsPage(name: ExtensionBrowserName): Promise<void> {
+    if (!(await this.browser.openExtensionsPage(name))) {
+      this.toasts.show('danger', this.i18n.t('toast.extPageFailed'));
+    }
   }
 
   protected async toggleBrowser(): Promise<void> {

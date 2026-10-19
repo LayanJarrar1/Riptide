@@ -18,6 +18,7 @@ use tauri::{Emitter, Manager};
 pub mod clipboard;
 pub mod commands;
 pub mod exit;
+pub mod extension;
 pub mod integration;
 pub mod ipc_server;
 pub mod media;
@@ -262,6 +263,9 @@ pub fn run() {
             commands::integration_status,
             commands::register_browser_host,
             commands::unregister_browser_host,
+            extension::extension_info,
+            extension::open_extension_folder,
+            extension::open_extensions_page,
             media::probe_media,
             media::media_tools_info,
             media::update_media_tools,
