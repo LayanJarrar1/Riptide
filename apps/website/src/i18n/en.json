@@ -182,7 +182,7 @@
   },
   "gallery": {
     "title": "Take a closer look.",
-    "lead": "Screenshots from the current build.",
+    "lead": "From the current development build. Batch downloads and queues are not in alpha 3 yet.",
     "open": "Open full size",
     "items": [
       {

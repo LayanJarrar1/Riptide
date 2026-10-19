@@ -40,13 +40,13 @@ apps/website/
     index.template.html      the page, rendered once per language
     404.template.html        bilingual not-found page
     privacy.template.html    privacy policy, rendered to privacy/ and ar/privacy/ (strings under `privacy`)
-    css/site.css             tokens (light first, dark override), layout, step animations
-    js/site.js               theme, mobile nav, simulated downloads, scroll reveals, lightbox
+    css/site.css             tokens and section tones (light first, dark override), layout, every scroll-linked state
+    js/site.js               theme, mobile nav, the scroll loop and its scenes, reveals and counters (~13 KiB, no dependencies)
     i18n/en.json             every English string
     i18n/ar.json             every Arabic string (same keys, same shape)
-    icons/*.svg              inline icons, inserted with {{{svg name}}}
+    icons/*.svg              inline icons, inserted with {{{svg name}}}; hero-logo.svg is the brand-kit logo with reveal masks
     assets/fonts/            Inter (variable, Latin subset) and IBM Plex Sans Arabic (Arabic + Latin subset), OFL
-    assets/screenshots/      WebP copies of assets/readme/shot-*.png, 1440 px and a 720 px `-720` variant
+    assets/screenshots/      shot-<screen>-<lang>-<theme>.webp captured from the desktop build at 1440x900, plus a 720 px `-720` variant
     assets/riptide-logo-light.svg, riptide-logo-dark.svg   brand kit logos, cropped to their artwork
     assets/favicon.svg       the brand kit app icon
     assets/og-en.png, og-ar.png, apple-touch-icon.png   rendered from og/og.html
@@ -54,6 +54,20 @@ apps/website/
                              any headless browser; `?lang=ar`, `?icon=1`)
   SCALING.md                 limits, budgets and what to do if traffic outgrows GitHub Pages
 ```
+
+## How the scroll story works
+
+The home page is a sequence of pinned chapters: each `section.ch` is taller than the viewport and holds a
+`position: sticky` stage (`.pin`). One passive scroll listener schedules at most one `requestAnimationFrame`; the frame
+turns the scroll position into a progress value per visible chapter (negative while it scrolls in, 0 to 1 while it is
+pinned) and writes it as `--p` on the stage. CSS derives everything else with `calc()`/`clamp()`, and only
+`transform`, `opacity`, `stroke-dashoffset` and `clip-path` change while scrolling. Offsets are measured on load,
+resize and font load, never inside the frame. The hero writes a few extra values (stream draw, spiral, wordmark, the
+fly into the header slot) and the speed, resume and verify chapters update their readouts from deterministic
+schedules, so scrolling back up plays everything in reverse. Scrolling itself is native: no smooth-scroll library,
+no scroll-jacking, no custom cursor.
+
+Chapter lengths live in `site.css` (`#speed { --len: 1.9; }` and so on, in viewport heights of pinned scroll).
 
 ## Template syntax
 
@@ -96,13 +110,17 @@ to turn the tile into a link. Nothing else needs to change.
 - Nothing invented: no user counts, download counts, testimonials, ratings or logos. The star and
   licence links live only in the "Open source" section and are plain links (no badge service), so
   the page makes no third-party request on load.
-- The build on offer is an alpha preview. The hero, the Download section, the FAQ and the
-  footer say so. The release tag and file names live at the top of `build.mjs`.
-- Features that are not in a release say so: video pages ("Next alpha") and queues with schedules
-  ("Coming soon").
+- The build on offer is an alpha preview. The hero, the Download section and the footer say so. The release tag and file names live at the top of `build.mjs`.
+- Features that are not in a release say so: video pages ("Next alpha"), and the gallery says batch downloads and queues
+  are not in alpha 3 (the screenshots come from the development build).
 - Feedback goes to GitHub issue forms (`.github/ISSUE_TEMPLATE/`); the site has no form, no
   analytics and no tracking.
-- `prefers-reduced-motion` stops the hero R, the simulations, the reveals and the step animations; the end states are shown instead.
+- `prefers-reduced-motion` (and a browser without JavaScript) gets no pinning and no scroll animation: the inline head
+  script only adds `html.anim` when motion is allowed, and without it every chapter shows its end state.
+- The logo is never recoloured. `icons/hero-logo.svg` holds the brand-kit mark and wordmark paths; the scroll animation
+  reveals them through masks whose strokes follow the centre line of each stream, so what shows is always the original
+  artwork in its original fill (light-logo colours on light, dark-logo colours on dark). Light effects belong to the
+  background flow lines, never to the logo.
 - Feature copy comes from the repository `README.md`. If the README changes, change the site.
 
 ## Deploy
