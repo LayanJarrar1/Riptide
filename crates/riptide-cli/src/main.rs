@@ -1,10 +1,11 @@
 //! `riptide` — the command-line face of the engine.
 //!
-//! `fetch` and `bench` run the standalone engine; `paths` and `ping` are utilities.
+//! `fetch`, `grab` and `bench` run the standalone engine; `paths` and `ping` are utilities.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
 
 mod fetch;
+mod grab;
 mod i18n;
 
 use std::path::PathBuf;
@@ -81,6 +82,74 @@ enum Command {
         #[arg(long)]
         no_resume: bool,
     },
+    /// Crawl a site for files and download them.
+    Grab {
+        /// Start page.
+        url: String,
+        /// Link depth.
+        #[arg(short, long, default_value_t = 1, value_name = "N")]
+        depth: u32,
+        /// File types.
+        #[arg(long, value_name = "LIST")]
+        types: Option<String>,
+        /// Whole domain.
+        #[arg(long, conflicts_with = "any_site")]
+        same_domain: bool,
+        /// Any site.
+        #[arg(long)]
+        any_site: bool,
+        /// Include glob.
+        #[arg(long, value_name = "GLOB")]
+        include: Vec<String>,
+        /// Exclude glob.
+        #[arg(long, value_name = "GLOB")]
+        exclude: Vec<String>,
+        /// Smallest file.
+        #[arg(long, value_name = "SIZE")]
+        min_size: Option<String>,
+        /// Largest file.
+        #[arg(long, value_name = "SIZE")]
+        max_size: Option<String>,
+        /// Page cap.
+        #[arg(long, default_value_t = riptide_crawl::DEFAULT_MAX_PAGES, value_name = "N")]
+        max_pages: usize,
+        /// File cap.
+        #[arg(long, default_value_t = riptide_crawl::DEFAULT_MAX_FILES, value_name = "N")]
+        max_files: usize,
+        /// Time budget.
+        #[arg(long, default_value_t = 600, value_name = "SECONDS")]
+        time_limit: u64,
+        /// Ignore robots.txt.
+        #[arg(long)]
+        no_robots: bool,
+        /// Only list.
+        #[arg(long)]
+        list: bool,
+        /// JSON output (with --list).
+        #[arg(long, requires = "list")]
+        json: bool,
+        /// Output folder.
+        #[arg(short, long, value_name = "DIR")]
+        output: Option<PathBuf>,
+        /// Extra header.
+        #[arg(short = 'H', long = "header", value_name = "NAME: VALUE")]
+        headers: Vec<String>,
+        /// Cookie header.
+        #[arg(long, value_name = "COOKIE")]
+        cookie: Option<String>,
+        /// Username.
+        #[arg(long, value_name = "USER", requires = "password")]
+        user: Option<String>,
+        /// Password.
+        #[arg(long, value_name = "PASS", requires = "user")]
+        password: Option<String>,
+        /// User agent.
+        #[arg(long, value_name = "UA")]
+        user_agent: Option<String>,
+        /// No progress output.
+        #[arg(short, long)]
+        quiet: bool,
+    },
     /// Benchmark connection counts.
     Bench {
         /// URL.
@@ -122,6 +191,31 @@ fn localized_command(lang: Lang) -> clap::Command {
                 .mut_arg("overwrite", |a| a.help(about("arg.overwrite")))
                 .mut_arg("quiet", |a| a.help(about("arg.quiet")))
                 .mut_arg("no_resume", |a| a.help(about("arg.no_resume")))
+        })
+        .mut_subcommand("grab", |s| {
+            s.about(about("cmd.grab"))
+                .mut_arg("url", |a| a.help(about("arg.grab_url")))
+                .mut_arg("depth", |a| a.help(about("arg.grab_depth")))
+                .mut_arg("types", |a| a.help(about("arg.grab_types")))
+                .mut_arg("same_domain", |a| a.help(about("arg.grab_same_domain")))
+                .mut_arg("any_site", |a| a.help(about("arg.grab_any_site")))
+                .mut_arg("include", |a| a.help(about("arg.grab_include")))
+                .mut_arg("exclude", |a| a.help(about("arg.grab_exclude")))
+                .mut_arg("min_size", |a| a.help(about("arg.grab_min_size")))
+                .mut_arg("max_size", |a| a.help(about("arg.grab_max_size")))
+                .mut_arg("max_pages", |a| a.help(about("arg.grab_max_pages")))
+                .mut_arg("max_files", |a| a.help(about("arg.grab_max_files")))
+                .mut_arg("time_limit", |a| a.help(about("arg.grab_time_limit")))
+                .mut_arg("no_robots", |a| a.help(about("arg.grab_no_robots")))
+                .mut_arg("list", |a| a.help(about("arg.grab_list")))
+                .mut_arg("json", |a| a.help(about("arg.json")))
+                .mut_arg("output", |a| a.help(about("arg.grab_output")))
+                .mut_arg("headers", |a| a.help(about("arg.header")))
+                .mut_arg("cookie", |a| a.help(about("arg.grab_cookie")))
+                .mut_arg("user", |a| a.help(about("arg.user")))
+                .mut_arg("password", |a| a.help(about("arg.password")))
+                .mut_arg("user_agent", |a| a.help(about("arg.user_agent")))
+                .mut_arg("quiet", |a| a.help(about("arg.quiet")))
         })
         .mut_subcommand("bench", |s| {
             s.about(about("cmd.bench"))
@@ -280,6 +374,69 @@ fn main() -> anyhow::Result<()> {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(fetch::fetch(opts, store, lang)).map(|_| ())
         }
+        Command::Grab {
+            url,
+            depth,
+            types,
+            same_domain,
+            any_site,
+            include,
+            exclude,
+            min_size,
+            max_size,
+            max_pages,
+            max_files,
+            time_limit,
+            no_robots,
+            list,
+            json,
+            output,
+            headers,
+            cookie,
+            user,
+            password,
+            user_agent,
+            quiet,
+        } => {
+            let opts = grab::GrabOptions {
+                url,
+                depth,
+                types: types
+                    .as_deref()
+                    .map(grab::parse_types)
+                    .transpose()?
+                    .unwrap_or_default(),
+                same_domain,
+                any_site,
+                include,
+                exclude,
+                min_size: min_size.as_deref().map(grab::parse_size).transpose()?,
+                max_size: max_size.as_deref().map(grab::parse_size).transpose()?,
+                max_pages,
+                max_files,
+                time_limit,
+                no_robots,
+                list,
+                json,
+                output: match output {
+                    Some(dir) => dir,
+                    None => std::env::current_dir()?,
+                },
+                headers: headers
+                    .iter()
+                    .map(|h| parse_header(h))
+                    .collect::<anyhow::Result<Vec<_>>>()?,
+                cookie,
+                credentials: match (user, password) {
+                    (Some(username), Some(password)) => Some(Credentials { username, password }),
+                    _ => None,
+                },
+                user_agent,
+                quiet,
+            };
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(grab::grab(opts, lang))
+        }
         Command::Bench {
             url,
             connections,
@@ -384,6 +541,80 @@ mod tests {
         assert!(
             matches!(cli.command, Command::Bench { ref connections, json: false, .. } if connections == "1,4")
         );
+    }
+
+    #[test]
+    fn grab_arguments_parse() {
+        let (cli, _) = parse(
+            [
+                "riptide",
+                "grab",
+                "https://x/y",
+                "--depth",
+                "3",
+                "--types",
+                "video,documents",
+                "--same-domain",
+                "--list",
+                "--json",
+                "--include",
+                "*.pdf",
+                "--exclude",
+                "**/ads/**",
+                "--min-size",
+                "1M",
+            ]
+            .map(String::from),
+        )
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Grab { depth: 3, same_domain: true, list: true, json: true, ref types, ref include, .. }
+                if types.as_deref() == Some("video,documents") && include == &["*.pdf".to_string()]
+        ));
+        let defaults = parse(["riptide", "grab", "u"].map(String::from)).unwrap().0;
+        assert!(matches!(
+            defaults.command,
+            Command::Grab {
+                depth: 1,
+                max_pages: 500,
+                max_files: 5000,
+                time_limit: 600,
+                list: false,
+                ..
+            }
+        ));
+        assert!(
+            parse(["riptide", "grab", "u", "--same-domain", "--any-site"].map(String::from))
+                .is_err()
+        );
+        assert!(
+            parse(["riptide", "grab", "u", "--json"].map(String::from)).is_err(),
+            "--json needs --list"
+        );
+    }
+
+    #[test]
+    fn grab_help_is_localized() {
+        let ar = localized_command(Lang::Ar)
+            .find_subcommand_mut("grab")
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(
+            ar.contains("robots.txt") && ar.contains("عمق الروابط"),
+            "{ar}"
+        );
+        assert!(
+            ar.contains("--same-domain"),
+            "flag names stay the same: {ar}"
+        );
+        let en = localized_command(Lang::En)
+            .find_subcommand_mut("grab")
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(en.contains("Link depth"), "{en}");
     }
 
     #[test]
