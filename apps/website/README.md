@@ -41,7 +41,7 @@ apps/website/
     404.template.html        bilingual not-found page
     privacy.template.html    privacy policy, rendered to privacy/ and ar/privacy/ (strings under `privacy`)
     css/site.css             tokens (light first, dark override), layout, step animations
-    js/site.js               theme, mobile nav, hero canvas, in-view animations, lightbox
+    js/site.js               theme, mobile nav, simulated downloads, scroll reveals, lightbox
     i18n/en.json             every English string
     i18n/ar.json             every Arabic string (same keys, same shape)
     icons/*.svg              inline icons, inserted with {{{svg name}}}
@@ -81,8 +81,8 @@ where they appear inside Arabic text.
 ## Brand
 
 Colours and logos come from the Riptide brand kit: Abyss `#071A26`, Deep Teal `#075C69`, Riptide
-Cyan `#00D5E8`, Ocean Blue `#168BFF`, Soft Ice `#D9F8FA`. The site is dark first (Abyss) with a light
-theme behind the toggle; the choice is stored in `localStorage` only. The header and footer use the
+Cyan `#00D5E8`, Ocean Blue `#168BFF`, Soft Ice `#D9F8FA`. The site is light by default (an inline head script sets the theme before paint, whatever the OS prefers) with Abyss dark
+behind the toggle; the choice is stored in `localStorage` only. The header and footer use the
 light or dark logo according to the theme (`.logo-light` / `.logo-dark` in `site.css`).
 
 ## Browser-store links
@@ -102,7 +102,7 @@ to turn the tile into a link. Nothing else needs to change.
   ("Coming soon").
 - Feedback goes to GitHub issue forms (`.github/ISSUE_TEMPLATE/`); the site has no form, no
   analytics and no tracking.
-- `prefers-reduced-motion` stops the canvas, the step animations and the entrance.
+- `prefers-reduced-motion` stops the hero R, the simulations, the reveals and the step animations; the end states are shown instead.
 - Feature copy comes from the repository `README.md`. If the README changes, change the site.
 
 ## Deploy
