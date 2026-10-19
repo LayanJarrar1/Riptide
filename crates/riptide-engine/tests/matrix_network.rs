@@ -555,15 +555,26 @@ async fn head_refused_and_http_error_statuses() {
 async fn server_sending_more_bytes_than_its_content_range_is_downloaded_whole() {
     let w = World::new().await;
     let engine = w.engine().await;
-    let size = 1_000_000;
+    let size = 1_000_000u64;
+    // big and tiny excesses: the tail may sit in a later chunk, in the last chunk, or be a
+    // single byte; every one must end byte-exact (SHA-256 against the source)
+    for over in [1, 2, 100, 4096, 65_535, 65_537, 100_000, 666_667, 999_998] {
+        let lie = size - over;
+        complete(
+            &w,
+            &engine,
+            &format!("/range-lie?size={size}&lie={lie}"),
+            size,
+        )
+        .await;
+    }
     complete(
         &w,
         &engine,
-        &format!("/range-lie?size={size}&lie=333333"),
-        size,
+        "/range-lie?size=3000000&lie=2950000",
+        3_000_000,
     )
     .await;
-    complete(&w, &engine, &format!("/range-lie?size={size}&lie=2"), size).await;
     complete(
         &w,
         &engine,
@@ -571,5 +582,41 @@ async fn server_sending_more_bytes_than_its_content_range_is_downloaded_whole() 
         3_000_000,
     )
     .await;
+    engine.shutdown().await;
+}
+
+/// Pause (and so a persisted checkpoint) at several moments around the "no ranges" fallback,
+/// then resume: the result is always the real size and bytes, never a zero-filled
+/// "Completed" file of the announced size.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pause_and_resume_around_the_content_range_fallback_is_byte_exact() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let size: u64 = 8 * 1024 * 1024;
+    let lie: u64 = 3 * 1024 * 1024;
+    for (round, pause_at) in [
+        200_000u64, 1_000_000, 2_500_000, 3_500_000, 5_000_000, 7_000_000,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut rx = engine.subscribe();
+        let id = engine
+            .add(DownloadRequest {
+                filename: Some(format!("lie{round}.bin")),
+                ..w.request(&format!("/range-lie?size={size}&lie={lie}&bps=2097152"))
+            })
+            .await
+            .unwrap();
+        wait_for(&mut rx, T, |e| {
+            matches!(e, riptide_core::Event::Progress { id: i, downloaded, .. } if *i == id && *downloaded >= pause_at)
+        })
+        .await;
+        engine.pause(id).await.unwrap();
+        engine.resume(id).await.unwrap();
+        let p = wait_completed_in(&mut rx, id, T).await;
+        assert_complete(&engine, id, &p, &w.downloads(), DEFAULT_SEED, size).await;
+        assert_eq!(engine.get(id).await.unwrap().unwrap().size, Some(size));
+    }
     engine.shutdown().await;
 }

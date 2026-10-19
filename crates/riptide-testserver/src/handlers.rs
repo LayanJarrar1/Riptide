@@ -1077,6 +1077,7 @@ pub(crate) async fn nohead(
 /// `Accept-Ranges`; the first byte (`bytes=0-0`) is honest.
 pub(crate) async fn range_lie(Query(q): Query<Params>, headers: HeaderMap) -> HandlerResult {
     let res = Resource::from_params(&q)?;
+    let shaping = optional_throttle(&q)?;
     let lie = param_u64(&q, "lie", (res.size / 3).max(1))?.min(res.size);
     let (status, start, end) = match parse_range(&headers, res.size) {
         // a one-byte probe is answered honestly; any longer range gets everything from `start`
@@ -1089,8 +1090,8 @@ pub(crate) async fn range_lie(Query(q): Query<Params>, headers: HeaderMap) -> Ha
         seed: res.seed,
         start,
         end,
-        chunk: CHUNK_SIZE,
-        bps: None,
+        chunk: shaping.chunk.unwrap_or(CHUNK_SIZE),
+        bps: shaping.bps,
         drop_after: None,
         flips: Arc::from(Vec::new()),
         _guard: None,

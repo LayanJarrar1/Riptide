@@ -356,3 +356,49 @@ async fn killed_download_from_a_server_without_ranges_restarts_clean() {
         assert_eq!(actual, expected_sha256_hex(DEFAULT_SEED, size), "{route}");
     }
 }
+
+/// A server whose `Content-Range` lies (CDN compression) makes the transfer fall back to one
+/// plain connection. Killing the process at any moment of that, any number of times, must still
+/// end with the real size and bytes: never a "Done in 0.0 s" over a zero-filled file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn killed_during_the_content_range_fallback_restarts_clean() {
+    let server = TestServer::spawn().await;
+    let size = 12 * MIB;
+    let url = server.url(&format!(
+        "/range-lie?size={size}&lie={}&bps=2097152",
+        4 * MIB
+    ));
+    let mut rng = rand::rng();
+    for round in 0..4 {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path().join("data");
+        let out = tmp.path().join("lie.bin");
+        let mut kills = 0;
+        loop {
+            let kill_after = if kills < 3 {
+                Duration::from_millis(rng.random_range(300..4500))
+            } else {
+                Duration::from_secs(120)
+            };
+            if fetch_and_maybe_kill(&data_dir, &url, &out, kill_after) {
+                kills += 1;
+            } else {
+                break;
+            }
+        }
+        let actual = riptide_net::checksum_of(out.clone(), ChecksumAlgo::Sha256)
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::metadata(&out).unwrap().len(),
+            size,
+            "round {round}: wrong size after {kills} kills"
+        );
+        assert_eq!(
+            actual,
+            expected_sha256_hex(DEFAULT_SEED, size),
+            "round {round}"
+        );
+        assert!(!riptide_net::part_path_for(&out).exists());
+    }
+}

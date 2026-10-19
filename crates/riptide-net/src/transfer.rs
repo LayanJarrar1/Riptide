@@ -303,10 +303,9 @@ async fn run_once(
             ..s.clone()
         })
         .collect();
-    let can_resume = !segments.is_empty()
-        && plan.supports_ranges
-        && plan.size.is_some()
-        && plan.validator.is_some();
+    let can_resume = plan.supports_ranges
+        && plan.validator.is_some()
+        && plan.size.is_some_and(|size| covers(&segments, size));
     if !can_resume {
         segments.clear();
     }
@@ -356,7 +355,7 @@ async fn run_once(
 
     // the plan itself is worth persisting before the first byte: a crash in the first second
     // then resumes against the same segment table instead of re-planning
-    checkpoint(&file, &state, events).await?;
+    checkpoint(&file, &state, events, streaming).await?;
 
     // --- writer ------------------------------------------------------------------------------
     let (tx, rx) = mpsc::channel::<Chunk>(64);
@@ -476,7 +475,7 @@ async fn run_once(
                 }
                 if last_checkpoint.elapsed() >= cfg.checkpoint_interval {
                     last_checkpoint = Instant::now();
-                    checkpoint(&file, &state, events).await?;
+                    checkpoint(&file, &state, events, streaming).await?;
                 }
             }
         }
@@ -490,7 +489,7 @@ async fn run_once(
     writer
         .await
         .map_err(|e| Error::Protocol(format!("writer task failed: {e}")))??;
-    checkpoint(&file, &state, events).await?;
+    checkpoint(&file, &state, events, streaming).await?;
 
     if let Some((validator, size, reason, no_ranges)) = restart {
         return Ok(Run::Restart {
@@ -508,7 +507,9 @@ async fn run_once(
         .iter()
         .all(|s| s.state == SegmentState::Done && (streaming || s.is_complete()));
     if stopped || !complete {
-        return Ok(Run::Finished(Outcome::Stopped { segments }));
+        return Ok(Run::Finished(Outcome::Stopped {
+            segments: persistable(streaming, segments),
+        }));
     }
 
     // --- verify + rename ----------------------------------------------------------------------
@@ -539,6 +540,46 @@ async fn run_once(
         path: plan.final_path.clone(),
         segments,
     }))
+}
+
+/// The server sent more bytes than its `Content-Range` announced: ranges cannot be trusted.
+fn overrun_restart() -> SegEnd {
+    SegEnd::Restart {
+        validator: None,
+        size: None,
+        reason:
+            "server sent more bytes than its Content-Range announced; downloading without ranges"
+                .into(),
+        no_ranges: true,
+    }
+}
+
+/// A segment table is resumable only if it proves itself: contiguous from 0 to exactly `size`,
+/// with no segment claiming more bytes than it spans. Anything else restarts from zero.
+fn covers(segments: &[Segment], size: u64) -> bool {
+    !segments.is_empty()
+        && segments[0].start == 0
+        && segments.windows(2).all(|w| w[0].end == w[1].start)
+        && segments.last().map(|s| s.end) == Some(size)
+        && segments.iter().all(|s| s.written <= s.len())
+}
+
+/// What may be persisted: a streaming transfer cannot resume (it restarts at byte 0), so its
+/// progress is never recorded; otherwise a stored "complete" streaming segment could later be
+/// mistaken for a finished ranged one.
+fn persistable(streaming: bool, segments: Vec<Segment>) -> Vec<Segment> {
+    if !streaming {
+        return segments;
+    }
+    segments
+        .into_iter()
+        .map(|mut g| {
+            g.written = 0;
+            g.end = 0;
+            g.state = SegmentState::Pending;
+            g
+        })
+        .collect()
 }
 
 /// Total size for progress: only the declared size counts; an unknown-length stream reports
@@ -603,12 +644,13 @@ async fn checkpoint(
     file: &Arc<PartFile>,
     state: &State,
     events: &mpsc::Sender<TransferEvent>,
+    streaming: bool,
 ) -> Result<()> {
     let f = Arc::clone(file);
     tokio::task::spawn_blocking(move || f.sync())
         .await
         .map_err(|e| Error::Protocol(format!("sync task failed: {e}")))??;
-    let segments = lock(state).segments.clone();
+    let segments = persistable(streaming, lock(state).segments.clone());
     let _ = events.send(TransferEvent::Checkpoint { segments }).await;
     Ok(())
 }
@@ -952,6 +994,10 @@ impl SegmentTask {
                 return self.range_done(&mut body, pos, cur_end, request_end).await;
             }
             let allowed = (cur_end - pos).min(chunk.len() as u64) as usize;
+            if allowed < chunk.len() && request_end == Some(cur_end) {
+                // the excess sits inside this very chunk: same lie, same answer
+                return Ok((overrun_restart(), pos));
+            }
             let data = if allowed < chunk.len() {
                 chunk.slice(..allowed)
             } else {
@@ -1012,19 +1058,44 @@ impl SegmentTask {
             let peek = tokio::time::timeout(std::time::Duration::from_secs(1), body.next()).await;
             if let Ok(Some(Ok(extra))) = peek {
                 if !extra.is_empty() {
-                    return Ok((
-                        SegEnd::Restart {
-                            validator: None,
-                            size: None,
-                            reason: "server sent more bytes than its Content-Range announced;                                      downloading without ranges"
-                                .into(),
-                            no_ranges: true,
-                        },
-                        pos,
-                    ));
+                    return Ok((overrun_restart(), pos));
                 }
             }
         }
         Ok((SegEnd::Done, pos))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use riptide_core::ByteRange;
+
+    fn seg(i: u32, a: u64, b: u64) -> Segment {
+        Segment::pending(DownloadId(1), i, ByteRange::new(a, b))
+    }
+
+    #[test]
+    fn only_a_table_covering_exactly_the_size_is_resumable() {
+        assert!(covers(&[seg(0, 0, 10)], 10));
+        assert!(covers(&[seg(0, 0, 4), seg(1, 4, 10)], 10));
+        assert!(!covers(&[], 10));
+        assert!(!covers(&[seg(0, 0, 9)], 10), "short table");
+        assert!(!covers(&[seg(0, 0, 11)], 10), "long table");
+        assert!(!covers(&[seg(0, 1, 10)], 10), "does not start at 0");
+        assert!(!covers(&[seg(0, 0, 4), seg(1, 5, 10)], 10), "gap");
+        let mut over = seg(0, 0, 10);
+        over.written = 11;
+        assert!(!covers(&[over], 10), "claims more than it spans");
+    }
+
+    #[test]
+    fn streaming_progress_is_never_persisted() {
+        let mut g = seg(0, 0, 500);
+        g.written = 500;
+        g.state = SegmentState::Done;
+        let kept = persistable(true, vec![g.clone()]);
+        assert_eq!((kept[0].written, kept[0].end), (0, 0));
+        assert_eq!(persistable(false, vec![g.clone()])[0].written, 500);
     }
 }
