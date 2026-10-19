@@ -51,6 +51,128 @@
       "unit": "MB/s",
       "verified": "SHA-256 verified",
       "hash": "7a0550bc…a14a51d0"
+    },
+    "mock": {
+      "label": "A simplified preview of the Riptide desktop app with sample downloads. An illustration, not the real window.",
+      "search": "Search downloads",
+      "add": "Add download",
+      "title": "All downloads",
+      "count": "16",
+      "nav": [
+        {
+          "t": "All downloads",
+          "n": "16"
+        },
+        {
+          "t": "Active",
+          "n": "4"
+        },
+        {
+          "t": "Waiting",
+          "n": "4"
+        },
+        {
+          "t": "Completed",
+          "n": "6"
+        },
+        {
+          "t": "Needs attention",
+          "n": "2"
+        }
+      ],
+      "cat": "Categories",
+      "cats": [
+        {
+          "t": "Archives",
+          "n": "6"
+        },
+        {
+          "t": "Documents",
+          "n": "2"
+        },
+        {
+          "t": "Music",
+          "n": "1"
+        },
+        {
+          "t": "Video",
+          "n": "3"
+        }
+      ],
+      "cols": [
+        "Name",
+        "Size",
+        "Progress",
+        "Speed",
+        "Status"
+      ],
+      "foot": "47.2 MB/s",
+      "foot2": "4 active, 3 waiting",
+      "rows": [
+        {
+          "name": "ubuntu-24.04.2-desktop-amd64.iso",
+          "host": "releases.ubuntu.com",
+          "size": "3.49 / 5.80 GB",
+          "speed": "29.9 MB/s",
+          "pct": 60,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "blender-4.3.2-windows-x64.msi",
+          "host": "download.blender.org",
+          "size": "307 / 330 MB",
+          "speed": "8.25 MB/s",
+          "pct": 93,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "محاضرة-الفيزياء-الحديثة-07.mp4",
+          "host": "cdn.example.org",
+          "size": "7.91 MB / 1.40 GB",
+          "speed": "6.64 MB/s",
+          "pct": 1,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "riptide-sdk-0.1.0-win64.zip",
+          "host": "static.example.com",
+          "size": "212 MB",
+          "speed": "—",
+          "pct": 100,
+          "st": "c",
+          "stl": "Completed"
+        },
+        {
+          "name": "router-ax6000-v2.3.1.bin",
+          "host": "cdn.example.org",
+          "size": "96.0 MB",
+          "speed": "—",
+          "pct": 0,
+          "st": "w",
+          "stl": "Waiting"
+        },
+        {
+          "name": "debian-12.9.0-amd64-netinst.iso",
+          "host": "mirror.example.net",
+          "size": "631 MB",
+          "speed": "—",
+          "pct": 100,
+          "st": "f",
+          "stl": "Checksum mismatch"
+        },
+        {
+          "name": "city-sounds-2025-flac.zip",
+          "host": "mirror.example.net",
+          "size": "2.10 GB",
+          "speed": "—",
+          "pct": 0,
+          "st": "w",
+          "stl": "Waiting"
+        }
+      ]
     }
   },
   "streams": {
@@ -73,26 +195,26 @@
     "winLabel": "The Riptide desktop app, with four numbered annotations.",
     "callouts": [
       {
-        "x": 47.5,
-        "y": 43.8,
+        "x": 63.2,
+        "y": 59.7,
         "t": "One stripe per connection",
         "tag": ""
       },
       {
-        "x": 80.5,
-        "y": 59.2,
+        "x": 77.4,
+        "y": 80.6,
         "t": "Checksum mismatches are caught, not hidden",
         "tag": ""
       },
       {
-        "x": 74.8,
-        "y": 2.9,
+        "x": 63.8,
+        "y": 3.8,
         "t": "Batch download and site grabber",
         "tag": "Next release"
       },
       {
-        "x": 4.9,
-        "y": 66.3,
+        "x": 19.5,
+        "y": 90.5,
         "t": "Queues",
         "tag": "Next release"
       }
