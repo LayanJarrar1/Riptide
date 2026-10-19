@@ -696,3 +696,81 @@ async fn rtpart_names_are_reserved_and_folder_spelling_does_not_split_claims() {
     assert_complete(&engine, a, &pa, &w.downloads(), 1, 50000).await;
     engine.shutdown().await;
 }
+
+/// A stop that exceeds the wait must not leave the record `Downloading` with no task: the entry
+/// is dropped, the record is `Paused`, the caller gets an error and a retry works.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_stuck_stop_times_out_into_a_paused_record_and_recovers() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let size = 4 * MIB;
+    let id = engine
+        .add(w.request(&format!("/slow?bps={MIB}&size={size}&seed=5")))
+        .await
+        .unwrap();
+    wait_for(
+        &mut rx,
+        T,
+        |e| matches!(e, Event::Progress { id: i, .. } if *i == id),
+    )
+    .await;
+    engine.set_test_stop_knobs(200, 5_000);
+    assert!(engine.pause(id).await.is_err(), "the stop should time out");
+    assert!(!engine.running_ids().contains(&id));
+    assert_eq!(
+        engine.get(id).await.unwrap().unwrap().state,
+        DownloadState::Paused
+    );
+    // remove on a stuck task behaves the same way and then works
+    engine.set_test_stop_knobs(0, 0);
+    engine.resume(id).await.unwrap();
+    let p = wait_completed_in(&mut rx, id, T).await;
+    assert_complete(&engine, id, &p, &w.downloads(), 5, size).await;
+    engine.shutdown().await;
+}
+
+/// The `.rtpart` deleted, truncated or extended between a pause and the resume: the engine
+/// starts over instead of declaring a zero-filled file complete.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn damaged_part_file_between_pause_and_resume_restarts_byte_exact() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let size = 4 * MIB;
+    for (round, what) in ["delete", "truncate", "extend"].into_iter().enumerate() {
+        let mut rx = engine.subscribe();
+        let id = engine
+            .add(DownloadRequest {
+                filename: Some(format!("dmg{round}.bin")),
+                ..w.request(&format!("/slow?bps={MIB}&size={size}&seed=9"))
+            })
+            .await
+            .unwrap();
+        wait_for(&mut rx, T, |e| {
+            matches!(e, Event::Progress { id: i, downloaded, .. } if *i == id && *downloaded > 300_000)
+        })
+        .await;
+        engine.pause(id).await.unwrap();
+        let rec = engine.get(id).await.unwrap().unwrap();
+        let part = riptide_net::part_path_for(&rec.final_path());
+        match what {
+            "delete" => std::fs::remove_file(&part).unwrap(),
+            "truncate" => std::fs::OpenOptions::new()
+                .write(true)
+                .open(&part)
+                .unwrap()
+                .set_len(size / 2)
+                .unwrap(),
+            _ => std::fs::OpenOptions::new()
+                .write(true)
+                .open(&part)
+                .unwrap()
+                .set_len(size + 8192)
+                .unwrap(),
+        }
+        engine.resume(id).await.unwrap();
+        let p = wait_completed_in(&mut rx, id, T).await;
+        assert_complete(&engine, id, &p, &w.downloads(), 9, size).await;
+    }
+    engine.shutdown().await;
+}

@@ -474,6 +474,10 @@ struct Inner {
     wake: Notify,
     settings: RwLock<EngineSettings>,
     shutting_down: AtomicBool,
+    /// Test knobs (0 = off): stop-wait timeout and an artificial delay before a stopping task
+    /// reacts, to exercise the stuck-stop path.
+    test_stop_timeout_ms: std::sync::atomic::AtomicU64,
+    test_stop_delay_ms: std::sync::atomic::AtomicU64,
     /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
     media: RwLock<Option<YtDlp>>,
     /// Serialises the choice of an on-disk file name, so two downloads that start at the same
@@ -839,6 +843,8 @@ impl Engine {
             wake: Notify::new(),
             settings: RwLock::new(settings),
             shutting_down: AtomicBool::new(false),
+            test_stop_timeout_ms: std::sync::atomic::AtomicU64::new(0),
+            test_stop_delay_ms: std::sync::atomic::AtomicU64::new(0),
             media: RwLock::new(None),
             name_lock: tokio::sync::Mutex::new(()),
         });
@@ -1401,20 +1407,28 @@ impl Engine {
     /// Pauses every queued or running download.
     pub async fn pause_all(&self) -> Result<()> {
         let all = self.list().await?;
-        let active = self.running_ids();
-        // queued items first, so no slot freed below can start (and probe) one of them
+        // queued items first, so no slot freed below can start (and probe) one of them; each
+        // is re-read right before the change and only paused if it is still queued, untouched
         for d in &all {
-            if d.state == DownloadState::Queued && !active.contains(&d.id) {
+            if d.state != DownloadState::Queued {
+                continue;
+            }
+            let still_queued = self
+                .get(d.id)
+                .await?
+                .is_some_and(|f| f.state == DownloadState::Queued);
+            if still_queued && !self.running_ids().contains(&d.id) {
                 self.transition(d.id, DownloadState::Paused, None).await?;
             }
         }
-        // then stop every running transfer together and wait for all of them
-        let waits: Vec<_> = active
+        // then stop every running transfer together (including any that started meanwhile)
+        let waits: Vec<_> = self
+            .running_ids()
             .into_iter()
-            .filter_map(|id| self.signal_stop(id, StopReason::Pause))
+            .filter_map(|id| self.signal_stop(id, StopReason::Pause).map(|rx| (id, rx)))
             .collect();
-        for rx in waits {
-            Self::wait_done(rx).await?;
+        for (id, rx) in waits {
+            self.wait_done(id, rx).await?;
         }
         Ok(())
     }
@@ -1521,20 +1535,68 @@ impl Engine {
         Some(r.done.clone())
     }
 
-    async fn wait_done(mut done: tokio::sync::watch::Receiver<bool>) -> Result<()> {
+    /// Test hook: shorten the stop wait and/or make a stopping task hang for `delay_ms`.
+    #[doc(hidden)]
+    pub fn set_test_stop_knobs(&self, timeout_ms: u64, delay_ms: u64) {
+        self.inner
+            .test_stop_timeout_ms
+            .store(timeout_ms, Ordering::SeqCst);
+        self.inner
+            .test_stop_delay_ms
+            .store(delay_ms, Ordering::SeqCst);
+    }
+
+    /// Waits for the task of `id` to end. If it does not within the timeout the task is
+    /// aborted, its entry dropped and the record put in a non-running state, so nothing is left
+    /// claiming to download; the caller gets an error and can simply try again.
+    async fn wait_done(
+        &self,
+        id: DownloadId,
+        mut done: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<()> {
+        let ms = self.inner.test_stop_timeout_ms.load(Ordering::SeqCst);
+        let limit = if ms > 0 {
+            std::time::Duration::from_millis(ms)
+        } else {
+            STOP_TIMEOUT
+        };
         // a dropped sender also means the task is gone
-        match tokio::time::timeout(STOP_TIMEOUT, done.wait_for(|d| *d)).await {
-            Ok(_) => Ok(()),
-            Err(_) => Err(Error::Core(riptide_core::Error::Invalid(
-                "the transfer did not stop in time; try again".into(),
-            ))),
+        if tokio::time::timeout(limit, done.wait_for(|d| *d))
+            .await
+            .is_ok()
+        {
+            return Ok(());
         }
+        let stale = self
+            .inner
+            .running
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&id);
+        if let Some(r) = stale {
+            r.task.abort();
+            let _ = r.task.await;
+        }
+        if let Some(d) = self.get(id).await? {
+            let to = match d.state {
+                DownloadState::Probing | DownloadState::Downloading => Some(DownloadState::Paused),
+                DownloadState::Verifying => Some(DownloadState::Failed { retryable: true }),
+                _ => None,
+            };
+            if let Some(to) = to {
+                let _ = self.transition(id, to, None).await;
+            }
+        }
+        self.inner.wake.notify_one();
+        Err(Error::Core(riptide_core::Error::Invalid(
+            "the transfer did not stop in time; try again".into(),
+        )))
     }
 
     /// Stops the running task of `id` (if any) and waits until it has ended. `true` if one ran.
     async fn stop_and_wait(&self, id: DownloadId, reason: StopReason) -> Result<bool> {
         match self.signal_stop(id, reason) {
-            Some(rx) => Self::wait_done(rx).await.map(|()| true),
+            Some(rx) => self.wait_done(id, rx).await.map(|()| true),
             None => Ok(false),
         }
     }
@@ -1630,9 +1692,21 @@ impl Engine {
         reason: Arc<Mutex<StopReason>>,
         limit: Arc<RateLimiter>,
     ) {
-        let outcome = self
-            .run_download_inner(id, stop.clone(), &reason, &limit)
-            .await;
+        let outcome = {
+            let inner = self.run_download_inner(id, stop.clone(), &reason, &limit);
+            tokio::pin!(inner);
+            tokio::select! {
+                r = &mut inner => r,
+                () = stop.cancelled() => {
+                    // test knob: a task that is slow to react to its stop
+                    let delay_ms = self.inner.test_stop_delay_ms.load(Ordering::SeqCst);
+                    if delay_ms > 0 {
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                    inner.await
+                }
+            }
+        };
         if let Err(e) = outcome {
             let retryable = match &e {
                 Error::Net(n) => n.is_retryable(),

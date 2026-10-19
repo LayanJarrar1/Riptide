@@ -208,6 +208,13 @@ pub async fn transfer(
                 if restarts > 2 {
                     return Err(Error::ValidatorChanged);
                 }
+                // the stored table must stop describing the old part file and before anyone is told:
+                // events are ordered, so this reset is saved ahead of anything the next run says
+                let _ = events
+                    .send(TransferEvent::Checkpoint {
+                        segments: Vec::new(),
+                    })
+                    .await;
                 let _ = events.send(TransferEvent::Restarted { reason }).await;
                 if let Some(v) = validator {
                     plan.validator = Some(v);
@@ -303,9 +310,14 @@ async fn run_once(
             ..s.clone()
         })
         .collect();
+    // the part file must still be there with exactly the preallocated length: a deleted,
+    // truncated or extended file is not what the table describes
+    let part_ok = |size: u64| std::fs::metadata(&plan.part_path).is_ok_and(|m| m.len() == size);
     let can_resume = plan.supports_ranges
         && plan.validator.is_some()
-        && plan.size.is_some_and(|size| covers(&segments, size));
+        && plan
+            .size
+            .is_some_and(|size| covers(&segments, size) && part_ok(size));
     if !can_resume {
         segments.clear();
     }
