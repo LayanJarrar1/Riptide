@@ -145,7 +145,7 @@ Output:
     dist/riptide-firefox-${version}.zip   identical to the uploaded file
 
 Steps the build runs (package.json "build" + scripts/package.mjs):
-1. scripts/make-icons.mjs renders icons/riptide.svg to PNG (no dependencies).
+1. scripts/make-icons.mjs copies the brand-kit PNGs from brand/ (no dependencies).
 2. scripts/build.mjs merges manifest/base.json + manifest/firefox.json, copies _locales and the
    popup/options HTML/CSS, and bundles src/*.ts with esbuild (versions pinned in
    package-lock.json).
