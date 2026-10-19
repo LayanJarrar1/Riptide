@@ -210,8 +210,10 @@ const FRESH_MS = 600;
       </div>
     </section>
 
-    @if (store.details(); as details) {
-      <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+    @defer (when store.details() !== null; prefetch on idle) {
+      @if (store.details(); as details) {
+        <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+      }
     }
 
     <app-menu [open]="menu().open" [items]="menuItems()" [x]="menu().x" [y]="menu().y" (selected)="onMenu($event)" (closed)="closeMenu()" />
@@ -232,6 +234,13 @@ const FRESH_MS = 600;
       </ng-container>
     </app-dialog>
 
+    @defer (when restartTarget() !== null) {
+      <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
+    }
+
+    @defer (when moveTargets() !== null) {
+      <app-move-to-queue-dialog [targets]="moveTargets()" (chosen)="confirmMove($event)" (closed)="moveTargets.set(null)" />
+    }
     <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
 
     <app-move-to-queue-dialog [targets]="moveTargets()" (chosen)="confirmMove($event)" (closed)="moveTargets.set(null)" />
@@ -991,6 +1000,81 @@ export class DownloadsPageComponent {
       case 'moveDown':
         this.moveInQueue(d, 1);
         break;
+    }
+  }
+
+  /** The "Move to queue" dialog chose a queue. */
+  protected confirmMove(queueId: number): void {
+    const targets = this.moveTargets();
+    this.moveTargets.set(null);
+    if (targets === null) {
+      return;
+    }
+    const queue = this.queues.get(queueId);
+    const name = queueId === MAIN_QUEUE_ID ? this.i18n.t('queue.main') : (queue?.name ?? '');
+    const ids = targets.map((d) => d.id);
+    this.engine.moveToQueue(ids, queueId).then(
+      () =>
+        this.toasts.show(
+          'info',
+          ids.length === 1
+            ? this.i18n.t('toast.queueMoved').replace('{queue}', name)
+            : this.i18n.t('toast.queueMovedMany').replace('{n}', this.format.int(ids.length)).replace('{queue}', name),
+        ),
+      (error: unknown) => this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error))),
+    );
+  }
+
+  /** Moves a download one place in its queue's manual order (keyboard and menu). */
+  private moveInQueue(d: Download, delta: 1 | -1): void {
+    const order = this.store.queueOrder(d.queueId);
+    const next = moveBy(order, d.id, delta);
+    if (!sameOrder(order, next)) {
+      this.run(this.engine.reorderQueue(d.queueId, next));
+    }
+  }
+
+  protected onRowDragStart(event: DragEvent, row: DownloadRow): void {
+    if (event.dataTransfer === null) {
+      return;
+    }
+    const selected = this.store.selected();
+    this.dragged = selected.has(row.d.id) ? [...selected] : [row.d.id];
+    event.dataTransfer.setData(DOWNLOAD_DRAG_TYPE, JSON.stringify(this.dragged));
+    event.dataTransfer.effectAllowed = 'copyMove';
+  }
+
+  protected onRowDragOver(event: DragEvent, row: DownloadRow): void {
+    if (!this.store.manualOrder() || !dragHas(event, DOWNLOAD_DRAG_TYPE) || this.dragged.includes(row.d.id)) {
+      return;
+    }
+    // only rows of this queue can be reordered; anything else is left to the sidebar
+    event.preventDefault();
+    this.rowMark.set({ id: row.d.id, after: inLowerHalf(event, event.currentTarget as HTMLElement) });
+  }
+
+  protected onRowDragLeave(row: DownloadRow): void {
+    if (this.rowMark()?.id === row.d.id) {
+      this.rowMark.set(null);
+    }
+  }
+
+  protected onRowDrop(event: DragEvent, row: DownloadRow): void {
+    const mark = this.rowMark();
+    const moving = this.dragged;
+    this.rowDragEnd();
+    if (!this.store.manualOrder() || mark === null || mark.id !== row.d.id) {
+      return;
+    }
+    event.preventDefault();
+    const queueId = row.d.queueId;
+    const order = this.store.queueOrder(queueId);
+    const next = moveManyBeside(order, moving, row.d.id, mark.after);
+    if (!sameOrder(order, next)) {
+      this.run(this.engine.reorderQueue(queueId, next));
+    }
+  }
+
     }
   }
 

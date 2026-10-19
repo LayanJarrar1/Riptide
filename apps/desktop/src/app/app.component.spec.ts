@@ -101,8 +101,10 @@ describe('AppComponent (shell)', () => {
     expect(names[0]).toContain('ubuntu');
   });
 
-  it('opens the add dialog with Ctrl+N', () => {
+  it('opens the add dialog with Ctrl+N (its chunk is fetched on the first request)', async () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
     const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
     expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Add download');
@@ -121,8 +123,11 @@ describe('AppComponent (shell)', () => {
     expect(ui.batchOpen()).toBeFalse();
   });
 
+  it('opens the keyboard shortcuts with ? and Ctrl+/, but not while typing in the search box', async () => {
   it('opens the keyboard shortcuts with ? and Ctrl+/, but not while typing in the search box', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
     expect(ui.shortcutsOpen()).toBeTrue();
     const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
