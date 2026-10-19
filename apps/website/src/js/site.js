@@ -249,9 +249,11 @@
     const y = window.scrollY;
     if (anim) {
       for (const m of metrics) {
-        if (!m.name || y + vh <= m.top || y >= m.top + m.h) continue;
+        if (!m.name) continue;
         const len = m.h - vh;
-        let p = y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
+        // Off-screen scenes are parked at their start or end state, so a jump (anchor link,
+        // reload mid-page) never leaves them half-way, e.g. the header logo still hidden.
+        let p = y + vh <= m.top ? -1 : y >= m.top + m.h ? 1 : y < m.top ? (y - m.top) / vh : len > 0 ? Math.min(1, (y - m.top) / len) : 1;
         p = r4(p);
         if (p === m.p) continue;
         m.p = p;
