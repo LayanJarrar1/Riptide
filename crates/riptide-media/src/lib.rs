@@ -31,7 +31,7 @@ pub mod runner;
 use std::path::PathBuf;
 
 pub use args::PlayerClients;
-pub use cookies::CookieFile;
+pub use cookies::{sweep_stale_cookie_files, CookieFile, STALE_AFTER};
 pub use ladder::{Attempt, Ladder, MAX_ATTEMPTS};
 pub use parse::{parse_info, parse_progress_line, ErrorClass, ProgressLine, ProgressTracker};
 pub use runner::{is_partial_name, partial_files, DownloadJob, MediaOutcome, YtDlp};
