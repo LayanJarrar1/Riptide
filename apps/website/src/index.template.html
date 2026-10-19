@@ -203,7 +203,6 @@
         <div class="wash" aria-hidden="true"></div>
         <div class="wrap ch-inner streams-grid">
           <div class="ch-copy">
-            <p class="eyebrow fade">{{streams.eyebrow}}</p>
             <h2 class="h2 mask" id="streams-title"><span class="ln"><span>{{streams.titleA}}</span></span> <span class="ln"><span>{{streams.titleB}}</span></span></h2>
             <p class="lead fade">{{streams.lead}}</p>
           </div>
@@ -232,11 +231,10 @@
         <div class="wash" aria-hidden="true"></div>
         <div class="wrap ch-inner app-grid">
           <div class="ch-copy">
-            <p class="eyebrow fade">{{app.eyebrow}}</p>
             <h2 class="h2 mask" id="app-title"><span class="ln"><span>{{app.titleA}}</span></span> <span class="ln"><span>{{app.titleB}}</span></span></h2>
             <p class="lead fade">{{app.lead}}</p>
             <ol class="legend">
-              {{#each app.callouts}}<li class="lg" style="--n:{{@index}}"><span class="lg-n" aria-hidden="true">{{@num}}</span><span class="lg-t">{{t}}{{#if tag}} <span class="tag">{{tag}}</span>{{/if}}</span></li>
+              {{#each app.callouts}}<li class="lg" style="--n:{{@index}}"><span class="lg-n" aria-hidden="true"></span><span class="lg-t">{{t}}{{#if tag}} <span class="tag">{{tag}}</span>{{/if}}</span></li>
               {{/each}}
             </ol>
           </div>
@@ -246,7 +244,7 @@
               <div class="win-shot">
                 <img class="only-light" src="{{root}}assets/screenshots/app-{{lang}}-light-1040.webp" srcset="{{root}}assets/screenshots/app-{{lang}}-light-560.webp 560w, {{root}}assets/screenshots/app-{{lang}}-light-760.webp 760w, {{root}}assets/screenshots/app-{{lang}}-light-880.webp 880w, {{root}}assets/screenshots/app-{{lang}}-light-1040.webp 1040w, {{root}}assets/screenshots/app-{{lang}}-light-1560.webp 1560w, {{root}}assets/screenshots/app-{{lang}}-light-2080.webp 2080w" sizes="(min-width: 1313px) 880px, (min-width: 1024px) 67vw, calc(100vw - max(32px, 8vw))" alt="{{app.altLight}}" width="1040" height="660" loading="lazy" decoding="async">
                 <img class="only-dark" src="{{root}}assets/screenshots/app-{{lang}}-dark-1040.webp" srcset="{{root}}assets/screenshots/app-{{lang}}-dark-560.webp 560w, {{root}}assets/screenshots/app-{{lang}}-dark-760.webp 760w, {{root}}assets/screenshots/app-{{lang}}-dark-880.webp 880w, {{root}}assets/screenshots/app-{{lang}}-dark-1040.webp 1040w, {{root}}assets/screenshots/app-{{lang}}-dark-1560.webp 1560w, {{root}}assets/screenshots/app-{{lang}}-dark-2080.webp 2080w" sizes="(min-width: 1313px) 880px, (min-width: 1024px) 67vw, calc(100vw - max(32px, 8vw))" alt="{{app.altDark}}" width="1040" height="660" loading="lazy" decoding="async">
-                {{#each app.callouts}}<span class="dot" style="--x:{{x}}%;--y:{{y}}%;--n:{{@index}}" aria-hidden="true">{{@num}}</span>
+                {{#each app.callouts}}<span class="dot" style="--x:{{x}}%;--y:{{y}}%;--n:{{@index}}" aria-hidden="true"></span>
                 {{/each}}
               </div>
             </figure>
@@ -261,7 +259,6 @@
         <div class="wash" aria-hidden="true"></div>
         <div class="wrap ch-inner speed-grid">
           <div class="ch-copy">
-            <p class="eyebrow fade">{{speed.eyebrow}}</p>
             <h2 class="h2 mask" id="speed-title"><span class="ln"><span>{{speed.titleA}}</span></span> <span class="ln"><span>{{speed.titleB}}</span></span></h2>
             <p class="lead fade">{{speed.lead}}</p>
             <p class="sim-note fade"><span class="tag">{{speed.tag}}</span> {{speed.note}}</p>
@@ -287,7 +284,6 @@
         <div class="wash" aria-hidden="true"></div>
         <div class="wrap ch-inner integrity-grid">
           <div class="ch-copy">
-            <p class="eyebrow fade">{{integrity.eyebrow}}</p>
             <h2 class="h2 mask" id="integrity-title"><span class="ln"><span>{{integrity.titleA}}</span></span> <span class="ln"><span>{{integrity.titleB}}</span></span></h2>
             <p class="lead fade">{{integrity.lead}}</p>
           </div>
@@ -332,7 +328,6 @@
       <div class="wrap">
         <div class="block-head">
           <i class="rule rv" aria-hidden="true"></i>
-          <p class="eyebrow rv">{{features.eyebrow}}</p>
           <h2 class="h2 mask rv" id="features-title"><span class="ln"><span>{{features.title}}</span></span></h2>
         </div>
         <div class="bento">
@@ -368,7 +363,7 @@
           </article>
           <article class="bp bp-video rv" style="--i:0">
             <div class="vid" aria-hidden="true"><span class="play"></span><span class="vbars"><i></i><i></i><i></i></span></div>
-            <div class="bp-copy"><h3 class="h3">{{features.video.h}}</h3><p>{{features.video.p}}</p><span class="tag">{{features.video.tag}}</span></div>
+            <div class="bp-copy"><h3 class="h3">{{features.video.h}}</h3><p>{{features.video.p}}</p></div>
           </article>
           <article class="bp bp-user rv" style="--i:1">
             <code class="path" dir="ltr">{{features.peruser.path}}</code>
@@ -383,7 +378,6 @@
       <div class="wrap">
         <div class="block-head">
           <i class="rule rv" aria-hidden="true"></i>
-          <p class="eyebrow rv">{{vs.eyebrow}}</p>
           <h2 class="h2 mask rv" id="vs-title"><span class="ln"><span>{{vs.title}}</span></span></h2>
           <p class="lead rv">{{vs.lead}}</p>
         </div>
@@ -400,7 +394,6 @@
     <section class="block tone-teal open" id="oss" data-tone="dark" aria-labelledby="oss-title">
       <div class="wrap open-grid">
         <div class="open-col rv">
-          <p class="eyebrow">{{oss.eyebrow}}</p>
           <h2 class="h2" id="oss-title">{{oss.title}}</h2>
           <p class="lead">{{oss.lead}}</p>
           <p class="open-links">
@@ -432,7 +425,6 @@
       <div class="wrap faq-grid">
         <div class="block-head">
           <i class="rule rv" aria-hidden="true"></i>
-          <p class="eyebrow rv">{{faq.eyebrow}}</p>
           <h2 class="h2 mask rv" id="faq-title"><span class="ln"><span>{{faq.title}}</span></span></h2>
         </div>
         <div class="faq-list">

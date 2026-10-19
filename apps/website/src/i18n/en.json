@@ -26,7 +26,7 @@
     "githubLabel": "Riptide on GitHub"
   },
   "hero": {
-    "status": "Alpha 3 for Windows 10 and 11",
+    "status": "Alpha {n} for Windows 10 and 11",
     "titleA": "Download faster.",
     "titleB": "Every byte verified.",
     "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
@@ -176,7 +176,6 @@
     }
   },
   "streams": {
-    "eyebrow": "01 / How it works",
     "titleA": "Streams in.",
     "titleB": "One exact file out.",
     "lead": "Riptide pulls a file down several lanes at once, then rebuilds it byte for byte.",
@@ -185,11 +184,9 @@
     "fileSub": "1 file · SHA-256 verified"
   },
   "app": {
-    "eyebrow": "02 / The app",
     "titleA": "A list that",
     "titleB": "stays fast.",
     "lead": "Dense, calm, keyboard-friendly. Light and dark, English and Arabic.",
-    "soon": "Next release",
     "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speeds, time left and status for each file",
     "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speeds, time left and status for each file",
     "winLabel": "The Riptide desktop app, with four numbered annotations.",
@@ -205,23 +202,10 @@
         "y": 80.6,
         "t": "Checksum mismatches are caught, not hidden",
         "tag": ""
-      },
-      {
-        "x": 63.8,
-        "y": 3.8,
-        "t": "Batch download and site grabber",
-        "tag": "Next release"
-      },
-      {
-        "x": 19.5,
-        "y": 90.5,
-        "t": "Queues",
-        "tag": "Next release"
       }
     ]
   },
   "speed": {
-    "eyebrow": "03 / Speed",
     "titleA": "Eight connections.",
     "titleB": "One file.",
     "lead": "A connection that finishes early takes over half of a slower one's range. Nothing sits idle.",
@@ -231,7 +215,6 @@
     "label": "Simulation: eight connections fill one file. A connection that finishes early takes over half of a slower one's range."
   },
   "integrity": {
-    "eyebrow": "04 / Integrity",
     "titleA": "Pull the plug.",
     "titleB": "Lose nothing.",
     "lead": "Progress is saved every second. Only a matching checksum makes a download Completed.",
@@ -259,7 +242,6 @@
     }
   },
   "features": {
-    "eyebrow": "05 / Details",
     "title": "Made for daily use.",
     "details": {
       "h": "Every connection, live",
@@ -291,8 +273,7 @@
     },
     "video": {
       "h": "Video pages",
-      "p": "Paste a page link and Riptide fetches the video.",
-      "tag": "Next release"
+      "p": "Paste a page link and Riptide fetches the video."
     },
     "peruser": {
       "h": "No admin. Ever.",
@@ -301,7 +282,6 @@
     }
   },
   "vs": {
-    "eyebrow": "06 / Compared",
     "title": "Versus paid managers.",
     "lead": "Plain facts about Riptide next to what is generally true of paid products.",
     "colFeature": "Feature",
@@ -342,7 +322,6 @@
     "footnote": "We name no product. Check any vendor's own documentation before you decide."
   },
   "oss": {
-    "eyebrow": "07 / Open source",
     "title": "Built in the open.",
     "lead": "App: GPL-3.0. Engine: MIT or Apache-2.0. Every line is on GitHub.",
     "star": "Star on GitHub",
@@ -372,7 +351,6 @@
     "security": "Security issue? Report it privately."
   },
   "faq": {
-    "eyebrow": "08 / Questions",
     "title": "Questions",
     "items": [
       {
@@ -389,7 +367,7 @@
       },
       {
         "q": "Can it download videos?",
-        "a": "Video pages work through bundled yt-dlp in the main branch and ship in the next release."
+        "a": "Yes. Paste a page link and Riptide fetches the video through bundled yt-dlp."
       },
       {
         "q": "Is it Windows only?",
@@ -398,8 +376,8 @@
     ]
   },
   "download": {
-    "eyebrow": "09 / Download",
-    "badge": "Alpha 3",
+    "eyebrow": "Download",
+    "badge": "Alpha {n}",
     "title": "Get Riptide.",
     "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
     "installer": "Installer",
