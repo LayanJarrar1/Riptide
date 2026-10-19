@@ -824,7 +824,17 @@ impl Engine {
         events: Option<mpsc::Sender<riptide_crawl::CrawlEvent>>,
         cancel: CancellationToken,
     ) -> Result<riptide_crawl::CrawlResult> {
-        Ok(riptide_crawl::crawl(spec, self.client(), events, cancel).await?)
+        // a crawl that starts on a public host gets a client whose DNS resolver only returns
+        // public addresses (and a guard that refuses private IP links and redirects); one that
+        // starts on the owner's LAN or loopback uses the normal client
+        let start = riptide_net::parse_http_url(&spec.start)?;
+        let guard = riptide_net::NetGuard::for_start(&start, None).await;
+        let client = if guard.blocks() {
+            riptide_net::build_client_guarded(&self.settings().client_options(), &guard)?
+        } else {
+            self.client()
+        };
+        Ok(riptide_crawl::crawl_with_guard(spec, client, events, cancel, guard).await?)
     }
 
     /// Engine events (added, probed, state changes, progress, completed, failed, removed).

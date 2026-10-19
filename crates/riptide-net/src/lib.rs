@@ -25,6 +25,7 @@ pub mod error;
 pub mod file;
 pub mod http;
 pub mod limiter;
+pub mod net_guard;
 pub mod probe;
 pub mod proxy;
 pub mod rate;
@@ -38,6 +39,7 @@ pub use context::RequestContext;
 pub use error::{Error, Result};
 pub use file::{part_path_for, PartFile, PART_EXTENSION};
 pub use limiter::{CapObserver, HostLimiter, HostPermit};
+pub use net_guard::{is_private_or_special, NetGuard};
 pub use probe::{probe, Probe};
 pub use proxy::{ProxyChoice, ProxyUrl};
 pub use rate::RateLimiter;
@@ -87,7 +89,23 @@ pub fn default_headers(user_agent: Option<&str>) -> HeaderMap {
 /// no automatic decompression, no cookie jar (the engine sends captured cookies explicitly and
 /// only to their origin).
 pub fn build_client(options: &ClientOptions) -> Result<reqwest::Client> {
-    let builder = options.proxy.apply(reqwest::Client::builder())?;
+    build_client_inner(options, None)
+}
+
+/// Like [`build_client`], with connections limited to public addresses by `guard`'s resolver
+/// (see [`NetGuard::dns_resolver`]): for crawls that start from a public host.
+pub fn build_client_guarded(options: &ClientOptions, guard: &NetGuard) -> Result<reqwest::Client> {
+    build_client_inner(options, Some(guard.dns_resolver()))
+}
+
+fn build_client_inner(
+    options: &ClientOptions,
+    dns: Option<std::sync::Arc<net_guard::GuardedDns>>,
+) -> Result<reqwest::Client> {
+    let mut builder = options.proxy.apply(reqwest::Client::builder())?;
+    if let Some(dns) = dns {
+        builder = builder.dns_resolver(dns);
+    }
     builder
         .default_headers(default_headers(options.user_agent.as_deref()))
         .redirect(reqwest::redirect::Policy::none())

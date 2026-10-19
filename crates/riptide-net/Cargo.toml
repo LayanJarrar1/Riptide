@@ -35,6 +35,7 @@ windows-sys = { workspace = true }
 riptide-testserver = { workspace = true }
 tempfile = { workspace = true }
 serde_json = { workspace = true }
+proptest = { workspace = true }
 
 [lints]
 workspace = true

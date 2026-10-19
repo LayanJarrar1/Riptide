@@ -10,6 +10,7 @@ use riptide_core::{Credentials, Secrets};
 use url::Url;
 
 use crate::digest::{basic_authorization, client_nonce, DigestChallenge};
+use crate::net_guard::NetGuard;
 use crate::redirect::Origin;
 
 /// Which authentication the origin accepted, remembered so later requests send it up front.
@@ -32,6 +33,7 @@ pub struct RequestContext {
     headers: Vec<(HeaderName, HeaderValue)>,
     credentials: Option<Credentials>,
     auth: Mutex<Option<AuthState>>,
+    guard: NetGuard,
 }
 
 impl RequestContext {
@@ -46,7 +48,20 @@ impl RequestContext {
             headers: Vec::new(),
             credentials: None,
             auth: Mutex::new(None),
+            guard: NetGuard::off(),
         }
+    }
+
+    /// The private-address guard for redirects (and, for crawls, for every hop). The default
+    /// only refuses a redirect from a public host to a private address.
+    pub fn with_guard(mut self, guard: NetGuard) -> Self {
+        self.guard = guard;
+        self
+    }
+
+    /// The guard applied to redirects.
+    pub fn guard(&self) -> &NetGuard {
+        &self.guard
     }
 
     /// `Referer` for every request (page the link was found on). Sent to every origin: it is
