@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/readme/demo.gif" alt="Riptide downloading several files at once: segmented progress bars fill, speeds change, a completion notice appears, and the details drawer shows the segment map and speed chart" width="900">
+</p>
+
+<p align="center">
   <a href="https://github.com/LayanJarrar1/Riptide/releases"><img alt="Latest pre-release" src="https://img.shields.io/github/v/release/LayanJarrar1/Riptide?include_prereleases&style=flat-square&label=pre-release&color=00d5e8"></a>
   <a href="https://github.com/LayanJarrar1/Riptide/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/LayanJarrar1/Riptide/total?style=flat-square&color=075c69"></a>
   <a href="https://github.com/LayanJarrar1/Riptide/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/LayanJarrar1/Riptide?style=flat-square&color=168bff"></a>
@@ -18,6 +22,7 @@
   <a href="#download"><b>Download</b></a> ·
   <a href="https://layanjarrar1.github.io/Riptide/">Website</a> ·
   <a href="#whats-new-in-alpha-4">What's new</a> ·
+  <a href="#gallery">Gallery</a> ·
   <a href="#browser-extension">Browser extension</a> ·
   <a href="#features">Features</a> ·
   <a href="#riptide-vs-idm">Riptide vs IDM</a> ·
@@ -39,10 +44,16 @@ browser, and speaks **Arabic and English** with a fully mirrored right-to-left i
 
 No license fee. No ads, nag screens or trial timers. No account. No telemetry. No administrator rights.
 
-<p align="center">
-  <img src="assets/readme/v4-list-en.webp" alt="The Riptide downloads list: segmented progress bars, speed, time left and status for every download" width="100%">
-</p>
-<p align="center"><sub>Every stripe in a progress bar is one connection. Red stripes mark a file that failed its checksum.</sub></p>
+<table>
+  <tr>
+    <td width="50%"><img src="assets/readme/v4-list-en.webp" alt="The Riptide downloads list in the light theme: segmented progress bars, speed, time left and status for every download"></td>
+    <td width="50%"><img src="assets/readme/v5-list-en-dark.webp" alt="The same list in the dark theme, with a notice that riptide-sdk-0.1.0-win64.zip is complete"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Light theme. Every stripe in a progress bar is one connection; red stripes mark a file that failed its checksum.</sub></td>
+    <td align="center"><sub>Dark theme, with a completion notice. Both follow Windows or your choice.</sub></td>
+  </tr>
+</table>
 
 ## What's new in alpha 4
 
@@ -55,7 +66,21 @@ No license fee. No ads, nag screens or trial timers. No account. No telemetry. N
 
 Full notes: [release 0.1.0-alpha.4](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.4).
 
+<sub>Video support uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org), shipped as separate programs
+next to Riptide. Websites change often, so *Settings → About → Update video support* fetches the newest yt-dlp when you ask.
+Live streams, playlists and DRM-protected videos are refused. Only download what you have the right to download.</sub>
+
+## Gallery
+
 <table>
+  <tr>
+    <td width="50%"><img src="assets/readme/v5-details.webp" alt="Details drawer for a downloading ISO: size, speed, time left, eight connections, a segment map and a speed chart"></td>
+    <td width="50%"><img src="assets/readme/v5-add.webp" alt="Add download dialog after probing a file link: size, resumable, multiple connections, file name, category and folder"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Details:</b> one stripe per connection, plus the last minute of speed.</sub></td>
+    <td align="center"><sub><b>Add:</b> paste a link and Riptide checks size and resume support first.</sub></td>
+  </tr>
   <tr>
     <td width="50%"><img src="assets/readme/v4-video.webp" alt="Add dialog showing a video page with a quality picker from Best down to audio-only"></td>
     <td width="50%"><img src="assets/readme/v4-batch.webp" alt="Batch dialog previewing the forty addresses a pattern makes"></td>
@@ -65,18 +90,38 @@ Full notes: [release 0.1.0-alpha.4](https://github.com/LayanJarrar1/Riptide/rele
     <td align="center"><sub><b>Batch:</b> a pattern becomes a checked list of links.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/readme/v4-queue.webp" alt="New queue dialog with a schedule, days of the week and an action for when the queue finishes"></td>
-    <td width="50%"><img src="assets/readme/v4-grabber.webp" alt="Site grabber results grouped by file type with check boxes"></td>
+    <td width="50%"><img src="assets/readme/v5-queue.webp" alt="New queue dialog named Night downloads, limited to 23:00 to 07:00 on every day, with an action for when the queue finishes"></td>
+    <td width="50%"><img src="assets/readme/v5-shortcuts.webp" alt="Keyboard shortcuts sheet listing add, batch, search, settings, pause, remove and selection keys"></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>Queues:</b> schedule them, then choose what happens next.</sub></td>
+    <td align="center"><sub><b>Queues:</b> a night queue with a schedule and a finish action.</sub></td>
+    <td align="center"><sub><b>Keyboard:</b> press <code>?</code> anywhere for the full list.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/v4-grabber.webp" alt="Site grabber results grouped by file type with check boxes"></td>
+    <td width="50%"><img src="assets/readme/v5-integration.webp" alt="Settings, Integration: browser extension connected, three install steps for Chrome and Edge, Bridge ready for both, proxy choice and the About block with video support"></td>
+  </tr>
+  <tr>
     <td align="center"><sub><b>Site grabber:</b> files found on a site, grouped by type.</sub></td>
+    <td align="center"><sub><b>Settings:</b> install the extension in three steps; video support and updates sit below.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/v5-ext-video.webp" alt="A video page in the browser with the Download this video button and a quality menu from Best quality down to audio-only"></td>
+    <td width="50%"><img src="assets/readme/v5-ext-popup.webp" alt="The extension popup: Connected to Riptide, Pause capture, Open Riptide and Options"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>In the browser:</b> a "Download this video" button with a quality menu.</sub></td>
+    <td align="center"><sub><b>Extension popup:</b> connection status and a pause switch.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/v5-list-ar-light.webp" alt="The downloads list in Arabic and the light theme, mirrored right to left"></td>
+    <td width="50%"><img src="assets/readme/v5-site.webp" alt="The Riptide website hero: Download faster, every byte verified, next to the app window"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Arabic (RTL):</b> the whole layout mirrors.</sub></td>
+    <td align="center"><sub><b>Website:</b> <a href="https://layanjarrar1.github.io/Riptide/">layanjarrar1.github.io/Riptide</a></sub></td>
   </tr>
 </table>
-
-<sub>Video support uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org), shipped as separate programs
-next to Riptide. Websites change often, so *Settings → About → Update video support* fetches the newest yt-dlp when you ask.
-Live streams, playlists and DRM-protected videos are refused. Only download what you have the right to download.</sub>
 
 ## Download
 
@@ -108,7 +153,7 @@ If anything goes wrong, the browser simply downloads the file itself; nothing is
 
 ### Chrome or Edge: install in 3 steps
 
-The extension is not in the Chrome Web Store or Edge Add-ons yet (store listings are coming), so load it once by hand.
+Chrome and Edge load the extension straight from the folder Riptide ships, so there is nothing to download separately.
 
 1. In Riptide open **Settings → Integration** and press **Open extension folder**.
 2. In the browser open `chrome://extensions` (`edge://extensions` in Edge) and turn on **Developer mode**.
@@ -119,13 +164,6 @@ The folder is `extension\chrome` (or `extension\edge`) inside the Riptide instal
 Firefox: `about:debugging` → *This Firefox* →
 *Load Temporary Add-on* → `extension\firefox\manifest.json`. Building it yourself: `cd apps/extension && npm ci && npm run build`.
 Permissions, privacy and how it talks to the app: [`apps/extension/README.md`](apps/extension/README.md).
-
-## Screenshots
-
-<p align="center">
-  <img src="assets/readme/v4-list-ar-dark.webp" alt="The same list in Arabic and the dark theme, mirrored right to left" width="100%">
-</p>
-<p align="center"><sub>Arabic and the dark theme. The whole layout mirrors, instantly, and you can switch language while downloads run.</sub></p>
 
 ## Features
 
@@ -274,31 +312,71 @@ scripts/check.ps1      the quality gate
 
 ## بالعربي
 
+<div dir="rtl">
+
 **ريبتايد** مدير تحميل مجاني ومفتوح المصدر لويندوز، والبديل المفتوح لبرنامج IDM. يقسم كل ملف على اتصالات
 متعددة، ويكمل من البايت الذي توقف عنده بالضبط، ويصمد أمام انطفاء الجهاز أو تعطّل البرنامج، ويلتقط التحميلات
 مباشرة من المتصفح عبر إضافة لكروم وإيدج وفايرفوكس.
 
+</div>
+
+<p align="center">
+  <img src="assets/readme/v4-list-ar-dark.webp" alt="قائمة التحميلات في ريبتايد بالعربية والوضع الداكن، والواجهة معكوسة من اليمين لليسار" width="100%">
+</p>
+<p align="center"><sub>الواجهة العربية: كل شيء معكوس من اليمين لليسار، ويمكنك التبديل بين اللغتين أثناء التحميل.</sub></p>
+
+<div dir="rtl">
+
 - **مجاني بالكامل:** بدون رخصة، بدون إعلانات، بدون حساب، بدون تتبّع، وبدون صلاحيات مسؤول.
-- **عربي من أول يوم:** واجهة معكوسة بالكامل من اليمين لليسار، وتبديل فوري بين العربية والإنجليزية، وأسماء الملفات
+- **عربي من أول يوم:** واجهة معكوسة بالكامل، وتبديل فوري بين العربية والإنجليزية، وأسماء الملفات
   العربية تصل إلى القرص صحيحة.
 - **دقيق حتى آخر بايت:** لا يعتبر التحميل مكتملًا إلا إذا وصلت كل القطع، وطابق الملف بصمته إن أعطيته واحدة.
+- **سريع:** حتى ٣٢ اتصالًا للملف الواحد، وإذا أنهى اتصال عمله مبكرًا أخذ نصف ما تبقّى من أبطأ جزء.
+- **يكمل بعد الانقطاع:** يُحفظ التقدم كل ثانية، فيستمر كل تحميل بعد انقطاع الكهرباء أو إغلاق البرنامج فجأة.
 
-**الجديد في النسخة 4:** تحميل الفيديو من يوتيوب وفيميو وغيرهما من المواقع التي يدعمها yt-dlp مع اختيار الجودة (حتى الصوت فقط)، وطوابير بجداول
-زمنية مع خيار «عند الانتهاء» (إغلاق أو سكون أو إيقاف التشغيل) بعدّ تنازلي لثلاثين ثانية، وتحميل دفعات بنمط مثل
-`file[001-120].zip`، وجامع الملفات الذي يمرّ على موقع كامل ويحترم `robots.txt`، وزرّ «حمّل هذا الفيديو» في المتصفح،
-وإشعارات بالتحديثات الجديدة.
+**الجديد في النسخة 4:**
+
+- تحميل الفيديو من يوتيوب وفيميو وغيرهما من المواقع التي يدعمها yt-dlp مع اختيار الجودة، حتى الصوت فقط (M4A أو MP3).
+- طوابير بجداول زمنية وخيار «عند الانتهاء»: إغلاق أو سكون أو إيقاف التشغيل، مع عدّ تنازلي لثلاثين ثانية.
+- تحميل دفعات بنمط مثل `file[001-120].zip`، وجامع الملفات الذي يمرّ على موقع كامل ويحترم `robots.txt`.
+- زرّ «حمّل هذا الفيديو» في المتصفح مع قائمة الجودات.
+- إشعارات بالتحديثات الجديدة وشارة في الإعدادات.
 
 **محدَّث دائمًا:** يتحقق ريبتايد من إصدارات GitHub مرة واحدة في اليوم على الأكثر (ويمكنك إيقاف ذلك من الإعدادات)، ويُشعرك حين يتوفر إصدار جديد، وبنقرة واحدة يثبّته. التحديثات موقَّعة، وهذا الفحص هو الاتصال الوحيد غير تنزيلاتك.
 
-**التحميل:** [المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide_0.1.0-alpha.4_x64-setup.exe) ·
-[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip) ·
+**التحميل:**
+[المثبّت (Riptide_0.1.0-alpha.4_x64-setup.exe)](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide_0.1.0-alpha.4_x64-setup.exe) ·
+[النسخة المحمولة (Riptide-0.1.0-alpha.4-portable.zip)](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip) ·
+[كل الإصدارات](https://github.com/LayanJarrar1/Riptide/releases) ·
 [دليل الاستخدام بالعربية](guide/ar.md)
 
-**تثبيت الإضافة في Chrome أو Edge بثلاث خطوات:** ١) في ريبتايد افتح **الإعدادات ← التكامل** واضغط **فتح مجلد الإضافة**.
-٢) في المتصفح افتح `chrome://extensions` (أو `edge://extensions` في Edge) وفعّل **وضع المطوّر**.
-٣) اضغط **تحميل إضافة غير مضغوطة** واختر ذلك المجلد. الإضافة ليست في المتاجر بعد (قريبًا)، ولذلك تحتاج هذه الخطوات مرة واحدة فقط.
+</div>
+
+### تثبيت الإضافة في Chrome أو Edge
+
+<div dir="rtl">
+
+يحمّل كروم وإيدج الإضافة مباشرة من المجلد الذي يأتي مع ريبتايد، فلا شيء آخر تنزّله:
+
+١. في ريبتايد افتح **الإعدادات ← التكامل** واضغط **فتح مجلد الإضافة**.
+
+٢. في المتصفح افتح `chrome://extensions` (أو `edge://extensions` في Edge) وفعّل **وضع المطوّر**.
+
+٣. اضغط **تحميل إضافة غير مضغوطة** واختر ذلك المجلد.
+
+بعدها يظهر «الجسر جاهز» في الإعدادات، وتصير التحميلات تنتقل من المتصفح إلى ريبتايد.
+
+</div>
+
+<p align="center">
+  <img src="assets/readme/v5-integration-ar.webp" alt="صفحة الإعدادات ← التكامل بالعربية: خطوات تثبيت الإضافة في كروم وإيدج وحالة «الجسر جاهز»" width="100%">
+</p>
+
+<div dir="rtl">
 
 > **ملاحظة:** هذه نسخة تجريبية (Alpha) للتجربة والإبلاغ عن الأخطاء، وليست نهائية بعد.
+
+</div>
 
 ## Contributing
 
