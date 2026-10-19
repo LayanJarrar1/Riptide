@@ -254,15 +254,15 @@ html:not(.anim) .ch .pin { padding-block: clamp(88px, 11vw, 152px); }
 /* The real app, in a Windows-style window with a little perspective. */
 .hero-stage { position: relative; justify-self: stretch; }
 .persp { perspective: 1800px; perspective-origin: 32% 40%; }
-.par { transform: translate3d(0, calc(var(--hp, 0) * var(--k, 0) * 1px), 0); }
-.win { --rx: 3deg; --ry: calc(var(--dir) * -6deg); position: relative; margin: 0; border-radius: 12px; overflow: hidden; background: var(--card, #fff);
-  box-shadow: 0 0 0 1px var(--line), 0 50px 90px -40px rgba(7, 26, 38, .55), 0 18px 36px -24px rgba(7, 26, 38, .4);
-  transform: rotateY(var(--ry)) rotateX(var(--rx)); }
+.par { transform: translate3d(0, calc(var(--hp, 0) * var(--k, 0) * 1px), 0); transform: translate3d(0, round(calc(var(--hp, 0) * var(--k, 0) * 1px), 1px), 0); }
+/* The window rests flat (no transform at all in its final state), so the raster is drawn 1:1 and stays sharp; the tilt exists only in the entrance keyframes. */
+.win { position: relative; margin: 0; border-radius: 12px; overflow: hidden; background: var(--card, #fff);
+  box-shadow: 0 0 0 1px var(--line), 0 50px 90px -40px rgba(7, 26, 38, .55), 0 18px 36px -24px rgba(7, 26, 38, .4); }
 :root[data-theme="dark"] .win { box-shadow: 0 0 0 1px rgba(217, 248, 250, .16), 0 50px 100px -40px rgba(0, 213, 232, .3), 0 24px 40px -24px rgba(0, 0, 0, .8); }
 .win-hero { animation: win-in 1s var(--ease-out) .3s both; }
 @media (min-width: 900px) { .win-hero { width: 116%; } .fl-speed { inset-inline-end: 14%; } .fl-sha { inset-inline-end: 8%; } }
-@keyframes win-in { from { opacity: 0; transform: translate3d(0, 64px, 0) rotateY(calc(var(--ry) * 1.9)) rotateX(calc(var(--rx) + 9deg)); } }
-.win img { width: 100%; height: auto; aspect-ratio: 16 / 10; }
+@keyframes win-in { from { opacity: 0; transform: translate3d(0, 40px, 0) rotateY(calc(var(--dir) * -10deg)) rotateX(8deg); } to { opacity: 1; transform: none; } }
+.win img { width: 100%; height: auto; aspect-ratio: 16 / 10; image-rendering: auto; }
 .tb { display: flex; align-items: center; gap: 8px; height: 34px; padding-inline: 12px; background: #eef3f5; color: #3a5461; border-bottom: 1px solid rgba(7, 26, 38, .08); font-size: .75rem; font-weight: 500; }
 :root[data-theme="dark"] .tb { background: #0a1e2b; color: #a9c3cc; border-bottom-color: rgba(217, 248, 250, .1); }
 .tb img { width: 16px; height: 16px; aspect-ratio: auto; }
@@ -274,7 +274,7 @@ html:not(.anim) .ch .pin { padding-block: clamp(88px, 11vw, 152px); }
 .tb-c i:nth-child(3)::after { transform: rotate(-45deg); }
 
 /* Floating simulation elements: a download card, a speed readout and a SHA-256 chip. */
-.fl { position: absolute; z-index: 3; transform: translate3d(0, calc(var(--hp, 0) * var(--k, 0) * 1px), 0); }
+.fl { position: absolute; z-index: 3; transform: translate3d(0, calc(var(--hp, 0) * var(--k, 0) * 1px), 0); transform: translate3d(0, round(calc(var(--hp, 0) * var(--k, 0) * 1px), 1px), 0); }
 .fl-in { animation: float-in var(--dur-4) var(--ease-spring) both; animation-delay: var(--d, 0s); }
 @keyframes float-in { from { opacity: 0; transform: translate3d(0, 26px, 0) scale(.94); } }
 .fl-dl { inset-inline-start: -6%; bottom: -8%; width: min(350px, 66%); }
@@ -314,7 +314,6 @@ html:not(.anim) .ch .pin { padding-block: clamp(88px, 11vw, 152px); }
 .sha-t code { font-size: .6875rem; color: var(--fg2); }
 .js .sha:not(.is-on) { opacity: 0; transform: scale(.9) translateY(8px); }
 @media (max-width: 899px) {
-  .win { --ry: calc(var(--dir) * -3deg); --rx: 1.5deg; }
   .fl-dl { inset-inline-start: 2%; bottom: -13%; width: min(300px, 74%); }
   .fl-speed { top: -7%; inset-inline-end: 2%; }
   .fl-sha { bottom: auto; top: 30%; inset-inline-end: 2%; }

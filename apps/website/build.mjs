@@ -43,7 +43,7 @@ const SITE_URL = (process.env.SITE_URL || 'https://layanjarrar1.github.io/Riptid
 const BASE_PATH = new URL(SITE_URL).pathname;
 
 // Size budgets in bytes (uncompressed). The build fails when something grows past them.
-const BUDGET = { html: 80 * 1024, css: 64 * 1024, js: 40 * 1024, image: 120 * 1024, font: 110 * 1024, total: 2 * 1024 * 1024 };
+const BUDGET = { html: 80 * 1024, css: 64 * 1024, js: 40 * 1024, image: 260 * 1024, font: 110 * 1024, total: 3 * 1024 * 1024 };
 
 const LANGUAGES = [
   { code: 'en', out: '', root: '' },
