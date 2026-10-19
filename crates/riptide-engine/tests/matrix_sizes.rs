@@ -27,7 +27,10 @@ async fn run_one(w: &World, engine: &riptide_engine::Engine, route: &str, size: 
     let path = wait_completed_in(&mut rx, id, Duration::from_secs(600)).await;
     assert_complete(engine, id, &path, &w.downloads(), DEFAULT_SEED, size).await;
     let record = engine.get(id).await.unwrap().unwrap();
-    assert_eq!(record.size, Some(size).filter(|_| route == "/ok" || route == "/noranges"));
+    assert_eq!(
+        record.size,
+        Some(size).filter(|_| route == "/ok" || route == "/noranges")
+    );
     // free the name for the next case
     engine.remove(id, true).await.unwrap();
 }
@@ -37,7 +40,21 @@ async fn tiny_sizes_through_every_server_mode() {
     let w = World::new().await;
     let engine = w.engine().await;
     for route in ["/ok", "/noranges", "/nolength"] {
-        for size in [0u64, 1, 2, 7, 8, 9, 1023, 1024, KIB + 1, 64 * KIB, MIB - 1, MIB, MIB + 1] {
+        for size in [
+            0u64,
+            1,
+            2,
+            7,
+            8,
+            9,
+            1023,
+            1024,
+            KIB + 1,
+            64 * KIB,
+            MIB - 1,
+            MIB,
+            MIB + 1,
+        ] {
             run_one(&w, &engine, route, size).await;
         }
     }

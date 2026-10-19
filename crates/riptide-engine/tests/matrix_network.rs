@@ -308,15 +308,14 @@ async fn expired_signed_url_is_finished_after_refresh() {
     let mut rx = engine.subscribe();
     let size = 8 * MIB;
     let id = engine
-        .add(w.request(&format!(
-            "/expires?after=1&bps={}&size={size}",
-            256 * KIB
-        )))
+        .add(w.request(&format!("/expires?after=1&bps={}&size={size}", 256 * KIB)))
         .await
         .unwrap();
-    wait_for(&mut rx, T, |e| {
-        matches!(e, Event::Progress { id: i, downloaded, .. } if *i == id && *downloaded > 0)
-    })
+    wait_for(
+        &mut rx,
+        T,
+        |e| matches!(e, Event::Progress { id: i, downloaded, .. } if *i == id && *downloaded > 0),
+    )
     .await;
     engine.pause(id).await.unwrap();
     wait_state(&mut rx, id, DownloadState::Paused, T).await;
@@ -466,5 +465,53 @@ async fn queue_limit_holds_with_twenty_five_downloads() {
     }
     assert!(max_running <= 3, "queue limit 3 exceeded: {max_running}");
     assert!(max_running >= 1);
+    engine.shutdown().await;
+}
+
+/// `http://user:password@host/...`: the download works, but the password never lands in the
+/// downloads table (URL, final URL), in an error message or in the duplicate check.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn credentials_in_the_url_move_to_secrets_and_never_stay_in_the_record() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut rx = engine.subscribe();
+    let size = 5000;
+    let base = w.server.base_url().replace("http://", "http://user:pass@");
+    let url = format!("{base}/needs-auth/basic?size={size}");
+    let id = engine.add(DownloadRequest::new(url.clone())).await.unwrap();
+    let p = wait_completed_in(&mut rx, id, T).await;
+    assert_complete(&engine, id, &p, &w.downloads(), DEFAULT_SEED, size).await;
+    let rec = engine.get(id).await.unwrap().unwrap();
+    for text in [
+        Some(rec.url.clone()),
+        rec.final_url.clone(),
+        rec.error.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        assert!(
+            !text.contains("pass") && !text.contains("user:"),
+            "credentials leaked into the record: {text}"
+        );
+    }
+    // the same link is still recognised as a duplicate
+    let dup = engine
+        .find_duplicate(&url::Url::parse(&url).unwrap(), None, None)
+        .await
+        .unwrap();
+    assert_eq!(dup.map(|d| d.id), Some(id));
+    // and a malformed link does not echo the password back in the error
+    let err = engine
+        .add(DownloadRequest::new(
+            "ftp://user:hunter2@host.example/f?token=1",
+        ))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        !err.contains("hunter2") && !err.contains("token=1"),
+        "{err}"
+    );
     engine.shutdown().await;
 }

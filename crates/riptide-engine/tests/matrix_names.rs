@@ -106,7 +106,11 @@ fn cases() -> Vec<Case> {
     v.push(case("/file/.hidden", "hidden", "other"));
 
     // extensionless names: the Content-Type may add an extension, otherwise the bare name stays
-    v.push(case("/file/README?ct=text/plain", "README.txt", "documents"));
+    v.push(case(
+        "/file/README?ct=text/plain",
+        "README.txt",
+        "documents",
+    ));
     v.push(case(
         "/file/archive?ct=application/zip",
         "archive.zip",
