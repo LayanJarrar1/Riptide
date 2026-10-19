@@ -6,7 +6,7 @@
   "meta": {
     "title": "Riptide: the free, open-source download manager for Windows",
     "description": "Free, open-source download manager for Windows. Resumes from the exact byte, verified with SHA-256. No accounts, no telemetry, no ads. Arabic and English.",
-    "ogAlt": "Riptide: the download manager that pulls harder"
+    "ogAlt": "Riptide: download faster, every byte verified"
   },
   "nav": {
     "brand": "Riptide",
@@ -23,31 +23,43 @@
     "theme": "Switch theme",
     "menu": "Menu",
     "closeMenu": "Close menu",
-    "feedback": "Feedback"
+    "feedback": "Feedback",
+    "compare": "Compare",
+    "source": "View source"
   },
   "hero": {
     "status": "Alpha preview for Windows 10 / 11",
-    "title": "The download manager that pulls harder.",
-    "lead": "Riptide splits each file across many connections, resumes from the exact byte after a pause, a crash or a power cut, and verifies the result with SHA-256. Free and open source, for Windows.",
+    "title": "Download faster. Every byte, verified.",
+    "lead": "Riptide is a free, open-source download manager for Windows. It splits each file across parallel connections, resumes from the exact byte after a crash or a power cut, and checks the result with SHA-256 before it calls the download done.",
     "ctaDownload": "Download for Windows",
-    "ctaGithub": "View on GitHub",
-    "note": "Free alpha preview, 64-bit, no admin rights needed. It is an early build and it changes often.",
+    "ctaGithub": "View source",
+    "note": "Free alpha preview. 64-bit, installs per user, no admin rights.",
     "line": "No accounts. No telemetry. No ads.",
-    "visualLabel": "Animated illustration: segment stripes flow like a current and assemble into a completed download bar.",
+    "visualLabel": "Animation: three streams flow and draw the Riptide R. Below it, a simulated download fills its segments and ends with a SHA-256 check.",
     "barLabel": "example.iso",
-    "barDone": "Verified"
+    "barDone": "Verified",
+    "demo": {
+      "file": "example.iso",
+      "tag": "Simulation",
+      "run": "Downloading",
+      "verify": "Verifying SHA-256",
+      "done": "SHA-256 verified",
+      "conns": "8 connections"
+    },
+    "titleA": "Download faster.",
+    "titleB": "Every byte, verified."
   },
   "download": {
-    "title": "Download the alpha preview",
-    "badge": "Alpha preview — Windows 10/11, 64-bit, no admin rights needed",
-    "lead": "Pick the installer for a per-user setup that never asks for elevation, or the portable zip to run Riptide from any folder.",
+    "title": "Download Riptide",
+    "badge": "Alpha preview. Windows 10/11, 64-bit",
+    "lead": "Free, with no account. The installer is per-user and never asks for admin rights; the portable zip runs from any folder.",
     "installer": "Download for Windows (installer)",
     "installerSub": "Per-user installer, no admin prompt",
     "portable": "Portable (zip)",
     "portableSub": "Unzip anywhere and run",
     "allReleases": "All releases",
     "requirements": "Requirements: Windows 10 / 11, x64. WebView2 (included in Windows).",
-    "note": "Alpha means early: the build changes often and rough edges are expected. Each release lists SHA-256 checksums for both files. If something breaks, tell us below.",
+    "note": "Alpha means early: the build changes often and rough edges are expected. Each release lists SHA-256 checksums for both files, so you can check what you downloaded. If something breaks, tell us below.",
     "sums": "SHA-256 checksums"
   },
   "extension": {
@@ -61,8 +73,8 @@
     "storeOpen": "Open listing"
   },
   "why": {
-    "title": "Why Riptide",
-    "lead": "Most download managers are a decade of features behind a nag screen. Riptide is a new engine built around a handful of rules it cannot skip.",
+    "title": "What is inside",
+    "lead": "Most download managers are a decade of features behind a nag screen. Riptide is a new engine built around a few rules it is not allowed to break.",
     "items": [
       {
         "icon": "split",
@@ -114,8 +126,8 @@
     ]
   },
   "vs": {
-    "title": "The open-source alternative to IDM",
-    "lead": "Internet Download Manager set the bar for segmented downloads on Windows. Riptide keeps the bar and drops the license, the reminders and the closed source.",
+    "title": "Riptide next to the paid download managers",
+    "lead": "IDM set the standard for segmented downloads on Windows, and it charges per PC. Riptide matches the core and adds open source, crash-safe resume and an Arabic interface built for right-to-left. Where we are not there yet, the table says so.",
     "colFeature": "Feature",
     "colIdm": "IDM",
     "colRiptide": "Riptide",
@@ -123,54 +135,81 @@
       {
         "feature": "Price",
         "idm": "Paid license per PC",
-        "riptide": "Free, forever"
+        "riptide": "Free. No trial, no key.",
+        "tag": ""
       },
       {
         "feature": "Source code",
         "idm": "Closed",
-        "riptide": "Open: GPL-3.0 app, MIT / Apache-2.0 engine"
+        "riptide": "Open: GPL-3.0 app, MIT / Apache-2.0 engine",
+        "tag": ""
       },
       {
-        "feature": "Ads and nag screens",
-        "idm": "Trial reminders",
-        "riptide": "None"
+        "feature": "Ads and reminders",
+        "idm": "Trial and license reminders",
+        "riptide": "None",
+        "tag": ""
       },
       {
         "feature": "Admin rights to install",
         "idm": "Typical installer",
-        "riptide": "Per-user install, no elevation"
-      },
-      {
-        "feature": "Arabic right-to-left interface",
-        "idm": "Translation only",
-        "riptide": "Fully mirrored layout"
+        "riptide": "Per-user install, no elevation",
+        "tag": ""
       },
       {
         "feature": "Multi-connection downloads",
         "idm": "Yes",
-        "riptide": "Yes, with work stealing between connections"
+        "riptide": "Yes, with work stealing between connections",
+        "tag": ""
       },
       {
         "feature": "Resume after a crash",
         "idm": "Resumes interrupted downloads",
-        "riptide": "Database checkpoints; resumes after a kill or power loss"
+        "riptide": "Progress saved every second; resumes after a kill or a power cut",
+        "tag": ""
       },
       {
         "feature": "Checksum verification",
         "idm": "Not a documented feature",
-        "riptide": "Built in"
+        "riptide": "Built in: SHA-256 before a file is marked complete",
+        "tag": ""
+      },
+      {
+        "feature": "Arabic interface",
+        "idm": "Arabic translation",
+        "riptide": "Fully mirrored right-to-left layout",
+        "tag": ""
+      },
+      {
+        "feature": "Video page downloads",
+        "idm": "Yes",
+        "riptide": "In the main branch, ships in the next alpha",
+        "tag": "Next alpha"
+      },
+      {
+        "feature": "Queues and scheduler",
+        "idm": "Yes",
+        "riptide": "Engine finished; the screens are still being built",
+        "tag": "Coming soon"
+      },
+      {
+        "feature": "Browser extension",
+        "idm": "Yes",
+        "riptide": "Chrome, Edge and Firefox from GitHub; store listings to come",
+        "tag": "Store listing soon"
       },
       {
         "feature": "Privacy",
-        "idm": "Not independently auditable",
-        "riptide": "No telemetry, and the code is public"
+        "idm": "Closed source, cannot be audited",
+        "riptide": "No telemetry, and the code is public",
+        "tag": ""
       }
     ],
-    "footnote": "IDM is a trademark of Tonec Inc. Comparison reflects publicly documented behaviour at the time of writing."
+    "footnote": "IDM is a trademark of Tonec Inc. The IDM column reflects its publicly documented behaviour at the time of writing. Rows marked as coming soon are not in any release yet."
   },
   "how": {
     "title": "How a download happens",
-    "lead": "Four moves, repeated for every file. Each one is a rule the engine cannot skip.",
+    "lead": "Four rules, applied to every file. Then watch them run.",
     "steps": [
       {
         "title": "Probe",
@@ -197,7 +236,17 @@
         "b": "file.iso",
         "c": "SHA-256 matches"
       }
-    ]
+    ],
+    "live": {
+      "title": "One download, simulated",
+      "text": "Eight connections fetch one file. When a connection finishes early it takes half of the largest range still left, so none of them sits idle. Nothing here touches the network.",
+      "filled": "Written to disk",
+      "active": "Receiving now",
+      "pending": "Waiting",
+      "steal": "Connection %a finished and took half of connection %b’s range",
+      "start": "Splitting the file into 8 ranges",
+      "label": "Simulated download: a file split into 64 blocks, filled by eight connections that take work from each other, then verified with SHA-256."
+    }
   },
   "shots": {
     "title": "What it looks like",
@@ -259,6 +308,10 @@
       {
         "q": "Can I download it now?",
         "a": "Yes, as an alpha preview for Windows 10 / 11 (64-bit): a per-user installer that needs no admin rights, or a portable zip. It is an early build that changes often, so expect rough edges."
+      },
+      {
+        "q": "How do I check that my download is genuine?",
+        "a": "Every release lists SHA-256 checksums for the installer and the zip (the link sits under the download buttons). On Windows run certutil -hashfile followed by the file name and SHA256, and compare the result with the list."
       },
       {
         "q": "Does it work with my browser?",
@@ -411,5 +464,58 @@
     "why": "Public reports let other people find the same problem, add detail and see when it is fixed. You need a free GitHub account. This site has no form of its own, no analytics and no tracking scripts, so there is nothing here that could collect your message.",
     "readReviews": "Read the reviews",
     "readIssues": "Browse open issues"
+  },
+  "trust": {
+    "title": "What you can check for yourself",
+    "items": [
+      {
+        "icon": "github",
+        "title": "Open source",
+        "text": "GPL-3.0 app, MIT / Apache-2.0 engine. Every line is public."
+      },
+      {
+        "icon": "exact",
+        "title": "SHA-256 verified",
+        "text": "A file counts as complete only when its checksum matches."
+      },
+      {
+        "icon": "lock",
+        "title": "No telemetry",
+        "text": "No accounts, no ads. Only your downloads use the network."
+      },
+      {
+        "icon": "user",
+        "title": "No admin rights",
+        "text": "A per-user install. Nothing asks for elevation, ever."
+      },
+      {
+        "icon": "rtl",
+        "title": "Arabic and English",
+        "text": "A fully mirrored right-to-left interface, switchable live."
+      }
+    ]
+  },
+  "band": {
+    "title": "Many connections in. One exact file out.",
+    "text": "Riptide opens parallel connections, writes every segment straight to its place on disk, and checks the finished file before it moves it into place. The three streams in our mark are the idea: separate flows, one result.",
+    "facts": [
+      {
+        "n": "8",
+        "t": "connections per file by default"
+      },
+      {
+        "n": "1s",
+        "t": "the longest your progress goes unsaved"
+      },
+      {
+        "n": "0",
+        "t": "accounts, telemetry or ads"
+      }
+    ],
+    "flowLabel": "Animation: three streams of segments merge into one finished file.",
+    "flowDone": "file.iso"
+  },
+  "cta": {
+    "tagline": "Three streams, one current."
   }
 }
