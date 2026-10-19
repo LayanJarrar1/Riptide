@@ -12,6 +12,8 @@ export class UiState {
   readonly addUrl = signal<string | null>(null);
   /** The batch-download dialog (pattern or list). */
   readonly batchOpen = signal(false);
+  /** The site grabber dialog (crawl a site for files). */
+  readonly grabberOpen = signal(false);
   /** The keyboard-shortcuts dialog. */
   readonly shortcutsOpen = signal(false);
   /** Incremented whenever something asks the search box to take focus. */
@@ -38,6 +40,14 @@ export class UiState {
 
   closeBatch(): void {
     this.batchOpen.set(false);
+  }
+
+  openGrabber(): void {
+    this.grabberOpen.set(true);
+  }
+
+  closeGrabber(): void {
+    this.grabberOpen.set(false);
   }
 
   openShortcuts(): void {
