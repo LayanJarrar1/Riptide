@@ -88,6 +88,7 @@ async function buildTarget(target) {
     minify: false,
     sourcemap: false,
     legalComments: 'none',
+    loader: { '.svg': 'text' },
     charset: 'utf8',
     logLevel: 'warning',
   };
