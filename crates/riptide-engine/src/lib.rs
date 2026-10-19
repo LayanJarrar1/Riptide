@@ -827,8 +827,11 @@ impl Engine {
         // a crawl that starts on a public host gets a client whose DNS resolver only returns
         // public addresses (and a guard that refuses private IP links and redirects); one that
         // starts on the owner's LAN or loopback uses the normal client
-        let start = riptide_net::parse_http_url(&spec.start)?;
-        let guard = riptide_net::NetGuard::for_start(&start, None).await;
+        // (an unusable start URL is reported by the crawl itself)
+        let guard = match riptide_net::parse_http_url(&spec.start) {
+            Ok(start) => riptide_net::NetGuard::for_start(&start, None).await,
+            Err(_) => riptide_net::NetGuard::off(),
+        };
         let client = if guard.blocks() {
             riptide_net::build_client_guarded(&self.settings().client_options(), &guard)?
         } else {
