@@ -201,6 +201,7 @@ pub async fn transfer(
                 validator,
                 size,
                 reason,
+                no_ranges,
             } => {
                 restarts += 1;
                 tracing::warn!(restarts, %reason, "restarting transfer from zero");
@@ -213,6 +214,12 @@ pub async fn transfer(
                 }
                 if let Some(s) = size {
                     plan.size = Some(s);
+                }
+                if no_ranges {
+                    // the server's range support is broken (it sends more than it announced):
+                    // one plain streaming connection, and its announced total is not trusted
+                    plan.supports_ranges = false;
+                    plan.size = None;
                 }
                 // second restart: the server keeps answering 200, so it does not really do ranges
                 if restarts == 2 {
@@ -231,6 +238,7 @@ enum Run {
         validator: Option<String>,
         size: Option<u64>,
         reason: String,
+        no_ranges: bool,
     },
 }
 
@@ -257,6 +265,8 @@ enum SegEnd {
         validator: Option<String>,
         size: Option<u64>,
         reason: String,
+        /// Ranges are not trustworthy on this server: continue without them.
+        no_ranges: bool,
     },
 }
 
@@ -398,7 +408,7 @@ async fn run_once(
     progress_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut last_checkpoint = Instant::now();
     let mut failure: Option<Error> = None;
-    let mut restart: Option<(Option<String>, Option<u64>, String)> = None;
+    let mut restart: Option<(Option<String>, Option<u64>, String, bool)> = None;
     let mut stopped = false;
 
     loop {
@@ -429,9 +439,9 @@ async fn run_once(
                             lock(&state).segments[index].state = SegmentState::Pending;
                         }
                     }
-                    Ok(SegEnd::Restart { validator, size, reason }) => {
+                    Ok(SegEnd::Restart { validator, size, reason, no_ranges }) => {
                         if restart.is_none() {
-                            restart = Some((validator, size, reason));
+                            restart = Some((validator, size, reason, no_ranges));
                             run_token.cancel();
                         }
                     }
@@ -482,11 +492,12 @@ async fn run_once(
         .map_err(|e| Error::Protocol(format!("writer task failed: {e}")))??;
     checkpoint(&file, &state, events).await?;
 
-    if let Some((validator, size, reason)) = restart {
+    if let Some((validator, size, reason, no_ranges)) = restart {
         return Ok(Run::Restart {
             validator,
             size,
             reason,
+            no_ranges,
         });
     }
     if let Some(e) = failure {
@@ -822,7 +833,9 @@ impl SegmentTask {
                         return Err(Error::Protocol("206 without a usable Content-Range".into()))
                     }
                 }
-                self.pump(sent.response, offset).await.map(|(end, _)| end)
+                self.pump(sent.response, offset, Some(end))
+                    .await
+                    .map(|(end, _)| end)
             }
             200 => Ok(SegEnd::Restart {
                 validator: headers
@@ -837,6 +850,7 @@ impl SegmentTask {
                 reason:
                     "server answered 200 to a ranged request (file changed or ranges unsupported)"
                         .into(),
+                no_ranges: false,
             }),
             416 => {
                 let actual = headers
@@ -852,6 +866,7 @@ impl SegmentTask {
                         validator: None,
                         size: actual,
                         reason: "416 for a range inside the known size".into(),
+                        no_ranges: false,
                     }),
                 }
             }
@@ -890,7 +905,7 @@ impl SegmentTask {
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<u64>().ok())
             .or(self.declared);
-        let (end, received) = self.pump(sent.response, 0).await?;
+        let (end, received) = self.pump(sent.response, 0, None).await?;
         if let SegEnd::Done = end {
             // `received` counts bytes handed to the writer (exact); the writer's own accounting
             // may lag by a few chunks, so it is not consulted here
@@ -908,7 +923,17 @@ impl SegmentTask {
 
     /// Streams the body to the writer from `offset`, honouring a shrinking `end` and the stop.
     /// Returns how the segment ended and the offset reached (bytes sent to the writer).
-    async fn pump(&self, response: reqwest::Response, mut pos: u64) -> Result<(SegEnd, u64)> {
+    ///
+    /// `request_end` is the end of the range this response was asked for (`None` when
+    /// streaming). Reaching it without the segment having been shrunk by work stealing, the body
+    /// must be over: a server that keeps sending is not honouring its own `Content-Range`
+    /// (CDNs that compress on the fly do this), so ranges cannot be trusted on it.
+    async fn pump(
+        &self,
+        response: reqwest::Response,
+        mut pos: u64,
+        request_end: Option<u64>,
+    ) -> Result<(SegEnd, u64)> {
         let mut body = response.bytes_stream();
         loop {
             let next = tokio::select! {
@@ -924,7 +949,7 @@ impl SegmentTask {
                 lock(&self.state).segments[self.index].end
             };
             if pos >= cur_end {
-                return Ok((SegEnd::Done, pos));
+                return self.range_done(&mut body, pos, cur_end, request_end).await;
             }
             let allowed = (cur_end - pos).min(chunk.len() as u64) as usize;
             let data = if allowed < chunk.len() {
@@ -954,7 +979,7 @@ impl SegmentTask {
             }
             pos += len;
             if pos >= cur_end {
-                return Ok((SegEnd::Done, pos));
+                return self.range_done(&mut body, pos, cur_end, request_end).await;
             }
         }
         if self.streaming {
@@ -967,6 +992,38 @@ impl SegmentTask {
                 std::io::ErrorKind::UnexpectedEof,
                 format!("body ended at {pos}, expected {end}"),
             )));
+        }
+        Ok((SegEnd::Done, pos))
+    }
+
+    /// The segment's bytes are all here. If it was not shrunk by work stealing, peek at the body
+    /// once: more data means the server ignores the range it announced.
+    async fn range_done<S>(
+        &self,
+        body: &mut S,
+        pos: u64,
+        cur_end: u64,
+        request_end: Option<u64>,
+    ) -> Result<(SegEnd, u64)>
+    where
+        S: futures::Stream<Item = reqwest::Result<Bytes>> + Unpin,
+    {
+        if request_end == Some(cur_end) {
+            let peek = tokio::time::timeout(std::time::Duration::from_secs(1), body.next()).await;
+            if let Ok(Some(Ok(extra))) = peek {
+                if !extra.is_empty() {
+                    return Ok((
+                        SegEnd::Restart {
+                            validator: None,
+                            size: None,
+                            reason: "server sent more bytes than its Content-Range announced;                                      downloading without ranges"
+                                .into(),
+                            no_ranges: true,
+                        },
+                        pos,
+                    ));
+                }
+            }
         }
         Ok((SegEnd::Done, pos))
     }

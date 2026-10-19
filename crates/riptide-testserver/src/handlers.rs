@@ -351,6 +351,7 @@ pub(crate) async fn index(State(st): App) -> Response {
          /file/<name.ext>         like /ok with the name in the path; ?ct= sets Content-Type, ?cd= Content-Disposition\n\
          /noranges                ignores Range, always 200, no Accept-Ranges\n\
          /nohead                  like /ok, HEAD answers 405
+\n         /range-lie?lie=          206 Content-Range total smaller than the body (CDN on-the-fly compression)
 \n         /nolength                chunked transfer, no Content-Length\n\
          /slow?bps=               throttled bandwidth (bytes per second), ranges like /ok\n\
          /drop?after=             closes the connection after N body bytes\n\
@@ -1176,4 +1177,46 @@ pub(crate) async fn nohead(
         Resource::from_params(&q)?,
         Shaping::default(),
     )
+}
+
+/// `/range-lie?lie=` — what some CDNs do when they compress on the fly: `Range` requests are
+/// answered `206` with a `Content-Range` whose total (`lie`, the compressed size) is smaller than
+/// the real resource, while the body carries the real, longer bytes. No `Content-Length`, no
+/// `Accept-Ranges`; the first byte (`bytes=0-0`) is honest.
+pub(crate) async fn range_lie(Query(q): Query<Params>, headers: HeaderMap) -> HandlerResult {
+    let res = Resource::from_params(&q)?;
+    let lie = param_u64(&q, "lie", (res.size / 3).max(1))?.min(res.size);
+    let (status, start, end) = match parse_range(&headers, res.size) {
+        // a one-byte probe is answered honestly; any longer range gets everything from `start`
+        RangeSpec::Part(s, e) if e - s <= 1 => (StatusCode::PARTIAL_CONTENT, s, e),
+        RangeSpec::Part(s, _) => (StatusCode::PARTIAL_CONTENT, s, res.size),
+        RangeSpec::Unsatisfiable => return range_not_satisfiable(&res),
+        RangeSpec::Whole => (StatusCode::OK, 0, res.size),
+    };
+    let body = Body::from_stream(content::body_stream(Delivery {
+        seed: res.seed,
+        start,
+        end,
+        chunk: CHUNK_SIZE,
+        bps: None,
+        drop_after: None,
+        flips: Arc::from(Vec::new()),
+        _guard: None,
+    }));
+    let mut resp = Response::new(body);
+    *resp.status_mut() = status;
+    let h = resp.headers_mut();
+    h.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    h.insert(header::ETAG, HeaderValue::from_str(&res.etag)?);
+    if status == StatusCode::PARTIAL_CONTENT {
+        let last = (end - 1).min(lie.saturating_sub(1)).max(start);
+        h.insert(
+            header::CONTENT_RANGE,
+            HeaderValue::from_str(&format!("bytes {start}-{last}/{lie}"))?,
+        );
+    }
+    Ok(resp)
 }

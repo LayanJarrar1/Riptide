@@ -1797,6 +1797,14 @@ impl Engine {
                 if current != DownloadState::Verifying {
                     self.transition(id, DownloadState::Verifying, None).await?;
                 }
+                // the file on disk is the truth: a stream of unknown length, or a server whose
+                // announced size was wrong, leaves the record with a size that is not the file's
+                if let (Ok(meta), Some(mut d)) = (std::fs::metadata(&path), self.get(id).await?) {
+                    if d.size != Some(meta.len()) {
+                        d.size = Some(meta.len());
+                        db(&self.inner.store, move |s| s.update_download(&d)).await?;
+                    }
+                }
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;

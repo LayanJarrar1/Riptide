@@ -21,6 +21,8 @@ async fn complete(w: &World, engine: &riptide_engine::Engine, path: &str, size: 
     let id = engine.add(w.request(path)).await.unwrap();
     let p = wait_completed_in(&mut rx, id, T).await;
     assert_complete(engine, id, &p, &w.downloads(), DEFAULT_SEED, size).await;
+    // the record ends up with the real size, whatever the server announced
+    assert_eq!(engine.get(id).await.unwrap().unwrap().size, Some(size));
     engine.remove(id, true).await.unwrap();
 }
 
@@ -543,5 +545,31 @@ async fn head_refused_and_http_error_statuses() {
         assert!(!retryable, "{path}: a client error is not retried forever");
         assert!(!w.downloads().join(format!("err{n}.bin")).exists());
     }
+    engine.shutdown().await;
+}
+
+/// A CDN that compresses on the fly answers ranged requests with a `Content-Range` total that
+/// is the compressed size while the body is the full, longer file (seen on jsDelivr). Riptide
+/// used to stop after the announced length and call the truncated file `Completed`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn server_sending_more_bytes_than_its_content_range_is_downloaded_whole() {
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let size = 1_000_000;
+    complete(
+        &w,
+        &engine,
+        &format!("/range-lie?size={size}&lie=333333"),
+        size,
+    )
+    .await;
+    complete(&w, &engine, &format!("/range-lie?size={size}&lie=2"), size).await;
+    complete(
+        &w,
+        &engine,
+        &format!("/range-lie?size=3000000&lie=1200000"),
+        3_000_000,
+    )
+    .await;
     engine.shutdown().await;
 }

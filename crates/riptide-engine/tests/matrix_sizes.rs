@@ -27,10 +27,8 @@ async fn run_one(w: &World, engine: &riptide_engine::Engine, route: &str, size: 
     let path = wait_completed_in(&mut rx, id, Duration::from_secs(600)).await;
     assert_complete(engine, id, &path, &w.downloads(), DEFAULT_SEED, size).await;
     let record = engine.get(id).await.unwrap().unwrap();
-    assert_eq!(
-        record.size,
-        Some(size).filter(|_| route == "/ok" || route == "/noranges")
-    );
+    // the record ends up with the real size, even for a stream of unknown length
+    assert_eq!(record.size, Some(size), "{route}");
     // free the name for the next case
     engine.remove(id, true).await.unwrap();
 }
