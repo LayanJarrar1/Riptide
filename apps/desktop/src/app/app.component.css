@@ -90,17 +90,42 @@
   border-inline-end: 1px solid var(--color-border);
 }
 
-.brand-mark {
+/* The brand-kit wordmark: the light-background variant by default, the dark-background one in
+   the dark theme. The "R" mark alone stands in when the sidebar collapses. */
+.brand-logo {
   display: block;
+  inline-size: auto;
+  block-size: 30px;
+  flex: none;
+}
+
+.brand-logo-dark,
+.brand-mark {
+  display: none;
+}
+
+:host-context([data-theme='dark']) .brand-logo-light {
+  display: none;
+}
+
+:host-context([data-theme='dark']) .brand-logo-dark {
+  display: block;
+}
+
+.brand-mark {
   inline-size: 28px;
   block-size: 28px;
   flex: none;
 }
 
+/* The name stays in the accessibility tree (the wordmark is decorative). */
 .brand-name {
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-tight);
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .search {
@@ -430,6 +455,14 @@
   .brand {
     justify-content: center;
     padding-inline: 0;
+  }
+
+  .brand .brand-logo {
+    display: none;
+  }
+
+  .brand .brand-mark {
+    display: block;
   }
 }
 
