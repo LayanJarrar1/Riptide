@@ -262,7 +262,7 @@ async fn queue_limit_and_order_are_respected() {
             engine
                 .add(DownloadRequest {
                     filename: Some(format!("f{i}.bin")),
-                    ..w.request("/slow?bps=4194304&size=4194304")
+                    ..w.request("/slow?bps=4194304&size=8388608")
                 })
                 .await
                 .unwrap(),
