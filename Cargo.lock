@@ -3871,6 +3871,8 @@ dependencies = [
  "clap",
  "rand 0.9.5",
  "riptide-core",
+ "riptide-crawl",
+ "riptide-engine",
  "riptide-ipc",
  "riptide-log",
  "riptide-net",
