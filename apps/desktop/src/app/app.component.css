@@ -272,6 +272,14 @@
   font-weight: var(--weight-semibold);
 }
 
+.nav-badge {
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
 .nav-key {
   padding: 1px 5px;
   border: 1px solid var(--color-border);

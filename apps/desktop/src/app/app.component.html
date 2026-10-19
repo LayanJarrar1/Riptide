@@ -113,6 +113,9 @@
       <a class="nav-item" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page">
         <app-icon name="settings" [size]="16" />
         <span class="nav-text">{{ 'nav.settings' | t }}</span>
+        @if (updates.badgeVersion(); as version) {
+          <span class="nav-badge" role="img" [attr.aria-label]="('settings.updateAvailable' | t).replace('{version}', version)" [attr.title]="('settings.updateAvailable' | t).replace('{version}', version)"></span>
+        }
         <kbd class="nav-key" aria-hidden="true">Ctrl ,</kbd>
       </a>
     </div>
