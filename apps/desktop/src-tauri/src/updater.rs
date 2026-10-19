@@ -61,7 +61,28 @@ pub enum Channel {
     Beta,
 }
 
+/// `true` when `version` (`0.1.0-alpha.4`) is a semver pre-release: a `-` before any `+build`
+/// metadata.
+pub fn is_prerelease(version: &str) -> bool {
+    version
+        .split('+')
+        .next()
+        .is_some_and(|core| core.contains('-'))
+}
+
 impl Channel {
+    /// The channel a build of `current_version` really follows. Every release so far is a
+    /// GitHub pre-release, so the stable feed (`releases/latest`) never has anything for a
+    /// pre-release build: those always use the beta feed, whatever was saved. A stable build
+    /// keeps the saved channel. The saved setting itself is not changed.
+    pub fn effective(self, current_version: &str) -> Channel {
+        if is_prerelease(current_version) {
+            Channel::Beta
+        } else {
+            self
+        }
+    }
+
     /// The manifest URL of this channel.
     pub fn endpoint(self) -> &'static str {
         match self {
@@ -110,6 +131,15 @@ pub async fn check_update<R: Runtime>(
     pending: State<'_, PendingUpdate>,
     channel: Channel,
 ) -> Result<Option<UpdateInfo>, String> {
+    let requested = channel;
+    let channel = channel.effective(&app.package_info().version.to_string());
+    if channel != requested {
+        tracing::info!(
+            ?requested,
+            ?channel,
+            "pre-release build: using the beta feed"
+        );
+    }
     let endpoint = url::Url::parse(channel.endpoint()).map_err(to_message)?;
     let updater = app
         .updater_builder()
@@ -186,6 +216,23 @@ mod tests {
         }
         assert!(STABLE_ENDPOINT.ends_with("/latest/download/latest.json"));
         assert!(BETA_ENDPOINT.ends_with("/channel-beta/latest-beta.json"));
+    }
+
+    #[test]
+    fn pre_release_builds_always_follow_the_beta_feed() {
+        assert!(is_prerelease("0.1.0-alpha.4"));
+        assert!(is_prerelease("1.0.0-rc.1+build.7"));
+        assert!(!is_prerelease("1.2.3"));
+        assert!(!is_prerelease("1.2.3+meta-with-dash"));
+        assert_eq!(Channel::Stable.effective("0.1.0-alpha.4"), Channel::Beta);
+        assert_eq!(Channel::Beta.effective("0.1.0-alpha.4"), Channel::Beta);
+        // a stable build keeps what the user saved
+        assert_eq!(Channel::Stable.effective("1.0.0"), Channel::Stable);
+        assert_eq!(Channel::Beta.effective("1.0.0"), Channel::Beta);
+        assert_eq!(
+            Channel::Stable.effective("0.1.0-alpha.4").endpoint(),
+            BETA_ENDPOINT
+        );
     }
 
     #[test]
