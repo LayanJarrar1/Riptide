@@ -242,9 +242,18 @@ video = initVideo({
   send,
 });
 
+video = initVideo({
+  root,
+  settings: () => settings,
+  lang: () => lang,
+  tr,
+  send,
+});
+
 browser.runtime.onMessage.addListener((message: unknown) => {
   if (!isMessage(message)) return undefined;
   if (message.kind === 'show-panel') links.show(message.mode);
+  if (message.kind === 'show-panel') showPanel(message.selectionOnly);
   else if (message.kind === 'show-video') video?.show(message.url);
   else if (message.kind === 'media-hint') video?.hint();
   return undefined;

@@ -14,6 +14,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
 
+pub mod batch;
 pub mod category;
 pub mod dispatch;
 pub mod download;
@@ -27,6 +28,10 @@ pub mod segment;
 pub mod state;
 pub mod throttle;
 
+pub use batch::{
+    export_url_list, import_url_list, is_http_url, parse_url_list, BatchError, BatchOptions,
+    UrlList, MAX_EXPANSION,
+};
 pub use category::Category;
 pub use dispatch::pick_next;
 pub use download::{

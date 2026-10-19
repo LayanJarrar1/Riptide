@@ -40,6 +40,7 @@ export type Message =
   | { kind: 'video-never'; site: string }
   /** Background -> content script. */
   | { kind: 'show-panel'; mode: PanelMode }
+  | { kind: 'show-panel'; selectionOnly: boolean }
   /** Background -> content script: open the quality picker for this page (context menu). */
   | { kind: 'show-video'; url: string }
   /** Background -> content script: the network saw a media response on this tab. */

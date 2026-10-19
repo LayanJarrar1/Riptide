@@ -1,9 +1,9 @@
 <div class="frame" [class.is-booting]="ui.booting()">
   <header class="topbar">
     <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
-      <span class="brand-mark" aria-hidden="true">
-        <app-icon name="download" [size]="18" />
-      </span>
+      <img class="brand-logo brand-logo-light" src="brand-logo-light.svg" alt="" width="91" height="34" />
+      <img class="brand-logo brand-logo-dark" src="brand-logo-dark.svg" alt="" width="91" height="34" />
+      <img class="brand-mark" src="brand-mark.svg" alt="" width="28" height="28" />
       <span class="brand-name">{{ 'app.title' | t }}</span>
     </a>
 
@@ -49,6 +49,9 @@
       >
         <span [attr.lang]="i18n.lang() === 'ar' ? 'en' : 'ar'">{{ i18n.lang() === 'ar' ? 'English' : 'العربية' }}</span>
       </button>
+      <button appButton variant="secondary" icon="layers" type="button" class="batch-button" (click)="ui.openBatch()">
+        {{ 'action.batch' | t }}
+      </button>
       <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">
         {{ 'action.add' | t }}
       </button>
@@ -62,8 +65,8 @@
         <button
           type="button"
           class="nav-item"
-          [class.is-active]="store.category() === null && store.view() === view && onDownloads()"
-          [attr.aria-current]="store.category() === null && store.view() === view && onDownloads() ? 'page' : null"
+          [class.is-active]="store.category() === null && store.queue() === null && store.view() === view && onDownloads()"
+          [attr.aria-current]="store.category() === null && store.queue() === null && store.view() === view && onDownloads() ? 'page' : null"
           (click)="goView(view)"
         >
           <app-icon [name]="viewIcons[view]" [size]="16" />
@@ -98,18 +101,16 @@
     }
 
     <div class="nav-group">
-      <p class="nav-heading">{{ 'nav.queues' | t }}</p>
-      <div class="nav-item is-static">
-        <app-icon name="list" [size]="16" />
-        <span class="nav-text">{{ 'queue.main' | t }}</span>
-        <span class="nav-count num"><span [appTicker]="store.totals().active" [tickerFormat]="intFormat"></span>/{{ format.int(store.totals().maxActive) }}</span>
-      </div>
+      <app-queues-nav [current]="onDownloads() ? store.queue() : null" (open)="goQueue($event)" />
     </div>
 
     <div class="nav-foot">
       <a class="nav-item" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page">
         <app-icon name="settings" [size]="16" />
         <span class="nav-text">{{ 'nav.settings' | t }}</span>
+        @if (updates.badgeVersion(); as version) {
+          <span class="nav-badge" role="img" [attr.aria-label]="('settings.updateAvailable' | t).replace('{version}', version)" [attr.title]="('settings.updateAvailable' | t).replace('{version}', version)"></span>
+        }
         <kbd class="nav-key" aria-hidden="true">Ctrl ,</kbd>
       </a>
     </div>
@@ -144,7 +145,26 @@
   </footer>
 </div>
 
+<!-- dialogs are separate chunks: fetched when first wanted (the big ones are also prefetched when idle) -->
+@defer (when ui.addOpen(); prefetch on idle) {
+  <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+}
+@if (batchDialog(); as dialog) {
+  <ng-container *ngComponentOutlet="dialog" />
+}
+@defer (when ui.shortcutsOpen(); prefetch on idle) {
+  <app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
+}
+<!-- these two open on events from the engine, so they are mounted as soon as the first paint is done -->
+@defer (on idle) {
+  <app-exit-confirm-dialog />
+  <app-post-action-dialog />
+}
 <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
+@if (batchDialog(); as dialog) {
+  <ng-container *ngComponentOutlet="dialog" />
+}
 <app-shortcuts-dialog [open]="ui.shortcutsOpen()" (closed)="ui.closeShortcuts()" />
 <app-exit-confirm-dialog />
+<app-post-action-dialog />
 <app-toasts />

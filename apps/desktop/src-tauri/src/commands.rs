@@ -11,6 +11,10 @@
 //! | `add_download` | `request: DownloadRequest` | new id |
 //! | `probe_url` | `url`, `referrer?` | `ProbeInfo` |
 //! | `find_duplicate` | `url`, `filename?`, `dir?` | the matching `Download` or `null` |
+//! | `batch_expand` | `pattern` | the URLs of a pattern like `file[001-120].zip`, or a typed `BatchError` |
+//! | `batch_import` | `text` | `UrlList` (URLs of a pasted/loaded list, plus what was ignored) |
+//! | `add_batch` | `urls`, `options: BatchOptions` | `BatchOutcome` (added ids, skipped duplicates) |
+//! | `pick_text_file` / `save_text_file` | – / `name`, `text` | the chosen file's text or `null` / whether it was saved |
 //! | `pause_download` / `resume_download` / `cancel_download` | `id` | – |
 //! | `restart_download` | `id` | – (starts over from byte zero) |
 //! | `remove_download` | `id`, `deleteFile` | – |
@@ -29,8 +33,10 @@
 
 use std::path::{Path, PathBuf};
 
-use riptide_core::{Download, DownloadId, DownloadRequest, Segment};
-use riptide_engine::{Engine, EngineSettings, ProbeInfo};
+use riptide_core::{
+    BatchError, BatchOptions, Download, DownloadId, DownloadRequest, Segment, UrlList,
+};
+use riptide_engine::{BatchOutcome, Engine, EngineSettings, ProbeInfo};
 use serde::Serialize;
 use tauri::State;
 
@@ -127,6 +133,77 @@ pub async fn find_duplicate(
         )
         .await
         .map_err(err)
+}
+
+/// The URLs a batch pattern (`file[001-120].zip`, `img_[a-z].jpg`, ...) stands for, at most
+/// [`riptide_core::MAX_EXPANSION`]; the error is typed so the UI can word it in either language.
+#[tauri::command]
+pub fn batch_expand(pattern: String) -> Result<Vec<String>, BatchError> {
+    riptide_core::batch::expand(&pattern)
+}
+
+/// The URLs of a pasted or loaded list (one per line, `#` comments, http(s) only, no repeats).
+#[tauri::command]
+pub fn batch_import(text: String) -> UrlList {
+    riptide_core::import_url_list(&text)
+}
+
+/// Adds the checked URLs of a batch in one transaction; duplicates are skipped and reported.
+#[tauri::command]
+pub async fn add_batch(
+    engine: State<'_, Engine>,
+    urls: Vec<String>,
+    options: BatchOptions,
+) -> CmdResult<BatchOutcome> {
+    engine.add_batch(options.requests(&urls)).await.map_err(err)
+}
+
+/// Largest list file the import accepts (a million short URLs is far below this).
+const MAX_LIST_FILE_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Native "open" dialog for a `.txt` URL list; answers the file's text, `None` on cancel. The
+/// path comes from the user's own pick in the OS dialog and is only read, never executed.
+#[tauri::command]
+pub async fn pick_text_file(app: tauri::AppHandle) -> CmdResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .add_filter("Text", &["txt", "list", "lst", "csv"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(err)?;
+    let Some(path) = picked.and_then(|p| p.into_path().ok()) else {
+        return Ok(None);
+    };
+    let len = tokio::fs::metadata(&path).await.map_err(err)?.len();
+    if len > MAX_LIST_FILE_BYTES {
+        return Err("the file is too large to be a URL list".into());
+    }
+    let bytes = tokio::fs::read(&path).await.map_err(err)?;
+    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
+}
+
+/// Native "save" dialog; writes `text` to the chosen file. `false` when the user cancels.
+#[tauri::command]
+pub async fn save_text_file(app: tauri::AppHandle, name: String, text: String) -> CmdResult<bool> {
+    use tauri_plugin_dialog::DialogExt;
+    let suggested = riptide_core::sanitize_filename(&name);
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_file_name(suggested)
+            .add_filter("Text", &["txt"])
+            .blocking_save_file()
+    })
+    .await
+    .map_err(err)?;
+    let Some(path) = picked.and_then(|p| p.into_path().ok()) else {
+        return Ok(false);
+    };
+    tokio::fs::write(&path, text).await.map_err(err)?;
+    Ok(true)
 }
 
 /// Pauses a download.

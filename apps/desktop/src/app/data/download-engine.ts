@@ -1,6 +1,7 @@
 import { Signal, signal } from '@angular/core';
 
-import { Download, DownloadRequest, MediaProbe, ProbeResult } from '../model/download';
+import { BatchOptions, BatchResult, Download, DownloadRequest, MediaProbe, ProbeResult } from '../model/download';
+import { BatchExpansion, UrlListResult } from './batch-pattern';
 
 /**
  * What the UI needs from a download engine. Two implementations exist: `MockEngineService`
@@ -49,6 +50,21 @@ export abstract class DownloadEngine {
   abstract add(request: DownloadRequest, probe?: ProbeResult): Promise<number>;
 
   /**
+   * The links a batch pattern (`file[001-120].zip`, `img_[a-z].jpg`, `[0-100:5]`) stands for,
+   * at most 10 000, or the reason it stands for none. Never rejects for a bad pattern.
+   */
+  abstract expandBatch(pattern: string): Promise<BatchExpansion>;
+
+  /** Reads a pasted or loaded link list: one per line, `#` comments, http(s) only, no repeats. */
+  abstract importUrlList(text: string): Promise<UrlListResult>;
+
+  /**
+   * Adds many links at once, in one step, with shared options. Links already in the list (and
+   * repeats within the batch) are skipped and reported, not failed.
+   */
+  abstract addBatch(urls: readonly string[], options: BatchOptions): Promise<BatchResult>;
+
+  /**
    * A download that would duplicate a new one: the same link (fragment ignored) or the same file
    * name in the same folder; `undefined` when there is none. `filename` and `dir` default to what
    * `add` would choose.
@@ -84,6 +100,16 @@ export abstract class DownloadEngine {
    * download follows it within a second; the global cap in Settings still applies on top.
    */
   abstract setSpeedLimit(id: number, bps: number | null): Promise<void>;
+
+  /** Moves downloads to the end of another queue; they show their new queue at once. */
+  abstract moveToQueue(ids: readonly number[], queueId: number): Promise<void>;
+
+  /**
+   * Puts the downloads of one queue in this order (ids of that queue; any it does not list
+   * follow in their current order). The new order shows at once and is restored if the engine
+   * refuses it.
+   */
+  abstract reorderQueue(queueId: number, ids: readonly number[]): Promise<void>;
 
   /** Gives an expired download a fresh address. */
   abstract refresh(id: number, url: string): Promise<void>;

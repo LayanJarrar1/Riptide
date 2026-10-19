@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="{{lang}}" dir="{{dir}}" data-theme="light" class="{{fontClass}}">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="dark" class="{{fontClass}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{privacy.meta.title}}</title>
   <meta name="description" content="{{privacy.meta.description}}">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#071a26" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <link rel="canonical" href="{{pageUrl}}">
   <link rel="alternate" hreflang="en" href="{{siteUrl}}privacy/">
   <link rel="alternate" hreflang="ar" href="{{siteUrl}}ar/privacy/">
@@ -26,8 +27,7 @@
     (function () {
       try {
         var saved = localStorage.getItem('riptide-theme');
-        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : (dark ? 'dark' : 'light');
+        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
       } catch (e) { /* storage blocked: stay light */ }
     })();
   </script>
@@ -38,8 +38,8 @@
   <header class="site-header" id="top">
     <nav class="nav container" aria-label="{{nav.menu}}">
       <a class="brand" href="{{home}}">
-        {{{svg mark}}}
-        <span class="brand-name">{{nav.brand}}</span>
+        <img class="brand-logo logo-light" src="{{root}}assets/riptide-logo-light.svg" alt="{{nav.brand}}" width="690" height="254">
+        <img class="brand-logo logo-dark" src="{{root}}assets/riptide-logo-dark.svg" alt="{{nav.brand}}" width="690" height="254">
       </a>
       <div class="nav-actions legal-actions">
         <a class="nav-lang" href="{{altHref}}" lang="{{altLang}}" hreflang="{{altLang}}" aria-label="{{nav.switchLangLabel}}">{{nav.switchLang}}</a>
@@ -69,8 +69,8 @@
     <div class="container footer-grid">
       <div class="footer-brand">
         <a class="brand" href="{{home}}">
-          {{{svg mark}}}
-          <span class="brand-name">{{nav.brand}}</span>
+          <img class="brand-logo logo-light" src="{{root}}assets/riptide-logo-light.svg" alt="{{nav.brand}}" width="690" height="254">
+        <img class="brand-logo logo-dark" src="{{root}}assets/riptide-logo-dark.svg" alt="{{nav.brand}}" width="690" height="254">
         </a>
         <p>{{footer.tagline}}</p>
       </div>

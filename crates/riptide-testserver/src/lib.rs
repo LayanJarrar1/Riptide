@@ -30,6 +30,7 @@
 //! | `/cd/arabic` | `Content-Disposition: attachment; filename*=UTF-8''%D9%85%D9%84%D9%81%20%D8%AA%D8%AC%D8%B1%D9%8A%D8%A8%D9%8A.zip` |
 //! | `/cd/evil` | `Content-Disposition: attachment; filename="../../CON%01.txt. "; filename*=UTF-8''..%2F..%2FCON%01.txt.%20` (the control char is `%01`: a raw `0x01` is not a legal header octet) |
 //! | `/corrupt?flip=` | Flips `flip` (default 1) bits at [`corrupt_bit_positions`]; `ETag`/`Content-Length` unchanged |
+//! | `/batch/<name>` | `file001.zip` ... `file120.zip` and `img_a.jpg` ... `img_z.jpg`: per-name seed and size (4-260 KiB, see [`batch_item`]), like `/ok`; any other name is `404` |
 //! | `/echo-headers` | Request headers as a JSON object |
 //! | `/` | Plain-text index |
 //!
@@ -38,12 +39,14 @@
 //! makes hyper close the TCP connection before the declared length is reached.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+mod batch;
 mod content;
 mod handlers;
 mod router;
 mod server;
 mod state;
 
+pub use batch::{exists as batch_exists, item as batch_item, BatchItem};
 pub use content::{
     bytes_at, corrupt_bit_positions, etag, expected_bytes, expected_sha256_hex, splitmix64,
     CHUNK_SIZE, DEFAULT_SEED, DEFAULT_SIZE, LAST_MODIFIED,

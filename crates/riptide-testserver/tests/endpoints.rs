@@ -828,3 +828,89 @@ async fn bad_query_parameter_is_400() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+// ------------------------------------------------------------------------------------------------
+// /batch/<name>
+// ------------------------------------------------------------------------------------------------
+
+#[tokio::test]
+async fn batch_items_serve_per_name_bytes_and_404_outside_the_pattern() {
+    let srv = TestServer::spawn().await;
+    let client = no_redirects();
+    let mut sizes = std::collections::HashSet::new();
+    for name in [
+        "file001.zip",
+        "file042.zip",
+        "file120.zip",
+        "img_a.jpg",
+        "img_z.jpg",
+    ] {
+        let item = riptide_testserver::batch_item(name).unwrap();
+        sizes.insert(item.size);
+        let resp = client
+            .get(srv.url(&format!("/batch/{name}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{name}");
+        assert_eq!(header_str(&resp, "accept-ranges"), Some("bytes"));
+        assert_eq!(
+            header_str(&resp, "etag"),
+            Some(etag(item.seed, item.size).as_str())
+        );
+        let body = resp.bytes().await.unwrap();
+        assert_eq!(body.len() as u64, item.size, "{name}");
+        assert_eq!(
+            sha256_hex(&body),
+            expected_sha256_hex(item.seed, item.size),
+            "{name}"
+        );
+    }
+    assert!(sizes.len() > 1, "items should differ in size");
+
+    // ranges work like /ok
+    let item = riptide_testserver::batch_item("file007.zip").unwrap();
+    let resp = client
+        .get(srv.url("/batch/file007.zip"))
+        .header(header::RANGE, "bytes=10-19")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        resp.bytes().await.unwrap().as_ref(),
+        &expected_bytes(item.seed, 20)[10..20]
+    );
+
+    // size override
+    let resp = client
+        .get(srv.url("/batch/file007.zip?size=100"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.bytes().await.unwrap().len(), 100);
+
+    // outside the pattern: missing items
+    for name in [
+        "file000.zip",
+        "file121.zip",
+        "file1.zip",
+        "file0001.zip",
+        "img_A.jpg",
+        "img_ab.jpg",
+        "other.bin",
+        "file001.zip.bak",
+    ] {
+        let resp = client
+            .get(srv.url(&format!("/batch/{name}")))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{name}");
+    }
+    // distinct names, distinct bytes
+    assert_ne!(
+        riptide_testserver::batch_item("file001.zip").unwrap().seed,
+        riptide_testserver::batch_item("file002.zip").unwrap().seed
+    );
+}
