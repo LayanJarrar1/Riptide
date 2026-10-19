@@ -78,6 +78,8 @@ export interface Download {
   readonly state: DownloadState;
   readonly category: CategoryKey;
   readonly queueId: number;
+  /** Place in the queue's manual order (smaller runs first); absent = unknown. */
+  readonly queuePosition?: number;
   readonly priority: Priority;
   /** Simultaneous connections the engine may open. */
   readonly connections: number;
@@ -219,6 +221,28 @@ export interface DownloadRequest {
   /** `media` for a video page; `mediaFormat` is then a [`MediaChoice`] key. */
   readonly kind?: DownloadKind;
   readonly mediaFormat?: string;
+}
+
+/** Options shared by every item of a batch. Mirrors `riptide_core::BatchOptions`. */
+export interface BatchOptions {
+  readonly dir?: string;
+  readonly connections?: number;
+  readonly startPaused?: boolean;
+}
+
+/** Why the engine left a batch item out. */
+export type BatchSkipReason = 'duplicate' | 'invalid';
+
+/** A batch item the engine did not add. */
+export interface BatchSkipped {
+  readonly url: string;
+  readonly reason: BatchSkipReason;
+}
+
+/** What `addBatch` did: the new ids and what was skipped. */
+export interface BatchResult {
+  readonly added: readonly number[];
+  readonly skipped: readonly BatchSkipped[];
 }
 
 /** Result of probing a URL before adding it. */

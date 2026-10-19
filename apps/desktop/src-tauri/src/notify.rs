@@ -15,6 +15,13 @@ use crate::shell;
 /// Tauri event asking the webview to show a download's details; the payload is its id.
 pub const OPEN_DOWNLOAD_EVENT: &str = "riptide://open-download";
 
+/// Tauri event asking the webview to open Settings → About (an update notification was clicked).
+pub const OPEN_UPDATE_EVENT: &str = "riptide://open-update";
+
+/// Id of the "update available" notification. Download ids are small and positive, so this
+/// can never be mistaken for one.
+pub const UPDATE_NOTIFICATION_ID: i32 = i32::MAX;
+
 /// Notification title for a finished download: the file name of `path`, or `fallback`.
 pub fn title_for(path: &str, fallback: &str) -> String {
     // both separators, so a Windows path reads the same on every OS
@@ -30,8 +37,13 @@ pub fn install<R: Runtime>(app: &AppHandle<R>, engine: Engine) {
     let registered = app.notification().on_action(move |performed| {
         crate::show_main_window(&handle);
         if let Some(n) = performed.notification() {
-            if let Err(e) = handle.emit(OPEN_DOWNLOAD_EVENT, i64::from(n.id())) {
-                tracing::debug!(error = %e, "open-download not delivered");
+            let result = if n.id() == UPDATE_NOTIFICATION_ID {
+                handle.emit(OPEN_UPDATE_EVENT, ())
+            } else {
+                handle.emit(OPEN_DOWNLOAD_EVENT, i64::from(n.id()))
+            };
+            if let Err(e) = result {
+                tracing::debug!(error = %e, "notification click not delivered");
             }
         }
     });
@@ -111,9 +123,31 @@ fn show<R: Runtime>(app: &AppHandle<R>, id: DownloadId, title: &str, body: &str)
     }
 }
 
+/// Shows the "update available" system notification (the webview decides when, once per
+/// version, and translates `title` and `body`). Clicking it opens Settings → About.
+#[tauri::command]
+pub fn notify_update<R: Runtime>(app: AppHandle<R>, title: String, body: String) {
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .id(UPDATE_NOTIFICATION_ID)
+        .title(title)
+        .body(body)
+        .show()
+    {
+        tracing::warn!(error = %e, "update notification not shown");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_id_is_not_a_download_id() {
+        assert_eq!(UPDATE_NOTIFICATION_ID, i32::MAX);
+        assert_ne!(i32::try_from(1_u64).ok(), Some(UPDATE_NOTIFICATION_ID));
+    }
 
     #[test]
     fn title_is_the_file_name() {

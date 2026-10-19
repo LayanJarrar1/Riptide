@@ -44,12 +44,29 @@ test('protocol version matches message.rs', () => {
 test('enum tags mirror message.rs', () => {
   assert.deepEqual(
     [...REQUEST_TYPES],
-    ['ping', 'probe', 'add', 'refresh', 'list', 'get', 'pause', 'resume', 'cancel', 'remove', 'subscribe', 'shutdown'],
+    [
+      'ping',
+      'probe',
+      'probe_media',
+      'add',
+      'refresh',
+      'list',
+      'get',
+      'pause',
+      'resume',
+      'cancel',
+      'remove',
+      'subscribe',
+      'shutdown',
+    ],
   );
-  assert.deepEqual([...RESPONSE_TYPES], ['pong', 'probed', 'added', 'downloads', 'download', 'ok', 'event', 'error']);
+  assert.deepEqual(
+    [...RESPONSE_TYPES],
+    ['pong', 'probed', 'media_probed', 'added', 'downloads', 'download', 'ok', 'event', 'error'],
+  );
   assert.deepEqual([...ERROR_CODES], ['bad_request', 'not_found', 'illegal_transition', 'unsupported', 'internal']);
   // must match BROWSER_REQUEST_TYPES in crates/riptide-host/src/lib.rs
-  assert.deepEqual([...BROWSER_REQUEST_TYPES], ['ping', 'probe', 'add', 'refresh', 'list']);
+  assert.deepEqual([...BROWSER_REQUEST_TYPES], ['ping', 'probe', 'probe_media', 'add', 'refresh', 'list']);
 });
 
 for (const f of requests) {

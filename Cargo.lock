@@ -3946,6 +3946,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "windows-sys 0.59.0",
  "winreg",
 ]
 
@@ -3988,6 +3989,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
  "windows-sys 0.59.0",
 ]
 

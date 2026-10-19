@@ -1,7 +1,8 @@
 <!doctype html>
 <!--
   Source for the Open Graph images (assets/og-en.png, assets/og-ar.png) and the touch icon.
-  Rendered once with a headless browser at 1200x630 and committed as PNG; not part of the build.
+  Rendered with a headless browser at 1200x630 (see apps/website/README.md) and committed as PNG; not part of the build.
+  Colours and logo come from the brand kit (Abyss, Riptide Cyan, Ocean Blue).
   Query: ?lang=ar for the Arabic card, ?icon=1 for the 180x180 touch icon.
 -->
 <html lang="en">
@@ -12,33 +13,30 @@
   @font-face { font-family: "IBM Plex Sans Arabic"; src: url("../src/assets/fonts/IBMPlexSansArabic-Bold.woff2") format("woff2"); font-weight: 700; }
   @font-face { font-family: "IBM Plex Sans Arabic"; src: url("../src/assets/fonts/IBMPlexSansArabic-Regular.woff2") format("woff2"); font-weight: 400; }
   * { box-sizing: border-box; margin: 0; }
-  html, body { background: #ffffff; }
-  body { width: 1200px; height: 630px; overflow: hidden; font-family: "Inter", system-ui, sans-serif; color: #121a20; }
+  html, body { background: #071a26; }
+  body { width: 1200px; height: 630px; overflow: hidden; font-family: "Inter", system-ui, sans-serif; color: #e9f7f9; }
   body[dir="rtl"] { font-family: "IBM Plex Sans Arabic", "Inter", sans-serif; }
-  .card { position: relative; width: 1200px; height: 630px; padding: 72px 80px; overflow: hidden; background: #ffffff; border-bottom: 10px solid #19c6b5; }
+  .card { position: relative; width: 1200px; height: 630px; padding: 72px 80px; overflow: hidden; background: #071a26; border-bottom: 10px solid #00d5e8; }
   .brand { display: flex; align-items: center; gap: 16px; font-weight: 640; font-size: 30px; letter-spacing: -0.02em; }
   body[dir="rtl"] .brand { letter-spacing: 0; font-weight: 700; }
-  .brand svg { width: 44px; height: 44px; border-radius: 12px; }
+  .brand img { height: 64px; width: auto; }
   h1 { margin-top: 64px; font-size: 76px; line-height: 1.02; letter-spacing: -0.035em; font-weight: 660; max-width: 800px; }
   body[dir="rtl"] h1 { letter-spacing: 0; line-height: 1.22; font-weight: 700; font-size: 70px; }
-  p { margin-top: 28px; font-size: 28px; line-height: 1.4; color: #4b5863; max-width: 780px; }
-  .status { position: absolute; bottom: 72px; inset-inline-start: 80px; display: inline-flex; align-items: center; gap: 12px; font-size: 22px; color: #4b5863; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: #19c6b5; box-shadow: 0 0 0 5px #e4f8f5; }
+  p { margin-top: 28px; font-size: 28px; line-height: 1.4; color: #aac6ce; max-width: 780px; }
+  .status { position: absolute; bottom: 72px; inset-inline-start: 80px; display: inline-flex; align-items: center; gap: 12px; font-size: 22px; color: #aac6ce; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #00d5e8; box-shadow: 0 0 0 5px #0a3442; }
   .lanes { position: absolute; inset-inline-end: -30px; top: 96px; width: 330px; display: grid; gap: 24px; }
   .lane { display: flex; gap: 14px; }
-  .lane span { height: 16px; border-radius: 8px; background: #19c6b5; flex: none; }
-  .bar { position: absolute; inset-inline-end: 80px; bottom: 84px; width: 220px; height: 20px; border-radius: 10px; background: #e6ebef; overflow: hidden; }
-  .bar i { position: absolute; inset: 2px; border-radius: 8px; background: #17b199; }
-  .icon-only { width: 180px; height: 180px; padding: 0; background: #19c6b5; display: grid; place-items: center; }
+  .lane span { height: 16px; border-radius: 8px; background: #00d5e8; flex: none; }
+  .bar { position: absolute; inset-inline-end: 80px; bottom: 84px; width: 220px; height: 20px; border-radius: 10px; background: #15374a; overflow: hidden; }
+  .bar i { position: absolute; inset: 2px; border-radius: 8px; background: #168bff; }
+  .icon-only { width: 180px; height: 180px; padding: 0; background: #071a26; display: grid; place-items: center; }
   .icon-only svg { width: 180px; height: 180px; }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="brand">
-    <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#19c6b5"/><path d="M23 48V17h12.5a8.5 8.5 0 0 1 0 17H23" fill="none" stroke="#06201d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 34.5 42.5 48" fill="none" stroke="#06201d" stroke-width="7" stroke-linecap="round"/></svg>
-    <span data-en="Riptide" data-ar="ريبتايد">Riptide</span>
-  </div>
+  <div class="brand"><img src="../src/assets/riptide-logo-dark.svg" alt="Riptide" width="175" height="64"></div>
   <h1 data-en="The download manager that pulls harder." data-ar="مدير التحميل الذي يسحب بقوة أكبر.">The download manager that pulls harder.</h1>
   <p data-en="Free, open source, for Windows. Multi-connection downloads, byte-exact verification, crash-safe resume, Arabic and English." data-ar="مجاني ومفتوح المصدر لويندوز. تحميل متعدد الاتصالات، تحقق دقيق حتى آخر بايت، استئناف آمن بعد الانهيار، عربي وإنجليزي.">Free, open source, for Windows. Multi-connection downloads, byte-exact verification, crash-safe resume, Arabic and English.</p>
   <div class="status"><span class="dot"></span><span data-en="Alpha preview for Windows 10 / 11" data-ar="معاينة ألفا لويندوز 10 / 11">Alpha preview for Windows 10 / 11</span></div>
@@ -55,7 +53,7 @@
 <script>
   const q = new URLSearchParams(location.search);
   if (q.get('icon')) {
-    document.body.innerHTML = '<div class="icon-only"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="0" fill="#19c6b5"/><path d="M23 48V17h12.5a8.5 8.5 0 0 1 0 17H23" fill="none" stroke="#06201d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 34.5 42.5 48" fill="none" stroke="#06201d" stroke-width="7" stroke-linecap="round"/></svg></div>';
+    document.body.innerHTML = '<div class="icon-only"><img src="../src/assets/favicon.svg" width="180" height="180" alt=""></div>';
     document.body.style.width = '180px'; document.body.style.height = '180px';
   } else if (q.get('lang') === 'ar') {
     document.documentElement.lang = 'ar';

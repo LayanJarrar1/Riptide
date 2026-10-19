@@ -184,6 +184,7 @@ export class ShortcutsDialogComponent {
         title: t('shortcuts.general'),
         items: [
           { label: t('shortcuts.add'), chords: [['Ctrl', 'N']] },
+          { label: t('shortcuts.batch'), chords: [['Ctrl', 'Shift', 'N']] },
           { label: t('shortcuts.search'), chords: [['Ctrl', 'F']] },
           { label: t('shortcuts.settings'), chords: [['Ctrl', ',']] },
           { label: t('shortcuts.help'), chords: [['?'], ['Ctrl', '/']] },
@@ -200,6 +201,7 @@ export class ShortcutsDialogComponent {
           { label: t('shortcuts.multi'), chords: [['Ctrl', t('key.click')]] },
           { label: t('shortcuts.range'), chords: [['Shift', t('key.click')]] },
           { label: t('shortcuts.context'), chords: [[t('key.rightclick')]] },
+          { label: t('shortcuts.moveInQueue'), chords: [['Alt', '↑'], ['Alt', '↓']] },
         ],
       },
     ];

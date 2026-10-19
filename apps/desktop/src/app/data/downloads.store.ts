@@ -25,8 +25,15 @@ const VIEW_STATES: Readonly<Record<ListView, readonly DownloadState[]>> = {
   failed: ['failed', 'cancelled'],
 };
 
+/** Downloads of one queue, by what they are doing. */
+export interface QueueCount {
+  readonly active: number;
+  readonly waiting: number;
+  readonly total: number;
+}
+
 /** Sortable columns. */
-export type SortKey = 'name' | 'size' | 'progress' | 'speed' | 'eta' | 'status' | 'added';
+export type SortKey = 'name' | 'size' | 'progress' | 'speed' | 'eta' | 'status' | 'added' | 'queue';
 
 /** Sort direction. */
 export type SortDir = 'asc' | 'desc';
@@ -61,6 +68,8 @@ export class DownloadsStore {
 
   readonly view = signal<ListView>('all');
   readonly category = signal<CategoryKey | null>(null);
+  /** Queue the list is limited to (`null` = every queue). */
+  readonly queue = signal<number | null>(null);
   readonly query = signal('');
   readonly sortKey = signal<SortKey>('added');
   readonly sortDir = signal<SortDir>('desc');
@@ -82,11 +91,13 @@ export class DownloadsStore {
   readonly rows = computed<readonly DownloadRow[]>(() => {
     const states = VIEW_STATES[this.view()];
     const category = this.category();
+    const queue = this.queue();
     const q = this.query().trim().toLowerCase();
     const filtered = this.allRows().filter(
       ({ d }) =>
         states.includes(d.state) &&
         (category === null || d.category === category) &&
+        (queue === null || d.queueId === queue) &&
         (q.length === 0 || d.filename.toLowerCase().includes(q) || d.url.toLowerCase().includes(q)),
     );
     const key = this.sortKey();
@@ -109,6 +120,25 @@ export class DownloadsStore {
     }
     return m;
   });
+
+  /** Per queue: downloads holding a slot, waiting ones, and all of them. */
+  readonly queueCounts = computed<ReadonlyMap<number, QueueCount>>(() => {
+    const m = new Map<number, { active: number; waiting: number; total: number }>();
+    for (const d of this.engine.downloads()) {
+      const c = m.get(d.queueId) ?? { active: 0, waiting: 0, total: 0 };
+      c.total++;
+      if (isActive(d.state)) {
+        c.active++;
+      } else if (d.state === 'queued') {
+        c.waiting++;
+      }
+      m.set(d.queueId, c);
+    }
+    return m;
+  });
+
+  /** The list shows one queue in its manual order: rows can be dragged and moved up and down. */
+  readonly manualOrder = computed(() => this.queue() !== null && this.sortKey() === 'queue' && this.sortDir() === 'asc');
 
   /** The download in the drawer, kept fresh as the engine ticks. */
   readonly details = computed<DownloadRow | null>(() => {
@@ -138,6 +168,33 @@ export class DownloadsStore {
   setView(view: ListView): void {
     this.view.set(view);
     this.category.set(null);
+    this.setQueue(null);
+  }
+
+  /**
+   * Limits the list to one queue (`null` = all). A queue is shown in its manual order; leaving
+   * it puts the sort back to "newest first" if the manual order was in use.
+   */
+  setQueue(queue: number | null): void {
+    this.queue.set(queue);
+    if (queue !== null) {
+      this.view.set('all');
+      this.category.set(null);
+      this.sortKey.set('queue');
+      this.sortDir.set('asc');
+    } else if (this.sortKey() === 'queue') {
+      this.sortKey.set('added');
+      this.sortDir.set('desc');
+    }
+  }
+
+  /** Ids of a queue's downloads in manual order, whatever the view and search show. */
+  queueOrder(queue: number): readonly number[] {
+    return this.engine
+      .downloads()
+      .filter((d) => d.queueId === queue)
+      .sort((a, b) => (a.queuePosition ?? 0) - (b.queuePosition ?? 0) || a.id - b.id)
+      .map((d) => d.id);
   }
 
   setCategory(category: CategoryKey | null): void {
@@ -232,5 +289,7 @@ function compare(a: DownloadRow, b: DownloadRow, key: SortKey): number {
       return STATE_ORDER[a.d.state] - STATE_ORDER[b.d.state];
     case 'added':
       return a.d.addedAt - b.d.addedAt;
+    case 'queue':
+      return (a.d.queuePosition ?? 0) - (b.d.queuePosition ?? 0) || a.d.id - b.d.id;
   }
 }

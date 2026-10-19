@@ -4,8 +4,10 @@ import { FORMAT_PIPES } from '../../core/format.pipes';
 import { FormatService } from '../../core/format.service';
 import { TickerDirective } from '../../core/ticker.directive';
 import { DownloadRow } from '../../data/downloads.store';
+import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { canPause, canResume } from '../../model/download';
+import { MAIN_QUEUE_ID } from '../../model/queue';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ProgressFlowComponent } from '../../ui/progress-flow.component';
@@ -131,6 +133,11 @@ interface LogLine {
           <dd class="fact-url">
             <span dir="ltr" class="truncate" [attr.title]="d().dir">{{ d().dir }}</span>
             <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" [attr.title]="i18n.t('action.openFolder')" (click)="action.emit('openFolder')"></button>
+          </dd>
+          <dt>{{ i18n.t('queue.detailsLabel') }}</dt>
+          <dd class="fact-url">
+            <span class="truncate" dir="auto" [attr.title]="queueName()">{{ queueName() }}</span>
+            <button appButton size="sm" variant="ghost" type="button" (click)="action.emit('moveToQueue')">{{ i18n.t('queue.detailsMove') }}</button>
           </dd>
           <dt>{{ i18n.t('details.checksum') }}</dt>
           <dd>
@@ -445,6 +452,7 @@ interface LogLine {
 export class DownloadDetailsComponent {
   protected readonly i18n = inject(I18nService);
   private readonly format = inject(FormatService);
+  private readonly queues = inject(QueuesService);
   protected readonly canPause = canPause;
   protected readonly canResume = canResume;
 
@@ -456,6 +464,10 @@ export class DownloadDetailsComponent {
   protected readonly isMedia = computed(() => this.d().kind === 'media');
   protected readonly icon = computed(() => CATEGORY_ICONS[this.d().category]);
   protected readonly host = computed(() => hostOf(this.d().url));
+  protected readonly queueName = computed(() => {
+    const id = this.d().queueId;
+    return id === MAIN_QUEUE_ID ? this.i18n.t('queue.main') : (this.queues.get(id)?.name ?? '');
+  });
   protected readonly activeConnections = computed(() => this.d().segments.filter((s) => s.state === 'active').length);
   protected readonly peak = computed(() => Math.max(0, ...this.d().speedHistory));
 

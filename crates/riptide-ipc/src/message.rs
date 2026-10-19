@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use riptide_core::{Download, DownloadId, DownloadRequest, Event, MediaInfo, Secrets};
 
 /// Bumped only for incompatible changes; reported in [`ResponseBody::Pong`].
+///
+/// Still `1`: the media messages (`probe_media`, `add` with `kind: "media"`) and the browser-only
+/// `cookie_origin` field are additive, and every older message parses unchanged.
 pub const PROTOCOL_VERSION: u32 = 1;
 
 /// Client → server.
@@ -53,6 +56,10 @@ pub enum RequestBody {
     /// Ask what a video page (YouTube, Vimeo, ...) offers: title, formats and the quality
     /// menu. Answered with [`ResponseBody::MediaProbed`]. Add the page afterwards with `add`,
     /// `kind: "media"` and `media_format` set to one of the menu's keys.
+    ///
+    /// From a browser the frame may also carry `cookie_origin`, the origin the cookies were read
+    /// for. `riptide-host` checks it against `url` and drops the cookies on a mismatch; the app
+    /// ignores the field.
     ProbeMedia {
         /// Page URL.
         url: String,
@@ -301,6 +308,16 @@ mod tests {
         };
         assert_eq!(request.kind, riptide_core::DownloadKind::Media);
         assert_eq!(request.media_format.as_deref(), Some("h720"));
+    }
+
+    #[test]
+    fn browser_only_cookie_origin_is_ignored_by_the_app_side() {
+        let r: Request = serde_json::from_str(
+            r#"{"id":4,"type":"probe_media","url":"https://vimeo.com/1","cookies":"a=b","cookie_origin":"https://vimeo.com"}"#,
+        )
+        .unwrap();
+        assert!(matches!(r.body, RequestBody::ProbeMedia { .. }));
+        assert!(!serde_json::to_string(&r).unwrap().contains("cookie_origin"));
     }
 
     #[test]

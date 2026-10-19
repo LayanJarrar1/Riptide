@@ -1,6 +1,9 @@
 import { computed, Injectable, InjectionToken, inject, signal } from '@angular/core';
 
 import {
+  BatchOptions,
+  BatchResult,
+  BatchSkipped,
   categoryOf,
   Download,
   DownloadRequest,
@@ -13,6 +16,8 @@ import {
   MediaChoice,
   MediaProbe,
 } from '../model/download';
+import type { BatchExpansion, UrlListResult } from './batch-pattern';
+import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
 import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
 
@@ -196,6 +201,33 @@ export class MockEngineService extends DownloadEngine {
     return Promise.resolve(id);
   }
 
+  /** The TypeScript port of the Rust expander (see `batch-pattern.ts`). */
+  async expandBatch(pattern: string): Promise<BatchExpansion> {
+    // loaded on demand: the port only matters to the batch dialog, never to the first paint
+    return (await import('./batch-pattern')).expandPattern(pattern);
+  }
+
+  async importUrlList(text: string): Promise<UrlListResult> {
+    return (await import('./batch-pattern')).importUrlList(text);
+  }
+
+  /** Adds the new links in one go and reports the ones already in the list, like the engine. */
+  async addBatch(urls: readonly string[], options: BatchOptions): Promise<BatchResult> {
+    const known = new Set(this.list().map((d) => stripFragment(d.url)));
+    const added: number[] = [];
+    const skipped: BatchSkipped[] = [];
+    for (const url of urls) {
+      const key = stripFragment(url);
+      if (known.has(key)) {
+        skipped.push({ url, reason: 'duplicate' });
+        continue;
+      }
+      known.add(key);
+      added.push(await this.add({ url, dir: options.dir, connections: options.connections, startPaused: options.startPaused }));
+    }
+    return { added, skipped };
+  }
+
   /** Scans the list like the engine would: same link without its fragment, or same name in the same folder. */
   findDuplicate(url: string, filename?: string, dir?: string): Promise<Download | undefined> {
     const wanted = stripFragment(url);
@@ -289,6 +321,18 @@ export class MockEngineService extends DownloadEngine {
     for (const d of this.list()) {
       void this.resume(d.id);
     }
+    return Promise.resolve();
+  }
+
+  /** Moves downloads to the end of another queue (the simulation has no per-queue limits). */
+  moveToQueue(ids: readonly number[], queueId: number): Promise<void> {
+    this.list.update((all) => withMovedToQueue(all, ids, queueId));
+    return Promise.resolve();
+  }
+
+  /** Renumbers the queue's downloads in the given order. */
+  reorderQueue(queueId: number, ids: readonly number[]): Promise<void> {
+    this.list.update((all) => withQueueOrder(all, queueId, ids));
     return Promise.resolve();
   }
 

@@ -1,6 +1,5 @@
 import { computed, DOCUMENT, effect, inject, Injectable, signal } from '@angular/core';
 
-import ar from '../../i18n/ar.json';
 import en from '../../i18n/en.json';
 import { NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 
@@ -19,7 +18,30 @@ export const LANG_STORAGE_KEY = 'riptide.lang';
 /** All languages the app ships, in menu order. */
 export const LANGS: readonly Lang[] = ['ar', 'en'];
 
-const TABLES: Readonly<Record<Lang, Readonly<Record<string, string>>>> = { ar, en };
+/** One language's strings. */
+export type Table = Readonly<Record<string, string>>;
+
+/**
+ * The loaded tables. English ships in the main bundle (it is the fallback and the source of the
+ * key type); Arabic is a separate chunk, fetched at startup when it is the language in use and on
+ * the first switch otherwise, so it stays out of the initial bundle for English users.
+ */
+const TABLES: Partial<Record<Lang, Table>> = { en };
+
+const LOADERS: Readonly<Record<Lang, () => Promise<Table>>> = {
+  en: () => Promise.resolve(en),
+  ar: async () => (await import('../../i18n/ar.json')).default,
+};
+
+/** Makes sure the table of `lang` is loaded. */
+export async function loadTable(lang: Lang): Promise<void> {
+  TABLES[lang] ??= await LOADERS[lang]();
+}
+
+/** Puts a table in place without fetching it (the test setup preloads Arabic this way). */
+export function registerTable(lang: Lang, table: Table): void {
+  TABLES[lang] = table;
+}
 
 /** Type guard for a persisted or user-supplied language value. */
 export function isLang(value: unknown): value is Lang {
@@ -68,10 +90,27 @@ export class I18nService {
     });
   }
 
-  /** Switches the language live and remembers the choice. */
+  /** Resolves once the table of the language in use is loaded (the app waits for it at startup). */
+  ready(): Promise<void> {
+    return loadTable(this.lang());
+  }
+
+  /**
+   * Switches the language live and remembers the choice. When the table is not loaded yet it is
+   * fetched first (a local chunk, a few milliseconds) and the switch happens as soon as it lands.
+   */
   setLang(lang: Lang): void {
-    this.lang.set(lang);
     this.store.set(LANG_STORAGE_KEY, lang);
+    if (TABLES[lang] !== undefined) {
+      this.lang.set(lang);
+      return;
+    }
+    void loadTable(lang).then(() => {
+      // the user may have clicked again while the table was on its way
+      if (this.store.get(LANG_STORAGE_KEY) === lang) {
+        this.lang.set(lang);
+      }
+    });
   }
 
   /**
@@ -80,7 +119,8 @@ export class I18nService {
    * is what keeps that from ever happening in a shipped build.
    */
   t(key: string): string {
-    const value = TABLES[this.lang()][key];
+    const table: Table = TABLES[this.lang()] ?? en;
+    const value: string | undefined = table[key];
     if (value === undefined) {
       console.warn(`[i18n] missing key "${key}" for language "${this.lang()}"`);
       return key;

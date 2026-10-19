@@ -21,7 +21,7 @@ Requires the Riptide desktop app (Windows 10 or 11), free from https://github.co
 What it does
 • Automatic capture: when a download starts and matches your rules (file type, minimum size, site lists), it is handed to Riptide. If Riptide is not running or not installed, the browser simply keeps the download.
 • "Download with Riptide" on the right-click menu for links, images, video and audio.
-• "Download all links" and "Download selected links" open a checklist on the page so you can pick several files at once.
+• "Download all links", "Download selected links" and "Download all images" open a checklist on the page, with type filters and search, so you can pick several files at once.
 • A small "Download with Riptide" button appears when you hover a direct file link. You can turn it off.
 • Hold Alt while clicking to let the browser download a file itself.
 • Toolbar popup with the connection status, the last files you sent and a pause switch.

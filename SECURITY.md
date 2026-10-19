@@ -16,7 +16,9 @@ prefer otherwise.
 
 ## Supported versions
 
-There are no releases yet. Reports against `main` are welcome.
+Pre-releases are published on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/releases).
+The latest pre-release is the supported version; please reproduce problems against it, or against
+`main` if the fix is already there.
 
 ## What Riptide guards against
 

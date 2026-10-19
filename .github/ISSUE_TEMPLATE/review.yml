@@ -1,0 +1,62 @@
+name: Review
+description: Rate Riptide and tell us how it went
+title: "[review] "
+labels: ["review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time. Reviews are public on GitHub, so please leave out anything
+        private (links with tokens, file names you would rather not share). A low rating with
+        detail helps more than a high one without. For a bug, use the bug report form instead, so
+        it gets tracked and fixed.
+  - type: dropdown
+    id: rating
+    attributes:
+      label: Rating
+      description: 1 is poor, 5 is excellent.
+      options:
+        - "5 - excellent"
+        - "4 - good"
+        - "3 - okay"
+        - "2 - poor"
+        - "1 - very poor"
+    validations:
+      required: true
+  - type: textarea
+    id: usage
+    attributes:
+      label: What you used it for
+      description: The kinds of files, how large, from which sites, on what connection.
+      placeholder: Large ISO and game downloads from a few mirrors, 8 connections, home fibre.
+    validations:
+      required: true
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked
+    validations:
+      required: true
+  - type: textarea
+    id: didnt
+    attributes:
+      label: What did not work, or could be better
+      description: Slow downloads, confusing screens, wrong Arabic text, missing features.
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: input
+    id: build
+    attributes:
+      label: Riptide version
+      description: Shown in the app's About, or by `riptide --version`.
+      placeholder: 0.1.0-alpha.3
+  - type: dropdown
+    id: lang
+    attributes:
+      label: Interface language
+      options:
+        - English
+        - العربية

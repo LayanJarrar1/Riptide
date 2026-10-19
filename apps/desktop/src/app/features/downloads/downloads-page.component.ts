@@ -17,8 +17,10 @@ import { DUR, MotionService } from '../../core/motion.service';
 import { finalPath } from '../../data/bridge-mapping';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow, DownloadsStore, SortKey } from '../../data/downloads.store';
+import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { canPause, canResume, Download } from '../../model/download';
+import { MAIN_QUEUE_ID, moveBy, moveManyBeside, sameOrder } from '../../model/queue';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -26,6 +28,8 @@ import { EmptyStateComponent, EmptyStep } from '../../ui/empty-state.component';
 import { IconComponent } from '../../ui/icon.component';
 import { MenuComponent, MenuItem } from '../../ui/menu.component';
 import { ToastService } from '../../ui/toast.service';
+import { DOWNLOAD_DRAG_TYPE, dragHas, inLowerHalf } from '../queues/dnd';
+import { MoveToQueueDialogComponent } from '../queues/move-to-queue-dialog.component';
 import { UiState } from '../shell/ui-state.service';
 import { DownloadDetailsComponent } from './download-details.component';
 import { DownloadRowComponent, RowAction } from './download-row.component';
@@ -79,6 +83,7 @@ const FRESH_MS = 600;
     EmptyStateComponent,
     IconComponent,
     MenuComponent,
+    MoveToQueueDialogComponent,
     RestartDialogComponent,
   ],
   host: {
@@ -91,6 +96,19 @@ const FRESH_MS = 600;
         <div class="toolbar-title">
           <h1 class="title">{{ title() }}</h1>
           <span class="count num">{{ format.int(store.rows().length) }}</span>
+          @if (selectedQueue(); as q) {
+            <span class="queue-tools">
+              <span class="queue-state" [class.is-running]="q.enabled">
+                <span class="queue-dot" aria-hidden="true"></span>{{ i18n.t(q.enabled ? 'queue.running' : 'queue.stopped') }}
+              </span>
+              <button appButton size="sm" variant="ghost" type="button" [icon]="q.enabled ? 'stop' : 'play'" (click)="toggleQueue(q.id, q.enabled)">
+                {{ i18n.t(q.enabled ? 'queue.stop' : 'queue.start') }}
+              </button>
+              @if (!store.manualOrder()) {
+                <button appButton size="sm" variant="ghost" type="button" icon="list" (click)="store.setQueue(q.id)">{{ i18n.t('queue.orderChip') }}</button>
+              }
+            </span>
+          }
         </div>
 
         @if (store.selectedRows().length > 1) {
@@ -172,6 +190,14 @@ const FRESH_MS = 600;
                 [staggerIndex]="ui.booting() && window().top === 0 && i < staggerRows ? i : null"
                 [fresh]="freshIds().has(row.d.id)"
                 [leaving]="leavingIds().has(row.d.id)"
+                [class.drop-before]="rowMark()?.id === row.d.id && !rowMark()?.after"
+                [class.drop-after]="rowMark()?.id === row.d.id && rowMark()?.after"
+                draggable="true"
+                (dragstart)="onRowDragStart($event, row)"
+                (dragover)="onRowDragOver($event, row)"
+                (dragleave)="onRowDragLeave(row)"
+                (drop)="onRowDrop($event, row)"
+                (dragend)="rowDragEnd()"
                 (rowClick)="onRowClick(row, $event)"
                 (rowDblClick)="store.openDetails(row.d.id)"
                 (rowContext)="onContext(row, $event)"
@@ -184,8 +210,10 @@ const FRESH_MS = 600;
       </div>
     </section>
 
-    @if (store.details(); as details) {
-      <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+    @defer (when store.details() !== null; prefetch on idle) {
+      @if (store.details(); as details) {
+        <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+      }
     }
 
     <app-menu [open]="menu().open" [items]="menuItems()" [x]="menu().x" [y]="menu().y" (selected)="onMenu($event)" (closed)="closeMenu()" />
@@ -206,7 +234,16 @@ const FRESH_MS = 600;
       </ng-container>
     </app-dialog>
 
+    @defer (when restartTarget() !== null) {
+      <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
+    }
+
+    @defer (when moveTargets() !== null) {
+      <app-move-to-queue-dialog [targets]="moveTargets()" (chosen)="confirmMove($event)" (closed)="moveTargets.set(null)" />
+    }
     <app-restart-dialog [target]="restartTarget()" (confirmed)="confirmRestart()" (closed)="restartTarget.set(null)" />
+
+    <app-move-to-queue-dialog [targets]="moveTargets()" (chosen)="confirmMove($event)" (closed)="moveTargets.set(null)" />
   `,
   styles: `
     :host {
@@ -275,6 +312,42 @@ const FRESH_MS = 600;
     .count {
       color: var(--color-text-muted);
       font-size: var(--text-sm);
+    }
+
+    .queue-tools {
+      display: inline-flex;
+      align-items: center;
+      align-self: center;
+      gap: var(--space-2);
+      margin-inline-start: var(--space-3);
+    }
+
+    .queue-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
+    }
+
+    .queue-dot {
+      inline-size: 8px;
+      block-size: 8px;
+      border-radius: 50%;
+      border: 1.5px solid var(--color-text-muted);
+    }
+
+    .queue-state.is-running .queue-dot {
+      border-color: var(--color-accent);
+      background: var(--color-accent);
+    }
+
+    app-download-row.drop-before {
+      box-shadow: inset 0 2px 0 var(--color-accent);
+    }
+
+    app-download-row.drop-after {
+      box-shadow: inset 0 -2px 0 var(--color-accent);
     }
 
     .bulk {
@@ -624,6 +697,7 @@ export class DownloadsPageComponent {
   private readonly tauriAvailable = inject(TAURI_AVAILABLE);
   private readonly invoke = inject(TAURI_INVOKE);
   private readonly toasts = inject(ToastService);
+  private readonly queues = inject(QueuesService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
 
@@ -639,6 +713,20 @@ export class DownloadsPageComponent {
   protected readonly deleteFile = signal(false);
   /** Download awaiting the "restart from the beginning" confirmation. */
   protected readonly restartTarget = signal<Download | null>(null);
+
+  /** Downloads awaiting a queue choice in the "Move to queue" dialog. */
+  protected readonly moveTargets = signal<readonly Download[] | null>(null);
+
+  /** Where a dragged row would land in the manual order: next to `id`, before or after. */
+  protected readonly rowMark = signal<{ readonly id: number; readonly after: boolean } | null>(null);
+  /** Ids being dragged (the selection when the dragged row is part of it). */
+  private dragged: readonly number[] = [];
+
+  /** The queue the list is limited to, if any. */
+  protected readonly selectedQueue = computed(() => {
+    const id = this.store.queue();
+    return id === null ? undefined : this.queues.get(id);
+  });
 
   /** Ids the user is removing; their rows play the leave animation before the engine drops them. */
   protected readonly leavingIds = signal<ReadonlySet<number>>(new Set());
@@ -660,6 +748,10 @@ export class DownloadsPageComponent {
   });
 
   protected readonly title = computed(() => {
+    const queue = this.selectedQueue();
+    if (queue !== undefined) {
+      return queue.id === MAIN_QUEUE_ID ? this.i18n.t('queue.main') : queue.name;
+    }
     const category = this.store.category();
     return category === null ? this.i18n.t(`view.${this.store.view()}`) : this.i18n.t(`category.${category}`);
   });
@@ -722,6 +814,15 @@ export class DownloadsPageComponent {
     items.push({ id: 'openFolder', label: t('action.openFolder'), icon: 'folderOpen' });
     items.push({ id: 'details', label: t('action.details'), icon: 'info', shortcut: 'Enter', separator: true });
     items.push({ id: 'copyLink', label: t('action.copyLink'), icon: 'copy' });
+    if (this.store.manualOrder()) {
+      const order = this.store.queueOrder(row.d.queueId);
+      const index = order.indexOf(row.d.id);
+      items.push({ id: 'moveUp', label: t('queue.moveUp'), icon: 'arrowUp', shortcut: 'Alt ↑', separator: true, disabled: index <= 0 });
+      items.push({ id: 'moveDown', label: t('queue.moveDown'), icon: 'arrowDown', shortcut: 'Alt ↓', disabled: index < 0 || index >= order.length - 1 });
+    }
+    if (this.queues.queues().length > 1) {
+      items.push({ id: 'moveToQueue', label: t('queue.moveTo'), icon: 'list', separator: !this.store.manualOrder() });
+    }
     // starting over only means something once bytes exist or the download has ended
     if (row.downloaded > 0 || s === 'completed' || s === 'failed' || s === 'cancelled') {
       items.push({ id: 'restart', label: t('action.restart'), icon: 'retry', separator: true });
@@ -735,7 +836,7 @@ export class DownloadsPageComponent {
 
   /** What the list is showing; a change of any part crossfades the viewport. */
   private readonly listKey = computed(
-    () => `${this.store.view()}|${this.store.category() ?? ''}|${this.store.query().trim().toLowerCase()}|${this.store.sortKey()}|${this.store.sortDir()}`,
+    () => `${this.store.view()}|${this.store.category() ?? ''}|${this.store.queue() ?? ''}|${this.store.query().trim().toLowerCase()}|${this.store.sortKey()}|${this.store.sortDir()}`,
   );
   private lastListKey: string | null = null;
 
@@ -888,7 +989,174 @@ export class DownloadsPageComponent {
       case 'refreshLink':
         this.ui.openAdd(d.url);
         break;
+      case 'moveToQueue': {
+        const selected = this.store.selectedRows();
+        this.moveTargets.set(selected.some((r) => r.d.id === d.id) ? selected.map((r) => r.d) : [d]);
+        break;
+      }
+      case 'moveUp':
+        this.moveInQueue(d, -1);
+        break;
+      case 'moveDown':
+        this.moveInQueue(d, 1);
+        break;
     }
+  }
+
+  /** The "Move to queue" dialog chose a queue. */
+  protected confirmMove(queueId: number): void {
+    const targets = this.moveTargets();
+    this.moveTargets.set(null);
+    if (targets === null) {
+      return;
+    }
+    const queue = this.queues.get(queueId);
+    const name = queueId === MAIN_QUEUE_ID ? this.i18n.t('queue.main') : (queue?.name ?? '');
+    const ids = targets.map((d) => d.id);
+    this.engine.moveToQueue(ids, queueId).then(
+      () =>
+        this.toasts.show(
+          'info',
+          ids.length === 1
+            ? this.i18n.t('toast.queueMoved').replace('{queue}', name)
+            : this.i18n.t('toast.queueMovedMany').replace('{n}', this.format.int(ids.length)).replace('{queue}', name),
+        ),
+      (error: unknown) => this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error))),
+    );
+  }
+
+  /** Moves a download one place in its queue's manual order (keyboard and menu). */
+  private moveInQueue(d: Download, delta: 1 | -1): void {
+    const order = this.store.queueOrder(d.queueId);
+    const next = moveBy(order, d.id, delta);
+    if (!sameOrder(order, next)) {
+      this.run(this.engine.reorderQueue(d.queueId, next));
+    }
+  }
+
+  protected onRowDragStart(event: DragEvent, row: DownloadRow): void {
+    if (event.dataTransfer === null) {
+      return;
+    }
+    const selected = this.store.selected();
+    this.dragged = selected.has(row.d.id) ? [...selected] : [row.d.id];
+    event.dataTransfer.setData(DOWNLOAD_DRAG_TYPE, JSON.stringify(this.dragged));
+    event.dataTransfer.effectAllowed = 'copyMove';
+  }
+
+  protected onRowDragOver(event: DragEvent, row: DownloadRow): void {
+    if (!this.store.manualOrder() || !dragHas(event, DOWNLOAD_DRAG_TYPE) || this.dragged.includes(row.d.id)) {
+      return;
+    }
+    // only rows of this queue can be reordered; anything else is left to the sidebar
+    event.preventDefault();
+    this.rowMark.set({ id: row.d.id, after: inLowerHalf(event, event.currentTarget as HTMLElement) });
+  }
+
+  protected onRowDragLeave(row: DownloadRow): void {
+    if (this.rowMark()?.id === row.d.id) {
+      this.rowMark.set(null);
+    }
+  }
+
+  protected onRowDrop(event: DragEvent, row: DownloadRow): void {
+    const mark = this.rowMark();
+    const moving = this.dragged;
+    this.rowDragEnd();
+    if (!this.store.manualOrder() || mark === null || mark.id !== row.d.id) {
+      return;
+    }
+    event.preventDefault();
+    const queueId = row.d.queueId;
+    const order = this.store.queueOrder(queueId);
+    const next = moveManyBeside(order, moving, row.d.id, mark.after);
+    if (!sameOrder(order, next)) {
+      this.run(this.engine.reorderQueue(queueId, next));
+    }
+  }
+
+    }
+  }
+
+  /** The "Move to queue" dialog chose a queue. */
+  protected confirmMove(queueId: number): void {
+    const targets = this.moveTargets();
+    this.moveTargets.set(null);
+    if (targets === null) {
+      return;
+    }
+    const queue = this.queues.get(queueId);
+    const name = queueId === MAIN_QUEUE_ID ? this.i18n.t('queue.main') : (queue?.name ?? '');
+    const ids = targets.map((d) => d.id);
+    this.engine.moveToQueue(ids, queueId).then(
+      () =>
+        this.toasts.show(
+          'info',
+          ids.length === 1
+            ? this.i18n.t('toast.queueMoved').replace('{queue}', name)
+            : this.i18n.t('toast.queueMovedMany').replace('{n}', this.format.int(ids.length)).replace('{queue}', name),
+        ),
+      (error: unknown) => this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error))),
+    );
+  }
+
+  /** Moves a download one place in its queue's manual order (keyboard and menu). */
+  private moveInQueue(d: Download, delta: 1 | -1): void {
+    const order = this.store.queueOrder(d.queueId);
+    const next = moveBy(order, d.id, delta);
+    if (!sameOrder(order, next)) {
+      this.run(this.engine.reorderQueue(d.queueId, next));
+    }
+  }
+
+  protected onRowDragStart(event: DragEvent, row: DownloadRow): void {
+    if (event.dataTransfer === null) {
+      return;
+    }
+    const selected = this.store.selected();
+    this.dragged = selected.has(row.d.id) ? [...selected] : [row.d.id];
+    event.dataTransfer.setData(DOWNLOAD_DRAG_TYPE, JSON.stringify(this.dragged));
+    event.dataTransfer.effectAllowed = 'copyMove';
+  }
+
+  protected onRowDragOver(event: DragEvent, row: DownloadRow): void {
+    if (!this.store.manualOrder() || !dragHas(event, DOWNLOAD_DRAG_TYPE) || this.dragged.includes(row.d.id)) {
+      return;
+    }
+    // only rows of this queue can be reordered; anything else is left to the sidebar
+    event.preventDefault();
+    this.rowMark.set({ id: row.d.id, after: inLowerHalf(event, event.currentTarget as HTMLElement) });
+  }
+
+  protected onRowDragLeave(row: DownloadRow): void {
+    if (this.rowMark()?.id === row.d.id) {
+      this.rowMark.set(null);
+    }
+  }
+
+  protected onRowDrop(event: DragEvent, row: DownloadRow): void {
+    const mark = this.rowMark();
+    const moving = this.dragged;
+    this.rowDragEnd();
+    if (!this.store.manualOrder() || mark === null || mark.id !== row.d.id) {
+      return;
+    }
+    event.preventDefault();
+    const queueId = row.d.queueId;
+    const order = this.store.queueOrder(queueId);
+    const next = moveManyBeside(order, moving, row.d.id, mark.after);
+    if (!sameOrder(order, next)) {
+      this.run(this.engine.reorderQueue(queueId, next));
+    }
+  }
+
+  protected rowDragEnd(): void {
+    this.dragged = [];
+    this.rowMark.set(null);
+  }
+
+  protected toggleQueue(id: number, running: boolean): void {
+    this.run(this.queues.setRunning(id, !running));
   }
 
   protected bulkAction(action: 'pause' | 'resume'): void {
@@ -980,6 +1248,13 @@ export class DownloadsPageComponent {
       case 'ArrowDown':
       case 'ArrowUp': {
         event.preventDefault();
+        if (event.altKey) {
+          // Alt + arrow: move the selected download in its queue (manual order only)
+          if (first && this.store.manualOrder()) {
+            this.moveInQueue(first.d, event.key === 'ArrowDown' ? 1 : -1);
+          }
+          break;
+        }
         const id = this.store.moveSelection(event.key === 'ArrowDown' ? 1 : -1);
         if (id !== null) {
           this.scrollIntoView(id);

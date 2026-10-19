@@ -1,6 +1,6 @@
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 
-import { Download, DownloadRequest, isActive, MediaProbe, ProbeResult, Segment } from '../model/download';
+import { BatchOptions, BatchResult, Download, DownloadRequest, isActive, MediaProbe, ProbeResult, Segment } from '../model/download';
 import type { Download as BridgeDownload } from '../tauri/bridge/Download';
 import type { EngineSettings } from '../tauri/bridge/EngineSettings';
 import type { Event as EngineEvent } from '../tauri/bridge/Event';
@@ -8,7 +8,12 @@ import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
 import type { MediaInfo } from '../tauri/bridge/MediaInfo';
 import type { Segment as BridgeSegment } from '../tauri/bridge/Segment';
 import { TAURI_INVOKE, TAURI_LISTEN } from '../tauri/tauri-bridge';
+import type { BatchError } from '../tauri/bridge/BatchError';
+import type { BatchOutcome } from '../tauri/bridge/BatchOutcome';
+import type { UrlList } from '../tauri/bridge/UrlList';
+import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { emptyHistory, toBridgeRequest, toUiDownload, toUiMedia, toUiProbe, toUiSize } from './bridge-mapping';
+import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
 
 /** The Tauri event every engine notification arrives on; its payload is the generated `Event`. */
@@ -36,6 +41,8 @@ type SegmentProgressEvent = Extract<EngineEvent, { type: 'segment_progress' }>;
  * - `completed`: refresh the record (`completedAt`, final segments).
  * - `failed`: refresh the record (`failure` kind derived from the error text).
  * - `removed`: drop the row.
+ * - `download_moved`: refresh the record (its queue and place changed).
+ * - `queue_order_changed`: re-read that queue's members (`queue_items`) for their new places.
  *
  * Events that arrive before the initial list is in are queued and replayed after it, so nothing
  * is lost or overwritten at startup. Refreshes of the same id are sequenced: a slow answer never
@@ -106,6 +113,42 @@ export class TauriEngineService extends DownloadEngine {
     return id;
   }
 
+  /** `batch_expand`: a pattern the engine cannot expand answers a typed error, not a rejection. */
+  async expandBatch(pattern: string): Promise<BatchExpansion> {
+    try {
+      return { urls: await this.invoke<string[]>('batch_expand', { pattern }), error: null };
+    } catch (e: unknown) {
+      if (isBatchError(e)) {
+        return { urls: [], error: e };
+      }
+      throw e;
+    }
+  }
+
+  async importUrlList(text: string): Promise<UrlListResult> {
+    return this.invoke<UrlList>('batch_import', { text });
+  }
+
+  /**
+   * `add_batch`: one transaction on the engine side. The rows arrive through the `added` events
+   * (one per new download), so nothing is fetched here.
+   */
+  async addBatch(urls: readonly string[], options: BatchOptions): Promise<BatchResult> {
+    const outcome = await this.invoke<BatchOutcome>('add_batch', {
+      urls,
+      options: {
+        dir: options.dir ?? null,
+        category_id: null,
+        queue_id: null,
+        priority: null,
+        connections: options.connections ?? null,
+        start_paused: options.startPaused ?? false,
+        referrer: null,
+      },
+    });
+    return { added: outcome.added, skipped: outcome.skipped.map((s) => ({ url: s.url, reason: s.reason })) };
+  }
+
   /** Asks `find_duplicate`; the answer is mapped with the segments the list already holds, if any. */
   async findDuplicate(url: string, filename?: string, dir?: string): Promise<Download | undefined> {
     const record = await this.invoke<BridgeDownload | null>('find_duplicate', { url, filename: filename ?? null, dir: dir ?? null });
@@ -154,6 +197,33 @@ export class TauriEngineService extends DownloadEngine {
 
   resumeAll(): Promise<void> {
     return this.invoke<void>('resume_all');
+  }
+
+  /**
+   * `move_to_queue` per download. The rows show their new queue at once; if the engine refuses
+   * (or the call fails), the records are re-read so the list shows the engine's truth.
+   */
+  async moveToQueue(ids: readonly number[], queueId: number): Promise<void> {
+    this.list.update((all) => withMovedToQueue(all, ids, queueId));
+    try {
+      for (const id of ids) {
+        await this.invoke<void>('move_to_queue', { id, queue: queueId });
+      }
+    } catch (error: unknown) {
+      await Promise.all(ids.map((id) => this.refreshRecord(id)));
+      throw error;
+    }
+  }
+
+  /** `reorder_queue_items`; the new order shows at once and the queue is re-read on failure. */
+  async reorderQueue(queueId: number, ids: readonly number[]): Promise<void> {
+    this.list.update((all) => withQueueOrder(all, queueId, ids));
+    try {
+      await this.invoke<void>('reorder_queue_items', { queue: queueId, order: ids });
+    } catch (error: unknown) {
+      await this.reloadQueue(queueId);
+      throw error;
+    }
   }
 
   /**
@@ -218,6 +288,28 @@ export class TauriEngineService extends DownloadEngine {
       case 'removed':
         this.drop(e.id);
         break;
+      case 'download_moved':
+        void this.refreshRecord(e.id);
+        break;
+      case 'queue_order_changed':
+        void this.reloadQueue(e.queue_id);
+        break;
+    }
+  }
+
+  /** Re-reads the members of one queue (their order changed) and applies queue and position. */
+  private async reloadQueue(queueId: number): Promise<void> {
+    try {
+      const members = await this.invoke<BridgeDownload[]>('queue_items', { id: queueId });
+      const placed = new Map(members.map((m) => [m.id, m]));
+      this.list.update((all) =>
+        all.map((d) => {
+          const m = placed.get(d.id);
+          return m === undefined ? d : { ...d, queueId: m.queue_id, queuePosition: m.queue_position };
+        }),
+      );
+    } catch (error: unknown) {
+      console.warn('[engine] queue_items failed', error);
     }
   }
 
@@ -318,4 +410,9 @@ export class TauriEngineService extends DownloadEngine {
     this.refreshSeq.delete(id);
     this.list.update((all) => (all.some((d) => d.id === id) ? all.filter((d) => d.id !== id) : all));
   }
+}
+
+/** Whether a rejected `invoke` carries the typed `BatchError` the backend serializes. */
+function isBatchError(e: unknown): e is BatchError {
+  return typeof e === 'object' && e !== null && 'code' in e && typeof (e as { code: unknown }).code === 'string';
 }
