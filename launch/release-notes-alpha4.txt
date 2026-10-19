@@ -1,0 +1,11 @@
+Riptide 0.1.0-alpha.4 (alpha, Windows)
+
+New: download videos from YouTube, Vimeo and other video sites, with a quality picker. Download queues with schedules and a finish action (shut down, sleep, hibernate, exit, or run a program with no arguments). Batch download from patterns such as file[001-120].zip or a pasted link list. Update notifications with a What's new link.
+
+Improved: servers that answer 429 or 503 now get fewer connections from Riptide, and the limit is remembered after a restart. Smaller startup bundle.
+
+Fixed: video downloads could end with the progress bar short of 100%.
+
+Known limits: this is an alpha. The browser extension is not in the stores yet. A sleeping PC is not woken by schedules. "Run a program" takes no arguments.
+
+Full notes: https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.4
