@@ -124,6 +124,7 @@ describe('AppComponent (shell)', () => {
   });
 
   it('opens the keyboard shortcuts with ? and Ctrl+/, but not while typing in the search box', async () => {
+  it('opens the keyboard shortcuts with ? and Ctrl+/, but not while typing in the search box', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -132,6 +133,7 @@ describe('AppComponent (shell)', () => {
     const dialog = Array.from(el().querySelectorAll<HTMLDialogElement>('dialog')).find((d) => d.open);
     expect(dialog?.querySelector('h2')?.textContent?.trim()).toBe('Keyboard shortcuts');
     expect(dialog?.querySelectorAll('.row').length).toBe(14);
+    expect(dialog?.querySelectorAll('.row').length).toBe(13);
 
     el().querySelector<HTMLInputElement>('.search-input')?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
     expect(ui.shortcutsOpen()).toBeTrue();
