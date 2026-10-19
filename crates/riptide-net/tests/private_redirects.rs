@@ -56,7 +56,12 @@ async fn public_to_private_redirect_is_refused_with_a_clear_error() {
     let ctx = RequestContext::new(&Url::parse(&start).unwrap()).with_guard(pretend_public());
     let err = get(&client, &ctx, &start).await.unwrap_err();
     assert!(matches!(err, Error::PrivateRedirect), "{err:?}");
-    assert_eq!(err.to_string(), "redirected to a private network address");
+    assert!(
+        err.to_string()
+            .starts_with("redirected to a private network address"),
+        "{err}"
+    );
+    assert!(err.to_string().contains("allow_private_redirects"));
     assert!(!err.is_retryable());
 }
 
@@ -90,4 +95,15 @@ async fn a_blocking_guard_refuses_private_hops_even_from_a_private_start() {
     let ctx = RequestContext::new(&Url::parse(&start).unwrap()).with_guard(NetGuard::blocking());
     let err = get(&client, &ctx, &start).await.unwrap_err();
     assert!(matches!(err, Error::PrivateRedirect), "{err:?}");
+}
+
+#[tokio::test]
+async fn allow_private_redirects_follows_the_hop() {
+    let server = TestServer::spawn().await;
+    let client = client_for(&server);
+    let port = Url::parse(server.base_url()).unwrap().port().unwrap();
+    let start = format!("http://public.test:{port}/redirect?cross=1&to=ok");
+    let ctx = RequestContext::new(&Url::parse(&start).unwrap())
+        .with_guard(pretend_public().with_allow_private_redirects(true));
+    assert_eq!(get(&client, &ctx, &start).await.unwrap(), 200);
 }

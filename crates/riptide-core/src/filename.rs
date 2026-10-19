@@ -33,6 +33,31 @@ fn is_invisible_format_char(c: char) -> bool {
     )
 }
 
+/// ZWNJ / ZWJ between two letters are orthographic (Persian, Urdu, Kurdish) and cannot reorder
+/// text, so they are the one invisible kind that may stay, and only there.
+fn is_joiner(c: char) -> bool {
+    c == '\u{200C}' || c == '\u{200D}'
+}
+
+fn strip_invisible(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let letter = |j: Option<usize>| {
+        j.and_then(|j| chars.get(j))
+            .is_some_and(|n| n.is_alphabetic())
+    };
+    let mut out = String::with_capacity(text.len());
+    for (i, &c) in chars.iter().enumerate() {
+        if is_joiner(c) {
+            if letter(i.checked_sub(1)) && letter(Some(i + 1)) {
+                out.push(c);
+            }
+        } else if !c.is_control() && !is_invisible_format_char(c) && !FORBIDDEN.contains(&c) {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Device names Windows reserves regardless of extension.
 const RESERVED: &[&str] = &[
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
@@ -58,10 +83,7 @@ pub fn sanitize_filename(raw: &str) -> String {
         .unwrap_or("");
 
     // 3. drop control characters and reserved punctuation
-    let mut cleaned: String = last
-        .chars()
-        .filter(|c| !c.is_control() && !is_invisible_format_char(*c) && !FORBIDDEN.contains(c))
-        .collect();
+    let mut cleaned: String = strip_invisible(last);
 
     // 4. no leading/trailing dots or spaces (Windows strips them silently, which hides ".." tricks)
     cleaned = cleaned
@@ -221,6 +243,19 @@ mod tests {
             "\u{1F468}\u{1F469}.png"
         );
         assert_eq!(sanitize_filename("\u{202E}\u{200B}"), "download");
+        // ZWNJ between letters is spelling in Persian / Urdu; at the edges or next to digits it goes
+        assert_eq!(
+            sanitize_filename("می\u{200C}خواهم.pdf"),
+            "می\u{200C}خواهم.pdf"
+        );
+        assert_eq!(
+            sanitize_filename("ہوائی\u{200C}جہاز.txt"),
+            "ہوائی\u{200C}جہاز.txt"
+        );
+        assert_eq!(sanitize_filename("\u{200C}می.pdf"), "می.pdf");
+        assert_eq!(sanitize_filename("می\u{200C}.pdf"), "می.pdf");
+        assert_eq!(sanitize_filename("a\u{200C}1.txt"), "a1.txt");
+        assert_eq!(sanitize_filename("تقرير\u{200E}.pdf"), "تقرير.pdf");
         // Arabic letters, Arabic-Indic digits and combining marks are untouched
         let arabic = "تقرير\u{0652}-\u{0661}\u{0662}\u{0663}.pdf";
         assert_eq!(sanitize_filename(arabic), arabic);
@@ -261,13 +296,24 @@ mod tests {
         #![proptest_config(ProptestConfig::with_cases(1500))]
 
         #[test]
+        fn joiners_survive_only_between_letters(raw in "[a-zA-Zء-ي0-9 \u{200C}\u{200D}.-]{0,40}") {
+            let out: Vec<char> = sanitize_filename(&raw).chars().collect();
+            for (i, c) in out.iter().enumerate() {
+                if *c == '\u{200C}' || *c == '\u{200D}' {
+                    prop_assert!(i > 0 && i + 1 < out.len());
+                    prop_assert!(out[i - 1].is_alphabetic() && out[i + 1].is_alphabetic(), "{out:?}");
+                }
+            }
+        }
+
+        #[test]
         fn output_is_always_safe(raw in "\\PC{0,260}") {
             let out = sanitize_filename(&raw);
             prop_assert!(!out.is_empty());
             prop_assert!(out.len() <= MAX_FILENAME_BYTES, "{} bytes", out.len());
             prop_assert!(
                 !out.chars().any(|c| c.is_control()
-                    || is_invisible_format_char(c)
+                    || (is_invisible_format_char(c) && !is_joiner(c))
                     || FORBIDDEN.contains(&c)),
                 "{out:?}"
             );

@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('SettingsService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false };
   let calls: Call[];
 
   function configure(tauri: boolean): SettingsService {
@@ -90,7 +90,7 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect(writes[0].args).toEqual({
-      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true },
+      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false },
     });
     // a UI-only change does not reach the engine
     service.patch({ closeToTray: false });

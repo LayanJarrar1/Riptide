@@ -236,6 +236,8 @@
   "settings.notifyOnComplete": "Notify when a download finishes",
   "settings.notifyOnCompleteDesc": "A Windows notification with Open and Show in folder.",
   "settings.markDownloads": "Mark downloaded files as from the internet (recommended)",
+  "settings.allowPrivateRedirects": "Allow public sites to redirect downloads to my local network",
+  "settings.allowPrivateRedirectsDesc": "Off by default. Turn on only if a trusted service (a NAS relay, an intranet link) redirects to a local address and the download is refused.",
   "settings.markDownloadsDesc": "Windows then warns before you open a downloaded program or document, as it does for browser downloads. Needs an NTFS drive.",
   "settings.confirmOnExit": "Ask before closing with active downloads",
   "settings.confirmOnExitDesc": "Downloads resume on the next start either way.",

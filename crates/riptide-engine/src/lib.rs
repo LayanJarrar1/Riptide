@@ -160,6 +160,12 @@ pub struct EngineSettings {
     /// executable or macro document opens. On by default; see [`motw`]. Ignored elsewhere.
     #[serde(default = "default_true")]
     pub mark_of_the_web: bool,
+    /// Follow a redirect from a public host to a private network address (NAS relay services
+    /// such as QuickConnect, split-horizon intranet names). Off by default: a public page
+    /// could otherwise send a download to a device on your network. Downloads that start on a
+    /// private address are never affected.
+    #[serde(default)]
+    pub allow_private_redirects: bool,
 }
 
 fn default_true() -> bool {
@@ -292,6 +298,7 @@ impl Default for EngineSettings {
             global_speed_limit: None,
             proxy: ProxySettings::default(),
             mark_of_the_web: true,
+            allow_private_redirects: false,
         }
     }
 }
@@ -922,7 +929,9 @@ impl Engine {
         referrer: Option<&str>,
     ) -> Result<ProbeInfo> {
         let parsed = riptide_net::parse_http_url(url)?;
-        let mut ctx = RequestContext::new(&parsed).with_referrer(referrer);
+        let mut ctx = RequestContext::new(&parsed)
+            .with_referrer(referrer)
+            .with_guard(self.redirect_guard());
         if let Some(s) = secrets {
             ctx = ctx.with_secrets(s);
         }
@@ -1053,6 +1062,13 @@ impl Engine {
     }
 
     /// The HTTP client new connections use.
+    /// The redirect rule for downloads and probes: public-to-private is refused unless the user
+    /// allowed it in the settings.
+    fn redirect_guard(&self) -> riptide_net::NetGuard {
+        riptide_net::NetGuard::off()
+            .with_allow_private_redirects(self.settings().allow_private_redirects)
+    }
+
     fn client(&self) -> reqwest::Client {
         self.inner
             .client
@@ -1601,7 +1617,11 @@ impl Engine {
         }
 
         let url = riptide_net::parse_http_url(&record.url)?;
-        let ctx = Arc::new(RequestContext::new(&url).with_secrets(&secrets));
+        let ctx = Arc::new(
+            RequestContext::new(&url)
+                .with_secrets(&secrets)
+                .with_guard(self.redirect_guard()),
+        );
         // one client for the whole run: a proxy change applies from the next start
         let client = self.client();
         let probed = tokio::select! {

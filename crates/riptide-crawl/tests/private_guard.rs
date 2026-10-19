@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use riptide_crawl::{crawl, crawl_with_guard, CrawlEvent, CrawlSpec, SkipReason};
 use riptide_net::net_guard::StaticResolver;
-use riptide_net::{build_client, ClientOptions, NetGuard};
+use riptide_net::{
+    build_client, build_client_guarded, ClientOptions, NetGuard, ProxyChoice, ProxyUrl,
+};
 use riptide_testserver::TestServer;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -140,4 +142,63 @@ async fn a_blocking_guard_refuses_a_private_start_page() {
         server.state().requests().is_empty(),
         "no request reached the server"
     );
+}
+
+/// A minimal forwarding proxy: every connection is piped to `target` byte for byte (the
+/// absolute-form request line is accepted by the test server).
+async fn spawn_proxy(target: SocketAddr) -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut inbound, _)) = listener.accept().await else {
+                return;
+            };
+            tokio::spawn(async move {
+                if let Ok(mut outbound) = tokio::net::TcpStream::connect(target).await {
+                    let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound).await;
+                }
+            });
+        }
+    });
+    port
+}
+
+#[tokio::test]
+async fn a_crawl_behind_a_proxy_named_localhost_still_works() {
+    let server = TestServer::spawn().await;
+    let port = Url::parse(server.base_url()).unwrap().port().unwrap();
+    let proxy_port = spawn_proxy(SocketAddr::from(([127, 0, 0, 1], port))).await;
+    // the proxy is a *name* that resolves to loopback, which the guarded resolver would refuse
+    let options = ClientOptions {
+        proxy: ProxyChoice::Manual(
+            ProxyUrl::parse(&format!("http://localhost:{proxy_port}")).unwrap(),
+        ),
+        ..ClientOptions::default()
+    };
+    let guard = public_guard();
+    let client = build_client_guarded(&options, &guard).unwrap();
+    let mut spec = CrawlSpec::new(format!("http://public.test:{port}/site/"));
+    spec.depth = 2;
+    spec.delay = Duration::ZERO;
+    let (result, events) = run(spec, client, Some(guard)).await;
+    assert!(
+        result
+            .files
+            .iter()
+            .any(|f| f.url.ends_with("/files/report.pdf")),
+        "crawl through the proxy found nothing: {:?}",
+        events
+            .iter()
+            .filter_map(|e| match e {
+                CrawlEvent::Skipped { url, reason } => Some(format!("{url} {reason:?}")),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    );
+    // URL-level checks still hold behind a proxy
+    assert!(result
+        .files
+        .iter()
+        .all(|f| !f.url.starts_with(server.alt_url())));
 }

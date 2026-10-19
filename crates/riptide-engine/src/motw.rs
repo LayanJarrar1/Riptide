@@ -19,7 +19,7 @@ const MAX_URL_LEN: usize = 1024;
 
 /// A URL fit for `ReferrerUrl` / `HostUrl`, or `None` when it must be left out: only `http` and
 /// `https` with a host survive, credentials, query and fragment are removed, anything with a
-/// control character or longer than [`MAX_URL_LEN`] is dropped.
+/// control character or longer than `MAX_URL_LEN` is dropped.
 pub fn sanitize_zone_url(raw: &str) -> Option<String> {
     if raw.chars().any(|c| c.is_control()) {
         return None;

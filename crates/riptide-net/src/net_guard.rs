@@ -159,6 +159,7 @@ impl HostResolver for StaticResolver {
 pub struct NetGuard {
     resolver: Arc<dyn HostResolver>,
     block_private: bool,
+    allow_private_redirects: bool,
 }
 
 impl Default for NetGuard {
@@ -174,6 +175,7 @@ impl NetGuard {
         NetGuard {
             resolver: Arc::new(SystemResolver),
             block_private: false,
+            allow_private_redirects: false,
         }
     }
 
@@ -183,6 +185,15 @@ impl NetGuard {
             block_private: true,
             ..NetGuard::off()
         }
+    }
+
+    /// The user's explicit choice (`allow_private_redirects` in the engine settings) to follow
+    /// redirects from a public host to a private address (NAS relays, split-horizon DNS). It
+    /// never relaxes a [`NetGuard::blocking`] guard.
+    #[must_use]
+    pub fn with_allow_private_redirects(mut self, allow: bool) -> NetGuard {
+        self.allow_private_redirects = allow;
+        self
     }
 
     /// Uses `resolver` for names (tests).
@@ -200,7 +211,7 @@ impl NetGuard {
         if let Some(r) = resolver {
             guard = guard.with_resolver(r);
         }
-        if !guard.is_private_host(start).await {
+        if !guard.is_private_start(start).await {
             guard.block_private = true;
         }
         guard
@@ -229,6 +240,25 @@ impl NetGuard {
         }
     }
 
+    /// Whether a chain or crawl starting at `url` counts as private: an IP literal that is
+    /// private, `localhost`, or a name whose answers are *all* private. A public name with one
+    /// private record is still public (otherwise a hostile DNS zone could switch the guard off).
+    pub async fn is_private_start(&self, url: &Url) -> bool {
+        if let Some(ip) = url_ip(url) {
+            return is_private_or_special(ip);
+        }
+        let Some(host) = url.host_str() else {
+            return false;
+        };
+        if is_localhost_name(host) {
+            return true;
+        }
+        match self.resolver.resolve(host).await {
+            Ok(ips) => !ips.is_empty() && ips.into_iter().all(is_private_or_special),
+            Err(_) => false,
+        }
+    }
+
     /// Fails with [`Error::PrivateAddress`] when this guard blocks and `url` targets a private
     /// address. A no-op for [`NetGuard::off`].
     pub async fn check(&self, url: &Url) -> Result<()> {
@@ -252,7 +282,10 @@ impl NetGuard {
     /// The redirect rule: following `from` to `next` is refused when `next` is private and the
     /// chain started on a public host (always, for a [`NetGuard::blocking`] guard).
     pub(crate) async fn check_redirect(&self, from: &Url, next: &Url) -> Result<()> {
-        if self.block_private || !self.is_private_host(from).await {
+        if self.allow_private_redirects && !self.block_private {
+            return Ok(());
+        }
+        if self.block_private || !self.is_private_start(from).await {
             self.deny_private(next)
                 .await
                 .map_err(|_| Error::PrivateRedirect)
@@ -561,5 +594,55 @@ mod tests {
         assert_eq!(got, vec![ip("93.184.216.34")]);
         assert!(dns.resolve(name("inner.example")).await.is_err());
         assert!(dns.resolve(name("localhost")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn for_start_with_mixed_public_and_private_answers_still_blocks() {
+        let resolver: Arc<dyn HostResolver> = Arc::new(StaticResolver(HashMap::from([
+            (
+                "evil.example".to_string(),
+                vec![ip("1.2.3.4"), ip("127.0.0.1")],
+            ),
+            (
+                "lan.example".to_string(),
+                vec![ip("192.168.1.2"), ip("10.0.0.3")],
+            ),
+        ])));
+        let evil = Url::parse("http://evil.example/").unwrap();
+        let lan = Url::parse("http://lan.example/").unwrap();
+        assert!(NetGuard::for_start(&evil, Some(resolver.clone()))
+            .await
+            .blocks());
+        assert!(!NetGuard::for_start(&lan, Some(resolver.clone()))
+            .await
+            .blocks());
+        // a mixed start is public for the redirect rule too
+        let guard = NetGuard::off().with_resolver(resolver);
+        let private = Url::parse("http://192.168.1.1/").unwrap();
+        assert!(matches!(
+            guard.check_redirect(&evil, &private).await,
+            Err(Error::PrivateRedirect)
+        ));
+    }
+
+    #[tokio::test]
+    async fn allow_private_redirects_lifts_only_the_redirect_rule() {
+        let resolver: Arc<dyn HostResolver> = Arc::new(StaticResolver(HashMap::from([(
+            "cdn.example".to_string(),
+            vec![ip("93.184.216.34")],
+        )])));
+        let public = Url::parse("https://cdn.example/a").unwrap();
+        let private = Url::parse("http://192.168.1.1/admin").unwrap();
+        let open = NetGuard::off()
+            .with_resolver(resolver.clone())
+            .with_allow_private_redirects(true);
+        assert!(open.check_redirect(&public, &private).await.is_ok());
+        // a blocking (crawl) guard ignores the setting
+        let strict = NetGuard::blocking()
+            .with_resolver(resolver)
+            .with_allow_private_redirects(true);
+        assert!(strict.check_redirect(&public, &private).await.is_err());
+        let message = Error::PrivateRedirect.to_string();
+        assert!(message.contains("allow_private_redirects"), "{message}");
     }
 }

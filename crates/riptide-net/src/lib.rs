@@ -95,7 +95,11 @@ pub fn build_client(options: &ClientOptions) -> Result<reqwest::Client> {
 /// Like [`build_client`], with connections limited to public addresses by `guard`'s resolver
 /// (see [`NetGuard::dns_resolver`]): for crawls that start from a public host.
 pub fn build_client_guarded(options: &ClientOptions, guard: &NetGuard) -> Result<reqwest::Client> {
-    build_client_inner(options, Some(guard.dns_resolver()))
+    // With a proxy the connector also resolves the *proxy's* host name through this resolver,
+    // which would refuse a corporate or localhost proxy and break every request. The
+    // per-request URL and redirect checks still apply; the proxy resolves the target names.
+    let dns = (options.proxy == ProxyChoice::Direct).then(|| guard.dns_resolver());
+    build_client_inner(options, dns)
 }
 
 fn build_client_inner(

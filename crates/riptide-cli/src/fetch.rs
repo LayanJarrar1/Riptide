@@ -196,7 +196,8 @@ pub async fn fetch(
         }
     };
 
-    record.final_url = Some(probe.final_url.to_string());
+    let final_url_text = probe.final_url.to_string();
+    record.final_url = Some(final_url_text.clone());
     record.size = probe.size;
     record.supports_ranges = probe.supports_ranges;
     record.etag = probe.etag.clone();
@@ -348,6 +349,12 @@ pub async fn fetch(
 
     match result {
         Ok(Outcome::Completed { path, .. }) => {
+            // same Mark-of-the-Web as the app writes (best effort, NTFS only)
+            riptide_engine::motw::mark_from_internet(
+                &path,
+                opts.referrer.as_deref(),
+                Some(final_url_text.as_str()),
+            );
             db(&store, move |s| {
                 s.set_state(id, DownloadState::Verifying, None)?;
                 s.set_state(id, DownloadState::Completed, None)?;
