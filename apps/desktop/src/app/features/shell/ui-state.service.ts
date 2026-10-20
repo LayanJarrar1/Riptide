@@ -23,7 +23,7 @@ export class UiState {
   /** The torrent being added (magnet link or `.torrent` file); the file-choice dialog shows while set. */
   readonly torrentSource = signal<TorrentSource | null>(null);
   /** Magnet links waiting for their turn in the file-choice dialog (several were pasted or dropped at once). */
-  readonly torrentQueue = signal<readonly string[]>([]);
+  readonly torrentQueue = signal<readonly TorrentSource[]>([]);
   /** The keyboard-shortcuts dialog. */
   readonly shortcutsOpen = signal(false);
   /** Incremented when the menus ask the queues list to open its "New queue" dialog. */
@@ -65,12 +65,17 @@ export class UiState {
 
   /** Several magnet links: the file choice opens for the first, the others follow one by one. */
   openTorrents(uris: readonly string[]): void {
-    const [first, ...rest] = uris;
+    this.openSources(uris.map((uri): TorrentSource => ({ kind: 'magnet', uri })));
+  }
+
+  /** Several torrents (magnet links, `.torrent` files): the file choice opens for each in turn. */
+  openSources(sources: readonly TorrentSource[]): void {
+    const [first, ...rest] = sources;
     if (first === undefined) {
       return;
     }
     this.torrentQueue.set(rest);
-    this.torrentSource.set({ kind: 'magnet', uri: first });
+    this.torrentSource.set(first);
   }
 
   /** The dialog closed (added, cancelled or Esc): the next waiting magnet link opens, if any. */
@@ -78,7 +83,7 @@ export class UiState {
     const [next, ...rest] = this.torrentQueue();
     if (next !== undefined) {
       this.torrentQueue.set(rest);
-      this.torrentSource.set({ kind: 'magnet', uri: next });
+      this.torrentSource.set(next);
       return;
     }
     this.torrentSource.set(null);

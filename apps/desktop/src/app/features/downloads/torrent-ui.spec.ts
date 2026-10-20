@@ -409,7 +409,7 @@ describe('several magnet links at once', () => {
     go.click();
     await flush();
     expect(ui.torrentSource()).toEqual({ kind: 'magnet', uri: OWNER_MAGNET });
-    expect(ui.torrentQueue()).toEqual([SECOND_MAGNET]);
+    expect(ui.torrentQueue()).toEqual([{ kind: 'magnet', uri: SECOND_MAGNET }]);
     // closing the first one opens the second; closing that one ends the sequence
     ui.closeTorrent();
     expect(ui.torrentSource()).toEqual({ kind: 'magnet', uri: SECOND_MAGNET });

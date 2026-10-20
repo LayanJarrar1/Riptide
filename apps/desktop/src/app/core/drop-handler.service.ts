@@ -3,9 +3,20 @@ import { DestroyRef, DOCUMENT, inject, Injectable } from '@angular/core';
 import { UiState } from '../features/shell/ui-state.service';
 import { magnetLinesOf } from '../model/torrent';
 import { isHttpUrl } from '../model/download';
+import type { TorrentSource } from '../model/torrent';
+import { TAURI_AVAILABLE, TAURI_LISTEN } from '../tauri/tauri-bridge';
+
+/** What the desktop shell sends when files are dropped on the window (Tauri's native drag-and-drop). */
+export const NATIVE_DROP_EVENT = 'tauri://drag-drop';
+
+/** The `.torrent` files among dropped paths, as torrent sources. */
+export function torrentFilesIn(paths: readonly string[]): TorrentSource[] {
+  return paths.filter((p) => /\.torrent$/i.test(p)).slice(0, 20).map((path): TorrentSource => ({ kind: 'file', path }));
+}
 
 /**
- * Text dropped on the window: magnet links (one per line) open the file choice, a single web
+ * `.torrent` files dropped on the window open the file choice (one after the other when there
+ * are several; other files are ignored). Text dropped on the window: magnet links (one per line) open the file choice, a single web
  * address opens the Add dialog with it filled in. Nothing is added by the drop itself, and
  * anything else (files, other text) is left to the page.
  */
@@ -18,6 +29,26 @@ export class DropHandlerService {
     const target = this.doc.defaultView;
     if (target === null) {
       return;
+    }
+    if (inject(TAURI_AVAILABLE)) {
+      let off: (() => void) | null = null;
+      let gone = false;
+      inject(DestroyRef).onDestroy(() => {
+        gone = true;
+        off?.();
+      });
+      inject(TAURI_LISTEN)<{ readonly paths?: readonly string[] }>(NATIVE_DROP_EVENT, (e) => {
+        this.ui.openSources(torrentFilesIn(e.paths ?? []));
+      }).then(
+        (unlisten) => {
+          if (gone) {
+            unlisten();
+          } else {
+            off = unlisten;
+          }
+        },
+        (error: unknown) => console.warn('[drop] cannot listen for dropped files', error),
+      );
     }
     const over = (e: DragEvent): void => {
       if (this.hasText(e)) {
