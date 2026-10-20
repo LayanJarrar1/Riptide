@@ -270,6 +270,7 @@ impl Engine {
         &self,
         tweak: impl FnOnce(&mut TorrentSettings),
     ) -> Result<()> {
+        let _starting = self.inner.torrents_starting.lock().await;
         if self.torrents_enabled() {
             return Ok(());
         }

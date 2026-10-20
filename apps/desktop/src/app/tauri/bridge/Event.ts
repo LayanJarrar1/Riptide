@@ -68,7 +68,35 @@ eta_secs: number | null,
 /**
  * Active connections right now.
  */
-connections: number, } | { "type": "segment_progress", 
+connections: number, } | { "type": "torrent_stats", 
+/**
+ * Download.
+ */
+id: DownloadId, 
+/**
+ * Peers connected right now.
+ */
+peers: number, 
+/**
+ * Peers seen so far (connected or not).
+ */
+peers_seen: number, 
+/**
+ * Upload speed in bytes per second.
+ */
+up_bps: number, 
+/**
+ * Bytes uploaded over the torrent's whole life (survives restarts).
+ */
+uploaded: number, 
+/**
+ * Uploaded divided by the selected size, times 1000 (`1500` = ratio 1.5).
+ */
+ratio_milli: number, 
+/**
+ * Complete and still uploading by the user's choice.
+ */
+seeding: boolean, } | { "type": "segment_progress", 
 /**
  * Download.
  */

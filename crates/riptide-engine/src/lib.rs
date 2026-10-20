@@ -524,6 +524,8 @@ struct Inner {
     /// The BitTorrent engine and its bridge to the download rows; `None` until
     /// [`Engine::enable_torrents`].
     torrents: RwLock<Option<Arc<torrent::TorrentRuntime>>>,
+    /// Held while the torrent engine starts, so two callers never start two sessions.
+    torrents_starting: tokio::sync::Mutex<()>,
     /// Folder next to the database file; the torrent engine keeps its state below it.
     data_dir: PathBuf,
     /// Serialises the choice of an on-disk file name, so two downloads that start at the same
@@ -904,6 +906,7 @@ impl Engine {
             test_crash_after_rename: AtomicBool::new(false),
             media: RwLock::new(None),
             torrents: RwLock::new(None),
+            torrents_starting: tokio::sync::Mutex::new(()),
             data_dir: config
                 .db_path
                 .parent()

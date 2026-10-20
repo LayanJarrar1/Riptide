@@ -3,4 +3,4 @@
 /**
  * Which engine moves the bytes of a download.
  */
-export type DownloadKind = "http" | "media";
+export type DownloadKind = "http" | "media" | "torrent";

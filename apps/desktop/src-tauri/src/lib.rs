@@ -27,6 +27,7 @@ pub mod notify;
 pub mod power;
 pub mod queues;
 pub mod shell;
+pub mod torrent;
 pub mod tray;
 pub mod updater;
 pub mod webview;
@@ -166,6 +167,12 @@ pub fn run() {
             }
             engine.set_media_tools(tools);
             app.manage(media::DataDir(data_dir));
+
+            // torrents already in the list continue; with none, no port is opened (privacy)
+            let torrent_engine = engine.clone();
+            tauri::async_runtime::spawn(async move {
+                torrent::start_if_needed(&torrent_engine).await;
+            });
 
             // tray, notifications, clipboard monitor; started by Windows → stay in the tray
             if let Err(e) = tray::install(app.handle(), engine.clone()) {
@@ -313,6 +320,11 @@ pub fn run() {
             queues::reorder_queues,
             queues::validate_post_action,
             queues::run_post_action,
+            torrent::torrent_preview,
+            torrent::add_torrent,
+            torrent::list_torrents,
+            torrent::torrent_live,
+            torrent::pick_torrent_file,
             shell::set_shell_prefs,
             shell::autostart_enabled,
             shell::set_autostart,
