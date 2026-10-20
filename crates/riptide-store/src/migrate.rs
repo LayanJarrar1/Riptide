@@ -211,10 +211,7 @@ mod tests {
                   INSERT INTO no_such_table VALUES (1);",
         });
         let err = run_with(&mut conn, &broken).unwrap_err();
-        assert!(
-            matches!(err, Error::Migration { version: 4, .. }),
-            "{err}"
-        );
+        assert!(matches!(err, Error::Migration { version: 4, .. }), "{err}");
 
         assert_eq!(
             current_version(&conn).unwrap(),
