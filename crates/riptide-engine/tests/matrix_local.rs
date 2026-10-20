@@ -774,3 +774,36 @@ async fn damaged_part_file_between_pause_and_resume_restarts_byte_exact() {
     }
     engine.shutdown().await;
 }
+
+/// Crash exactly between the atomic rename and `Completed`: after an engine restart the record
+/// ends `Completed` with the right bytes (no "already exists" failure).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn crash_between_rename_and_completed_recovers_after_restart() {
+    let w = World::new().await;
+    let size = 2 * MIB;
+    for (n, route) in ["/ok", "/noranges", "/nolength"].into_iter().enumerate() {
+        let engine = w.engine().await;
+        engine.set_test_crash_after_rename(true);
+        let mut rx = engine.subscribe();
+        let id = engine
+            .add(DownloadRequest {
+                filename: Some(format!("crash{n}.bin")),
+                ..w.request(&format!("{route}?size={size}"))
+            })
+            .await
+            .unwrap();
+        wait_failed(&mut rx, id, T).await;
+        let final_path = engine.get(id).await.unwrap().unwrap().final_path();
+        assert!(final_path.exists(), "the file was renamed before the crash");
+        engine.shutdown().await;
+        drop(engine);
+
+        let engine = w.engine().await;
+        let mut rx = engine.subscribe();
+        engine.resume(id).await.unwrap();
+        let p = wait_completed_in(&mut rx, id, T).await;
+        assert_eq!(p, final_path, "{route}: same name, not a (1) copy");
+        assert_complete(&engine, id, &p, &w.downloads(), DEFAULT_SEED, size).await;
+        engine.shutdown().await;
+    }
+}

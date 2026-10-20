@@ -277,7 +277,7 @@ fn fetch_and_maybe_kill(data_dir: &Path, url: &str, out: &Path, kill_after: Dura
 async fn killed_at_any_instant_still_ends_byte_exact_with_no_leftovers() {
     let server = TestServer::spawn().await;
     let size = 6 * MIB;
-    let url = server.url(&format!("/slow?bps=1048576&size={size}"));
+    let url = server.url(&format!("/slow?bps=524288&size={size}"));
     let mut rng = rand::rng();
     let mut total_kills = 0;
     for round in 0..6 {
@@ -288,7 +288,7 @@ async fn killed_at_any_instant_still_ends_byte_exact_with_no_leftovers() {
         loop {
             // the first runs are cut at a random instant, later ones are left to finish
             let kill_after = if kills < 3 {
-                Duration::from_millis(rng.random_range(0..3000))
+                Duration::from_millis(rng.random_range(0..2000))
             } else {
                 Duration::from_secs(120)
             };
@@ -331,15 +331,19 @@ async fn killed_at_any_instant_still_ends_byte_exact_with_no_leftovers() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn killed_download_from_a_server_without_ranges_restarts_clean() {
     let server = TestServer::spawn().await;
-    let size = 5 * MIB;
+    let size = 3 * MIB;
     for route in ["noranges", "nolength"] {
-        let url = server.url(&format!("/{route}?size={size}"));
+        // 1 MiB/s: the 3 s transfer is certainly still running when it is killed at 1 s
+        let url = server.url(&format!("/{route}?size={size}&bps=1048576"));
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = tmp.path().join("data");
         let out = tmp.path().join("nr.bin");
-        let killed = fetch_and_maybe_kill(&data_dir, &url, &out, Duration::from_millis(60));
-        let _ = killed;
-        assert!(!out.exists() || std::fs::metadata(&out).unwrap().len() == size);
+        let killed = fetch_and_maybe_kill(&data_dir, &url, &out, Duration::from_millis(1000));
+        assert!(killed, "{route}: the download finished before the kill");
+        assert!(
+            !out.exists(),
+            "{route}: no final file after a kill mid-transfer"
+        );
         assert!(!fetch_and_maybe_kill(
             &data_dir,
             &url,

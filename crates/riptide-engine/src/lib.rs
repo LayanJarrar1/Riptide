@@ -478,6 +478,7 @@ struct Inner {
     /// reacts, to exercise the stuck-stop path.
     test_stop_timeout_ms: std::sync::atomic::AtomicU64,
     test_stop_delay_ms: std::sync::atomic::AtomicU64,
+    test_crash_after_rename: AtomicBool,
     /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
     media: RwLock<Option<YtDlp>>,
     /// Serialises the choice of an on-disk file name, so two downloads that start at the same
@@ -845,6 +846,7 @@ impl Engine {
             shutting_down: AtomicBool::new(false),
             test_stop_timeout_ms: std::sync::atomic::AtomicU64::new(0),
             test_stop_delay_ms: std::sync::atomic::AtomicU64::new(0),
+            test_crash_after_rename: AtomicBool::new(false),
             media: RwLock::new(None),
             name_lock: tokio::sync::Mutex::new(()),
         });
@@ -1535,6 +1537,15 @@ impl Engine {
         Some(r.done.clone())
     }
 
+    /// Test hook: make transfers fail right after the atomic rename (see
+    /// `TransferConfig::crash_after_rename`).
+    #[doc(hidden)]
+    pub fn set_test_crash_after_rename(&self, on: bool) {
+        self.inner
+            .test_crash_after_rename
+            .store(on, Ordering::SeqCst);
+    }
+
     /// Test hook: shorten the stop wait and/or make a stopping task hang for `delay_ms`.
     #[doc(hidden)]
     pub fn set_test_stop_knobs(&self, timeout_ms: u64, delay_ms: u64) {
@@ -1840,6 +1851,7 @@ impl Engine {
         let cfg = TransferConfig {
             connections: record.connections,
             rate_limits: vec![Arc::clone(limit), Arc::clone(&self.inner.global_limit)],
+            crash_after_rename: self.inner.test_crash_after_rename.load(Ordering::SeqCst),
             ..TransferConfig::default()
         };
         let limiter = self

@@ -416,7 +416,7 @@ pub(crate) async fn noranges(
 ) -> HandlerResult {
     let mut res = Resource::from_params(&q)?;
     res.ranges = false;
-    serve(&method, &headers, res, Shaping::default())
+    serve(&method, &headers, res, optional_throttle(&q)?)
 }
 
 /// `/nolength`
@@ -428,7 +428,7 @@ pub(crate) async fn nolength(
     let mut res = Resource::from_params(&q)?;
     res.ranges = false;
     res.known_length = false;
-    serve(&method, &headers, res, Shaping::default())
+    serve(&method, &headers, res, optional_throttle(&q)?)
 }
 
 /// Optional `?bps=` throttle for endpoints that are not `/slow`, so a test can interrupt them.

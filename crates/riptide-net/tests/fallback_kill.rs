@@ -179,3 +179,106 @@ async fn deleted_truncated_or_extended_part_file_restarts_instead_of_completing(
         assert_eq!(hex, expected_sha256_hex(DEFAULT_SEED, SIZE), "{what}");
     }
 }
+
+/// Runs a transfer with the crash fault point on and returns the last stored table.
+async fn crash_after_rename(url: &str, final_path: &std::path::Path) -> Vec<Segment> {
+    let (client, ctx, plan) = plan_for(url, final_path, Vec::new()).await;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4096);
+    let table = tokio::spawn(async move {
+        let mut last = Vec::new();
+        while let Some(ev) = rx.recv().await {
+            if let TransferEvent::Checkpoint { segments } = ev {
+                last = segments;
+            }
+        }
+        last
+    });
+    let cfg = TransferConfig {
+        crash_after_rename: true,
+        ..cfg()
+    };
+    let r = transfer(
+        client,
+        ctx,
+        plan,
+        cfg,
+        tx,
+        CancellationToken::new(),
+        HostLimiter::new(8),
+    )
+    .await;
+    assert!(r.is_err(), "the injected crash must surface");
+    assert!(final_path.exists(), "renamed before the crash");
+    assert!(!part_path_for(final_path).exists());
+    table.await.unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn crash_between_rename_and_completed_is_adopted_on_the_next_run() {
+    let server = TestServer::spawn().await;
+    for route in ["ok", "noranges", "nolength"] {
+        let url = server.url(&format!("/{route}?size={SIZE}"));
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join("c.bin");
+        let table = crash_after_rename(&url, &final_path).await;
+        assert!(!table.is_empty(), "{route}: a stored table");
+        run_to_end(&url, &final_path, table).await;
+        let (len, hex) = sha_of(&final_path).await;
+        assert_eq!(len, SIZE, "{route}");
+        assert_eq!(hex, expected_sha256_hex(DEFAULT_SEED, SIZE), "{route}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_different_file_at_the_final_name_is_never_adopted_or_overwritten() {
+    let server = TestServer::spawn().await;
+    let url = server.url(&format!("/ok?size={SIZE}"));
+    let dir = tempfile::tempdir().unwrap();
+    let final_path = dir.path().join("d.bin");
+    let table = crash_after_rename(&url, &final_path).await;
+
+    // 1. another size: not ours, not touched, a clear error
+    std::fs::write(&final_path, b"somebody else's data").unwrap();
+    let (client, ctx, plan) = plan_for(&url, &final_path, table.clone()).await;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4096);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let r = transfer(
+        client,
+        ctx,
+        plan,
+        cfg(),
+        tx,
+        CancellationToken::new(),
+        HostLimiter::new(8),
+    )
+    .await;
+    assert!(r.is_err());
+    assert_eq!(std::fs::read(&final_path).unwrap(), b"somebody else's data");
+
+    let _ = std::fs::remove_file(part_path_for(&final_path)); // case 1 left a part file behind
+                                                              // 2. same size, other content, checksum known: rejected, not touched
+    let other = vec![7u8; SIZE as usize];
+    std::fs::write(&final_path, &other).unwrap();
+    let (client, ctx, mut plan) = plan_for(&url, &final_path, table).await;
+    plan.checksum = Some(riptide_core::Checksum {
+        algo: riptide_core::ChecksumAlgo::Sha256,
+        hex: expected_sha256_hex(DEFAULT_SEED, SIZE),
+    });
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4096);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let r = transfer(
+        client,
+        ctx,
+        plan,
+        cfg(),
+        tx,
+        CancellationToken::new(),
+        HostLimiter::new(8),
+    )
+    .await;
+    assert!(
+        matches!(r, Err(riptide_net::Error::ChecksumMismatch { .. })),
+        "{r:?}"
+    );
+    assert_eq!(std::fs::read(&final_path).unwrap(), other);
+}

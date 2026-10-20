@@ -58,3 +58,11 @@ was adjusted to this (before, the paused one yielded when the newcomer finished 
 No test is quarantined. One flake appeared (random pause/resume, about 1 run in 4 before the fix)
 and was traced to D-03; after the fix 20+ consecutive runs of `matrix_local` passed. The random
 test prints its seed and accepts `RIPTIDE_SEED` to replay the input sequence (timings still vary).
+
+## Crash between the atomic rename and `Completed` (D-15)
+
+| ID | Sev | Symptom | Root cause | Fix | Tests |
+|---|---|---|---|---|---|
+| D-15 | P1 | kill -9 after the `.rtpart` was renamed but before the record became `Completed` left the finished file in place and a rerun failed with "already exists" (hit by the random-kill test about 1 run in 10-15). | The rename and the DB write are two steps; the resume path knew nothing about a finished file. | `adopt_finished_file` in `transfer()`: part file gone, final file present, stored table complete and contiguous, final length equals the table total (and the probed size), checksum verified when one is expected: the download is finished as Completed. Anything else is left alone (never overwritten, never adopted). A stream's table now says "complete" only in a last checkpoint before the rename. | `fallback_kill::crash_between_rename_and_completed_is_adopted_on_the_next_run` (red without the adoption: TargetExists), `::a_different_file_at_the_final_name_is_never_adopted_or_overwritten`, `matrix_local::crash_between_rename_and_completed_recovers_after_restart`, plus a strict `kill9` random-kill loop, 20/20 |
+
+Test hygiene in the same change: `killed_download_from_a_server_without_ranges_restarts_clean` now throttles the server and asserts the kill landed mid-transfer; `killed_at_any_instant...` is throttled so its kill-count assertion is not timing luck. Same-size foreign file without a checksum cannot be told apart from ours; it is adopted only when the stored table, probe size and file length all agree.

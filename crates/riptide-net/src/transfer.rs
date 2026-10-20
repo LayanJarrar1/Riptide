@@ -57,6 +57,10 @@ pub struct TransferConfig {
     /// Bandwidth buckets every connection draws from before a chunk reaches the writer (the
     /// download's own limit, the global one). Their rates may change while the transfer runs.
     pub rate_limits: Vec<Arc<RateLimiter>>,
+    /// Test fault point: fail right after the atomic rename, before `Completed` is reported,
+    /// the way a crash at that instant would leave things.
+    #[doc(hidden)]
+    pub crash_after_rename: bool,
 }
 
 impl Default for TransferConfig {
@@ -70,6 +74,7 @@ impl Default for TransferConfig {
             checkpoint_interval: Duration::from_secs(1),
             overwrite: false,
             rate_limits: Vec::new(),
+            crash_after_rename: false,
         }
     }
 }
@@ -193,6 +198,9 @@ pub async fn transfer(
     limiter: Arc<HostLimiter>,
 ) -> Result<Outcome> {
     let mut plan = plan;
+    if let Some(outcome) = adopt_finished_file(&plan, &events).await? {
+        return Ok(outcome);
+    }
     let mut restarts = 0u32;
     loop {
         match run_once(&client, &ctx, &plan, &cfg, &events, &stop, &limiter).await? {
@@ -525,6 +533,15 @@ async fn run_once(
     }
 
     // --- verify + rename ----------------------------------------------------------------------
+    if streaming {
+        // every byte is in: only now may the table say so (earlier checkpoints of a stream
+        // never do), so a crash right after the rename can recognise its own finished file
+        let _ = events
+            .send(TransferEvent::Checkpoint {
+                segments: segments.clone(),
+            })
+            .await;
+    }
     let _ = events.send(TransferEvent::Verifying).await;
     if let Some(expected) = &plan.checksum {
         verify_file(plan.part_path.clone(), expected).await?;
@@ -543,6 +560,9 @@ async fn run_once(
                 Error::Io(e)
             }
         })?;
+    if cfg.crash_after_rename {
+        return Err(Error::Protocol("injected crash after the rename".into()));
+    }
     let _ = events
         .send(TransferEvent::Completed {
             path: plan.final_path.clone(),
@@ -551,6 +571,46 @@ async fn run_once(
     Ok(Run::Finished(Outcome::Completed {
         path: plan.final_path.clone(),
         segments,
+    }))
+}
+
+/// Crash recovery for the instant between the atomic rename and the record becoming
+/// `Completed`: the part file is gone, the final file is there, and the stored table says every
+/// byte was written. The file is adopted only if its length is exactly what the table (and the
+/// probe) say and, when a checksum is expected, its content matches. Anything else is left
+/// alone for the normal path, which never overwrites a file it did not write.
+async fn adopt_finished_file(
+    plan: &TransferPlan,
+    events: &mpsc::Sender<TransferEvent>,
+) -> Result<Option<Outcome>> {
+    if plan.segments.is_empty() || plan.part_path.exists() {
+        return Ok(None);
+    }
+    let Ok(meta) = std::fs::metadata(&plan.final_path) else {
+        return Ok(None);
+    };
+    let total: u64 = plan.segments.iter().map(|s| s.written).sum();
+    let table_done =
+        covers(&plan.segments, total) && plan.segments.iter().all(Segment::is_complete);
+    if !meta.is_file()
+        || !table_done
+        || meta.len() != total
+        || plan.size.is_some_and(|s| s != total)
+    {
+        return Ok(None);
+    }
+    let _ = events.send(TransferEvent::Verifying).await;
+    if let Some(expected) = &plan.checksum {
+        verify_file(plan.final_path.clone(), expected).await?;
+    }
+    let _ = events
+        .send(TransferEvent::Completed {
+            path: plan.final_path.clone(),
+        })
+        .await;
+    Ok(Some(Outcome::Completed {
+        path: plan.final_path.clone(),
+        segments: plan.segments.clone(),
     }))
 }
 
