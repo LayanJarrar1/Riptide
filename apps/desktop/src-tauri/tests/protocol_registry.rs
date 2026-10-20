@@ -25,7 +25,8 @@ fn read(root: &str, key: &str, name: &str) -> Option<String> {
 
 #[test]
 fn registering_and_unregistering_through_the_registry_root_knob() {
-    let root = format!(r"Software\RiptideProtocolTest\{}", std::process::id());
+    // one key of its own, so deleting it at the end leaves nothing behind
+    let root = format!(r"Software\RiptideProtocolTest_{}", std::process::id());
     std::env::set_var(REGISTRY_ROOT_ENV, &root);
     let exe = Path::new(r"C:\Riptide Test\riptide-desktop.exe");
 
