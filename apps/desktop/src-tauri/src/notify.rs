@@ -161,6 +161,25 @@ pub mod toast {
         WAITING.load(Ordering::SeqCst)
     }
 
+    /// Reserves one of the [`MAX_WAITING`] waiter slots; `false` when all are taken.
+    fn take_slot() -> bool {
+        let mut current = WAITING.load(Ordering::SeqCst);
+        loop {
+            if current >= MAX_WAITING {
+                return false;
+            }
+            match WAITING.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => return true,
+                Err(seen) => current = seen,
+            }
+        }
+    }
+
     /// Shows a toast; `on_click` runs if the user clicks it while a waiter is available.
     ///
     /// # Errors
@@ -185,12 +204,7 @@ pub mod toast {
             n.app_id(identifier);
         }
         let handle = n.show().map_err(|e| e.to_string())?;
-        if WAITING
-            .try_update(Ordering::SeqCst, Ordering::SeqCst, |w| {
-                (w < MAX_WAITING).then_some(w + 1)
-            })
-            .is_err()
-        {
+        if !take_slot() {
             // the cap is reached: no click-through; dropping the handle frees everything
             return Ok(());
         }
