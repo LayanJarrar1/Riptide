@@ -15,6 +15,7 @@ riptide-net = { workspace = true }
 riptide-store = { workspace = true }
 riptide-media = { workspace = true }
 riptide-crawl = { workspace = true }
+riptide-torrent = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
@@ -37,6 +38,7 @@ riptide-testserver = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
 tempfile = { workspace = true }
+sha1 = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [lints]

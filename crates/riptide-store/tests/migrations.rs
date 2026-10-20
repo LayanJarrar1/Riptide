@@ -90,7 +90,7 @@ fn migrate_from_v1_fixture_keeps_every_row() {
 fn v1_to_v3_adds_media_and_queue_columns_and_keeps_item_order() {
     let (_dir, path) = fixture_db(V1_FIXTURE);
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(SCHEMA_VERSION, 3);
+    assert_eq!(SCHEMA_VERSION, 4);
 
     // the v1 queues survive with an empty schedule and no post action
     let queues = store.queues().unwrap();
@@ -141,7 +141,7 @@ fn v2_database_with_a_media_row_migrates_to_v3() {
         .unwrap();
     }
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 3);
+    assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
 
     let all = store.list_downloads().unwrap();
     assert_eq!(all[0].kind, DownloadKind::Http);
@@ -197,4 +197,94 @@ fn two_connections_share_the_file_under_wal() {
         reader.get_download(id).unwrap().map(|d| d.url),
         Some("https://a/b".to_string())
     );
+}
+
+#[test]
+fn v3_database_migrates_to_v4_keeping_segments_secrets_and_ids() {
+    use riptide_core::{DownloadKind, TorrentFileInfo, TorrentInfo};
+    use riptide_store::{migrate, MIGRATIONS};
+
+    // a database exactly as alpha.4 (schema v3) left it, with data in every child table
+    let (_dir, path) = fixture_db(V1_FIXTURE);
+    let (segments_before, secrets_before) = {
+        let mut conn = Connection::open(&path).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+        let s: i64 = conn
+            .query_row("SELECT COUNT(*) FROM segments", [], |r| r.get(0))
+            .unwrap();
+        let k: i64 = conn
+            .query_row("SELECT COUNT(*) FROM secrets", [], |r| r.get(0))
+            .unwrap();
+        (s, k)
+    };
+    assert!(segments_before > 0 && secrets_before > 0);
+
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 4);
+    // foreign keys are enforced again after the migration
+    let fk: i64 = store
+        .connection()
+        .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(fk, 1);
+    let ids: Vec<_> = store
+        .list_downloads()
+        .unwrap()
+        .iter()
+        .map(|d| d.id)
+        .collect();
+    assert_eq!(ids, [DownloadId(1), DownloadId(2)]);
+    let segs: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM segments", [], |r| r.get(0))
+        .unwrap();
+    let secs: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM secrets", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!((segs, secs), (segments_before, secrets_before));
+
+    // the rebuilt table takes a torrent row, the old kinds still work, bad kinds are refused
+    let mut d = riptide_core::Download::new(DownloadId(0), "magnet:?xt=urn:btih:x", "t", ".", 1);
+    d.kind = DownloadKind::Torrent;
+    let id = store.insert_download(&d).unwrap();
+    assert!(id.0 > 2, "ids continue after the old ones");
+    store
+        .insert_torrent(&TorrentInfo {
+            download_id: id,
+            info_hash: "e".repeat(40),
+            name: "t".into(),
+            files: vec![TorrentFileInfo {
+                index: 0,
+                path: "t".into(),
+                len: 1,
+            }],
+            selected: None,
+            sequential: false,
+            seeding: false,
+            uploaded: 0,
+            downloaded: 0,
+            peers: 0,
+        })
+        .unwrap();
+    assert_eq!(
+        store.get_download(id).unwrap().unwrap().kind,
+        DownloadKind::Torrent
+    );
+    assert!(store
+        .connection()
+        .execute("UPDATE downloads SET kind = 'bogus' WHERE id = 1", [])
+        .is_err());
+
+    // removing a download still cascades to its segments
+    store.remove_download(DownloadId(1)).unwrap();
+    let left: i64 = store
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM segments WHERE download_id = 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(left, 0);
 }

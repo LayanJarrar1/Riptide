@@ -37,10 +37,15 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "queue_schedule_and_order",
         sql: include_str!("sql/v3.sql"),
     },
+    Migration {
+        version: 4,
+        name: "torrents",
+        sql: include_str!("sql/v4.sql"),
+    },
 ];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -79,11 +84,42 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
     }
 
     let start = current;
+    // Table rebuilds (v4) need foreign keys off, and the pragma cannot change inside a
+    // transaction. Off for the whole run, restored (and checked) at the end; no migration relies
+    // on enforcement, and the check below reports any dangling reference.
+    let fk_was_on: bool = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
+    if fk_was_on && latest > start {
+        conn.pragma_update(None, "foreign_keys", "OFF")?;
+    }
+    let outcome = apply(conn, migrations, start, &mut current);
+    if fk_was_on {
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+    }
+    outcome?;
+    if latest > start {
+        let dangling: i64 =
+            conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })?;
+        if dangling > 0 {
+            // the data is intact and usable; refusing to start would only lock the user out
+            tracing::error!(dangling, "dangling foreign keys after migrating");
+        }
+    }
+    Ok(current)
+}
+
+fn apply(
+    conn: &mut Connection,
+    migrations: &[Migration],
+    start: u32,
+    current: &mut u32,
+) -> Result<()> {
     for m in migrations.iter().filter(|m| m.version > start) {
-        if m.version != current + 1 {
+        if m.version != *current + 1 {
             return Err(Error::Corrupt(format!(
-                "migration {} ({}) follows version {current}; versions must be consecutive",
-                m.version, m.name
+                "migration {} ({}) follows version {}; versions must be consecutive",
+                m.version, m.name, *current
             )));
         }
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -102,9 +138,9 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
             name = m.name,
             "applied schema migration"
         );
-        current = m.version;
+        *current = m.version;
     }
-    Ok(current)
+    Ok(())
 }
 
 /// Milliseconds since the Unix epoch; `0` if the clock is before 1970.
@@ -157,7 +193,8 @@ mod tests {
     #[test]
     fn failed_migration_rolls_back_entirely() {
         let mut conn = Connection::open_in_memory().unwrap();
-        run(&mut conn).unwrap();
+        // a database at the last released schema (v3); the broken script plays the next one
+        run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
 
         let broken = [
             MIGRATIONS[0],
@@ -177,7 +214,7 @@ mod tests {
 
         assert_eq!(
             current_version(&conn).unwrap(),
-            SCHEMA_VERSION,
+            3,
             "version must not advance"
         );
         assert!(!table_exists(&conn, "will_vanish_a"));

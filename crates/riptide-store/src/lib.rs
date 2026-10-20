@@ -13,6 +13,7 @@
 mod error;
 pub mod migrate;
 mod store;
+mod torrents;
 
 pub use error::Error;
 pub use migrate::{Migration, MIGRATIONS, SCHEMA_VERSION};

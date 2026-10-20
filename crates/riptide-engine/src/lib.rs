@@ -39,6 +39,12 @@
 //! `Verifying` → `Completed` once the merged file is on disk. Pause stops the process and resume
 //! runs it again (`--continue` picks up its `.part` files); cancel and remove delete them.
 //!
+//! # BitTorrent
+//!
+//! A [`DownloadKind::Torrent`] record is run by `riptide-torrent` (librqbit), not by the segment
+//! scheduler; see the [`torrent`] module for the add flow (preview, file choice, add), the state
+//! mapping and the persistence. Call [`Engine::enable_torrents`] once after [`Engine::open`].
+//!
 //! # Site grabber
 //!
 //! [`Engine::crawl`] runs `riptide-crawl` with the engine's HTTP client (proxy, user agent, TLS
@@ -65,6 +71,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
+mod torrent;
+
 use riptide_core::{
     Category, Clock, Download, DownloadId, DownloadKind, DownloadRequest, DownloadState, Event,
     MediaInfo, MediaSelection, QueueId, Secrets, Segment,
@@ -90,6 +98,7 @@ pub mod queues;
 pub use disk::free_space;
 pub use queues::SystemClock;
 pub use riptide_net::parse_http_url;
+pub use torrent::TorrentOptions;
 
 /// Errors from the runtime.
 #[derive(Debug, thiserror::Error)]
@@ -112,6 +121,9 @@ pub enum Error {
     /// The site grabber could not start (bad start URL or setting).
     #[error(transparent)]
     Crawl(#[from] riptide_crawl::Error),
+    /// BitTorrent engine.
+    #[error(transparent)]
+    Torrent(#[from] riptide_torrent::Error),
     /// Disk.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
@@ -166,6 +178,9 @@ pub struct EngineSettings {
     /// private address are never affected.
     #[serde(default)]
     pub allow_private_redirects: bool,
+    /// Settings -> Torrents: seeding rules, upload cap, DHT, port.
+    #[serde(default)]
+    pub torrent: TorrentOptions,
 }
 
 fn default_true() -> bool {
@@ -268,6 +283,7 @@ impl EngineSettings {
         // 0 means unlimited, as everywhere else
         self.global_speed_limit = self.global_speed_limit.filter(|&l| l > 0);
         self.proxy.url = self.proxy.url.trim().to_string();
+        self.torrent = self.torrent.sanitized();
         self
     }
 
@@ -299,6 +315,7 @@ impl Default for EngineSettings {
             proxy: ProxySettings::default(),
             mark_of_the_web: true,
             allow_private_redirects: false,
+            torrent: TorrentOptions::default(),
         }
     }
 }
@@ -437,6 +454,8 @@ fn delete_partials(d: &Download) {
                 let _ = std::fs::remove_file(p);
             }
         }
+        // the torrent engine owns (and deletes) its files; see `Engine::torrent_cancel`
+        DownloadKind::Torrent => {}
     }
 }
 
@@ -502,6 +521,11 @@ struct Inner {
     test_crash_after_rename: AtomicBool,
     /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
     media: RwLock<Option<YtDlp>>,
+    /// The BitTorrent engine and its bridge to the download rows; `None` until
+    /// [`Engine::enable_torrents`].
+    torrents: RwLock<Option<Arc<torrent::TorrentRuntime>>>,
+    /// Folder next to the database file; the torrent engine keeps its state below it.
+    data_dir: PathBuf,
     /// Serialises the choice of an on-disk file name, so two downloads that start at the same
     /// moment can never settle on the same name (and share one part file).
     name_lock: tokio::sync::Mutex<()>,
@@ -565,6 +589,11 @@ fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<P
     let (clean_url, url_auth) = riptide_net::split_userinfo(&url);
     let media_selection = match request.kind {
         DownloadKind::Http => None,
+        DownloadKind::Torrent => {
+            return Err(Error::Core(riptide_core::Error::Invalid(
+                "torrents are added with torrent_preview and add_torrent".into(),
+            )))
+        }
         DownloadKind::Media => {
             let key = request.media_format.as_deref().unwrap_or("best");
             Some(MediaSelection::parse(key).ok_or_else(|| {
@@ -811,6 +840,10 @@ impl Engine {
         // crash recovery: anything still "active" belongs back in the queue
         db(&store, |s| {
             for d in s.list_downloads()? {
+                // a torrent is brought back by `enable_torrents`, from the torrent engine state
+                if d.kind == DownloadKind::Torrent {
+                    continue;
+                }
                 match d.state {
                     DownloadState::Probing | DownloadState::Downloading => {
                         s.set_state(d.id, DownloadState::Paused, None)?;
@@ -870,6 +903,13 @@ impl Engine {
             test_stop_delay_ms: std::sync::atomic::AtomicU64::new(0),
             test_crash_after_rename: AtomicBool::new(false),
             media: RwLock::new(None),
+            torrents: RwLock::new(None),
+            data_dir: config
+                .db_path
+                .parent()
+                .map(Path::to_path_buf)
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or_else(|| PathBuf::from(".")),
             name_lock: tokio::sync::Mutex::new(()),
         });
         let engine = Engine { inner };
@@ -982,6 +1022,7 @@ impl Engine {
         self.inner
             .global_limit
             .set_limit(settings.global_speed_limit);
+        self.apply_torrent_options(&settings.torrent);
         let max_active = settings.max_active;
         if let Ok(mut s) = self.inner.settings.write() {
             *s = settings;
@@ -1172,6 +1213,9 @@ impl Engine {
     /// Pauses a queued or running download. For a running one it returns once the transfer
     /// has stopped and the record is `Paused`, so a `resume` right after is never ignored.
     pub async fn pause(&self, id: DownloadId) -> Result<()> {
+        if self.is_torrent(id).await? {
+            return self.torrent_pause(id).await;
+        }
         if self.stop_and_wait(id, StopReason::Pause).await? {
             return Ok(());
         }
@@ -1185,6 +1229,9 @@ impl Engine {
     /// Resumes a paused download or retries a failed one.
     pub async fn resume(&self, id: DownloadId) -> Result<()> {
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        if d.kind == DownloadKind::Torrent {
+            return self.torrent_resume(id).await;
+        }
         if matches!(
             d.state,
             DownloadState::Paused | DownloadState::Failed { .. }
@@ -1197,6 +1244,13 @@ impl Engine {
 
     /// Cancels a download; the row stays, the part file is deleted.
     pub async fn cancel(&self, id: DownloadId) -> Result<()> {
+        if let Some(d) = self
+            .get(id)
+            .await?
+            .filter(|d| d.kind == DownloadKind::Torrent)
+        {
+            return self.torrent_cancel(&d).await;
+        }
         if self.stop_and_wait(id, StopReason::Cancel).await? {
             return Ok(());
         }
@@ -1213,8 +1267,11 @@ impl Engine {
     pub async fn remove(&self, id: DownloadId, delete_file: bool) -> Result<()> {
         self.stop_and_wait(id, StopReason::Remove).await?;
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
+        if d.kind == DownloadKind::Torrent {
+            self.torrent_remove(&d, delete_file).await?;
+        }
         delete_partials(&d);
-        if delete_file && d.state == DownloadState::Completed {
+        if delete_file && d.state == DownloadState::Completed && d.kind != DownloadKind::Torrent {
             let _ = std::fs::remove_file(d.final_path());
         }
         db(&self.inner.store, move |s| {
@@ -1269,6 +1326,10 @@ impl Engine {
     /// state does not change (it was `Paused` or `Queued`) or the record is reborn from a
     /// terminal state, [`Event::Added`] is emitted again so listeners re-read the record.
     pub async fn restart(&self, id: DownloadId) -> Result<()> {
+        if self.is_torrent(id).await? {
+            // "start over" for a torrent is a full re-check: pieces that verify are kept
+            return self.verify_torrent(id).await;
+        }
         self.stop_and_wait(id, StopReason::Restart).await?;
         let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
         let was_paused = before.state == DownloadState::Paused;
@@ -1467,6 +1528,13 @@ impl Engine {
                 self.transition(d.id, DownloadState::Paused, None).await?;
             }
         }
+        for d in &all {
+            if d.kind == DownloadKind::Torrent
+                && matches!(d.state, DownloadState::Probing | DownloadState::Downloading)
+            {
+                self.torrent_pause(d.id).await?;
+            }
+        }
         // then stop every running transfer together (including any that started meanwhile)
         let waits: Vec<_> = self
             .running_ids()
@@ -1496,6 +1564,7 @@ impl Engine {
     /// `open`), then returns. Call before the process exits.
     pub async fn shutdown(&self) {
         self.inner.shutting_down.store(true, Ordering::SeqCst);
+        self.shutdown_torrents().await;
         self.inner.wake.notify_one();
         self.inner.sched_wake.notify_one();
         let running: Vec<Running> = {
@@ -1511,6 +1580,13 @@ impl Engine {
         for r in running {
             let _ = r.task.await;
         }
+    }
+
+    async fn is_torrent(&self, id: DownloadId) -> Result<bool> {
+        Ok(self
+            .get(id)
+            .await?
+            .is_some_and(|d| d.kind == DownloadKind::Torrent))
     }
 
     /// Ids of downloads with a running task.
@@ -1695,7 +1771,7 @@ impl Engine {
             ))
         })
         .await?;
-        queued.retain(|d| !running_ids.contains(&d.id));
+        queued.retain(|d| !running_ids.contains(&d.id) && d.kind != DownloadKind::Torrent);
         let Some(id) = riptide_core::pick_next(&queues, &queued, &per_queue, max_active) else {
             return Ok(false);
         };

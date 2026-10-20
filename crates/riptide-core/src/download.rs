@@ -174,14 +174,19 @@ pub enum DownloadKind {
     Http,
     /// A video page (YouTube, Vimeo, ...) fetched by the bundled `yt-dlp` through `riptide-media`.
     Media,
+    /// A magnet link or `.torrent` file run by `riptide-torrent` (BitTorrent). It lives in the
+    /// same list as every other download but is driven by the torrent engine, not the segment
+    /// scheduler; its extra facts are a [`crate::TorrentInfo`].
+    Torrent,
 }
 
 impl DownloadKind {
-    /// Stable lower-case name (`"http"`, `"media"`).
+    /// Stable lower-case name (`"http"`, `"media"`, `"torrent"`).
     pub const fn name(self) -> &'static str {
         match self {
             DownloadKind::Http => "http",
             DownloadKind::Media => "media",
+            DownloadKind::Torrent => "torrent",
         }
     }
 
@@ -190,6 +195,7 @@ impl DownloadKind {
         match name {
             "http" => Some(DownloadKind::Http),
             "media" => Some(DownloadKind::Media),
+            "torrent" => Some(DownloadKind::Torrent),
             _ => None,
         }
     }

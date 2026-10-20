@@ -27,6 +27,7 @@ pub mod schedule;
 pub mod segment;
 pub mod state;
 pub mod throttle;
+pub mod torrent;
 
 pub use batch::{
     export_url_list, import_url_list, is_http_url, parse_url_list, BatchError, BatchOptions,
@@ -56,3 +57,7 @@ pub use segment::{
 };
 pub use state::DownloadState;
 pub use throttle::Throttle;
+pub use torrent::{
+    TorrentAdd, TorrentFileInfo, TorrentInfo, TorrentLive, TorrentPreviewFile, TorrentPreviewInfo,
+    TorrentSourceRequest,
+};

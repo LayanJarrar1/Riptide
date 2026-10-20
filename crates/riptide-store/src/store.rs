@@ -48,7 +48,7 @@ pub struct SegmentProgress {
 /// The database handle. Not `Sync`; one per thread.
 #[derive(Debug)]
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 /// `(cookies, headers_json, auth_user, auth_pass)` as read from the `secrets` table.
