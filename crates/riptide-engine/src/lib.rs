@@ -483,6 +483,9 @@ struct Inner {
     sched_wake: Notify,
     /// Per scheduled queue: the last "should be running" answer the timer applied.
     sched_applied: Mutex<HashMap<QueueId, bool>>,
+    /// Serialises schedule passes: the timer task and a caller of `check_schedules` must not
+    /// interleave (the second would see the level marked applied before the queue changed).
+    sched_pass: tokio::sync::Mutex<()>,
     /// Queues whose `QueueFinished` was announced and that have not started anything since.
     announced: Mutex<HashSet<QueueId>>,
     /// [`EngineSettings::global_speed_limit`], shared by every connection of every download.
@@ -853,6 +856,7 @@ impl Engine {
             clock,
             sched_wake: Notify::new(),
             sched_applied: Mutex::new(HashMap::new()),
+            sched_pass: tokio::sync::Mutex::new(()),
             announced: Mutex::new(HashSet::new()),
             store,
             client: RwLock::new(client),
