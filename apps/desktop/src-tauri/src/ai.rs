@@ -187,6 +187,12 @@ fn today() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 
+/// Reads a JSON file, tolerating a UTF-8 byte-order mark (editors on Windows add one).
+fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()
+}
+
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, text)?;
@@ -206,10 +212,7 @@ impl AiService {
 
     /// The saved settings (defaults when none).
     pub fn settings(&self) -> AiSettings {
-        std::fs::read_to_string(self.dir.join(SETTINGS_FILE))
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default()
+        read_json(&self.dir.join(SETTINGS_FILE)).unwrap_or_default()
     }
 
     /// Validates and saves settings.
@@ -288,10 +291,7 @@ impl AiService {
 
     /// Today's usage (a new day starts at zero).
     pub fn usage(&self) -> Usage {
-        let u: Usage = std::fs::read_to_string(self.dir.join(USAGE_FILE))
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default();
+        let u: Usage = read_json(&self.dir.join(USAGE_FILE)).unwrap_or_default();
         if u.day == today() {
             u
         } else {
@@ -667,6 +667,20 @@ mod tests {
             assert!(!text.contains("TESTKEY"), "{text}");
         }
         assert!(all_files_text(d.path()).contains("google/gemma"));
+    }
+
+    #[test]
+    fn a_byte_order_mark_in_the_settings_file_is_tolerated() {
+        let d = tempfile::tempdir().unwrap();
+        let svc = service(d.path());
+        std::fs::write(
+            d.path().join(SETTINGS_FILE),
+            "\u{feff}{\"provider\":\"groq\",\"model\":\"m\",\"suggestNames\":true}",
+        )
+        .unwrap();
+        let s = svc.settings();
+        assert_eq!(s.provider, ProviderKind::Groq);
+        assert!(s.suggest_names);
     }
 
     #[test]

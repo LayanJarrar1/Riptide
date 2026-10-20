@@ -109,6 +109,16 @@ pub fn merge(lists: Vec<Vec<Hit>>) -> Vec<Hit> {
             // a file name + size match is a weak key; never merge on it here
             keys.retain(|k| !k.starts_with("file:"));
             keys.push(format!("id:{}", hit.id));
+            // the same paper often arrives twice with different DOIs (preprint and journal)
+            let title: String = hit
+                .title
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .flat_map(char::to_lowercase)
+                .collect();
+            if title.chars().count() >= 24 {
+                keys.push(format!("title:{title}"));
+            }
             if keys.iter().any(|k| seen.contains(k)) {
                 continue;
             }

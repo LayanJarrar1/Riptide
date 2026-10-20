@@ -753,5 +753,6 @@
   "research.source.github": "GitHub",
   "research.source.data-gov": "Data.gov",
   "research.desktopOnly": "Research needs the desktop app, which does the searching.",
-  "research.selectCard": "Select {title}"
+  "research.selectCard": "Select {title}",
+  "batch.seenBefore": "{count} of these links were downloaded before and are still on disk. Switch on \"Skip downloads I already have\" in Settings → AI to leave them out."
 }

@@ -753,5 +753,6 @@
   "research.source.github": "GitHub",
   "research.source.data-gov": "Data.gov",
   "research.desktopOnly": "يحتاج البحث إلى تطبيق سطح المكتب الذي يتولى عملية البحث.",
-  "research.selectCard": "تحديد {title}"
+  "research.selectCard": "تحديد {title}",
+  "batch.seenBefore": "{count} من هذه الروابط سبق تحميلها وما زالت على القرص. فعّل \"تخطَّ التحميلات الموجودة عندي\" في الإعدادات ← الذكاء الاصطناعي لاستبعادها."
 }
