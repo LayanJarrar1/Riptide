@@ -361,6 +361,7 @@
   "tray.idle": "ريبتايد",
   "tray.active": "ريبتايد: {count} نشطة، {speed}",
   "notify.completed": "اكتمل التحميل",
+  "notify.completedMany": "اكتمل تنزيل {count} ملفات",
   "notify.failed": "فشل التحميل: {reason}",
   "clipboard.prompt": "تحميل {name}؟",
   "clipboard.download": "تحميل",

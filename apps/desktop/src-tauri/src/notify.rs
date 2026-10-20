@@ -3,7 +3,10 @@
 //! toast covers the focused case). Clicking a notification brings the window up and asks the
 //! webview to open that download's details ([`OPEN_DOWNLOAD_EVENT`]).
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
+use std::time::Duration;
+
+use tokio::time::Instant;
 
 use riptide_core::{DownloadId, Event};
 use riptide_engine::Engine;
@@ -29,6 +32,53 @@ pub fn title_for(path: &str, fallback: &str) -> String {
         .next()
         .filter(|n| !n.is_empty())
         .map_or_else(|| fallback.to_string(), str::to_string)
+}
+
+/// How long a burst of completions is measured over, and how long it must be quiet before the
+/// summary toast is shown.
+pub const BURST_WINDOW: Duration = Duration::from_secs(10);
+
+/// Most individual completion toasts per [`BURST_WINDOW`]; the rest are counted and summarised.
+/// Every toast costs the system a few kernel handles for as long as the app runs, so a batch of
+/// 1,000 small files must not become 1,000 toasts.
+pub const BURST_LIMIT: usize = 3;
+
+/// Decides which completion toasts are shown one by one and counts the rest.
+#[derive(Debug, Default)]
+pub struct Burst {
+    shown: VecDeque<Instant>,
+    suppressed: u32,
+}
+
+impl Burst {
+    /// `true` when the toast of a completion at `now` may be shown on its own.
+    pub fn admit(&mut self, now: Instant) -> bool {
+        while self
+            .shown
+            .front()
+            .is_some_and(|t| now.duration_since(*t) >= BURST_WINDOW)
+        {
+            self.shown.pop_front();
+        }
+        if self.shown.len() < BURST_LIMIT {
+            self.shown.push_back(now);
+            true
+        } else {
+            self.suppressed += 1;
+            false
+        }
+    }
+
+    /// Completions held back since the last call; resets the count.
+    pub fn take_suppressed(&mut self) -> u32 {
+        std::mem::take(&mut self.suppressed)
+    }
+
+    /// Whether some completions still wait for their summary.
+    #[must_use]
+    pub fn has_suppressed(&self) -> bool {
+        self.suppressed > 0
+    }
 }
 
 /// Registers the click handler and starts watching engine events.
@@ -58,16 +108,32 @@ async fn watch<R: Runtime>(app: AppHandle<R>, engine: Engine) {
     let mut rx = engine.subscribe();
     // one failure notification per download per session (automatic retries can fail again)
     let mut failed_once: HashSet<DownloadId> = HashSet::new();
+    let mut burst = Burst::default();
+    let quiet = tokio::time::sleep(BURST_WINDOW);
+    tokio::pin!(quiet);
     loop {
-        let event = match rx.recv().await {
-            Ok(e) => e,
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        let event = tokio::select! {
+            received = rx.recv() => match received {
+                Ok(e) => e,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            },
+            () = &mut quiet, if burst.has_suppressed() => {
+                // the burst is over: one summary for the toasts that were held back
+                let count = burst.take_suppressed();
+                if should_notify(&app) {
+                    let labels = shell::prefs(&app).labels;
+                    let body = labels.completed_many.replace("{count}", &count.to_string());
+                    show(&app, DownloadId(i64::from(i32::MAX) - 1), "Riptide", &body);
+                }
+                continue;
+            }
         };
         match event {
             Event::Completed { id, path } => {
                 failed_once.remove(&id);
-                if should_notify(&app) {
+                quiet.as_mut().reset(Instant::now() + BURST_WINDOW);
+                if should_notify(&app) && burst.admit(Instant::now()) {
                     let labels = shell::prefs(&app).labels;
                     show(
                         &app,
@@ -248,6 +314,22 @@ pub fn notify_update<R: Runtime>(app: AppHandle<R>, title: String, body: String)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_burst_shows_a_few_toasts_then_counts_the_rest() {
+        let mut burst = Burst::default();
+        let t0 = Instant::now();
+        let shown = (0..50).filter(|_| burst.admit(t0)).count();
+        assert_eq!(shown, BURST_LIMIT);
+        assert!(burst.has_suppressed());
+        assert_eq!(
+            burst.take_suppressed(),
+            50 - u32::try_from(BURST_LIMIT).unwrap()
+        );
+        assert!(!burst.has_suppressed());
+        // a calm moment later toasts are shown one by one again
+        assert!(burst.admit(t0 + BURST_WINDOW));
+    }
 
     #[test]
     fn update_id_is_not_a_download_id() {

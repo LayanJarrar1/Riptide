@@ -361,6 +361,7 @@
   "tray.idle": "Riptide",
   "tray.active": "Riptide: {count} active, {speed}",
   "notify.completed": "Download complete",
+  "notify.completedMany": "{count} downloads complete",
   "notify.failed": "Download failed: {reason}",
   "clipboard.prompt": "Download {name}?",
   "clipboard.download": "Download",
