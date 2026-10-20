@@ -4816,11 +4816,13 @@ name = "riptide-core"
 version = "0.1.0-alpha.4"
 dependencies = [
  "proptest",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "ts-rs",
  "unicode-normalization",
+ "url",
 ]
 
 [[package]]
@@ -4847,8 +4849,10 @@ dependencies = [
 name = "riptide-desktop"
 version = "0.1.0-alpha.4"
 dependencies = [
+ "chrono",
  "dirs 6.0.0",
  "notify-rust",
+ "riptide-ai",
  "riptide-core",
  "riptide-crawl",
  "riptide-engine",
@@ -4857,6 +4861,7 @@ dependencies = [
  "riptide-log",
  "riptide-media",
  "riptide-net",
+ "riptide-research",
  "riptide-torrent",
  "serde",
  "serde_json",
@@ -4875,9 +4880,11 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "url",
  "windows-sys 0.59.0",
  "winreg",
+ "wiremock",
 ]
 
 [[package]]
@@ -4996,6 +5003,25 @@ dependencies = [
  "tracing",
  "url",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "riptide-research"
+version = "0.1.0-alpha.4"
+dependencies = [
+ "async-trait",
+ "futures",
+ "regex",
+ "reqwest 0.12.28",
+ "riptide-ai",
+ "riptide-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+ "wiremock",
 ]
 
 [[package]]

@@ -1,0 +1,60 @@
+{
+ "metadata": {
+  "identifier": "TheStrandMagazineAnIllustratedMonthly",
+  "title": "The Strand Magazine: An Illustrated Monthly",
+  "creator": "George Newnes (Editor)",
+  "date": "1891-01 to 1922-12",
+  "licenseurl": "http://creativecommons.org/publicdomain/mark/1.0/",
+  "description": "This is a collection of the bound editions of 'The Strand Magazine: An Illustrated Monthly', from its first issue (January) 1891-1922 (December), all having been published before 1923 and thus in the public domain in the United States of America, and many other countries. Each bound volume has 6 issues, starting from Jan-June, and then July-Dec of each year. This collection goes from issue number "
+ },
+ "files": [
+  {
+   "name": "TheStrandMagazine1891aVol.IJan-jun.pdf",
+   "format": "Text PDF",
+   "size": "333318191",
+   "source": "original"
+  },
+  {
+   "name": "TheStrandMagazine1891aVol.IJan-jun_djvu.xml",
+   "format": "Djvu XML",
+   "size": "27412625",
+   "source": "derivative"
+  },
+  {
+   "name": "TheStrandMagazine1891aVol.IJan-jun_scandata.xml",
+   "format": "Scandata",
+   "size": "230038",
+   "source": "derivative"
+  },
+  {
+   "name": "TheStrandMagazine1891bVol.IiJul-dec.pdf",
+   "format": "Text PDF",
+   "size": "352325537",
+   "source": "original"
+  },
+  {
+   "name": "TheStrandMagazine1891bVol.IiJul-dec_djvu.xml",
+   "format": "Djvu XML",
+   "size": "28708619",
+   "source": "derivative"
+  },
+  {
+   "name": "TheStrandMagazine1891bVol.IiJul-dec_scandata.xml",
+   "format": "Scandata",
+   "size": "240840",
+   "source": "derivative"
+  },
+  {
+   "name": "TheStrandMagazine1892aVol.IiiJan-jun.pdf",
+   "format": "Text PDF",
+   "size": "337393418",
+   "source": "original"
+  },
+  {
+   "name": "TheStrandMagazine1892aVol.IiiJan-jun_djvu.xml",
+   "format": "Djvu XML",
+   "size": "25818479",
+   "source": "derivative"
+  }
+ ]
+}

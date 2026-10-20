@@ -42,10 +42,15 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "torrents",
         sql: include_str!("sql/v4.sql"),
     },
+    Migration {
+        version: 5,
+        name: "seen_index",
+        sql: include_str!("sql/v5.sql"),
+    },
 ];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -196,21 +201,20 @@ mod tests {
         // a database at the last released schema (v3); the broken script plays the next one
         run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
 
-        let broken = [
-            MIGRATIONS[0],
-            MIGRATIONS[1],
-            MIGRATIONS[2],
-            Migration {
-                version: 4,
-                name: "broken",
-                // the third statement fails: nothing from the first two may survive
-                sql: "CREATE TABLE will_vanish_a (x);
-                      CREATE TABLE will_vanish_b (y);
-                      INSERT INTO no_such_table VALUES (1);",
-            },
-        ];
+        let mut broken = MIGRATIONS[..3].to_vec();
+        broken.push(Migration {
+            version: 4,
+            name: "broken",
+            // the third statement fails: nothing from the first two may survive
+            sql: "CREATE TABLE will_vanish_a (x);
+                  CREATE TABLE will_vanish_b (y);
+                  INSERT INTO no_such_table VALUES (1);",
+        });
         let err = run_with(&mut conn, &broken).unwrap_err();
-        assert!(matches!(err, Error::Migration { version: 4, .. }), "{err}");
+        assert!(
+            matches!(err, Error::Migration { version: 4, .. }),
+            "{err}"
+        );
 
         assert_eq!(
             current_version(&conn).unwrap(),

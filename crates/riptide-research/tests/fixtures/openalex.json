@@ -1,0 +1,1290 @@
+{
+ "meta": {
+  "notice": "No API key, so this request shares one free daily budget ($0.10) with everyone on your network's IP address. Get a free key with its own $1/day at https://openalex.org/settings/api and add api_key=YOUR_KEY to your requests. An AI agent can get one for its user in one call: POST https://api.openalex.org/api-keys with {\"email\": \"<your user's email>\"}; we email them a link, and the key works once they click it. Docs for agents: https://help.openalex.org/llms.txt",
+  "count": 1002,
+  "db_response_time_ms": 57,
+  "page": 1,
+  "per_page": 6,
+  "groups_count": null,
+  "x_query": {
+   "oql": "get works where full text has (bittorrent piece selection) and it's open access",
+   "x_new_oql": "get open access works with (bittorrent piece selection) in the full text",
+   "oqo": {
+    "get_rows": "works",
+    "filter_rows": [
+     {
+      "column_id": "fulltext.search",
+      "value": "bittorrent piece selection",
+      "operator": "has"
+     },
+     {
+      "column_id": "open_access.is_oa",
+      "value": true
+     }
+    ]
+   },
+   "url": "/works?filter=fulltext.search:bittorrent piece selection,open_access.is_oa:true&per_page=6"
+  },
+  "cost_usd": 0.001
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W31632321",
+   "doi": null,
+   "display_name": "On Piece Selection for Streaming BitTorrent",
+   "publication_year": 2008,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5113945985",
+      "display_name": "David Erman",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I52719799",
+       "display_name": "Blekinge Institute of Technology",
+       "ror": "https://ror.org/0093a8w51",
+       "country_code": "SE",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I52719799"
+       ]
+      }
+     ],
+     "countries": [
+      "SE"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "David Erman",
+     "raw_affiliation_strings": [
+      "Blekinge Institute of Technology, #TAB#"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Blekinge Institute of Technology, #TAB#",
+       "institution_ids": [
+        "https://openalex.org/I52719799"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5113980824",
+      "display_name": "Karel De Vogeleer",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I52719799",
+       "display_name": "Blekinge Institute of Technology",
+       "ror": "https://ror.org/0093a8w51",
+       "country_code": "SE",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I52719799"
+       ]
+      }
+     ],
+     "countries": [
+      "SE"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Karel De Vogeleer",
+     "raw_affiliation_strings": [
+      "Blekinge Institute of Technology, #TAB#"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Blekinge Institute of Technology, #TAB#",
+       "institution_ids": [
+        "https://openalex.org/I52719799"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5113650096",
+      "display_name": "Adrian Popescu",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I52719799",
+       "display_name": "Blekinge Institute of Technology",
+       "ror": "https://ror.org/0093a8w51",
+       "country_code": "SE",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I52719799"
+       ]
+      }
+     ],
+     "countries": [
+      "SE"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Adrian Popescu",
+     "raw_affiliation_strings": [
+      "Blekinge Institute of Technology, #TAB#"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "Blekinge Institute of Technology, #TAB#",
+       "institution_ids": [
+        "https://openalex.org/I52719799"
+       ]
+      }
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "green",
+    "oa_url": "http://urn.kb.se/resolve?urn=urn:nbn:se:bth-8055",
+    "any_repository_has_fulltext": true
+   },
+   "best_oa_location": {
+    "id": "pmh:oai:DiVA.org:bth-8055",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://urn.kb.se/resolve?urn=urn:nbn:se:bth-8055",
+    "pdf_url": null,
+    "source": {
+     "id": "https://openalex.org/S4306401559",
+     "display_name": "KTH Publication Database DiVA (KTH Royal Institute of Technology)",
+     "issn_l": null,
+     "issn": null,
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I86987016",
+     "host_organization_name": "KTH Royal Institute of Technology",
+     "host_organization_lineage": [
+      "https://openalex.org/I86987016"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": "other-oa",
+    "license_id": "https://openalex.org/licenses/other-oa",
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "info:eu-repo/semantics/conferenceObject"
+   },
+   "ids": {
+    "openalex": "https://openalex.org/W31632321",
+    "mag": "31632321"
+   },
+   "abstract_inverted_index": {
+    "Abstract\u2014Video-on-Demand": [
+     0
+    ],
+    "(VoD)": [
+     1
+    ],
+    "has": [
+     2,
+     18,
+     40
+    ],
+    "been": [
+     3
+    ],
+    "hailed": [
+     4
+    ],
+    "as": [
+     5
+    ],
+    "a": [
+     6,
+     13,
+     23,
+     56,
+     78,
+     89,
+     95
+    ],
+    "\u201ckiller": [
+     7
+    ],
+    "app\u201d": [
+     8
+    ],
+    "of": [
+     9,
+     36,
+     58,
+     86,
+     98
+    ],
+    "the": [
+     10,
+     42,
+     63,
+     99,
+     103
+    ],
+    "Internet": [
+     11
+    ],
+    "for": [
+     12,
+     48,
+     74
+    ],
+    "long": [
+     14
+    ],
+    "time,": [
+     15
+    ],
+    "but": [
+     16
+    ],
+    "it": [
+     17,
+     72
+    ],
+    "yet": [
+     19
+    ],
+    "to": [
+     20,
+     27,
+     62,
+     70,
+     102
+    ],
+    "really": [
+     21
+    ],
+    "make": [
+     22,
+     71
+    ],
+    "major": [
+     24
+    ],
+    "breakthrough,": [
+     25
+    ],
+    "due": [
+     26
+    ],
+    "various": [
+     28
+    ],
+    "technical": [
+     29
+    ],
+    "and": [
+     30,
+     60,
+     67,
+     83
+    ],
+    "political": [
+     31
+    ],
+    "reasons.": [
+     32
+    ],
+    "The": [
+     33
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W1597717689",
+   "doi": "https://doi.org/10.1007/978-3-642-12963-6_5",
+   "display_name": "Toward Efficient On-Demand Streaming with BitTorrent",
+   "publication_year": 2010,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5032865590",
+      "display_name": "Youmna Borghol",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I31746571",
+       "display_name": "UNSW Sydney",
+       "ror": "https://ror.org/03r8z3t63",
+       "country_code": "AU",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I31746571"
+       ]
+      },
+      {
+       "id": "https://openalex.org/I42894916",
+       "display_name": "Data61",
+       "ror": "https://ror.org/03q397159",
+       "country_code": "AU",
+       "type": "other",
+       "lineage": [
+        "https://openalex.org/I1292875679",
+        "https://openalex.org/I2801453606",
+        "https://openalex.org/I42894916",
+        "https://openalex.org/I4387156119"
+       ]
+      }
+     ],
+     "countries": [
+      "AU"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Youmna Borghol",
+     "raw_affiliation_strings": [
+      "NICTA, Locked Bag 9013, Alexandria, NSW 1435, Australia",
+      "School of Electrical Engineering and Telecommunications, University of New South Wales, NSW 2030, Sydney, Australia",
+      "NICTA - National ICT Australia [Sydney] (Australia)",
+      "UNSW - School of Electrical Engineering and Telecommunications (School of Electrical Engineering & Telecommunications University of New South Wales UNSW Sydney N.S.W. 2052 Australia - Australia)"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "NICTA, Locked Bag 9013, Alexandria, NSW 1435, Australia",
+       "institution_ids": [
+        "https://openalex.org/I42894916"
+       ]
+      },
+      {
+       "raw_affiliation_string": "School of Electrical Engineering and Telecommunications, University of New South Wales, NSW 2030, Sydney, Australia",
+       "institution_ids": [
+        "https://openalex.org/I31746571"
+       ]
+      },
+      {
+       "raw_affiliation_string": "NICTA - National ICT Australia [Sydney] (Australia)",
+       "institution_ids": [
+        "https://openalex.org/I42894916"
+       ]
+      },
+      {
+       "raw_affiliation_string": "UNSW - School of Electrical Engineering and Telecommunications (School of Electrical Engineering & Telecommunications University of New South Wales UNSW Sydney N.S.W. 2052 Australia - Australia)",
+       "institution_ids": [
+        "https://openalex.org/I31746571"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5112826326",
+      "display_name": "S\u00e9bastien Ardon",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I42894916",
+       "display_name": "Data61",
+       "ror": "https://ror.org/03q397159",
+       "country_code": "AU",
+       "type": "other",
+       "lineage": [
+        "https://openalex.org/I1292875679",
+        "https://openalex.org/I2801453606",
+        "https://openalex.org/I42894916",
+        "https://openalex.org/I4387156119"
+       ]
+      }
+     ],
+     "countries": [
+      "AU"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Sebastien Ardon",
+     "raw_affiliation_strings": [
+      "NICTA, Locked Bag 9013, Alexandria, NSW 1435, Australia",
+      "NICTA - National ICT Australia [Sydney] (Australia)"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "NICTA, Locked Bag 9013, Alexandria, NSW 1435, Australia",
+       "institution_ids": [
+        "https://openalex.org/I42894916"
+       ]
+      },
+      {
+       "raw_affiliation_string": "NICTA - National ICT Australia [Sydney] (Australia)",
+       "institution_ids": [
+        "https://openalex.org/I42894916"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5077044865",
+      "display_name": "Niklas Ferdinand Carlsson",
+      "orcid": "https://orcid.org/0000-0003-1367-1594",
+      "observed_orcids": [
+       "https://orcid.org/0000-0003-1367-1594",
+       "https://orcid.org/0000-0002-1831-9920"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I168635309",
+       "display_name": "University of Calgary",
+       "ror": "https://ror.org/03yjb2x39",
+       "country_code": "CA",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I168635309"
+       ]
+      }
+     ],
+     "countries": [
+      "CA"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Niklas Carlsson",
+     "raw_affiliation_strings": [
+      "University of Calgary, Calgary, AB, Canada",
+      "University of Calgary (2500 University Dr NW Calgary, Alberta, T2N 1N4 - Canada)"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "University of Calgary, Calgary, AB, Canada",
+       "institution_ids": [
+        "https://openalex.org/I168635309"
+       ]
+      },
+      {
+       "raw_affiliation_string": "University of Calgary (2500 University Dr NW Calgary, Alberta, T2N 1N4 - Canada)",
+       "institution_ids": [
+        "https://openalex.org/I168635309"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5111750897",
+      "display_name": "Anirban Mahanti",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I42894916",
+       "display_name": "Data61",
+       "ror": "https://ror.org/03q397159",
+       "country_code": "AU",
+       "type": "other",
+       "lineage": [
+        "https://openalex.org/I1292875679",
+        "https://openalex.org/I2801453606",
+        "https://openalex.org/I42894916",
+        "https://openalex.org/I4387156119"
+       ]
+      }
+     ],
+     "countries": [
+      "AU"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Anirban Mahanti",
+     "raw_affiliation_strings": [
+      "NICTA, Locked Bag 9013, Alexandria, NSW 1435, Australia",
+      "NICTA - National ICT Australia [Sydney] (Australia)"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "NICTA, Locked Bag 9013, Alexandria, NSW 1435, Australia",
+       "institution_ids": [
+        "https://openalex.org/I42894916"
+       ]
+      },
+      {
+       "raw_affiliation_string": "NICTA - National ICT Australia [Sydney] (Australia)",
+       "institution_ids": [
+        "https://openalex.org/I42894916"
+       ]
+      }
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "bronze",
+    "oa_url": "https://link.springer.com/content/pdf/10.1007/978-3-642-12963-6_5.pdf",
+    "any_repository_has_fulltext": true
+   },
+   "best_oa_location": {
+    "id": "doi:10.1007/978-3-642-12963-6_5",
+    "doi": "https://doi.org/10.1007/978-3-642-12963-6_5",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.1007/978-3-642-12963-6_5",
+    "pdf_url": "https://link.springer.com/content/pdf/10.1007/978-3-642-12963-6_5.pdf",
+    "source": {
+     "id": "https://openalex.org/S106296714",
+     "display_name": "Lecture notes in computer science",
+     "issn_l": "0302-9743",
+     "issn": [
+      "0302-9743",
+      "1611-3349"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "cwts-core",
+      "jufo-1",
+      "ki-jl-1",
+      "norway-1",
+      "vabb-shw"
+     ],
+     "host_organization": "https://openalex.org/P4310319900",
+     "host_organization_name": "Springer Science+Business Media",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310319900",
+      "https://openalex.org/P4310319965"
+     ],
+     "host_organization_lineage_names": [
+      "Springer Science+Business Media",
+      "Springer Nature"
+     ],
+     "type": "book series"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Lecture Notes in Computer Science",
+    "raw_type": "book-chapter"
+   },
+   "ids": {
+    "openalex": "https://openalex.org/W1597717689",
+    "doi": "https://doi.org/10.1007/978-3-642-12963-6_5",
+    "mag": "1597717689"
+   },
+   "abstract_inverted_index": null
+  },
+  {
+   "id": "https://openalex.org/W4238875223",
+   "doi": "https://doi.org/10.1145/1402958.1402987",
+   "display_name": "Bittorrent is an auction",
+   "publication_year": 2008,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5088579822",
+      "display_name": "Dave Levin",
+      "orcid": "https://orcid.org/0000-0003-4957-5131",
+      "observed_orcids": [
+       "https://orcid.org/0000-0003-4957-5131"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I66946132",
+       "display_name": "University of Maryland, College Park",
+       "ror": "https://ror.org/047s2c258",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Dave Levin",
+     "raw_affiliation_strings": [
+      "University of Maryland, College Park, MD, USA"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "University of Maryland, College Park, MD, USA",
+       "institution_ids": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5055541077",
+      "display_name": "Katrina LaCurts",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I66946132",
+       "display_name": "University of Maryland, College Park",
+       "ror": "https://ror.org/047s2c258",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Katrina LaCurts",
+     "raw_affiliation_strings": [
+      "University of Maryland, College Park, MD, USA"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "University of Maryland, College Park, MD, USA",
+       "institution_ids": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5110270006",
+      "display_name": "Neil T. Spring",
+      "orcid": "https://orcid.org/0009-0005-1606-6746",
+      "observed_orcids": [
+       "https://orcid.org/0009-0005-1606-6746"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I66946132",
+       "display_name": "University of Maryland, College Park",
+       "ror": "https://ror.org/047s2c258",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Neil Spring",
+     "raw_affiliation_strings": [
+      "University of Maryland, College Park, MD, USA"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "University of Maryland, College Park, MD, USA",
+       "institution_ids": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ]
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5019096316",
+      "display_name": "Bobby Bhattacharjee",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I66946132",
+       "display_name": "University of Maryland, College Park",
+       "ror": "https://ror.org/047s2c258",
+       "country_code": "US",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ],
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Bobby Bhattacharjee",
+     "raw_affiliation_strings": [
+      "University of Maryland, College Park, MD, USA"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "University of Maryland, College Park, MD, USA",
+       "institution_ids": [
+        "https://openalex.org/I66946132"
+       ]
+      }
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "gold",
+    "oa_url": "https://dl.acm.org/doi/pdf/10.1145/1402958.1402987",
+    "any_repository_has_fulltext": null
+   },
+   "best_oa_location": {
+    "id": "doi:10.1145/1402958.1402987",
+    "doi": "https://doi.org/10.1145/1402958.1402987",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.1145/1402958.1402987",
+    "pdf_url": "https://dl.acm.org/doi/pdf/10.1145/1402958.1402987",
+    "source": null,
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Proceedings of the ACM SIGCOMM 2008 conference on Data communication",
+    "raw_type": "proceedings-article"
+   },
+   "ids": {
+    "openalex": "https://openalex.org/W4238875223",
+    "doi": "https://doi.org/10.1145/1402958.1402987"
+   },
+   "abstract_inverted_index": {
+    "Incentives": [
+     0
+    ],
+    "play": [
+     1
+    ],
+    "a": [
+     2,
+     126,
+     148,
+     157,
+     166
+    ],
+    "crucial": [
+     3
+    ],
+    "role": [
+     4
+    ],
+    "in": [
+     5,
+     130
+    ],
+    "BitTorrent,": [
+     6
+    ],
+    "motivating": [
+     7
+    ],
+    "users": [
+     8,
+     41
+    ],
+    "to": [
+     9,
+     11,
+     13,
+     24,
+     27,
+     43,
+     52,
+     76,
+     80,
+     109,
+     119,
+     128
+    ],
+    "upload": [
+     10
+    ],
+    "others": [
+     12
+    ],
+    "achieve": [
+     14
+    ],
+    "fast": [
+     15
+    ],
+    "download": [
+     16
+    ],
+    "times": [
+     17
+    ],
+    "for": [
+     18
+    ],
+    "all": [
+     19
+    ],
+    "peers.": [
+     20
+    ],
+    "Though": [
+     21
+    ],
+    "long": [
+     22
+    ],
+    "believed": [
+     23
+    ],
+    "be": [
+     25
+    ],
+    "robust": [
+     26
+    ],
+    "strategic": [
+     28
+    ],
+    "manipulation,": [
+     29
+    ],
+    "recent": [
+     30
+    ],
+    "work": [
+     31
+    ],
+    "has": [
+     32
+    ],
+    "empirically": [
+     33
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2345961160",
+   "doi": "https://doi.org/10.14232/actacyb.22.3.2016.8",
+   "display_name": "Robustness of BitTorrent-like VoD Protocols",
+   "publication_year": 2016,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5031679652",
+      "display_name": "Tam\u00e1s Vink\u00f3",
+      "orcid": "https://orcid.org/0000-0002-3724-4725",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-3724-4725"
+      ]
+     },
+     "institutions": [
+      {
+       "id": "https://openalex.org/I227486990",
+       "display_name": "University of Szeged",
+       "ror": "https://ror.org/01pnej532",
+       "country_code": "HU",
+       "type": "education",
+       "lineage": [
+        "https://openalex.org/I227486990"
+       ]
+      }
+     ],
+     "countries": [
+      "HU"
+     ],
+     "is_corresponding": true,
+     "raw_author_name": "Tam\u00e1s Vink\u00f3",
+     "raw_affiliation_strings": [
+      "University of Szeged , Hungary ,",
+      "University of Szeged, Hungary,"
+     ],
+     "raw_orcid": null,
+     "affiliations": [
+      {
+       "raw_affiliation_string": "University of Szeged , Hungary ,",
+       "institution_ids": [
+        "https://openalex.org/I227486990"
+       ]
+      },
+      {
+       "raw_affiliation_string": "University of Szeged, Hungary,",
+       "institution_ids": [
+        "https://openalex.org/I227486990"
+       ]
+      }
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "diamond",
+    "oa_url": "https://cyber.bibl.u-szeged.hu/index.php/actcybern/article/download/3902/3886",
+    "any_repository_has_fulltext": true
+   },
+   "best_oa_location": {
+    "id": "doi:10.14232/actacyb.22.3.2016.8",
+    "doi": "https://doi.org/10.14232/actacyb.22.3.2016.8",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.14232/actacyb.22.3.2016.8",
+    "pdf_url": "https://cyber.bibl.u-szeged.hu/index.php/actcybern/article/download/3902/3886",
+    "source": {
+     "id": "https://openalex.org/S5962179",
+     "display_name": "Acta Cybernetica",
+     "issn_l": "0324-721X",
+     "issn": [
+      "0324-721X",
+      "2676-993X"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "cwts-core",
+      "jufo-1",
+      "norway-1",
+      "poland-20",
+      "russia-white-list-4"
+     ],
+     "host_organization": "https://openalex.org/P4310315420",
+     "host_organization_name": "University of Szeged",
+     "host_organization_lineage": [
+      "https://openalex.org/P4310315420"
+     ],
+     "host_organization_lineage_names": [
+      "University of Szeged"
+     ],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Acta Cybernetica",
+    "raw_type": "journal-article"
+   },
+   "ids": {
+    "openalex": "https://openalex.org/W2345961160",
+    "doi": "https://doi.org/10.14232/actacyb.22.3.2016.8",
+    "mag": "2345961160"
+   },
+   "abstract_inverted_index": {
+    "Besides": [
+     0
+    ],
+    "server": [
+     1
+    ],
+    "supported": [
+     2
+    ],
+    "solutions": [
+     3
+    ],
+    "for": [
+     4,
+     40
+    ],
+    "Video-on-demand,": [
+     5
+    ],
+    "approaches": [
+     6
+    ],
+    "based": [
+     7
+    ],
+    "on": [
+     8
+    ],
+    "distributed": [
+     9
+    ],
+    "systems": [
+     10
+    ],
+    "such": [
+     11
+    ],
+    "as": [
+     12
+    ],
+    "BitTorrent": [
+     13
+    ],
+    "are": [
+     14,
+     25,
+     34
+    ],
+    "being": [
+     15
+    ],
+    "used": [
+     16
+    ],
+    "due": [
+     17
+    ],
+    "to": [
+     18
+    ],
+    "their": [
+     19
+    ],
+    "efficiency": [
+     20
+    ],
+    "and": [
+     21,
+     43
+    ],
+    "high": [
+     22
+    ],
+    "scalability.": [
+     23
+    ],
+    "There": [
+     24
+    ],
+    "several": [
+     26,
+     63
+    ],
+    "protocol": [
+     27,
+     72
+    ],
+    "variants": [
+     28,
+     73
+    ],
+    "proposed": [
+     29
+    ],
+    "in": [
+     30
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W2000322248",
+   "doi": "https://doi.org/10.5121/ijcnc.2014.6114",
+   "display_name": "Analyzing Peer Selection Policies for BitTorrent Multimedia On-Demand Streaming Systems in Internet",
+   "publication_year": 2014,
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": null,
+      "display_name": "Carlo Kleber da Silva Rodrigues",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "institutions": [],
+     "countries": [],
+     "is_corresponding": true,
+     "raw_author_name": "Carlo Kleber da Silva Rodrigues",
+     "raw_affiliation_strings": [],
+     "raw_orcid": null,
+     "affiliations": []
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "bronze",
+    "oa_url": "https://doi.org/10.5121/ijcnc.2014.6114",
+    "any_repository_has_fulltext": true
+   },
+   "best_oa_location": {
+    "id": "doi:10.5121/ijcnc.2014.6114",
+    "doi": "https://doi.org/10.5121/ijcnc.2014.6114",
+    "is_oa": true,
+    "landing_page_url": "https://doi.org/10.5121/ijcnc.2014.6114",
+    "pdf_url": "https://doi.org/10.5121/ijcnc.2014.6114",
+    "source": {
+     "id": "https://openalex.org/S191438308",
+     "display_name": "International journal of Computer Networks & Communications",
+     "issn_l": "0974-9322",
+     "issn": [
+      "0974-9322",
+      "0975-2293"
+     ],
+     "is_oa": false,
+     "is_in_doaj": false,
+     "is_core": true,
+     "listed_in": [
+      "cwts-core",
+      "norway-1",
+      "poland-20",
+      "russia-white-list-3"
+     ],
+     "host_organization": null,
+     "host_organization_name": null,
+     "host_organization_lineage": [],
+     "host_organization_lineage_names": [],
+     "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "International journal of Computer Networks &amp; Communications",
+    "raw_type": "journal-article"
+   },
+   "ids": {
+    "openalex": "https://openalex.org/W2000322248",
+    "doi": "https://doi.org/10.5121/ijcnc.2014.6114",
+    "mag": "2000322248"
+   },
+   "abstract_inverted_index": {
+    "The": [
+     0
+    ],
+    "adaptation": [
+     1
+    ],
+    "of": [
+     2,
+     16,
+     54,
+     61,
+     93,
+     99,
+     115,
+     156
+    ],
+    "the": [
+     3,
+     14,
+     22,
+     25,
+     37,
+     52,
+     123,
+     128,
+     135,
+     154
+    ],
+    "BitTorrent": [
+     4
+    ],
+    "protocol": [
+     5
+    ],
+    "to": [
+     6,
+     36
+    ],
+    "multimedia": [
+     7,
+     94
+    ],
+    "on-demand": [
+     8
+    ],
+    "streaming": [
+     9
+    ],
+    "systems": [
+     10
+    ],
+    "essentially": [
+     11
+    ],
+    "lies": [
+     12
+    ],
+    "on": [
+     13,
+     87
+    ],
+    "modification": [
+     15
+    ],
+    "its": [
+     17
+    ],
+    "two": [
+     18
+    ],
+    "core": [
+     19
+    ],
+    "algorithms,": [
+     20
+    ],
+    "namely": [
+     21
+    ],
+    "piece": [
+     23,
+     38
+    ],
+    "and": [
+     24,
+     73,
+     109,
+     118
+    ],
+    "peer": [
+     26,
+     48
+    ],
+    "selection": [
+     27,
+     39,
+     49
+    ],
+    "policies,": [
+     28
+    ],
+    "respectively.Much": [
+     29
+    ],
+    "more": [
+     30
+    ],
+    "attention": [
+     31
+    ],
+    "has": [
+     32
+    ],
+    "though": [
+     33
+    ]
+   }
+  }
+ ],
+ "group_by": []
+}

@@ -94,6 +94,9 @@ use url::Url;
 pub mod disk;
 pub mod motw;
 pub mod queues;
+pub mod seen;
+
+pub use seen::{SeenHint, SeenMatch, SeenQuery};
 
 pub use disk::free_space;
 pub use queues::SystemClock;
@@ -124,6 +127,9 @@ pub enum Error {
     /// BitTorrent engine.
     #[error(transparent)]
     Torrent(#[from] riptide_torrent::Error),
+    /// The "skip duplicates" option is on and this was downloaded before.
+    #[error("already downloaded: {0}")]
+    AlreadyDownloaded(String),
     /// Disk.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
@@ -1085,6 +1091,27 @@ impl Engine {
     /// Adds a download. It starts when a queue slot is free (or waits in `Paused` when
     /// `start_paused`). Returns its id.
     pub async fn add(&self, request: DownloadRequest) -> Result<DownloadId> {
+        self.add_checked(request, false).await
+    }
+
+    /// [`Engine::add`] with an explicit answer to "skip duplicates": `allow_duplicates` adds
+    /// even when the option is on and the same thing was downloaded before.
+    pub async fn add_checked(
+        &self,
+        request: DownloadRequest,
+        allow_duplicates: bool,
+    ) -> Result<DownloadId> {
+        if !allow_duplicates && self.skip_duplicates().await {
+            let q = SeenQuery {
+                url: Some(request.url.clone()),
+                ..SeenQuery::default()
+            };
+            if let Some(Some(m)) = self.seen_lookup(vec![q]).await?.into_iter().next() {
+                if !m.stale {
+                    return Err(Error::AlreadyDownloaded(m.title));
+                }
+            }
+        }
         let settings = self.settings();
         let prepared = prepare_add(&request, &settings)?;
         let id = db(&self.inner.store, move |s| {
@@ -1129,7 +1156,24 @@ impl Engine {
         let mut in_batch: HashSet<String> = HashSet::new();
         let mut skipped = Vec::new();
         let mut prepared = Vec::new();
-        for request in &requests {
+        // "skip duplicates" also covers what was downloaded before and is still on disk
+        let already: Vec<bool> = if self.skip_duplicates().await {
+            let queries = requests
+                .iter()
+                .map(|r| SeenQuery {
+                    url: Some(r.url.clone()),
+                    ..SeenQuery::default()
+                })
+                .collect();
+            self.seen_lookup(queries)
+                .await?
+                .into_iter()
+                .map(|m| m.is_some_and(|m| !m.stale))
+                .collect()
+        } else {
+            vec![false; requests.len()]
+        };
+        for (request, was_downloaded) in requests.iter().zip(already) {
             let skip = |reason, existing| BatchSkip {
                 url: request.url.clone(),
                 reason,
@@ -1137,6 +1181,10 @@ impl Engine {
             };
             if riptide_net::parse_http_url(&request.url).is_err() {
                 skipped.push(skip(BatchSkipReason::Invalid, None));
+                continue;
+            }
+            if was_downloaded {
+                skipped.push(skip(BatchSkipReason::Duplicate, None));
                 continue;
             }
             let key = comparable_url(&request.url).unwrap_or_else(|| request.url.clone());
@@ -2071,6 +2119,7 @@ impl Engine {
                 }
                 self.mark_downloaded(&path, &secrets, Some(final_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
+                self.spawn_record_seen(id);
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;
                 Ok(())
@@ -2317,6 +2366,7 @@ impl Engine {
                 });
                 self.mark_downloaded(&path, &secrets, Some(page_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
+                self.spawn_record_seen(id);
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;
                 Ok(())

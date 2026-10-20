@@ -253,6 +253,8 @@ export interface DownloadRequest {
   /** `media` for a video page; `mediaFormat` is then a [`MediaChoice`] key. */
   readonly kind?: DownloadKind;
   readonly mediaFormat?: string;
+  /** Add even if the "skip duplicates" option is on and this was downloaded before. */
+  readonly allowDuplicate?: boolean;
 }
 
 /** Options shared by every item of a batch. Mirrors `riptide_core::BatchOptions`. */

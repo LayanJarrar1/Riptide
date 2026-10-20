@@ -90,7 +90,7 @@ fn migrate_from_v1_fixture_keeps_every_row() {
 fn v1_to_v3_adds_media_and_queue_columns_and_keeps_item_order() {
     let (_dir, path) = fixture_db(V1_FIXTURE);
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(SCHEMA_VERSION, 4);
+    assert_eq!(SCHEMA_VERSION, 5);
 
     // the v1 queues survive with an empty schedule and no post action
     let queues = store.queues().unwrap();
@@ -220,7 +220,7 @@ fn v3_database_migrates_to_v4_keeping_segments_secrets_and_ids() {
     assert!(segments_before > 0 && secrets_before > 0);
 
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 4);
+    assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
     // foreign keys are enforced again after the migration
     let fk: i64 = store
         .connection()
@@ -287,4 +287,78 @@ fn v3_database_migrates_to_v4_keeping_segments_secrets_and_ids() {
         )
         .unwrap();
     assert_eq!(left, 0);
+}
+
+#[test]
+fn v3_and_v4_databases_migrate_to_v5_keeping_their_data() {
+    use riptide_core::{DownloadKind, TorrentFileInfo, TorrentInfo};
+    use riptide_store::{migrate, MIGRATIONS};
+
+    // a v3 database (alpha.4) with rows in every child table goes straight to v5
+    let (_d3, p3) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&p3).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+    }
+    let store = Store::open(&p3).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 5);
+    assert_eq!(store.list_downloads().unwrap().len(), 2);
+    assert_eq!(store.segments(DownloadId(1)).unwrap().len(), 2);
+    assert!(store.secrets(DownloadId(1)).unwrap().is_some());
+    for table in ["torrents", "seen_downloads", "seen_keys"] {
+        let n: i64 = store
+            .connection()
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0, "{table} exists and is empty");
+    }
+    drop(store);
+
+    // a v4 database (torrents, no seen index) with a torrent keeps it and gains the index
+    let (_d4, p4) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&p4).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..4]).unwrap();
+        conn.execute(
+            "INSERT INTO downloads (url, filename, dir, state, added_at, kind) \
+             VALUES ('magnet:?xt=urn:btih:x', 'T', '.', 'paused', 1, 'torrent')",
+            [],
+        )
+        .unwrap();
+        let id: i64 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO torrents (download_id, info_hash, name, files, uploaded, downloaded) \
+             VALUES (?1, ?2, 'T', '[]', 7, 9)",
+            rusqlite::params![id, "f".repeat(40)],
+        )
+        .unwrap();
+    }
+    let store = Store::open(&p4).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 5);
+    let t = store.list_torrents().unwrap().remove(0);
+    assert_eq!((t.uploaded, t.downloaded), (7, 9));
+    assert_eq!(
+        store.get_download(t.download_id).unwrap().unwrap().kind,
+        DownloadKind::Torrent
+    );
+    store
+        .connection()
+        .execute(
+            "INSERT INTO seen_downloads (download_id, title, filename, dir, completed_at) \
+             VALUES (1, 't', 'f', 'd', 1)",
+            [],
+        )
+        .unwrap();
+    let _ = TorrentInfo {
+        download_id: DownloadId(1),
+        info_hash: String::new(),
+        name: String::new(),
+        files: Vec::<TorrentFileInfo>::new(),
+        selected: None,
+        sequential: false,
+        seeding: false,
+        uploaded: 0,
+        downloaded: 0,
+        peers: 0,
+    };
 }

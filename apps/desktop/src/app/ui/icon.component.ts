@@ -53,6 +53,9 @@ const PATHS: Readonly<Record<string, string>> = {
   fileImage: 'M6 3h9l5 5v13H6zM15 3v5h5M8 19l4-5 3 3 2-2 2 4M9.5 13a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
   file: 'M6 3h9l5 5v13H6zM15 3v5h5',
   magnet: 'M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3zM6 7h4M14 7h4',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  sparkles: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+  book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7M8 11h5',
 };
 
 /** Icon names available to templates. */

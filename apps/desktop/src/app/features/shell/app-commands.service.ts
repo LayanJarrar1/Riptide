@@ -160,6 +160,11 @@ export class AppCommands {
   }
 
   // ---- Tools ---------------------------------------------------------------------------
+  /** The Research page (open-access search, optionally AI-assisted). */
+  openResearch(): void {
+    void this.router.navigateByUrl('/research');
+  }
+
   /** Opens Settings, scrolled to `section` (`appearance`, `downloads`, `behaviour`, `integration`, `about`). */
   openSettings(section?: string): void {
     void this.router.navigateByUrl('/settings').then(() => {

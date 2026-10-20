@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use riptide_engine::{Engine, EngineConfig};
 use tauri::{Emitter, Manager};
 
+pub mod ai;
 pub mod clipboard;
 pub mod commands;
 pub mod crawl;
@@ -27,6 +28,7 @@ pub mod notify;
 pub mod power;
 pub mod protocol;
 pub mod queues;
+pub mod research;
 pub mod shell;
 pub mod torrent;
 pub mod tray;
@@ -170,6 +172,9 @@ pub fn run() {
                 None => tracing::warn!("video support not installed (no yt-dlp)"),
             }
             engine.set_media_tools(tools);
+            // AI (off until configured), research and the download index
+            app.manage(ai::service_for(&media::DataDir(data_dir.clone())));
+            app.manage(research::ResearchState::default());
             app.manage(media::DataDir(data_dir));
 
             // launched by a magnet link or a .torrent file: the webview asks for it once it is up
@@ -286,6 +291,22 @@ pub fn run() {
             crawl::cancel_crawl,
             crawl::discard_crawl,
             crawl::add_crawl_files,
+            ai::ai_status,
+            ai::ai_save_settings,
+            ai::ai_set_key,
+            ai::ai_remove_key,
+            ai::ai_list_models,
+            ai::ai_test_connection,
+            ai::ai_last_request,
+            ai::ai_forget_all,
+            ai::ai_suggest_name,
+            research::research_search,
+            research::research_preview,
+            research::research_add,
+            research::seen_check,
+            research::seen_settings,
+            research::seen_set_skip,
+            research::seen_forget,
             commands::pick_text_file,
             commands::save_text_file,
             commands::pause_download,

@@ -1,6 +1,6 @@
 import { computed, DOCUMENT, effect, inject, Injectable, signal } from '@angular/core';
 
-import en from '../../i18n/en.json';
+import type en from '../../i18n/en.json';
 import { NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 
 /** Supported UI languages. */
@@ -22,14 +22,15 @@ export const LANGS: readonly Lang[] = ['ar', 'en'];
 export type Table = Readonly<Record<string, string>>;
 
 /**
- * The loaded tables. English ships in the main bundle (it is the fallback and the source of the
- * key type); Arabic is a separate chunk, fetched at startup when it is the language in use and on
- * the first switch otherwise, so it stays out of the initial bundle for English users.
+ * The loaded tables. Both languages are separate chunks (the English file is only a type here,
+ * the source of the key type), fetched at startup for the language in use (the app waits for it,
+ * see `ready()`) and on the first switch otherwise, so neither table counts against the initial
+ * bundle budget however many strings the app grows.
  */
-const TABLES: Partial<Record<Lang, Table>> = { en };
+const TABLES: Partial<Record<Lang, Table>> = {};
 
 const LOADERS: Readonly<Record<Lang, () => Promise<Table>>> = {
-  en: () => Promise.resolve(en),
+  en: async () => (await import('../../i18n/en.json')).default,
   ar: async () => (await import('../../i18n/ar.json')).default,
 };
 
@@ -119,7 +120,7 @@ export class I18nService {
    * is what keeps that from ever happening in a shipped build.
    */
   t(key: string): string {
-    const table: Table = TABLES[this.lang()] ?? en;
+    const table: Table = TABLES[this.lang()] ?? TABLES['en'] ?? {};
     const value: string | undefined = table[key];
     if (value === undefined) {
       console.warn(`[i18n] missing key "${key}" for language "${this.lang()}"`);

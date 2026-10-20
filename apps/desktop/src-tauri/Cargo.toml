@@ -40,6 +40,9 @@ riptide-log = { workspace = true }
 riptide-net = { workspace = true }
 riptide-media = { workspace = true }
 riptide-crawl = { workspace = true }
+riptide-ai = { workspace = true }
+riptide-research = { workspace = true }
+chrono = { workspace = true }
 tokio-util = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
@@ -55,6 +58,8 @@ tempfile = { workspace = true }
 riptide-torrent = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
+wiremock = "0.6"
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

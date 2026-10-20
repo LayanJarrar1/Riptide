@@ -1,0 +1,56 @@
+{
+ "total_count": 2705,
+ "incomplete_results": false,
+ "items": [
+  {
+   "full_name": "qbittorrent/qBittorrent",
+   "description": "qBittorrent BitTorrent client",
+   "html_url": "https://github.com/qbittorrent/qBittorrent",
+   "private": false,
+   "disabled": false,
+   "license": {
+    "key": "other",
+    "name": "Other",
+    "spdx_id": "NOASSERTION",
+    "url": null,
+    "node_id": "MDc6TGljZW5zZTA="
+   }
+  },
+  {
+   "full_name": "webtorrent/webtorrent",
+   "description": "\u26a1\ufe0f Streaming torrent client for the web",
+   "html_url": "https://github.com/webtorrent/webtorrent",
+   "private": false,
+   "disabled": false,
+   "license": {
+    "key": "mit",
+    "name": "MIT License",
+    "spdx_id": "MIT",
+    "url": "https://api.github.com/licenses/mit",
+    "node_id": "MDc6TGljZW5zZTEz"
+   }
+  },
+  {
+   "full_name": "transmission/transmission",
+   "description": "Official Transmission BitTorrent client repository",
+   "html_url": "https://github.com/transmission/transmission",
+   "private": false,
+   "disabled": false,
+   "license": {
+    "key": "other",
+    "name": "Other",
+    "spdx_id": "NOASSERTION",
+    "url": null,
+    "node_id": "MDc6TGljZW5zZTA="
+   }
+  },
+  {
+   "full_name": "filecxx/FileCentipede",
+   "description": "Cross-platform internet upload/download manager for HTTP(S), FTP(S), SSH, magnet-link, BitTorrent, m3u8, ed2k, and online videos.  WebDAV client, FTP client, SSH client.",
+   "html_url": "https://github.com/filecxx/FileCentipede",
+   "private": false,
+   "disabled": false,
+   "license": null
+  }
+ ]
+}

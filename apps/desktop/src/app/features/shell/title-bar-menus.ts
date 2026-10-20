@@ -100,6 +100,7 @@ export interface MenuActions {
   resumeAll(): void;
   newQueue(): void;
   openSettings(section?: string): void;
+  openResearch(): void;
   updateVideoSupport(): Promise<void>;
   setTheme(theme: Theme): void;
   setLanguage(lang: Lang): void;
@@ -160,6 +161,7 @@ export function buildMenus(s: MenuState, a: MenuActions): readonly MenuDef[] {
   ];
 
   const tools: MenuEntry[] = [
+    item('research', t('menu.research'), () => a.openResearch()),
     item('settings', t('nav.settings'), () => a.openSettings(), { shortcut: 'Ctrl+,' }),
     item('integration', t('menu.browserIntegration'), () => a.openSettings('integration')),
   ];

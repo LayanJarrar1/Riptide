@@ -34,12 +34,34 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
   Torrents* turns it on, with a ratio limit, a time limit and an upload cap. File names from a
   torrent go through the same sanitising as HTTP downloads and never leave the chosen folder.
   Opt-in in *Settings, Integration*: open `magnet:` links and `.torrent` files with Riptide
-  (registered for your user only, removable). The database moves to schema version 4; an
+  (registered for your user only, removable). The database moves to schema version 5; an
   alpha.4 build cannot open it afterwards.
+- **Settings -> AI** (off until you set it up): ten providers, your own API key kept only in the
+  Windows Credential Manager (the page shows `••••abcd` and never gets the key back), model list
+  from the provider plus a free-text model, optional compatible endpoint, a test button that
+  reports latency and provider-reported tokens, a daily token/request budget, a privacy panel
+  (download history for the AI off by default, a live "what will be sent" view, "Forget
+  everything") and no telemetry.
+- **Research** page (Tools menu and sidebar): searches OpenAlex, Crossref, arXiv, Europe PMC,
+  Internet Archive, Wikimedia Commons, GitHub releases and Data.gov for open, directly
+  downloadable files and adds the ones you tick to your downloads. Without an AI provider it is a
+  keyword search; with one, the question is expanded, results are ranked with a one-line reason
+  and every link the model cites is checked against the real results.
+- "You already downloaded this": Riptide remembers finished downloads by normalised address,
+  DOI, arXiv id, PubMed id, file name and size and SHA-256, warns in the Add dialog and on
+  Research cards (Open file / Open folder / Download again), notices when the file was deleted,
+  and can optionally skip repeats (Settings -> AI -> Download memory).
+- Add dialog: optional "Suggest name and category" (only host, file name and size are sent; you
+  accept or dismiss).
+- New crate `riptide-research`; new database migration 5 (`seen_downloads`, `seen_keys`, after the torrents migration 4). Version 5
+  is not readable by alpha.4: back up `%LOCALAPPDATA%\Riptide\riptide.sqlite` before trying the
+  preview on your real data, or use the portable build.
 
 ### Changed
 
 - The clipboard monitor also offers magnet links.
+- The English strings are now a lazily loaded chunk like the Arabic ones, which keeps the initial
+  bundle under its 500 kB budget as the app grows.
 - The downloads list stays smooth at tens of thousands of items (measured at 50 000): progress
   updates touch only the rows on screen, and sorting and filtering reuse the previous work.
 

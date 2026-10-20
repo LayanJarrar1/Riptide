@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, signal, untracked, viewChild } from '@angular/core';
 
+import { AiService } from '../../ai/ai.service';
 import { BatchExpansion, exportUrlList, MAX_EXPANSION, UrlListResult } from '../../data/batch-pattern';
 import { DownloadEngine } from '../../data/download-engine';
 import { I18nService } from '../../i18n/i18n.service';
@@ -105,6 +106,10 @@ const EMPTY_LIST: UrlListResult = { urls: [], ignored: 0, duplicates: 0 };
               }
               <input #fileInput class="file-input" type="file" accept=".txt,.list,.lst,.csv,text/plain" tabindex="-1" aria-hidden="true" (change)="onFilePicked($event)" />
             </div>
+          }
+
+          @if (seenCount() > 0) {
+            <p class="help seen-note" role="status"><app-icon name="info" [size]="14" /> {{ i18n.t('batch.seenBefore').replace('{count}', '' + seenCount()) }}</p>
           }
 
           <div class="preview">
@@ -480,6 +485,7 @@ export class BatchDownloadDialogComponent {
   private readonly invoke = inject(TAURI_INVOKE);
   private readonly toasts = inject(ToastService);
   private readonly settingsService = inject(SettingsService);
+  private readonly aiService = inject(AiService);
 
   private readonly ui = inject(UiState);
   /** Whether the dialog is showing; the shell flips it through [`UiState`]. */
@@ -499,6 +505,9 @@ export class BatchDownloadDialogComponent {
   protected readonly startPaused = signal(false);
   protected readonly submitting = signal(false);
   private readonly scrollTop = signal(0);
+  /** How many of the links the download memory already knows (finished and still on disk). */
+  protected readonly seenCount = signal(0);
+  private seenToken = 0;
 
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
@@ -560,6 +569,10 @@ export class BatchDownloadDialogComponent {
       }
     });
     effect(() => this.scheduleExpand(this.pattern()));
+    effect(() => {
+      const items = this.items();
+      untracked(() => void this.checkSeen(items));
+    });
     effect(() => this.scheduleImport(this.listText()));
     // a different list starts at the top
     effect(() => {
@@ -751,6 +764,23 @@ export class BatchDownloadDialogComponent {
     }, EXPAND_DEBOUNCE_MS);
   }
 
+  /** Asks the download memory about (at most the first 1000 of) the links; silent on any failure. */
+  private async checkSeen(items: readonly string[]): Promise<void> {
+    const token = ++this.seenToken;
+    if (!this.aiService.available || items.length === 0) {
+      this.seenCount.set(0);
+      return;
+    }
+    try {
+      const matches = await this.aiService.seenCheck(items.slice(0, 1000).map((url) => ({ url })));
+      if (token === this.seenToken) {
+        this.seenCount.set(matches.filter((m) => m !== null && !m.stale).length);
+      }
+    } catch {
+      /* no memory, no note */
+    }
+  }
+
   private engineError(error: unknown): void {
     this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error)));
   }
@@ -762,6 +792,7 @@ export class BatchDownloadDialogComponent {
     this.expansion.set(EMPTY_EXPANSION);
     this.list.set(EMPTY_LIST);
     this.unchecked.set(new Set());
+    this.seenCount.set(0);
     this.dir.set(this.settingsService.settings().defaultDir);
     this.startPaused.set(false);
     this.submitting.set(false);

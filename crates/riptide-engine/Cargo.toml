@@ -25,6 +25,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 chrono = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 ts-rs = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
@@ -35,8 +37,6 @@ ts = ["dep:ts-rs", "riptide-core/ts"]
 
 [dev-dependencies]
 riptide-testserver = { workspace = true }
-sha2 = { workspace = true }
-hex = { workspace = true }
 tempfile = { workspace = true }
 sha1 = { workspace = true }
 tracing-subscriber = { workspace = true }

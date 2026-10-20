@@ -131,7 +131,10 @@ export class TauriEngineService extends DownloadEngine {
    * dialog's preview is not forwarded.
    */
   async add(request: DownloadRequest): Promise<number> {
-    const id = await this.invoke<number>('add_download', { request: toBridgeRequest(request) });
+    const id = await this.invoke<number>('add_download', {
+      request: toBridgeRequest(request),
+      ...(request.allowDuplicate === true ? { allowDuplicates: true } : {}),
+    });
     await this.refreshRecord(id);
     return id;
   }

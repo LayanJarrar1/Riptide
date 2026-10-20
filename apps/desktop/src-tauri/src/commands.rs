@@ -102,8 +102,16 @@ pub async fn get_segments(engine: State<'_, Engine>, id: i64) -> CmdResult<Vec<S
 
 /// Adds a download; returns its id.
 #[tauri::command]
-pub async fn add_download(engine: State<'_, Engine>, request: DownloadRequest) -> CmdResult<i64> {
-    engine.add(request).await.map(|id| id.0).map_err(err)
+pub async fn add_download(
+    engine: State<'_, Engine>,
+    request: DownloadRequest,
+    allow_duplicates: Option<bool>,
+) -> CmdResult<i64> {
+    engine
+        .add_checked(request, allow_duplicates.unwrap_or(false))
+        .await
+        .map(|id| id.0)
+        .map_err(err)
 }
 
 /// Probes a URL for the add dialog's preview.
