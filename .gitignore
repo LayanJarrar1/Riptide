@@ -55,3 +55,15 @@ desktop.ini
 
 # Website build output (node apps/website/build.mjs)
 /apps/website/dist/
+
+# ---------------------------------------------------------------------------
+# Portable-bundle staging in the repo root (build outputs, never commit)
+# ---------------------------------------------------------------------------
+/*.exe
+/extension/
+/licenses/
+/portable.txt
+/THIRD-PARTY-NOTICES.txt
+/install-extension.ps1
+/*.zip
+/*.nsis.zip

@@ -709,9 +709,11 @@ export class SettingsPageComponent {
   protected readonly proxyInvalid = signal(false);
   protected readonly langAttr: Readonly<Record<Lang, string>> = { ar: 'ar', en: 'en' };
 
-  protected readonly toggles: readonly { key: 'confirmOnExit' | 'startWithWindows' | 'closeToTray' | 'clipboardMonitor' | 'notifyOnComplete' }[] = [
+  protected readonly toggles: readonly { key: 'confirmOnExit' | 'startWithWindows' | 'closeToTray' | 'clipboardMonitor' | 'notifyOnComplete' | 'markDownloads' | 'allowPrivateRedirects' }[] = [
     { key: 'clipboardMonitor' },
     { key: 'notifyOnComplete' },
+    { key: 'markDownloads' },
+    { key: 'allowPrivateRedirects' },
     { key: 'confirmOnExit' },
     { key: 'closeToTray' },
     { key: 'startWithWindows' },

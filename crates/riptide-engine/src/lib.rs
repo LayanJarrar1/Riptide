@@ -84,6 +84,7 @@ use tokio_util::sync::CancellationToken;
 use url::Url;
 
 pub mod disk;
+pub mod motw;
 pub mod queues;
 
 pub use disk::free_space;
@@ -154,6 +155,21 @@ pub struct EngineSettings {
     /// Which proxy new connections use.
     #[serde(default)]
     pub proxy: ProxySettings,
+    /// Windows: mark finished downloads as coming from the internet (the NTFS
+    /// `Zone.Identifier` stream browsers write), so SmartScreen and Office warn before an
+    /// executable or macro document opens. On by default; see [`motw`]. Ignored elsewhere.
+    #[serde(default = "default_true")]
+    pub mark_of_the_web: bool,
+    /// Follow a redirect from a public host to a private network address (NAS relay services
+    /// such as QuickConnect, split-horizon intranet names). Off by default: a public page
+    /// could otherwise send a download to a device on your network. Downloads that start on a
+    /// private address are never affected.
+    #[serde(default)]
+    pub allow_private_redirects: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// How the engine reaches the network.
@@ -281,6 +297,8 @@ impl Default for EngineSettings {
             category_dirs: BTreeMap::new(),
             global_speed_limit: None,
             proxy: ProxySettings::default(),
+            mark_of_the_web: true,
+            allow_private_redirects: false,
         }
     }
 }
@@ -813,7 +831,20 @@ impl Engine {
         events: Option<mpsc::Sender<riptide_crawl::CrawlEvent>>,
         cancel: CancellationToken,
     ) -> Result<riptide_crawl::CrawlResult> {
-        Ok(riptide_crawl::crawl(spec, self.client(), events, cancel).await?)
+        // a crawl that starts on a public host gets a client whose DNS resolver only returns
+        // public addresses (and a guard that refuses private IP links and redirects); one that
+        // starts on the owner's LAN or loopback uses the normal client
+        // (an unusable start URL is reported by the crawl itself)
+        let guard = match riptide_net::parse_http_url(&spec.start) {
+            Ok(start) => riptide_net::NetGuard::for_start(&start, None).await,
+            Err(_) => riptide_net::NetGuard::off(),
+        };
+        let client = if guard.blocks() {
+            riptide_net::build_client_guarded(&self.settings().client_options(), &guard)?
+        } else {
+            self.client()
+        };
+        Ok(riptide_crawl::crawl_with_guard(spec, client, events, cancel, guard).await?)
     }
 
     /// Engine events (added, probed, state changes, progress, completed, failed, removed).
@@ -898,7 +929,9 @@ impl Engine {
         referrer: Option<&str>,
     ) -> Result<ProbeInfo> {
         let parsed = riptide_net::parse_http_url(url)?;
-        let mut ctx = RequestContext::new(&parsed).with_referrer(referrer);
+        let mut ctx = RequestContext::new(&parsed)
+            .with_referrer(referrer)
+            .with_guard(self.redirect_guard());
         if let Some(s) = secrets {
             ctx = ctx.with_secrets(s);
         }
@@ -1029,6 +1062,13 @@ impl Engine {
     }
 
     /// The HTTP client new connections use.
+    /// The redirect rule for downloads and probes: public-to-private is refused unless the user
+    /// allowed it in the settings.
+    fn redirect_guard(&self) -> riptide_net::NetGuard {
+        riptide_net::NetGuard::off()
+            .with_allow_private_redirects(self.settings().allow_private_redirects)
+    }
+
     fn client(&self) -> reqwest::Client {
         self.inner
             .client
@@ -1577,7 +1617,11 @@ impl Engine {
         }
 
         let url = riptide_net::parse_http_url(&record.url)?;
-        let ctx = Arc::new(RequestContext::new(&url).with_secrets(&secrets));
+        let ctx = Arc::new(
+            RequestContext::new(&url)
+                .with_secrets(&secrets)
+                .with_guard(self.redirect_guard()),
+        );
         // one client for the whole run: a proxy change applies from the next start
         let client = self.client();
         let probed = tokio::select! {
@@ -1720,6 +1764,7 @@ impl Engine {
             }
         });
 
+        let final_url = probed.final_url.to_string();
         let result = transfer(client, ctx, plan, cfg, tx, stop.clone(), limiter).await;
         let _ = forwarder.await;
 
@@ -1733,6 +1778,7 @@ impl Engine {
                 if current != DownloadState::Verifying {
                     self.transition(id, DownloadState::Verifying, None).await?;
                 }
+                self.mark_downloaded(&path, &secrets, Some(final_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;
@@ -1741,6 +1787,25 @@ impl Engine {
             Ok(Outcome::Stopped { segments }) => self.stopped(id, reason, segments).await,
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// Writes the Mark-of-the-Web stream on a file this run just finished (never on files that
+    /// were already on disk), unless the user turned it off. Best effort; see [`motw`]. The
+    /// referrer comes from the stored `Referer` header, and only its sanitised form is written.
+    async fn mark_downloaded(&self, path: &Path, secrets: &Secrets, host_url: Option<String>) {
+        if !self.settings().mark_of_the_web {
+            return;
+        }
+        let referrer = secrets
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("referer"))
+            .map(|(_, v)| v.clone());
+        let path = path.to_path_buf();
+        let _ = tokio::task::spawn_blocking(move || {
+            motw::mark_from_internet(&path, referrer.as_deref(), host_url.as_deref())
+        })
+        .await;
     }
 
     /// Applies the state a stop asked for.
@@ -1942,6 +2007,7 @@ impl Engine {
 
         match result? {
             MediaOutcome::Completed { path, size } => {
+                let page_url = record.url.clone();
                 self.transition(id, DownloadState::Verifying, None).await?;
                 let mut done = self.get(id).await?.ok_or(Error::NotFound(id))?;
                 if let Some(name) = path.file_name() {
@@ -1958,6 +2024,7 @@ impl Engine {
                     eta_secs: Some(0),
                     connections: 1,
                 });
+                self.mark_downloaded(&path, &secrets, Some(page_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
                 self.emit(Event::Completed { id, path });
                 self.announce_drained_after(id).await;

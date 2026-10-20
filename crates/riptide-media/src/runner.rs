@@ -34,6 +34,8 @@ const STDERR_KEEP: usize = 16 * 1024;
 pub struct YtDlp {
     exe: PathBuf,
     ffmpeg: Option<PathBuf>,
+    /// Where cookie temp files go (the app's own `tmp` folder); the system temp folder if unset.
+    cookie_dir: Option<PathBuf>,
 }
 
 /// One media download (a run of yt-dlp; run it again to resume).
@@ -90,7 +92,16 @@ impl YtDlp {
         YtDlp {
             exe: exe.into(),
             ffmpeg,
+            cookie_dir: None,
         }
+    }
+
+    /// Keeps cookie temp files in `dir` (created on first use) instead of the system temp
+    /// folder, so a start-up sweep of that folder can remove leftovers of a killed run.
+    #[must_use]
+    pub fn with_cookie_dir(mut self, dir: impl Into<PathBuf>) -> YtDlp {
+        self.cookie_dir = Some(dir.into());
+        self
     }
 
     /// The yt-dlp executable.
@@ -216,7 +227,7 @@ impl YtDlp {
         attempt: Attempt,
     ) -> Result<MediaInfo> {
         let jar = match cookies.filter(|_| attempt.cookies) {
-            Some(c) => Some(CookieFile::write(url, c)?),
+            Some(c) => Some(CookieFile::write_in(self.cookie_dir.as_deref(), url, c)?),
             None => None,
         };
         let args = probe_args(url, jar.as_ref().map(CookieFile::path), attempt.clients);
@@ -244,7 +255,7 @@ impl YtDlp {
         }
         std::fs::create_dir_all(&job.dir)?;
         let jar = match job.cookies.as_deref().filter(|c| !c.trim().is_empty()) {
-            Some(c) => Some(CookieFile::write(&url, c)?),
+            Some(c) => Some(CookieFile::write_in(self.cookie_dir.as_deref(), &url, c)?),
             None => None,
         };
         let args = download_args(&RunArgs {
@@ -366,11 +377,19 @@ fn file_name(p: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// `%SystemRoot%\System32\taskkill.exe`, never a PATH lookup (a `taskkill.exe` in the working
+/// folder or an odd PATH entry must not be run instead).
+#[cfg(windows)]
+fn taskkill_path() -> PathBuf {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+    PathBuf::from(root).join("System32").join("taskkill.exe")
+}
+
 /// Stops yt-dlp and whatever it started (ffmpeg merges and HLS downloads run as children).
 async fn kill_tree(child: &mut Child) {
     #[cfg(windows)]
     if let Some(pid) = child.id() {
-        let mut taskkill = Command::new("taskkill");
+        let mut taskkill = Command::new(taskkill_path());
         taskkill
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdin(Stdio::null())

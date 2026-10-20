@@ -15,7 +15,7 @@ use riptide_core::{sanitize_filename, Category};
 use riptide_net::http::send;
 use riptide_net::probe::filename_from_url;
 use riptide_net::redirect::strip_query;
-use riptide_net::{parse_http_url, Origin, RequestContext};
+use riptide_net::{parse_http_url, NetGuard, Origin, RequestContext};
 use tokio::sync::{mpsc, OnceCell};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -42,11 +42,34 @@ use crate::types::{
 /// # Errors
 /// Only for a start URL that is not http(s) or a spec that cannot work; everything that goes
 /// wrong during the crawl is a [`CrawlEvent::Skipped`] instead.
+///
+/// A crawl that starts on a public host never fetches (or lists) links that point to loopback,
+/// private, link-local or otherwise special addresses, nor follows redirects there: a page must
+/// not be able to aim this machine at its own network. A crawl that starts on a private
+/// address (own LAN, `localhost`) may go to private addresses. See
+/// [`riptide_net::net_guard`]; [`crawl_with_guard`] takes the guard explicitly.
 pub async fn crawl(
     spec: CrawlSpec,
     client: reqwest::Client,
     events: Option<mpsc::Sender<CrawlEvent>>,
     cancel: CancellationToken,
+) -> Result<CrawlResult, Error> {
+    let start = parse_http_url(&spec.start).map_err(|e| Error::InvalidStart(e.to_string()))?;
+    let guard = NetGuard::for_start(&start, None).await;
+    crawl_with_guard(spec, client, events, cancel, guard).await
+}
+
+/// [`crawl`] with an explicit [`NetGuard`] (the engine passes a client whose DNS resolver is the
+/// guard's, so the checked address is the one connected to; tests inject a resolver).
+///
+/// # Errors
+/// As [`crawl`].
+pub async fn crawl_with_guard(
+    spec: CrawlSpec,
+    client: reqwest::Client,
+    events: Option<mpsc::Sender<CrawlEvent>>,
+    cancel: CancellationToken,
+    guard: NetGuard,
 ) -> Result<CrawlResult, Error> {
     let start = parse_http_url(&spec.start).map_err(|e| Error::InvalidStart(e.to_string()))?;
     let start = normalize_url(&start).ok_or_else(|| Error::InvalidStart(spec.start.clone()))?;
@@ -55,7 +78,7 @@ pub async fn crawl(
             "concurrency, per_host and max_pages must be at least 1".into(),
         ));
     }
-    let shared = Shared::new(spec, start.clone(), client);
+    let shared = Shared::new(spec, start.clone(), client, guard);
     Ok(run(&shared, start, events, cancel).await)
 }
 
@@ -67,6 +90,8 @@ struct Shared {
     spec: CrawlSpec,
     start: Url,
     client: reqwest::Client,
+    /// Private-address policy for every request of this crawl.
+    guard: NetGuard,
     /// Carries the secrets; applies them to the start origin only.
     ctx: RequestContext,
     include: Vec<Glob>,
@@ -78,8 +103,8 @@ struct Shared {
 }
 
 impl Shared {
-    fn new(spec: CrawlSpec, start: Url, client: reqwest::Client) -> Shared {
-        let mut ctx = RequestContext::new(&start);
+    fn new(spec: CrawlSpec, start: Url, client: reqwest::Client, guard: NetGuard) -> Shared {
+        let mut ctx = RequestContext::new(&start).with_guard(guard.clone());
         if let Some(secrets) = &spec.secrets {
             ctx = ctx.with_secrets(secrets);
         }
@@ -100,6 +125,7 @@ impl Shared {
             spec,
             start,
             client,
+            guard,
             ctx,
         }
     }
@@ -139,7 +165,7 @@ impl Shared {
         };
         let gate = self.gate(&robots_url);
         // no secrets for robots.txt: it is public by definition
-        let ctx = RequestContext::new(&robots_url);
+        let ctx = RequestContext::new(&robots_url).with_guard(self.guard.clone());
         let fetched = tokio::time::timeout(self.spec.request_timeout, async {
             let _slot = gate.enter().await;
             let mut sent = send(&self.client, &ctx, Method::GET, robots_url.clone(), |r| r)
@@ -181,6 +207,14 @@ impl Shared {
 
     /// Runs one unit of work to its outcome. Never fails: a failure is an outcome.
     async fn run_work(&self, work: Work) -> Outcome {
+        // before anything is requested (robots.txt included): a link to a private address
+        // found by a crawl that started on a public host is neither fetched nor listed
+        if let Err(e) = self.guard.check(&work.url).await {
+            return Outcome::Skipped {
+                work,
+                reason: skip_for_net_error(e),
+            };
+        }
         if !self.allowed(&work.url).await {
             return Outcome::Skipped {
                 work,
