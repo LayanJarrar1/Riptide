@@ -37,6 +37,9 @@
   },
   "hero": {
     "status": "{channel} for Windows 10 and 11",
+  },
+  "hero": {
+    "status": "Alpha {n} for Windows 10 and 11",
     "titleA": "Download faster.",
     "titleB": "Every byte verified.",
     "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
@@ -387,6 +390,7 @@
   "download": {
     "eyebrow": "Download",
     "badge": "{channel}",
+    "badge": "Alpha {n}",
     "title": "Get the latest Riptide.",
     "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
     "installer": "Download the latest version",

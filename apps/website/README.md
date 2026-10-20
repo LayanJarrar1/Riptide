@@ -137,6 +137,20 @@ Deploy: `.github/workflows/site.yml` builds, tests and link-checks the site on p
 releases and daily. It publishes to GitHub Pages only when the repository variable `SITE_DEPLOY` is `true` and Pages has
 "GitHub Actions" as its source, so it does nothing until the owner turns that on. `_headers` (Cloudflare Pages and Netlify)
 gives hashed assets a year, HTML and `release.json` five minutes; GitHub Pages ignores it.
+The page links to one release (currently v0.1.0-alpha.4). To point it at a new build, change the one constant in `build.mjs`:
+
+```js
+const RELEASE_VERSION = '0.1.0-alpha.4';   // next build: '0.1.0-alpha.5'
+```
+
+The hero badge ("Alpha {n}"), the download section badge, the installer and portable file names, the tag in every download URL
+the SHA256SUMS link, the "All releases" link (`releases/tag/v<version>`), the version shown on the buttons, in "What's new in …" and in the footer all derive from it. The "What's new" list itself (`download.new.items` in both i18n files) is edited by hand for each release. Do this only after the assets exist on the GitHub release (installer
+`Riptide_<version>_x64-setup.exe`, portable zip `Riptide-<version>-portable.zip`, `SHA256SUMS.txt`), then run `node apps/website/build.mjs`
+and the e2e check.
+
+Deploy: GitHub Pages is published by `.github/workflows/pages.yml` on every push to `main` that touches `apps/website`. It needs the
+repository to be public (or a plan that includes Pages for private repositories) and Settings, Pages, Source set to "GitHub Actions".
+Merge the site PR only after the release exists, so the download links are live the moment the page is.
 
 ## Checks
 
@@ -144,6 +158,7 @@ gives hashed assets a year, HTML and `release.json` five minutes; GitHub Pages i
 links, theme persistence, language switch, mobile menu, console errors, third-party requests, no video, no filter or blend on
 the logo, native scroll, horizontal overflow at 1920x1080, 1440x900, 768x1024 and 390x844 in both languages and themes,
 calm-motion and no-JS states, the first-visit hint, the release manifest and "New in Riptide" pill (EN/AR, dismissal per version, no layout shift, blocked storage, reduced motion, no-JS fallback), the engine (progress follows scroll, reload, back/forward, anchor jumps, resize 1440 to 390 to 1440, hidden tab, CPU throttling to lite, no IntersectionObserver, script failure, layout shift), pinned stage budgets, no numbered labels or "Next release" tags, the header/hero no-overlap assertion at seven viewports, CTAs above the fold at 1366x768 and 1350x530, and the Animations override (`?motion=on` animates under an OS reduce setting and persists).
+calm-motion and no-JS states, the first-visit hint, the engine (progress follows scroll, reload, back/forward, anchor jumps, resize 1440 to 390 to 1440, hidden tab, CPU throttling to lite, no IntersectionObserver, script failure, layout shift), pinned stage budgets, no numbered labels or "Next release" tags, the header/hero no-overlap assertion at seven viewports, CTAs above the fold at 1366x768 and 1350x530, and the Animations override (`?motion=on` animates under an OS reduce setting and persists).
 
 ## Template syntax
 
@@ -182,6 +197,9 @@ light or dark logo according to the theme (`.logo-light` / `.logo-dark` in `site
   the page makes no third-party request on load.
 - The build on offer is whatever `release.json` features (currently an alpha preview, and the hero, Download section and footer say so).
 - Only verified, released features are advertised; the rest wait in `features.json`. Simulations (hero card, speed, resume) are labelled "Simulation"; there are no benchmark numbers. The comparison names no product.
+- The build on offer is an alpha preview. The hero, the Download section and the footer say so. The release tag and file names live at the top of `build.mjs`.
+- Features that are not in a release say so: batch download, site grabber, queues and video pages carry a "Next release" tag.
+  Simulations (hero card, speed, resume) are labelled "Simulation"; there are no benchmark numbers. The comparison names no product.
 - Feedback goes to GitHub issue forms (`.github/ISSUE_TEMPLATE/`); the site has no form, no
   analytics and no tracking.
 - `prefers-reduced-motion` (and a browser without JavaScript) gets no pinning and no scroll animation: the inline head

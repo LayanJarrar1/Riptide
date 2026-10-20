@@ -89,6 +89,18 @@ const RELEASE_URL = RELEASE.notesUrl;
 const INSTALLER_URL = RELEASE.installer.url;
 const PORTABLE_URL = RELEASE.portable.url;
 const SUMS_URL = RELEASE.sums.url;
+// The release the site points at. To switch to a new build, change this one line (see README, "Releasing"):
+// the hero badge, the installer and portable names, the tag in every download URL and the checksums link follow it.
+const RELEASE_VERSION = '0.1.0-alpha.4';
+const RELEASE_TAG = `v${RELEASE_VERSION}`;
+const ALPHA_N = (RELEASE_VERSION.match(/alpha\.(\d+)/) || [, ''])[1];
+const INSTALLER_FILE = `Riptide_${RELEASE_VERSION}_x64-setup.exe`;
+const PORTABLE_FILE = `Riptide-${RELEASE_VERSION}-portable.zip`;
+const RELEASES_URL = `${REPO_URL}/releases`;
+const RELEASE_URL = `${RELEASES_URL}/tag/${RELEASE_TAG}`;
+const INSTALLER_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${INSTALLER_FILE}`;
+const PORTABLE_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${PORTABLE_FILE}`;
+const SUMS_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/SHA256SUMS.txt`;
 const EXTENSION_URL = `${REPO_URL}/tree/main/apps/extension`;
 // The public URL the site is served from. GitHub Pages for this repository by default;
 // override with SITE_URL=https://example.org/ for a custom domain. Used for canonical,
@@ -238,6 +250,8 @@ function build() {
   const version = shortHash(join(SRC, 'css', 'site.css'), join(SRC, 'js', 'site.js'));
   // `{channel}` in a string is the badge text of the featured release ("Alpha 4" / "ألفا 4"); `{v}` is its full version.
   const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8').replaceAll('{channel}', channelLabel(RELEASE, l.code)).replaceAll('{v}', RELEASE.version))]));
+  // `{n}` in a string is the pre-release number of RELEASE_VERSION ("Alpha {n}" -> "Alpha 4"); `{v}` is the full version.
+  const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8').replaceAll('{n}', ALPHA_N).replaceAll('{v}', RELEASE_VERSION))]));
 
   for (const lang of LANGUAGES) {
     const table = tables[lang.code];
@@ -249,6 +263,7 @@ function build() {
       repoSlug: REPO_SLUG,
       version: RELEASE.version,
       features: loadFeatures(MANIFEST, RELEASE, lang.code),
+      version: RELEASE_VERSION,
       releasesUrl: RELEASES_URL,
       releaseUrl: RELEASE_URL,
       installerUrl: INSTALLER_URL,
