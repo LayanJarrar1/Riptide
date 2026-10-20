@@ -423,7 +423,7 @@
   "torrent.logAdded": "Added to the list",
   "settings.protocols": "Magnet links and .torrent files",
   "settings.protocolsDesc": "Open them with Riptide when you click one in a browser or double-click a file. Registered for your user only; no administrator rights.",
-  "settings.protocolsOn": "Riptide opens them",
+  "settings.protocolsOn": "Registered",
   "settings.protocolsOff": "Not registered",
   "settings.protocolsPreview": "Available in the desktop app",
   "settings.protocolsInstall": "Use Riptide",

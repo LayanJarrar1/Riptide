@@ -186,6 +186,7 @@ describe('TorrentDialogComponent', () => {
     await engine.addTorrent({ token: preview.token, onlyFiles: null, sequential: false, startPaused: true });
     await open();
     expect(el().textContent).toContain('already in your list');
+    expect(primary().disabled).toBeTrue();
   });
 
   it('turns a failed lookup into a readable message with Try again', async () => {

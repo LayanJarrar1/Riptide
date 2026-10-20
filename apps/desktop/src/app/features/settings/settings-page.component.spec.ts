@@ -96,7 +96,7 @@ describe('SettingsPageComponent magnet and torrent handlers', () => {
     (row(el).querySelector('button') as HTMLButtonElement).click();
     await settle(fixture);
     expect(calls.map((c) => c.cmd)).toContain('register_protocols');
-    expect(row(el).textContent).toContain('Riptide opens them');
+    expect(row(el).textContent).toContain('Registered');
     expect(row(el).querySelector('button')?.textContent?.trim()).toBe('Stop using Riptide');
     (row(el).querySelector('button') as HTMLButtonElement).click();
     await settle(fixture);

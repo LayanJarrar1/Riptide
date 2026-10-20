@@ -444,7 +444,10 @@ export class TorrentDialogComponent {
     const free = this.freeBytes();
     return free !== null && this.chosenBytes() > free;
   });
-  protected readonly canSubmit = computed(() => this.phase() === 'ready' && this.chosenCount() > 0 && !this.submitting());
+  /** A torrent that is already in the list is shown, not added a second time. */
+  protected readonly canSubmit = computed(
+    () => this.phase() === 'ready' && this.chosenCount() > 0 && !this.submitting() && (this.preview()?.existing ?? null) === null,
+  );
 
   constructor() {
     effect(() => {

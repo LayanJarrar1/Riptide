@@ -25,9 +25,21 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
   accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls
   stay at the right. *View* also gets Sidebar (Ctrl+B) and Display density (comfortable or compact).
 - Home, End, Page Up, Page Down, Shift+arrows and Ctrl+A in the downloads list.
+- BitTorrent. Paste a magnet link in *Add download* (or choose a `.torrent` file, or use
+  *File, Open torrent file...*), see the files with their sizes, tick the ones you want, optionally
+  download them one after another, and start. Torrent rows show peers and the share ratio, the
+  details drawer shows per-file progress, pause, resume, remove and "Check files again" work, and a
+  torrent survives a restart or a killed process (pieces are re-checked on start, never trusted).
+  Seeding is off by default: a finished torrent stops all network activity unless *Settings,
+  Torrents* turns it on, with a ratio limit, a time limit and an upload cap. File names from a
+  torrent go through the same sanitising as HTTP downloads and never leave the chosen folder.
+  Opt-in in *Settings, Integration*: open `magnet:` links and `.torrent` files with Riptide
+  (registered for your user only, removable). The database moves to schema version 4; an
+  alpha.4 build cannot open it afterwards.
 
 ### Changed
 
+- The clipboard monitor also offers magnet links.
 - The downloads list stays smooth at tens of thousands of items (measured at 50 000): progress
   updates touch only the rows on screen, and sorting and filtering reuse the previous work.
 

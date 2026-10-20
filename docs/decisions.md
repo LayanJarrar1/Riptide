@@ -64,3 +64,45 @@ restart re-hashes what is on disk before trusting it.
 desktop wiring yet: that touches the database schema and every exhaustive match on the kind, and
 belongs to its own change. `TorrentSnapshot::download_state()` already maps onto the existing
 state machine so the integration is mechanical.
+
+## D-torrent-2: Torrents in the app: the same list, their own engine, schema v4
+
+Status: accepted (branch `feat/alpha5-preview`).
+
+**Rows, not a second list.** A torrent is a `downloads` row with `kind = 'torrent'`, so the list,
+filters, notifications and events work unchanged. The segment scheduler never starts one
+(`start_next` skips the kind; crash recovery leaves it to `Engine::enable_torrents`); the torrent
+engine (`riptide-torrent`) moves the bytes and `riptide-engine::torrent` bridges the two: every
+torrent event or start-up snapshot becomes legal `DownloadState` transitions (the table is walked,
+never bypassed; the one exception is a completed row that a re-check finds damaged, which is
+reopened in place). Torrents do not count against the queues' concurrency limit and ignore the
+per-download speed limit; the upload cap and seeding rules are in Settings, Torrents.
+
+**Schema v4.** The `kind` CHECK had to allow `'torrent'`, which SQLite cannot alter in place, so
+the migration rebuilds `downloads` (new table, copy, drop, rename) with foreign keys switched off
+around the whole run and `foreign_key_check` afterwards; ids, segments and secrets are kept (test:
+`v3_database_migrates_to_v4_keeping_segments_secrets_and_ids`). New table `torrents` (info-hash,
+planned files, selection, seeding flag, lifetime upload and verified-download totals). An older
+build cannot open a v4 file; the preview notes say so.
+
+**Two-step add.** `torrent_preview` resolves a magnet link or reads a `.torrent` and returns the
+files plus a token (the metadata stays in memory for 30 minutes, so a magnet link is not resolved
+twice); `add_torrent` takes the token and the selection. The list stores the info-hash link only,
+never the trackers of the magnet (they can carry a private passkey).
+
+**The torrent engine starts lazily.** At launch only when the list already holds a torrent, else on
+the first preview. An app that never touches a torrent opens no listening port and contacts no
+tracker or DHT node.
+
+**Sparse files.** Torrent pieces do not respect file boundaries, so choosing a tiny file can write
+a few KB at the end of a neighbour you did not choose. Without the NTFS sparse flag that reserved
+the neighbour's whole length (found with a real torrent: 263 MB of disk for a 303 KB choice). Files
+we create are marked sparse (`FSCTL_SET_SPARSE`, one documented `unsafe` call in
+`riptide-torrent::storage`, so the crate is `deny(unsafe_code)` with that single exception).
+
+**Magnet and `.torrent` handlers.** Registered only when the user presses the button in Settings,
+Integration, under `HKCU\Software\Classes` (`RIPTIDE_REGISTRY_ROOT` moves it for tests); `.torrent`
+becomes the default only when the user has no per-user default yet; unregistering removes only what
+points at this executable. A launch with a magnet link or an existing `.torrent` path (first launch
+or a second one handed over by the single-instance plugin) opens the file-choice dialog; nothing is
+added without the user pressing Download.
