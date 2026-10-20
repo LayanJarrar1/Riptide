@@ -44,6 +44,18 @@ pub trait Registry {
     fn set_default_value(&mut self, key: &str, value: &str) -> std::io::Result<()>;
     /// Deletes `key` and everything under it; a missing key is not an error.
     fn delete_key(&mut self, key: &str) -> std::io::Result<()>;
+    /// The string value `name` of `key` (`""` is the default value).
+    fn named_value(&self, _key: &str, _name: &str) -> Option<String> {
+        None
+    }
+    /// Creates `key` if needed and sets its string value `name` (`""` is the default value).
+    fn set_named_value(&mut self, _key: &str, _name: &str, _value: &str) -> std::io::Result<()> {
+        Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+    }
+    /// Deletes the value `name` of `key` and nothing else; a missing key or value is not an error.
+    fn delete_named_value(&mut self, _key: &str, _name: &str) -> std::io::Result<()> {
+        Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+    }
 }
 
 /// Test knob: moves every registry key under `HKCU\<value>` (an installer test run must not
@@ -101,6 +113,32 @@ impl Registry for CurrentUserRegistry {
     fn delete_key(&mut self, key: &str) -> std::io::Result<()> {
         let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
         match hkcu.delete_subkey_all(self.path(key)) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            other => other,
+        }
+    }
+
+    fn named_value(&self, key: &str, name: &str) -> Option<String> {
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        hkcu.open_subkey(self.path(key))
+            .ok()?
+            .get_value::<String, _>(name)
+            .ok()
+    }
+
+    fn set_named_value(&mut self, key: &str, name: &str, value: &str) -> std::io::Result<()> {
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        let (k, _) = hkcu.create_subkey(self.path(key))?;
+        k.set_value(name, &value)
+    }
+
+    fn delete_named_value(&mut self, key: &str, name: &str) -> std::io::Result<()> {
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        let Ok(k) = hkcu.open_subkey_with_flags(self.path(key), winreg::enums::KEY_SET_VALUE)
+        else {
+            return Ok(());
+        };
+        match k.delete_value(name) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             other => other,
         }

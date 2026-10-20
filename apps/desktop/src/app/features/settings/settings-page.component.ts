@@ -21,6 +21,15 @@ import { ToastService } from '../../ui/toast.service';
 import { CATEGORY_ICONS } from '../downloads/download-row.component';
 import { Settings, SettingsService } from './settings.service';
 
+/** What `protocol_status` reports (`src-tauri/src/protocol.rs`). */
+export interface ProtocolStatus {
+  readonly supported: boolean;
+  /** `magnet:` links open Riptide. */
+  readonly magnet: boolean;
+  /** `.torrent` files offer (and may default to) Riptide. */
+  readonly torrent: boolean;
+}
+
 /** What `media_tools_info` reports (`src-tauri/src/media.rs`). */
 export interface MediaToolsInfo {
   readonly available: boolean;
@@ -224,6 +233,19 @@ export function isValidProxyUrl(raw: string): boolean {
             <span class="dot" [class.is-on]="browser.connected()"></span>
             <span class="browser-state">{{ i18n.t(browserStateKey()) }}</span>
             <button appButton variant="secondary" type="button" [disabled]="browser.busy()" (click)="toggleBrowser()">{{ i18n.t(browser.connected() ? 'settings.browserRemove' : 'settings.browserInstall') }}</button>
+          </div>
+        </div>
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.protocols') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.protocolsDesc') }}</span>
+          </div>
+          <div class="browser-row">
+            <span class="dot" [class.is-on]="protocols()?.magnet === true"></span>
+            <span class="browser-state">{{ i18n.t(protocolStateKey()) }}</span>
+            <button appButton variant="secondary" type="button" [disabled]="!tauriAvailable || protocolsBusy() || protocols()?.supported === false" (click)="toggleProtocols()">
+              {{ i18n.t(protocols()?.magnet ? 'settings.protocolsRemove' : 'settings.protocolsInstall') }}
+            </button>
           </div>
         </div>
         <div class="setting column ext-card" id="extension">
@@ -692,6 +714,16 @@ export class SettingsPageComponent {
   protected readonly tauriAvailable = inject(TAURI_AVAILABLE);
   private readonly invoke = inject(TAURI_INVOKE);
 
+  /** What `protocol_status` said (magnet and .torrent handlers); `null` while loading or in the browser preview. */
+  protected readonly protocols = signal<ProtocolStatus | null>(null);
+  protected readonly protocolsBusy = signal(false);
+  protected readonly protocolStateKey = computed(() => {
+    if (!this.tauriAvailable) {
+      return 'settings.protocolsPreview';
+    }
+    return this.protocols()?.magnet ? 'settings.protocolsOn' : 'settings.protocolsOff';
+  });
+
   /** What `media_tools_info` said; `null` while loading or in the browser preview. */
   protected readonly videoInfo = signal<MediaToolsInfo | null>(null);
   protected readonly videoBusy = signal(false);
@@ -731,9 +763,38 @@ export class SettingsPageComponent {
   protected readonly extId = computed(() => this.browser.extension()?.id ?? 'dcoeaodjhaibfchhcbfdkekpcacofnhm');
 
   constructor() {
+    void this.loadProtocols();
     void this.browser.refresh();
     void this.browser.refreshExtension();
     void this.loadVideoInfo();
+  }
+
+  private async loadProtocols(): Promise<void> {
+    if (!this.tauriAvailable) {
+      return;
+    }
+    try {
+      this.protocols.set(await this.invoke<ProtocolStatus>('protocol_status'));
+    } catch {
+      this.protocols.set({ supported: false, magnet: false, torrent: false });
+    }
+  }
+
+  /** Registers (or removes) Riptide as the handler of magnet links and .torrent files, for this user only. */
+  protected async toggleProtocols(): Promise<void> {
+    if (this.protocolsBusy()) {
+      return;
+    }
+    const on = this.protocols()?.magnet !== true;
+    this.protocolsBusy.set(true);
+    try {
+      this.protocols.set(await this.invoke<ProtocolStatus>(on ? 'register_protocols' : 'unregister_protocols'));
+      this.toasts.show('info', this.i18n.t(on ? 'toast.protocolsOn' : 'toast.protocolsOff'));
+    } catch {
+      this.toasts.show('danger', this.i18n.t('toast.protocolsFailed'));
+    } finally {
+      this.protocolsBusy.set(false);
+    }
   }
 
   private async loadVideoInfo(): Promise<void> {

@@ -1,5 +1,6 @@
 //! Clipboard monitor: while "clipboard monitor" is on, a copied `http(s)` link whose path ends
-//! in a known downloadable extension (the category table of `riptide_core::Category`) is offered
+//! in a known downloadable extension (the category table of `riptide_core::Category`), or a
+//! `magnet:?xt=urn:btih:...` link, is offered
 //! to the webview as [`CLIPBOARD_LINK_EVENT`]; the webview asks the user (it never starts a
 //! download by itself) and skips links already in the list. The same URL is offered once.
 //!
@@ -41,6 +42,9 @@ pub fn downloadable_link(text: &str) -> Option<ClipboardLink> {
     if text.is_empty() || text.len() > MAX_URL_LEN || text.chars().any(char::is_whitespace) {
         return None;
     }
+    if let Some(link) = magnet_link(text) {
+        return Some(link);
+    }
     let url = url::Url::parse(text).ok()?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none_or(str::is_empty) {
         return None;
@@ -61,6 +65,45 @@ pub fn downloadable_link(text: &str) -> Option<ClipboardLink> {
     Some(ClipboardLink {
         url: text.to_string(),
         name,
+    })
+}
+
+/// A `magnet:` link that names a BitTorrent info-hash (hex or base32); its name is the `dn`
+/// (display name) parameter, else the hash.
+fn magnet_link(text: &str) -> Option<ClipboardLink> {
+    let (scheme, rest) = text.split_at_checked(8)?;
+    if !scheme.eq_ignore_ascii_case("magnet:?") {
+        return None;
+    }
+    let mut hash = None;
+    let mut name = None;
+    for pair in rest.split('&') {
+        let (k, v) = pair.split_once('=')?;
+        match k.to_ascii_lowercase().as_str() {
+            "xt" => {
+                let Some(h) = v
+                    .get(..9)
+                    .filter(|p| p.eq_ignore_ascii_case("urn:btih:"))
+                    .and_then(|_| v.get(9..))
+                else {
+                    continue;
+                };
+                let hex = h.len() == 40 && h.bytes().all(|b| b.is_ascii_hexdigit());
+                let b32 = h.len() == 32
+                    && h.bytes()
+                        .all(|b| b.is_ascii_alphabetic() || (b'2'..=b'7').contains(&b));
+                if hex || b32 {
+                    hash = Some(h.to_string());
+                }
+            }
+            "dn" => name = Some(percent_decode(&v.replace('+', " "))),
+            _ => {}
+        }
+    }
+    let hash = hash?;
+    Some(ClipboardLink {
+        url: text.to_string(),
+        name: name.filter(|n| !n.trim().is_empty()).unwrap_or(hash),
     })
 }
 
@@ -165,6 +208,29 @@ mod tests {
         assert_eq!(link.name, "Setup.EXE");
         assert!(downloadable_link("http://host:8080/a/b/movie.mkv").is_some());
         assert!(downloadable_link("https://h/archive.zip").is_some());
+    }
+
+    #[test]
+    fn offers_magnet_links_with_their_display_name() {
+        let hash = "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c";
+        let link = downloadable_link(&format!(
+            "magnet:?xt=urn:btih:{hash}&dn=Big+Buck%20Bunny&tr=udp%3A%2F%2Fx%3A80"
+        ))
+        .unwrap();
+        assert_eq!(link.name, "Big Buck Bunny");
+        assert!(link.url.starts_with("magnet:?xt=urn:btih:"));
+        // without a name the hash stands in; the scheme is case-insensitive
+        assert_eq!(
+            downloadable_link(&format!("MAGNET:?xt=urn:btih:{hash}"))
+                .unwrap()
+                .name,
+            hash
+        );
+        // not a BitTorrent link, malformed hash, spaces
+        assert!(downloadable_link("magnet:?xt=urn:sha1:abc").is_none());
+        assert!(downloadable_link("magnet:?xt=urn:btih:short").is_none());
+        assert!(downloadable_link("magnet:?dn=only-a-name").is_none());
+        assert!(downloadable_link(&format!("magnet:?xt=urn:btih:{hash} extra")).is_none());
     }
 
     #[test]

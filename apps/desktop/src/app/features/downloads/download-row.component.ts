@@ -93,7 +93,7 @@ export function hostOf(url: string): string {
             }
           </span>
         } @else if (torrentLine(); as line) {
-          <span class="host torrent-line" dir="auto">{{ line }}</span>
+          <span class="host torrent-line" dir="auto" [attr.title]="line">{{ line }}</span>
         } @else {
           <span class="host" dir="ltr">{{ host() }}</span>
         }
@@ -503,14 +503,15 @@ export class DownloadRowComponent {
     if (d.kind !== 'torrent' || t === undefined) {
       return null;
     }
-    const ratio = this.i18n.t('torrent.ratio').replace('{ratio}', formatRatio(t.ratio));
+    // the ratio only shows once something was uploaded: the line is short and a 0.00 says nothing
+    const ratio = t.ratio > 0 ? ` · ${this.i18n.t('torrent.ratio').replace('{ratio}', formatRatio(t.ratio))}` : '';
     if (t.seeding) {
-      return `${this.i18n.t('torrent.seeding')} · ${ratio}`;
+      return `${this.i18n.t('torrent.seeding')}${ratio}`;
     }
     if (d.state === 'downloading' || d.state === 'probing') {
-      return `${this.i18n.t('torrent.peersOf').replace('{n}', '' + t.peers).replace('{seen}', '' + t.peersSeen)} · ${ratio}`;
+      return `${this.i18n.t('torrent.peersOf').replace('{n}', '' + t.peers).replace('{seen}', '' + t.peersSeen)}${ratio}`;
     }
-    return `${this.i18n.t('torrent.badge')} · ${ratio}`;
+    return `${this.i18n.t('torrent.badge')}${ratio}`;
   });
   protected readonly host = computed(() => hostOf(this.row().d.url));
   protected readonly showDownloaded = computed(() => {

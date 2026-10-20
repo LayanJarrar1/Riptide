@@ -25,6 +25,7 @@ pub mod ipc_server;
 pub mod media;
 pub mod notify;
 pub mod power;
+pub mod protocol;
 pub mod queues;
 pub mod shell;
 pub mod torrent;
@@ -135,7 +136,9 @@ pub fn run() {
     tauri::Builder::default()
         // first: a second launch hands over to the running instance and exits before it opens
         // the database (its crash recovery would otherwise re-queue the live transfers)
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // a magnet link or .torrent file launched while Riptide runs opens its file choice
+            protocol::handle_second_launch(app, &args);
             show_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
@@ -150,6 +153,7 @@ pub fn run() {
             Some(vec![shell::MINIMIZED_ARG]),
         ))
         .manage(shell::Shell::default())
+        .manage(protocol::PendingOpen::default())
         .manage(std::sync::Arc::new(crawl::Crawls::default()))
         .setup(move |app| {
             // the window first: portable mode gives it a profile folder next to the app
@@ -167,6 +171,11 @@ pub fn run() {
             }
             engine.set_media_tools(tools);
             app.manage(media::DataDir(data_dir));
+
+            // launched by a magnet link or a .torrent file: the webview asks for it once it is up
+            if let Some(target) = protocol::open_target(&std::env::args().collect::<Vec<_>>()) {
+                app.state::<protocol::PendingOpen>().set(target);
+            }
 
             // torrents already in the list continue; with none, no port is opened (privacy)
             let torrent_engine = engine.clone();
@@ -325,6 +334,10 @@ pub fn run() {
             torrent::list_torrents,
             torrent::torrent_live,
             torrent::pick_torrent_file,
+            protocol::protocol_status,
+            protocol::register_protocols,
+            protocol::unregister_protocols,
+            protocol::take_pending_open,
             shell::set_shell_prefs,
             shell::autostart_enabled,
             shell::set_autostart,

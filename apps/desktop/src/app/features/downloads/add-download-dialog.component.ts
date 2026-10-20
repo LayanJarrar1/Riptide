@@ -140,6 +140,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           </section>
         }
 
+        @if (!isMagnet()) {
         <div class="row">
           <label class="field grow">
             <span class="label">{{ i18n.t('add.filename') }}</span>
@@ -218,6 +219,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             </label>
           </div>
         </details>
+        }
       </form>
 
       <ng-container dialogActions>

@@ -73,6 +73,15 @@ describe('Add dialog with a magnet link', () => {
     expect(add).not.toHaveBeenCalled();
   });
 
+  it('hides the fields that do not apply to a torrent (name, category, connections, checksum)', () => {
+    type(MAGNET);
+    expect(el().querySelector('input[name="filename"]')).toBeNull();
+    expect(el().querySelector('select[name="category"]')).toBeNull();
+    expect(el().querySelector('input[name="checksum"]')).toBeNull();
+    type('https://example.com/a.zip');
+    expect(el().querySelector('input[name="filename"]')).not.toBeNull();
+  });
+
   it('still refuses text that is neither a web address nor a magnet link', () => {
     type('not a link');
     const submit = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.className.includes('primary')) as HTMLButtonElement;
@@ -286,7 +295,13 @@ describe('DownloadRowComponent for a torrent', () => {
     expect(el.querySelector('.media-badge')).not.toBeNull();
     expect(el.querySelector('.torrent-line')?.textContent).toContain('5 of 17 peers');
     expect(el.querySelector('.torrent-line')?.textContent).toContain('Ratio 0.50');
+    expect(el.querySelector('.torrent-line')?.getAttribute('title')).toContain('5 of 17 peers');
     expect(el.querySelector('.host:not(.torrent-line)')).toBeNull();
+  });
+
+  it('leaves the ratio out while nothing was uploaded', () => {
+    const el = render(torrent({ ratio: 0 }));
+    expect(el.querySelector('.torrent-line')?.textContent?.trim()).toBe('5 of 17 peers');
   });
 
   it('says Seeding while it shares a finished download', () => {
