@@ -164,10 +164,13 @@ async fn a_torrent_completes_through_the_engine_and_every_file_matches_sha256() 
 
     // the same info-hash again is reported, and refused when forced
     let again = e
-        .torrent_preview(save_torrent(tmp.path(), &torrent), None)
+        .torrent_preview(save_torrent(tmp.path(), &torrent), Some(dir.clone()))
         .await
         .unwrap();
     assert_eq!(again.existing, Some(id));
+    // its own files are in the folder now, yet the list shows the real names, not `name (1)`
+    let names = |p: &TorrentPreviewInfo| p.files.iter().map(|f| f.path.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&again), names(&preview));
     assert!(e
         .add_torrent(add_for(&again, &dir, seeder.addr))
         .await

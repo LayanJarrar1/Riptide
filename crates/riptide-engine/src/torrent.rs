@@ -405,7 +405,7 @@ impl Engine {
             TorrentSourceRequest::Magnet { uri } => TorrentSource::Magnet(uri),
             TorrentSourceRequest::File { path } => TorrentSource::File(path),
         };
-        let preview = rt.engine.preview(&source, &opts).await?;
+        let mut preview = rt.engine.preview(&source, &opts).await?;
         let existing = {
             let hash = preview.info_hash.clone();
             db(&self.inner.store, move |s| {
@@ -419,6 +419,17 @@ impl Engine {
             })
             .await?
         };
+        // a torrent that is already in the list is shown under its real names: the planner would
+        // otherwise rename every file (`name (1).ext`) because its own files are in the folder
+        if existing.is_some() && matches!(source, TorrentSource::File(_)) {
+            let adopt = AddOptions {
+                adopt_existing: true,
+                ..opts.clone()
+            };
+            if let Ok(again) = rt.engine.preview(&source, &adopt).await {
+                preview = again;
+            }
+        }
         let files = preview
             .files
             .iter()
