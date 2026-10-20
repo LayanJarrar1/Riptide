@@ -94,6 +94,14 @@ export class HostClient {
     });
   }
 
+  /**
+   * Forget that the host was missing, so the next request really tries again. Called when the
+   * user asks for it (Open Riptide, Refresh): the host may have been registered a moment ago.
+   */
+  retryNow(): void {
+    this.missingSince = 0;
+  }
+
   /** Liveness check; updates and returns the status. */
   async ping(timeoutMs = 5_000): Promise<HostStatus> {
     try {
@@ -105,9 +113,9 @@ export class HostClient {
         this.setStatus('app_not_running');
       }
     } catch (e) {
-      // A disconnect already updated the status. A timeout does not, and an `unknown` status
-      // would hide that the app never answered.
-      if (e instanceof HostError && this.status === 'unknown') this.setStatus(e.status);
+      // A disconnect already updated the status. A timeout does not: without this a stale
+      // `connected` (or `unknown`) would hide that the app never answered.
+      if (e instanceof HostError) this.setStatus(e.status);
     }
     return this.status;
   }

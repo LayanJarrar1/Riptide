@@ -134,10 +134,40 @@ Nothing coming from the browser is executed or used as a path. The app answers `
 
 ### Registration
 
-The app registers the host per user, no elevation: automatically on every start (idempotent;
-it also repairs the paths after the app moved) until the user presses *Turn off* in
-*Settings → Integration → Browser extension*, and again with *Set up*. The choice is stored as
-`browser_host` in `integration.json`.
+The host is registered per user, no elevation, at three moments (all idempotent, all the same
+Rust code, so the paths and extension ids can not drift):
+
+1. **At install time.** The NSIS hooks (`apps/desktop/src-tauri/windows/hooks.nsh`) run
+   `riptide-desktop.exe --register-host` after copying the files, on a fresh install and on every
+   upgrade. The extension therefore works before the app was ever opened. A silent install
+   (`/S`) does the same.
+2. **On every app start** (it also repairs the paths after the app moved) until the user presses
+   *Turn off* in *Settings → Integration → Browser extension*, and again with *Set up*. The choice
+   is stored as `browser_host` in `integration.json`; an upgrade never turns it back on.
+3. **On uninstall** `--unregister-host` removes only the keys and manifests that point at *this*
+   install's `riptide-host.exe`. A second copy (portable folder, another install dir) keeps its
+   registration; settings and downloads are untouched.
+
+`NativeMessagingHosts` is per Windows user, not per browser profile: one registration serves every
+Chrome profile (and every Edge profile) of that user. What is per profile is the extension itself:
+each profile loads it once (*Developer mode → Load unpacked*, or from a store later). Riptide never
+sideloads the extension, never writes browser policy or `Preferences` files, and the browser's own
+consent screens stay in charge.
+
+The extension folders (`extension\chrome`, `extension\edge`) are installed next to the app, which is
+`%LOCALAPPDATA%\Riptide` by default, and survive upgrades; *Settings → Integration → Open extension
+folder* and `install-extension.ps1` point at that copy.
+
+**Open Riptide** (popup) asks the host for a `ping`; when the app's pipe is down the host starts
+`riptide-desktop.exe` (next to the host, else `%LOCALAPPDATA%\Riptide`) detached and waits up to
+10 s. If the app is already running nothing is started (the single-instance lock would focus it
+anyway). The popup shows a "Starting Riptide…" state, then connected, or "did not start" with the
+next step. With no registration the popup says *host not installed* and **Website and help** opens
+the project site (a fixed https URL, opened by the extension itself).
+
+Test knobs (never needed in normal use): `RIPTIDE_REGISTRY_ROOT` moves the keys under
+`HKCU\<value>`, `RIPTIDE_INTEGRATION_DIR` moves the manifests and `integration.json`. The installer
+test `scripts/test-installer.ps1` and the popup E2E `apps/extension/e2e/popup_states.py` use them.
 
 | Browser | Registry value (`HKCU`) | Manifest file it points to |
 |---|---|---|
