@@ -47,6 +47,8 @@ tokio-util = { workspace = true }
 winreg = "0.56"
 # SetSuspendState (sleep / hibernate); the only unsafe call, isolated in src/power.rs
 windows-sys = { workspace = true }
+# toasts for finished downloads without the plugin's one-waiting-thread-per-toast (see src/notify.rs)
+notify-rust = "4.18"
 
 [dev-dependencies]
 tempfile = { workspace = true }

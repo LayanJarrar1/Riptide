@@ -107,10 +107,32 @@ fn should_notify<R: Runtime>(app: &AppHandle<R>) -> bool {
     !(focused && visible && !minimized)
 }
 
-fn show<R: Runtime>(app: &AppHandle<R>, id: DownloadId, title: &str, body: &str) {
+/// Shows the system notification of a finished or failed download; clicking it opens that
+/// download's details.
+///
+/// On Windows the plugin would park one thread per notification until the user clicks or
+/// dismisses it (the toast API only reports that through a blocking wait), and a toast nobody
+/// touches never ends: 1,000 completed downloads left 1,000 threads. So the toast is shown here
+/// and at most [`toast::MAX_WAITING`] of them may wait for a click at the same time; the rest
+/// are shown without click-through.
+pub fn show<R: Runtime>(app: &AppHandle<R>, id: DownloadId, title: &str, body: &str) {
     let Ok(nid) = i32::try_from(id.0) else {
         return;
     };
+    #[cfg(windows)]
+    {
+        let handle = app.clone();
+        let on_click = move || {
+            crate::show_main_window(&handle);
+            if let Err(e) = handle.emit(OPEN_DOWNLOAD_EVENT, i64::from(nid)) {
+                tracing::debug!(error = %e, "notification click not delivered");
+            }
+        };
+        if let Err(e) = toast::show(&app.config().identifier, title, body, Box::new(on_click)) {
+            tracing::warn!(error = %e, "notification not shown");
+        }
+    }
+    #[cfg(not(windows))]
     if let Err(e) = app
         .notification()
         .builder()
@@ -120,6 +142,76 @@ fn show<R: Runtime>(app: &AppHandle<R>, id: DownloadId, title: &str, body: &str)
         .show()
     {
         tracing::warn!(error = %e, "notification not shown");
+    }
+}
+
+/// Windows toasts with a bounded number of click waiters.
+#[cfg(windows)]
+pub mod toast {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Most toasts that may wait for a click (or dismissal) at once; each costs a thread.
+    pub const MAX_WAITING: usize = 8;
+
+    static WAITING: AtomicUsize = AtomicUsize::new(0);
+
+    /// Threads currently waiting on a toast.
+    #[must_use]
+    pub fn waiting() -> usize {
+        WAITING.load(Ordering::SeqCst)
+    }
+
+    /// Shows a toast; `on_click` runs if the user clicks it while a waiter is available.
+    ///
+    /// # Errors
+    ///
+    /// The toast could not be shown.
+    pub fn show(
+        identifier: &str,
+        title: &str,
+        body: &str,
+        on_click: Box<dyn FnOnce() + Send>,
+    ) -> Result<(), String> {
+        let mut n = notify_rust::Notification::new();
+        n.summary(title).body(body).auto_icon();
+        // like the plugin: the app identity only when installed (a dev build runs from target/debug or target/release and must borrow PowerShell identity to be allowed to toast)
+        let from_target = std::env::current_exe().ok().is_some_and(|exe| {
+            exe.parent().is_some_and(|dir| {
+                let dir = dir.to_string_lossy();
+                dir.ends_with(r"target\debug") || dir.ends_with(r"target\release")
+            })
+        });
+        if !from_target {
+            n.app_id(identifier);
+        }
+        let handle = n.show().map_err(|e| e.to_string())?;
+        if WAITING
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |w| {
+                (w < MAX_WAITING).then_some(w + 1)
+            })
+            .is_err()
+        {
+            // the cap is reached: no click-through; dropping the handle frees everything
+            return Ok(());
+        }
+        let spawned = std::thread::Builder::new()
+            .name("toast-wait".into())
+            .spawn(move || {
+                let _ = handle.wait_for_response(|response: &notify_rust::NotificationResponse| {
+                    if matches!(
+                        response,
+                        notify_rust::NotificationResponse::Default
+                            | notify_rust::NotificationResponse::Action(_)
+                    ) {
+                        on_click();
+                    }
+                });
+                WAITING.fetch_sub(1, Ordering::SeqCst);
+            });
+        if spawned.is_err() {
+            WAITING.fetch_sub(1, Ordering::SeqCst);
+        }
+        Ok(())
     }
 }
 
@@ -154,5 +246,28 @@ mod tests {
         assert_eq!(title_for(r"C:\Downloads\movie.mkv", "x"), "movie.mkv");
         assert_eq!(title_for("/home/u/تقرير.pdf", "x"), "تقرير.pdf");
         assert_eq!(title_for("", "Riptide"), "Riptide");
+    }
+
+    /// Regression test for the per-download thread leak: a toast nobody touches never ends, and
+    /// the plugin parked one thread per toast waiting for it, so 1,000 downloads left 1,000
+    /// threads. Showing toasts must keep the number of waiting threads at the cap.
+    #[cfg(windows)]
+    #[test]
+    fn untouched_toasts_never_pile_up_waiting_threads() {
+        for i in 0..80 {
+            // a toast that may fail to show on a machine without a desktop; that is fine here
+            let _ = toast::show(
+                "app.riptide.test",
+                &format!("finished {i}"),
+                "body",
+                Box::new(|| {}),
+            );
+        }
+        assert!(
+            toast::waiting() <= toast::MAX_WAITING,
+            "{} threads wait for toasts, the cap is {}",
+            toast::waiting(),
+            toast::MAX_WAITING
+        );
     }
 }

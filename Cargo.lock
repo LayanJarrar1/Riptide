@@ -3924,6 +3924,7 @@ name = "riptide-desktop"
 version = "0.1.0-alpha.4"
 dependencies = [
  "dirs 6.0.0",
+ "notify-rust",
  "riptide-core",
  "riptide-crawl",
  "riptide-engine",
