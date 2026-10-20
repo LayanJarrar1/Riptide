@@ -165,6 +165,7 @@ describe('TitleBarComponent', () => {
         'Site grabber',
         'Import link list…',
         'Open torrent file…',
+        'Open magnet link from clipboard',
         'Open file',
         'Show in folder',
       ]);
@@ -245,13 +246,13 @@ describe('TitleBarComponent', () => {
       key(row('Add download'), 'ArrowDown');
       expect(document.activeElement).toBe(row('Batch download'));
       key(row('Batch download'), 'End');
-      // Open file / Show in folder are unavailable: the last reachable row is the torrent file
-      expect(document.activeElement).toBe(row('Open torrent file…'));
-      key(row('Open torrent file…'), 'ArrowDown');
+      // Open file / Show in folder are unavailable: the last reachable row is the magnet one
+      expect(document.activeElement).toBe(row('Open magnet link from clipboard'));
+      key(row('Open magnet link from clipboard'), 'ArrowDown');
       expect(document.activeElement).toBe(row('Add download'));
       key(row('Add download'), 'ArrowUp');
-      expect(document.activeElement).toBe(row('Open torrent file…'));
-      key(row('Open torrent file…'), 'Home');
+      expect(document.activeElement).toBe(row('Open magnet link from clipboard'));
+      key(row('Open magnet link from clipboard'), 'Home');
       expect(document.activeElement).toBe(row('Add download'));
     });
 

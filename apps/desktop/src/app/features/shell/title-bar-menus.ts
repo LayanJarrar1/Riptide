@@ -89,6 +89,7 @@ export interface MenuActions {
   siteGrabber(): void;
   importLinkList(): void;
   openTorrentFile(): void;
+  openMagnetFromClipboard(): void;
   openFile(): void;
   openFolder(): void;
   exit(): void;
@@ -140,6 +141,7 @@ export function buildMenus(s: MenuState, a: MenuActions): readonly MenuDef[] {
     item('grabber', t('action.grabber'), () => a.siteGrabber()),
     item('importList', t('menu.importList'), () => a.importLinkList()),
     item('openTorrent', t('menu.openTorrent'), () => a.openTorrentFile()),
+    item('openMagnet', t('menu.openMagnet'), () => a.openMagnetFromClipboard()),
     SEP,
     item('openFile', t('action.openFile'), () => a.openFile(), { disabled: !s.openable }),
     item('openFolder', t('action.openFolder'), () => a.openFolder(), { disabled: !s.openable }),

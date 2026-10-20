@@ -93,6 +93,38 @@ export function magnetHash(text: string): string | null {
   return /^[0-9a-f]{40}$/i.test(h) ? h.toLowerCase() : /^[a-z2-7]{32}$/i.test(h) ? h.toUpperCase() : null;
 }
 
+/** The magnet links in a block of text, one per line (other lines are ignored, the same info-hash counts once, at most 50). */
+export function magnetLinesOf(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.length === 0 || /\s/.test(line) || !isMagnetLink(line)) {
+      continue;
+    }
+    const hash = magnetHash(line);
+    if (hash === null || seen.has(hash.toLowerCase()) || out.length >= 50) {
+      continue;
+    }
+    seen.add(hash.toLowerCase());
+    out.push(line);
+  }
+  return out;
+}
+
+/** What to call a magnet link in a list: its display name, else the first eight characters of the hash. Never a tracker. */
+export function magnetLabel(link: string): string {
+  const dn = /[?&]dn=([^&]*)/i.exec(link);
+  if (dn !== null && dn[1].length > 0) {
+    try {
+      return decodeURIComponent(dn[1].replace(/\+/g, ' ')).slice(0, 80);
+    } catch {
+      /* fall through to the hash */
+    }
+  }
+  return (magnetHash(link) ?? '?').slice(0, 8) + '…';
+}
+
 /** Total size of the chosen files (`null` = all of them). */
 export function selectedBytes(files: readonly { readonly index: number; readonly len: number }[], selected: readonly number[] | null): number {
   const chosen = selected === null ? null : new Set(selected);

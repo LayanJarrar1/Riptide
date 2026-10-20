@@ -11,7 +11,7 @@ import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, isMediaUrl, MediaChoice, MediaProbe, ProbeResult } from '../../model/download';
 import { parseMediaError } from '../../model/media-error';
-import { isMagnetLink } from '../../model/torrent';
+import { isMagnetLink, magnetLabel, magnetLinesOf } from '../../model/torrent';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -52,7 +52,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
               [placeholder]="i18n.t('add.urlPlaceholder')"
               [value]="url()"
               (input)="onUrl($event)"
-              (paste)="onPaste()"
+              (paste)="onPaste($event)"
 
             />
             @if (probe() === 'probing') {
@@ -103,6 +103,24 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             <span class="help">{{ i18n.t('add.urlHint') }}</span>
           }
         </label>
+
+        @if (magnets().length > 1) {
+          <div class="magnets" role="group" [attr.aria-label]="i18n.t('torrent.multiTitle').replace('{n}', '' + magnets().length)">
+            <p class="magnets-title"><app-icon name="magnet" [size]="16" class="ok" /> {{ i18n.t('torrent.multiTitle').replace('{n}', '' + magnets().length) }}</p>
+            <ul class="magnets-list">
+              @for (m of magnets(); track m) {
+                <li dir="auto"><code class="num">{{ label(m) }}</code></li>
+              }
+            </ul>
+            <p class="help">{{ i18n.t('torrent.multiHint') }}</p>
+            <div class="magnets-actions">
+              <button appButton variant="secondary" size="sm" icon="download" type="button" [busy]="bulk() !== null" [disabled]="bulk() !== null" (click)="addAllDefault()">
+                {{ bulk() === null ? i18n.t('torrent.addAllDefault') : i18n.t('torrent.addAllProgress').replace('{done}', '' + bulk()!.done).replace('{total}', '' + bulk()!.total) }}
+              </button>
+              <button appButton variant="ghost" size="sm" type="button" [disabled]="bulk() !== null" (click)="clearMagnets()">{{ i18n.t('torrent.multiClear') }}</button>
+            </div>
+          </div>
+        }
 
         @if (seen(); as s) {
           <app-seen-notice [match]="s" [offerAgain]="!s.stale" [againChosen]="again()" (again)="again.set(!again())" />
@@ -252,8 +270,8 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       <ng-container dialogActions>
         <button appButton variant="ghost" icon="magnet" type="button" class="torrent-file" (click)="chooseTorrentFile()">{{ i18n.t('torrent.choose') }}</button>
         <button appButton variant="ghost" type="button" (click)="close()">{{ i18n.t('action.cancel') }}</button>
-        <button appButton variant="primary" [icon]="isMagnet() ? 'magnet' : 'download'" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
-          {{ i18n.t(submitting() ? 'add.submitting' : isMagnet() ? 'torrent.chooseFiles' : startPaused() ? 'add.submitLater' : 'add.submit') }}
+        <button appButton variant="primary" [icon]="isMagnet() || magnets().length > 1 ? 'magnet' : 'download'" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
+          {{ i18n.t(submitting() ? 'add.submitting' : isMagnet() || magnets().length > 1 ? 'torrent.chooseFiles' : startPaused() ? 'add.submitLater' : 'add.submit') }}
         </button>
       </ng-container>
     </app-dialog>
@@ -434,6 +452,39 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
     .mono {
       font-family: var(--font-mono);
+    }
+
+    .magnets {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border: 1px solid var(--color-accent);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+    }
+
+    .magnets-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-weight: var(--weight-semibold);
+      font-size: var(--text-sm);
+    }
+
+    .magnets-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-block-size: 120px;
+      overflow: auto;
+      font-size: var(--text-xs);
+      color: var(--color-text-secondary);
+    }
+
+    .magnets-actions {
+      display: flex;
+      gap: var(--space-2);
     }
 
     .help {
@@ -768,7 +819,11 @@ export class AddDownloadDialogComponent {
   });
   /** A pasted `magnet:` link: the torrent dialog takes over for the file choice. */
   protected readonly isMagnet = computed(() => isMagnetLink(this.url()));
-  protected readonly canSubmit = computed(() => (this.isMagnet() || (isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError())) && !this.submitting());
+  /** Several magnet links pasted at once (one per line); the file choice then opens for each in turn. */
+  protected readonly magnets = signal<readonly string[]>([]);
+  /** "Add all with default selection" in progress. */
+  protected readonly bulk = signal<{ readonly done: number; readonly total: number } | null>(null);
+  protected readonly canSubmit = computed(() => (this.magnets().length > 1 && this.bulk() === null) || (this.isMagnet() || (isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError())) && !this.submitting());
 
   constructor() {
     effect(() => {
@@ -800,11 +855,67 @@ export class AddDownloadDialogComponent {
   }
 
   protected onUrl(event: Event): void {
+    this.magnets.set([]);
     this.setUrl(this.value(event));
   }
 
-  protected onPaste(): void {
-    // the input event fires right after and carries the pasted text; nothing else to do
+  protected label(link: string): string {
+    return magnetLabel(link);
+  }
+
+  protected clearMagnets(): void {
+    this.magnets.set([]);
+  }
+
+  /** Every magnet link, each with all its files, without the file-choice step; a summary says what happened. */
+  protected async addAllDefault(): Promise<void> {
+    const links = this.magnets();
+    if (links.length < 2 || this.bulk() !== null) {
+      return;
+    }
+    let done = 0;
+    let added = 0;
+    let existing = 0;
+    let failed = 0;
+    this.bulk.set({ done, total: links.length });
+    const queue = [...links];
+    const worker = async (): Promise<void> => {
+      for (let uri = queue.shift(); uri !== undefined; uri = queue.shift()) {
+        try {
+          const preview = await this.engine.torrentPreview({ kind: 'magnet', uri });
+          if (preview.existing !== null) {
+            existing++;
+          } else {
+            await this.engine.addTorrent({ token: preview.token, onlyFiles: null, sequential: false, startPaused: this.startPaused() });
+            added++;
+          }
+        } catch {
+          failed++;
+        }
+        done++;
+        this.bulk.set({ done, total: links.length });
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    this.bulk.set(null);
+    const text = this.i18n
+      .t('torrent.addAllSummary')
+      .replace('{added}', String(added))
+      .replace('{existing}', String(existing))
+      .replace('{failed}', String(failed));
+    this.toasts.show(failed > 0 && added === 0 ? 'danger' : 'success', text);
+    this.magnets.set([]);
+    this.closed.emit();
+  }
+
+  protected onPaste(event: ClipboardEvent): void {
+    // a single-line field would glue several lines together: several magnet links get their own list
+    const links = magnetLinesOf(event.clipboardData?.getData('text') ?? '');
+    if (links.length > 1) {
+      event.preventDefault();
+      this.setUrl('');
+      this.magnets.set(links);
+    }
   }
 
   protected onFilename(event: Event): void {
@@ -879,6 +990,11 @@ export class AddDownloadDialogComponent {
   protected async submit(event?: Event): Promise<void> {
     event?.preventDefault();
     if (!this.canSubmit()) {
+      return;
+    }
+    if (this.magnets().length > 1) {
+      this.ui.openTorrents(this.magnets());
+      this.closed.emit();
       return;
     }
     if (this.isMagnet()) {
@@ -1124,6 +1240,8 @@ export class AddDownloadDialogComponent {
   }
 
   private reset(): void {
+    this.magnets.set([]);
+    this.bulk.set(null);
     this.probeToken++;
     this.clearMedia();
     this.url.set('');

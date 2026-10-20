@@ -7,7 +7,7 @@ import { seedDownloads } from '../../data/mock-data';
 import { MOCK_ENGINE_AUTOSTART, MockEngineService } from '../../data/mock-engine.service';
 import { I18nService, registerTable } from '../../i18n/i18n.service';
 import { Download } from '../../model/download';
-import { TorrentPreview, TorrentSource, TorrentView } from '../../model/torrent';
+import { magnetLabel, magnetLinesOf, TorrentPreview, TorrentSource, TorrentView } from '../../model/torrent';
 import { UiState } from '../shell/ui-state.service';
 import { AddDownloadDialogComponent } from './add-download-dialog.component';
 import { DownloadRowComponent } from './download-row.component';
@@ -337,5 +337,111 @@ describe('DownloadRowComponent for a torrent', () => {
     const line = (fixture.nativeElement as HTMLElement).querySelector('.torrent-line')?.textContent ?? '';
     expect(line).toContain('مصدر');
     expect(line).toContain('النسبة');
+  });
+});
+
+const OWNER_MAGNET = 'magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&tr=http%3A%2F%2Frutracker.ru%2Fbt%2Fannounce.php%3Fuk%3D';
+const SECOND_MAGNET = `magnet:?xt=urn:btih:${HASH}&dn=Big+Buck+Bunny`;
+
+describe('magnet link text helpers', () => {
+  it('finds one magnet link per line and ignores everything else', () => {
+    const text = `notes\r\n${OWNER_MAGNET}\r\n\r\n  ${SECOND_MAGNET}  \n${OWNER_MAGNET}\nhttps://example.com/a.zip\nmagnet:?xt=urn:sha1:abc`;
+    expect(magnetLinesOf(text)).toEqual([OWNER_MAGNET, SECOND_MAGNET]);
+    expect(magnetLinesOf('')).toEqual([]);
+    expect(magnetLinesOf('one two three')).toEqual([]);
+  });
+
+  it('labels a link by its name or hash, never by a tracker', () => {
+    expect(magnetLabel(SECOND_MAGNET)).toBe('Big Buck Bunny');
+    expect(magnetLabel(OWNER_MAGNET)).toBe('428c72ff…');
+    expect(magnetLabel(OWNER_MAGNET)).not.toContain('rutracker');
+  });
+});
+
+describe('several magnet links at once', () => {
+  let fixture: ComponentFixture<AddDownloadDialogComponent>;
+  let engine: MockEngineService;
+  let ui: UiState;
+  const el = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  function paste(text: string): ClipboardEvent {
+    const input = el().querySelector<HTMLInputElement>('input[name="url"]') as HTMLInputElement;
+    const data = new DataTransfer();
+    data.setData('text', text);
+    const event = new ClipboardEvent('paste', { clipboardData: data, cancelable: true, bubbles: true });
+    input.dispatchEvent(event);
+    fixture.detectChanges();
+    return event;
+  }
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [AddDownloadDialogComponent], providers: providers() as never[] }).compileComponents();
+    engine = TestBed.inject(DownloadEngine) as MockEngineService;
+    ui = TestBed.inject(UiState);
+    fixture = TestBed.createComponent(AddDownloadDialogComponent);
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+  });
+
+  it('a paste of the owner link alone is a single magnet that leads to the file choice', async () => {
+    const e = paste(OWNER_MAGNET);
+    expect(e.defaultPrevented).toBeFalse();
+    const input = el().querySelector<HTMLInputElement>('input[name="url"]') as HTMLInputElement;
+    input.value = OWNER_MAGNET;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(el().textContent).toContain('This is a torrent link');
+    const go = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes('Choose files')) as HTMLButtonElement;
+    go.click();
+    await flush();
+    expect(ui.torrentSource()).toEqual({ kind: 'magnet', uri: OWNER_MAGNET });
+  });
+
+  it('a paste with several magnet links lists them (no trackers) and opens the file choice for each in turn', async () => {
+    const e = paste(`${OWNER_MAGNET}\n${SECOND_MAGNET}\n`);
+    expect(e.defaultPrevented).toBeTrue();
+    expect(el().textContent).toContain('2 magnet links found');
+    expect(el().textContent).toContain('428c72ff');
+    expect(el().textContent).toContain('Big Buck Bunny');
+    expect(el().textContent).not.toContain('rutracker');
+    const go = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes('Choose files')) as HTMLButtonElement;
+    expect(go.disabled).toBeFalse();
+    go.click();
+    await flush();
+    expect(ui.torrentSource()).toEqual({ kind: 'magnet', uri: OWNER_MAGNET });
+    expect(ui.torrentQueue()).toEqual([SECOND_MAGNET]);
+    // closing the first one opens the second; closing that one ends the sequence
+    ui.closeTorrent();
+    expect(ui.torrentSource()).toEqual({ kind: 'magnet', uri: SECOND_MAGNET });
+    ui.closeTorrent();
+    expect(ui.torrentSource()).toBeNull();
+  });
+
+  it('"Add all" adds every link with all files and says what happened', async () => {
+    const previews: string[] = [];
+    spyOn(engine, 'torrentPreview').and.callFake(async (source: TorrentSource) => {
+      const uri = source.kind === 'magnet' ? source.uri : '';
+      previews.push(uri);
+      if (uri === SECOND_MAGNET) {
+        throw new Error('timed out');
+      }
+      return { token: 't1', infoHash: 'x', name: 'n', files: [], totalBytes: 0, isPrivate: false, existing: null } as TorrentPreview;
+    });
+    const add = spyOn(engine, 'addTorrent').and.resolveTo(7);
+    paste(`${OWNER_MAGNET}\n${SECOND_MAGNET}`);
+    const all = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes('Add all')) as HTMLButtonElement;
+    all.click();
+    await flush();
+    expect(previews.sort()).toEqual([OWNER_MAGNET, SECOND_MAGNET].sort());
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add.calls.mostRecent().args[0]).toEqual({ token: 't1', onlyFiles: null, sequential: false, startPaused: false });
+  });
+
+  it('the skip button drops the links that were still waiting', () => {
+    ui.openTorrents([OWNER_MAGNET, SECOND_MAGNET]);
+    expect(ui.torrentQueue().length).toBe(1);
+    ui.skipQueuedTorrents();
+    ui.closeTorrent();
+    expect(ui.torrentSource()).toBeNull();
   });
 });

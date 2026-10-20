@@ -24,6 +24,7 @@ import { TickerDirective } from './core/ticker.directive';
 import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
+import { DropHandlerService } from './core/drop-handler.service';
 import { TorrentLaunchService } from './core/torrent-launch.service';
 import { TorrentDialogComponent } from './features/downloads/torrent-dialog.component';
 import { CompletionToastService } from './features/downloads/completion-toast.service';
@@ -150,6 +151,7 @@ export class AppComponent implements OnInit {
     inject(PostActionCountdown);
     // a magnet link or .torrent file the system handed to Riptide opens the file choice
     inject(TorrentLaunchService);
+    inject(DropHandlerService);
 
     this.router.events
       .pipe(

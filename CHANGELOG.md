@@ -21,6 +21,17 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ### Added
 
+- Research now streams: every source's results appear as soon as that source answers (with
+  per-source status, retry and Cancel), and the AI's query plan and ranking stream in behind them
+  while the list re-sorts in place. Tabs for Papers, Books, Music, Video, Games, Software, Images,
+  Datasets and Web; new open sources (Project Gutenberg, Open Library, LibriVox, Jamendo, Openverse,
+  Blender open movies, OpenGameArt, NASA, open-source games on GitHub, Internet Archive audio and
+  public-domain films); a licence badge on every result; optional web search through Brave or
+  SearXNG with "Find files on this page". No torrent indexes or piracy sources (D-research-1).
+- Several magnet links pasted at once (one per line), dropped on the window, or read from the
+  clipboard (File, Open magnet link from clipboard) open the file choice one after the other.
+- Magnet links and tracker announce addresses are masked in the log.
+
 - An integrated title bar with menus (File, Downloads, Tools, View, Window, Help), keyboard
   accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls
   stay at the right. *View* also gets Sidebar (Ctrl+B) and Display density (comfortable or compact).

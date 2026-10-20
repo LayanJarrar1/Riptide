@@ -12,6 +12,7 @@ import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
 import { SettingsService } from '../settings/settings.service';
+import { UiState } from '../shell/ui-state.service';
 import { TorrentFileListComponent } from './torrent-file-list.component';
 
 type Phase = 'resolving' | 'ready' | 'error';
@@ -29,6 +30,12 @@ type Phase = 'resolving' | 'ready' | 'error';
   template: `
     <app-dialog [open]="open()" [title]="i18n.t('torrent.title')" [wide]="true" (closed)="close()">
       <div class="body">
+        @if (ui.torrentQueue().length > 0) {
+          <p class="queue-note" role="status">
+            {{ i18n.t('torrent.queueMore').replace('{n}', '' + ui.torrentQueue().length) }}
+            <button type="button" class="queue-skip" (click)="ui.skipQueuedTorrents()">{{ i18n.t('torrent.queueSkip') }}</button>
+          </p>
+        }
         @switch (phase()) {
           @case ('resolving') {
             <div class="state" role="status" aria-live="polite">
@@ -131,6 +138,27 @@ type Phase = 'resolving' | 'ready' | 'error';
     </app-dialog>
   `,
   styles: `
+    .queue-note {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .queue-skip {
+      border: 0;
+      background: transparent;
+      color: var(--color-accent);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     .body {
       display: flex;
       flex-direction: column;
@@ -403,6 +431,7 @@ export class TorrentDialogComponent {
   protected readonly format = inject(FormatService);
   private readonly engine = inject(DownloadEngine);
   private readonly toasts = inject(ToastService);
+  protected readonly ui = inject(UiState);
   private readonly settingsService = inject(SettingsService);
   private readonly disk = inject(DiskSpaceService);
   private readonly store = inject(DownloadsStore);

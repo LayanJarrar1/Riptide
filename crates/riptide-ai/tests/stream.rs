@@ -1,6 +1,6 @@
 //! Streaming completions against a scripted SSE server: chunk boundaries, [DONE], mid-stream
 //! disconnects, cancellation, slow servers, retries before the first byte, redaction.
-#![allow(missing_docs)]
+#![allow(missing_docs, clippy::unwrap_used)]
 
 mod common;
 

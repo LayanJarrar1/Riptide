@@ -106,3 +106,39 @@ becomes the default only when the user has no per-user default yet; unregisterin
 points at this executable. A launch with a magnet link or an existing `.torrent` path (first launch
 or a second one handed over by the single-instance plugin) opens the file-choice dialog; nothing is
 added without the user pressing Download.
+
+
+## D-research-1: Research searches open and public sources only
+
+**Decision.** The Research page searches only sources whose purpose is open or public content,
+and shows the licence the source reports. The following are out of scope and will not be added,
+whatever the request: torrent indexes and trackers' search pages; piracy, warez and "abandonware"
+sites; paywall-bypass and Sci-Hub-like sources; any source whose purpose is copyrighted content
+without a licence. A source qualifies when its API or terms say the items are public domain, openly
+licensed or open source, or when it is a public archive that marks restricted items (those are
+skipped: lending-library scans, access-restricted Internet Archive items).
+
+**Why.** Riptide is a download manager that is free for everyone; it must not become a way to find
+infringing copies, and the app (and its maintainer) should be defensible in every store and every
+country. Showing the licence next to each result lets people check what they may do with a file.
+
+**What it means in the code.**
+- Each adapter in `riptide-research` has a recorded fixture, a mock test and one live test, and
+  names the licence field it reads (`Rights::classify` turns it into a badge: public domain, CC,
+  open source, unknown). A result without a direct http(s) file link is dropped (web search
+  results are marked as pages and only open the site grabber, which obeys `robots.txt`).
+- General web search is a backend the user chooses and configures (Brave Search API token or a
+  SearXNG instance, validated base URL); it is off by default and nothing is sent to it otherwise.
+- Everything returned by a source is untrusted: escaped in the UI, never executed, http/https only
+  (no `javascript:`, `file:` or `data:`), and the AI can only rank results that the sources
+  returned (ids, not links; every entry is validated as it streams in).
+- Jamendo needs the user's own free client id (Credential Manager); Free Music Archive has no
+  keyless API today and is not included; OpenGameArt has no API, so its public search page is read
+  with the 10 s crawl delay its `robots.txt` asks for.
+- The page says so in one line at the foot and in a standing notice: *Riptide searches open and
+  public sources. Only download what you have the right to download.*
+
+**Streaming (same entry).** Sources run concurrently and report as they answer; the AI step runs
+in the background and streams (SSE for the eight OpenAI-compatible providers, Anthropic and
+Gemini; `Provider::complete_stream` has a non-streaming default). Retries happen only before the
+first byte; dropping the future closes the HTTP connection, which is how Cancel works.

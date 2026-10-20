@@ -11,6 +11,7 @@ const EN: Record<string, string> = {
   'action.remove': 'Remove',
   'menu.importList': 'Import link list…',
   'menu.openTorrent': 'Open torrent file…',
+  'menu.openMagnet': 'Open magnet link from clipboard',
   'menu.exit': 'Exit',
   'menu.startResume': 'Start / Resume',
   'toolbar.pauseAll': 'Pause all',
@@ -97,7 +98,7 @@ describe('title bar menus', () => {
 
   it('File lists the add, batch, grabber and import commands with their shortcuts, and Exit', () => {
     const file = menu(buildMenus(state(), recorder().actions), 'file');
-    expect(labels(file)).toEqual(['Add download', 'Batch download', 'Site grabber', 'Import link list…', 'Open torrent file…', 'Open file', 'Show in folder', 'Exit']);
+    expect(labels(file)).toEqual(['Add download', 'Batch download', 'Site grabber', 'Import link list…', 'Open torrent file…', 'Open magnet link from clipboard', 'Open file', 'Show in folder', 'Exit']);
     const shortcuts = actionEntries(file.entries).map((e) => (e.kind === 'item' ? e.shortcut : undefined));
     expect(shortcuts.slice(0, 2)).toEqual(['Ctrl+N', 'Ctrl+Shift+N']);
   });

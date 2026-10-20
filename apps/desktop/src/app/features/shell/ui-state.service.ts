@@ -22,6 +22,8 @@ export class UiState {
   readonly grabberPreset = signal<string | null>(null);
   /** The torrent being added (magnet link or `.torrent` file); the file-choice dialog shows while set. */
   readonly torrentSource = signal<TorrentSource | null>(null);
+  /** Magnet links waiting for their turn in the file-choice dialog (several were pasted or dropped at once). */
+  readonly torrentQueue = signal<readonly string[]>([]);
   /** The keyboard-shortcuts dialog. */
   readonly shortcutsOpen = signal(false);
   /** Incremented when the menus ask the queues list to open its "New queue" dialog. */
@@ -61,8 +63,30 @@ export class UiState {
     this.torrentSource.set(source);
   }
 
+  /** Several magnet links: the file choice opens for the first, the others follow one by one. */
+  openTorrents(uris: readonly string[]): void {
+    const [first, ...rest] = uris;
+    if (first === undefined) {
+      return;
+    }
+    this.torrentQueue.set(rest);
+    this.torrentSource.set({ kind: 'magnet', uri: first });
+  }
+
+  /** The dialog closed (added, cancelled or Esc): the next waiting magnet link opens, if any. */
   closeTorrent(): void {
+    const [next, ...rest] = this.torrentQueue();
+    if (next !== undefined) {
+      this.torrentQueue.set(rest);
+      this.torrentSource.set({ kind: 'magnet', uri: next });
+      return;
+    }
     this.torrentSource.set(null);
+  }
+
+  /** Forget the magnet links that were still waiting. */
+  skipQueuedTorrents(): void {
+    this.torrentQueue.set([]);
   }
 
   openGrabber(): void {

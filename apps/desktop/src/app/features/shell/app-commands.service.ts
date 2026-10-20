@@ -93,6 +93,23 @@ export class AppCommands {
     );
   }
 
+  /** File menu: the magnet link(s) on the clipboard open the file choice (one after the other when there are several). */
+  openMagnetFromClipboard(): void {
+    if (!this.tauri) {
+      this.toasts.show('info', this.i18n.t('torrent.desktopOnly'));
+      return;
+    }
+    this.run(
+      this.invoke<string[]>('clipboard_magnets').then((links) => {
+        if (links.length === 0) {
+          this.toasts.show('info', this.i18n.t('torrent.noMagnetOnClipboard'));
+        } else {
+          this.ui.openTorrents(links);
+        }
+      }),
+    );
+  }
+
   openFile(): void {
     this.openPath('open_file');
   }
