@@ -4,9 +4,65 @@ All notable changes to Riptide are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/releases). Everything below is on `main` and changes often.
+Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/releases).
 
 ## [Unreleased]
+
+### Fixed
+
+- Downloads that start together with the same file name no longer share one partial file (the
+  finished file could hold another download's bytes).
+- A server that sends more bytes than its own `Content-Range` announces (jsDelivr) no longer
+  yields a truncated file marked Completed; Riptide falls back to one plain connection.
+- `http://user:password@host/...` links keep the password out of the downloads list; it is stored
+  with the other secrets and removed with them.
+- Pause followed at once by Resume no longer leaves the download paused.
+- Links without a file extension get one for CSV, XML, SVG, WAV, EPUB and Office types.
+
+## [0.1.0-alpha.4] - 2026-10-19
+
+An alpha for Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.4).
+
+### Added
+
+- Video pages: download from YouTube, Vimeo and other sites yt-dlp supports, with a quality picker
+  from the best available down to 144p, or audio only as M4A or MP3. yt-dlp and ffmpeg are bundled;
+  *Settings → About → Update video support* fetches the newest yt-dlp on request.
+- Queues with schedules: several queues, each with its own limit; run one only at night, on chosen
+  days or at a set time. When it finishes: exit, sleep, hibernate, shut down or run a program, with
+  a 30 second countdown to cancel.
+- Batch downloads: patterns such as `file[001-120].zip` or `img_[a-z].jpg` with a preview of every
+  address, or a pasted list of links; import and export of lists.
+- Site grabber: crawl a page to a chosen depth and tick the files you want; respects `robots.txt`.
+- Browser extension: a "Download this video" button with a quality picker, download all or selected
+  links and all images, capture rules, and a one-click install helper for Chrome and Edge in
+  *Settings → Integration*.
+- Update notifications: a system notification when a new version exists (once per version), a badge
+  in Settings, and a "What's new" link after updating.
+- The Riptide brand: new logo, icons and website.
+
+### Changed
+
+- A server that answers 429 or 503 now gets fewer connections from Riptide, and the lower limit is
+  remembered after a restart.
+- Faster start: the app loads about 130 kB less before the first paint.
+
+### Fixed
+
+- A video download could finish with its progress bar stopped short of 100%.
+
+### Known limits
+
+- This is an alpha. Keep copies of important files.
+- The browser extension is not in the Chrome Web Store or Edge Add-ons yet; load it once from
+  *Settings → Integration → Open extension folder* and Chrome's *Developer mode → Load unpacked*.
+- A sleeping PC is not woken by schedules. "Run a program" takes no arguments.
+- Windows SmartScreen may warn on first run because the alpha is not code-signed yet: choose
+  *More info → Run anyway*. SHA-256 checksums are in `SHA256SUMS.txt`.
+
+## Earlier development
+
+The detailed record of what was built up to and including 0.1.0-alpha.4.
 
 ### Added
 

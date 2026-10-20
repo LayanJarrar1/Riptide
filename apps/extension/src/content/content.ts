@@ -12,6 +12,7 @@
  */
 import browser from 'webextension-polyfill';
 
+import brandIcon from '../../brand/riptide-app-icon.svg';
 import { dirOf, resolveLang, t } from '../i18n';
 import type { Lang, MessageKey } from '../i18n';
 import { isMessage } from '../messages';
@@ -89,7 +90,7 @@ const CSS = `
 .rt-badge:hover { background: #5ae0d1; }
 .rt-badge[data-state="sent"] { background: #3ddc97; }
 .rt-badge[data-state="failed"] { background: #f2665f; color: #fff; }
-.rt-badge svg { width: 12px; height: 12px; flex: none; }
+.rt-badge svg { width: 16px; height: 16px; flex: none; }
 .rt-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
 .rt-item:hover { background: rgb(255 255 255 / 4%); }
 .rt-item input { flex: none; accent-color: #19c6b5; }
@@ -98,8 +99,8 @@ const CSS = `
 .rt-item .rt-ext { flex: none; padding: 2px 7px; border-radius: 999px; background: rgb(25 198 181 / 12%); color: #5ae0d1; font-size: 11px; font-weight: 600; text-transform: uppercase; }
 `;
 
-const RIPTIDE_ICON =
-  '<svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="22" fill="#06201d"/><g fill="#19c6b5"><rect x="30" y="22" width="12" height="56"/><path d="M30 22 H47 A15.5 15.5 0 0 1 47 53 H30 V43 H47 A5.5 5.5 0 0 0 47 32 H30 Z"/><path d="M38 56 L50 48 L72 72 L72 78 L60 78 Z"/></g></svg>';
+// The brand-kit app icon, unchanged (bundled as text by esbuild); only the XML prolog is dropped.
+const RIPTIDE_ICON = brandIcon.replace(/^<\?xml[^>]*\?>\s*/, '').replace('<svg ', '<svg aria-hidden="true" ');
 
 let shadow: ShadowRoot | null = null;
 

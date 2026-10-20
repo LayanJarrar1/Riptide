@@ -29,6 +29,7 @@ pub mod queues;
 pub mod shell;
 pub mod tray;
 pub mod updater;
+pub mod webview;
 
 pub use commands::{AppInfo, BUILD_LABEL, PRODUCT_NAME};
 
@@ -150,6 +151,9 @@ pub fn run() {
         .manage(shell::Shell::default())
         .manage(std::sync::Arc::new(crawl::Crawls::default()))
         .setup(move |app| {
+            // the window first: portable mode gives it a profile folder next to the app
+            let paths = riptide_log::Paths::resolve()?;
+            webview::create_main_window(app, &paths)?;
             let config = engine_config()?;
             let engine = tauri::async_runtime::block_on(Engine::open(config))?;
             app.manage(engine.clone());

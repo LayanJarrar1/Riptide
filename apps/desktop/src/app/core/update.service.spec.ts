@@ -61,7 +61,27 @@ describe('UpdateService', () => {
     return TestBed.inject(UpdateService);
   }
 
-  const updateCalls = (): string[] => calls.map((c) => c.cmd).filter((c) => c !== 'get_engine_settings');
+  const updateCalls = (): string[] => calls.map((c) => c.cmd).filter((c) => c !== 'get_engine_settings' && c !== 'app_info');
+
+  it('checks the beta channel by default', async () => {
+    const updates = configure(true);
+    await updates.check();
+    expect(calls.find((c) => c.cmd === 'check_update')?.args).toEqual({ channel: 'beta' });
+  });
+
+  it('sends a pre-release build to the beta feed even when stable is saved', async () => {
+    const updates = configure(true);
+    appVersion = '0.1.0-alpha.4';
+    await updates.check('stable');
+    expect(calls.find((c) => c.cmd === 'check_update')?.args).toEqual({ channel: 'beta' });
+  });
+
+  it('lets a stable build keep the saved channel', async () => {
+    const updates = configure(true);
+    appVersion = '1.0.0';
+    await updates.check('stable');
+    expect(calls.find((c) => c.cmd === 'check_update')?.args).toEqual({ channel: 'stable' });
+  });
 
   it('checks the selected channel and keeps what it found', async () => {
     const updates = configure(true);

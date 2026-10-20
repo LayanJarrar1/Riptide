@@ -6,7 +6,7 @@ import { TickerDirective } from '../../core/ticker.directive';
 import { DownloadRow } from '../../data/downloads.store';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
-import { canPause, canResume } from '../../model/download';
+import { canPause, canResume, failureFix } from '../../model/download';
 import { MAIN_QUEUE_ID } from '../../model/queue';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
@@ -66,6 +66,19 @@ interface LogLine {
     </header>
 
     <div class="scroll">
+      @if (d().state === 'failed' && (friendlyError() !== null || d().errorDetail)) {
+        <section class="failure" role="alert">
+          @if (friendlyError(); as friendly) {
+            <p class="failure-text">{{ i18n.t(friendly) }}</p>
+          }
+          @if (d().errorDetail; as detail) {
+            <details class="failure-details">
+              <summary>{{ i18n.t('add.mediaDetails') }}</summary>
+              <code dir="ltr">{{ detail }}</code>
+            </details>
+          }
+        </section>
+      }
       <section class="numbers" [attr.aria-label]="i18n.t('details.progress')">
         <div class="stat" style="--i: 0">
           <span class="stat-value num" [appTicker]="row().downloaded" [tickerFormat]="bytesFormat"></span>
@@ -175,8 +188,10 @@ interface LogLine {
     <footer class="actions">
       @if (canPause(d().state)) {
         <button appButton variant="secondary" icon="pause" type="button" (click)="action.emit('pause')">{{ i18n.t('action.pause') }}</button>
-      } @else if (d().state === 'failed' && d().failure === 'expired') {
-        <button appButton variant="primary" icon="link" type="button" (click)="action.emit('refreshLink')">{{ i18n.t('action.refreshLink') }}</button>
+      } @else if (d().state === 'failed' && fix()?.action === 'refreshLink') {
+        <button appButton variant="primary" icon="link" type="button" (click)="action.emit('refreshLink')">{{ i18n.t(fix()?.labelKey ?? 'action.refreshLink') }}</button>
+      } @else if (d().state === 'failed' && fix() === null) {
+        <!-- permanent failure (404/410): retrying cannot help -->
       } @else if (canResume(d().state)) {
         <button appButton variant="primary" [icon]="d().state === 'failed' ? 'retry' : 'play'" type="button" (click)="action.emit(d().state === 'failed' ? 'retry' : 'resume')">{{ i18n.t(d().state === 'failed' ? 'action.retry' : 'action.resume') }}</button>
       } @else if (d().state === 'completed') {
@@ -394,6 +409,35 @@ interface LogLine {
       font-size: var(--text-xs);
     }
 
+    .failure {
+      display: grid;
+      gap: 8px;
+      margin-block-end: var(--space-4, 16px);
+      padding: 10px 12px;
+      border: 1px solid var(--color-danger);
+      border-radius: var(--radius-md, 8px);
+      color: var(--color-text-primary);
+      font-size: var(--text-sm);
+    }
+
+    .failure-text {
+      margin: 0;
+    }
+
+    .failure-details summary {
+      cursor: pointer;
+      color: var(--color-text-secondary);
+    }
+
+    .failure-details code {
+      display: block;
+      margin-block-start: 6px;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+
     .log-line {
       display: grid;
       grid-template-columns: max-content 1fr;
@@ -461,6 +505,12 @@ export class DownloadDetailsComponent {
   readonly action = output<RowAction>();
 
   protected readonly d = computed(() => this.row().d);
+  /** The i18n key of the long, friendly explanation for a refused video; `null` for other failures. */
+  protected readonly friendlyError = computed(() => {
+    const failure = this.d().failure;
+    return failure === 'login' || failure === 'refused' || failure === 'auth' || failure === 'denied' || failure === 'notfound' ? `failure.${failure}.long` : null;
+  });
+  protected readonly fix = computed(() => failureFix(this.d().failure));
   protected readonly isMedia = computed(() => this.d().kind === 'media');
   protected readonly icon = computed(() => CATEGORY_ICONS[this.d().category]);
   protected readonly host = computed(() => hostOf(this.d().url));

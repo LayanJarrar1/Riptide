@@ -23,7 +23,7 @@ class FakeBridge {
   readonly records = new Map<number, BridgeDownload>();
   readonly segments = new Map<number, BridgeSegment[]>();
   readonly calls: Call[] = [];
-  settings: EngineSettings = { default_dir: 'C:\\dl', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' } };
+  settings: EngineSettings = { default_dir: 'C:\\dl', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false };
   /** What `find_duplicate` answers; `null` = nothing like it. */
   duplicate: BridgeDownload | null = null;
   probeAnswer: ProbeInfo = { final_url: 'https://x/final.iso', filename: 'final.iso', size: 10, supports_ranges: true, content_type: null, resumable: true };
@@ -291,7 +291,7 @@ describe('TauriEngineService', () => {
     bridge.emit({ type: 'failed', id: 1, error: 'server answered 403 Forbidden', retryable: false });
     await settle();
     expect(engine.get(1)?.state).toBe('failed');
-    expect(engine.get(1)?.failure).toBe('expired');
+    expect(engine.get(1)?.failure).toBe('denied');
   });
 
   it('removed: drops the row; a refresh of a record the engine lost drops it too', async () => {

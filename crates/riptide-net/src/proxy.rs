@@ -81,6 +81,17 @@ pub enum ProxyChoice {
 }
 
 impl ProxyChoice {
+    /// Host names the connector must be able to resolve to reach the proxy itself: the manual
+    /// proxy's host, or for the system choice the hosts in `HTTP_PROXY` / `HTTPS_PROXY` /
+    /// `ALL_PROXY` and (Windows) the WinINet `ProxyServer` value. Empty for a direct connection.
+    pub fn proxy_hosts(&self) -> Vec<String> {
+        match self {
+            ProxyChoice::Direct => Vec::new(),
+            ProxyChoice::Manual(url) => url.0.host_str().map(str::to_owned).into_iter().collect(),
+            ProxyChoice::System => system_proxy_hosts(),
+        }
+    }
+
     /// Applies the choice to a client builder.
     pub(crate) fn apply(&self, builder: reqwest::ClientBuilder) -> Result<reqwest::ClientBuilder> {
         Ok(match self {
@@ -95,9 +106,108 @@ impl ProxyChoice {
     }
 }
 
+/// Hosts out of a proxy setting: `host:port`, `scheme://host:port`, or the WinINet list
+/// `http=host:port;https=host2:port`.
+pub(crate) fn parse_proxy_hosts(setting: &str) -> Vec<String> {
+    setting
+        .split([';', ' '])
+        .filter_map(|entry| {
+            let entry = entry.trim();
+            let entry = entry.rsplit_once('=').map_or(entry, |(_, v)| v);
+            let entry = entry.split_once("://").map_or(entry, |(_, v)| v);
+            let entry = entry.rsplit_once('@').map_or(entry, |(_, v)| v);
+            let authority = entry.split(['/', '?']).next().unwrap_or("");
+            let host = if let Some(rest) = authority.strip_prefix('[') {
+                rest.split(']').next().unwrap_or("")
+            } else {
+                authority.split(':').next().unwrap_or("")
+            };
+            (!host.is_empty()).then(|| host.to_ascii_lowercase())
+        })
+        .collect()
+}
+
+fn system_proxy_hosts() -> Vec<String> {
+    let mut hosts = Vec::new();
+    for var in [
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ] {
+        if let Ok(v) = std::env::var(var) {
+            hosts.extend(parse_proxy_hosts(&v));
+        }
+    }
+    #[cfg(windows)]
+    if let Some(v) = wininet::proxy_server() {
+        hosts.extend(parse_proxy_hosts(&v));
+    }
+    hosts.sort();
+    hosts.dedup();
+    hosts
+}
+
+/// The per-user WinINet proxy value, read with one registry call.
+#[cfg(windows)]
+mod wininet {
+    #![allow(unsafe_code)]
+
+    use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_SZ};
+
+    pub fn proxy_server() -> Option<String> {
+        let subkey: Vec<u16> = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let value: Vec<u16> = "ProxyServer".encode_utf16().chain(Some(0)).collect();
+        let mut buf = vec![0u16; 2048];
+        let mut bytes = (buf.len() * 2) as u32;
+        // SAFETY: both names are NUL-terminated UTF-16; `buf` is valid for `bytes` bytes and
+        // `bytes` is a valid in/out pointer; the type filter limits the result to REG_SZ.
+        let status = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                subkey.as_ptr(),
+                value.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                buf.as_mut_ptr().cast(),
+                &mut bytes,
+            )
+        };
+        if status != 0 {
+            return None;
+        }
+        let len = (bytes as usize / 2).min(buf.len());
+        let text = String::from_utf16_lossy(&buf[..len]);
+        Some(text.trim_end_matches('\0').to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_hosts_are_pulled_out_of_every_setting_format() {
+        assert_eq!(parse_proxy_hosts("proxy.corp:8080"), ["proxy.corp"]);
+        assert_eq!(
+            parse_proxy_hosts("http://user:pw@Proxy.Corp:3128/"),
+            ["proxy.corp"]
+        );
+        assert_eq!(
+            parse_proxy_hosts("http=a.corp:80;https=b.corp:443;ftp=c.corp:21"),
+            ["a.corp", "b.corp", "c.corp"]
+        );
+        assert_eq!(parse_proxy_hosts("socks5://[::1]:1080"), ["::1"]);
+        assert!(parse_proxy_hosts("").is_empty());
+        let manual = ProxyChoice::Manual(ProxyUrl::parse("http://localhost:8888").unwrap());
+        assert_eq!(manual.proxy_hosts(), ["localhost"]);
+        assert!(ProxyChoice::Direct.proxy_hosts().is_empty());
+    }
 
     #[test]
     fn accepts_the_three_kinds() {

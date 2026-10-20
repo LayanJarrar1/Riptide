@@ -54,6 +54,21 @@ describe('HostClient', () => {
     assert.equal(ports.length, before, 'no new connection while the host is known to be missing');
   });
 
+  it('retryNow lets a user action try a host that was just reported missing', async () => {
+    const client = new HostClient(1_000, 60_000);
+    const first = client.ping(1_000);
+    lastPort().drop('Specified native messaging host not found.');
+    assert.equal(await first, 'host_missing');
+    const before = ports.length;
+    client.retryNow(); // "Open Riptide" / "Refresh": the host may have been registered meanwhile
+    const second = client.ping(1_000);
+    assert.equal(ports.length, before + 1, 'a new connection was attempted');
+    const sent = lastPort().sent[0] as { id: number };
+    lastPort().receive({ id: sent.id, type: 'pong', version: '1', protocol: 1 });
+    assert.equal(await second, 'connected');
+    client.disconnect();
+  });
+
   it('connectNative throwing is classified the same way', async () => {
     behaviour.throwOnConnect = 'Specified native messaging host not found.';
     const client = new HostClient(1_000, 1_000);

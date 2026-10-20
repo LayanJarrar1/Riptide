@@ -83,6 +83,13 @@ pub enum Error {
         #[source]
         last: Box<Error>,
     },
+    /// A redirect led from a public host to a private network address (loopback, LAN,
+    /// link-local, ...). Nothing was requested from it.
+    #[error("redirected to a private network address; to allow it, turn on \"allow_private_redirects\" in the engine settings")]
+    PrivateRedirect,
+    /// The address of a page-driven request is a private network address; it was not requested.
+    #[error("private network address refused")]
+    PrivateAddress,
     /// The server broke the protocol (bad `Content-Range`, missing headers, …).
     #[error("unexpected response: {0}")]
     Protocol(String),

@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('SettingsService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' } };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false };
   let calls: Call[];
 
   function configure(tauri: boolean): SettingsService {
@@ -37,6 +37,20 @@ describe('SettingsService', () => {
     });
     return TestBed.inject(SettingsService);
   }
+
+  it('defaults to the beta update channel during the alpha, and keeps a persisted choice', () => {
+    expect(DEFAULT_SETTINGS.channel).toBe('beta');
+    expect(configure(false).settings().channel).toBe('beta');
+    TestBed.resetTestingModule();
+    const store = new MemoryPreferenceStore({ 'riptide.settings': JSON.stringify({ channel: 'stable' }) });
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PREFERENCE_STORE, useValue: store },
+        { provide: TAURI_AVAILABLE, useValue: false },
+      ],
+    });
+    expect(TestBed.inject(SettingsService).settings().channel).toBe('stable');
+  });
 
   it('in a plain browser it never talks to an engine', async () => {
     const service = configure(false);
@@ -76,7 +90,7 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect(writes[0].args).toEqual({
-      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' } },
+      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false },
     });
     // a UI-only change does not reach the engine
     service.patch({ closeToTray: false });
@@ -93,5 +107,20 @@ describe('SettingsService', () => {
     const again = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(again.length).toBe(2);
     expect((again[1].args?.['settings'] as EngineSettings).category_dirs).toEqual({ images: 'D:\\Pics' });
+  });
+
+  it('Mark-of-the-Web is on by default and turning it off reaches the engine', async () => {
+    expect(DEFAULT_SETTINGS.markDownloads).toBe(true);
+    const service = configure(true);
+    await service.engineLoaded;
+    TestBed.tick();
+    expect(service.settings().markDownloads).toBe(true);
+    service.patch({ markDownloads: false });
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
+    expect(writes.length).toBe(1);
+    expect((writes[0].args?.['settings'] as EngineSettings).mark_of_the_web).toBe(false);
   });
 });

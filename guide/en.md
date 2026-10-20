@@ -15,6 +15,10 @@ development build. Get the alpha preview (installer or portable zip) from
 - [Finished files](#finished-files)
 - [Removing downloads](#removing-downloads)
 - [Details](#details)
+- [Video, batches and the site grabber](#video-batches-and-the-site-grabber)
+- [Queues and schedules](#queues-and-schedules)
+- [Browser extension](#browser-extension)
+- [Updates](#updates)
 - [Settings](#settings)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Language and theme](#language-and-theme)
@@ -105,6 +109,38 @@ Press `Enter` on a row or choose **Details** to open the drawer. It shows:
 - **Timeline**: what happened to this download, in order.
 
 The drawer's own buttons pause, cancel or remove the download. `Esc` closes it.
+
+## Video, batches and the site grabber
+
+- **Video pages.** Paste the address of a YouTube, Vimeo or other page that yt-dlp supports. Riptide
+  lists the qualities from the best available down to 144p, or audio only as M4A or MP3. yt-dlp and
+  ffmpeg ship with the app; **Settings → About → Update video support** fetches the newest yt-dlp when
+  you ask.
+- **Batch downloads.** Use a pattern such as `file[001-120].zip` or `img_[a-z].jpg` and check the
+  preview of every address, or paste a list of links. Lists can be imported and exported.
+- **Site grabber.** Crawl a page to a depth you choose, then tick the files you want. It respects
+  `robots.txt`.
+
+## Queues and schedules
+
+Make as many queues as you like, each with its own limit on simultaneous downloads. A queue can run
+only at night, on chosen days or at a set time. When it finishes you can have Riptide exit, sleep,
+hibernate, shut down or run a program, with a 30 second countdown you can cancel. A sleeping PC is
+not woken by a schedule, and "run a program" takes no arguments.
+
+## Browser extension
+
+The extension adds a **Download this video** button with a quality picker, can download all or
+selected links and all images on a page, and has capture rules. It is not in the Chrome Web Store
+or Edge Add-ons yet: open **Settings → Integration** and use the install helper for Chrome and Edge
+(**Open extension folder**, then Chrome's **Developer mode → Load unpacked**).
+
+## Updates
+
+Riptide checks for a new version once a day. When one exists you get a system notification (once per
+version) and a badge in **Settings → About**, where you can install it. After an update, a
+**What's new** link opens the release notes. The check can be turned off, and **Update channel** in
+the same place chooses between stable and beta releases; while Riptide is in alpha, beta is the default.
 
 ## Settings
 

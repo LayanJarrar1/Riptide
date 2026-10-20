@@ -80,6 +80,9 @@ It runs, in order:
 8. `cargo test` for the workspace and the desktop crate
 9. a check that the generated TypeScript bindings in `apps/desktop/src/app/tauri/bridge/`
    match the Rust types (regenerate with the command the script prints if they do not)
+10. `tsc --noEmit` and `eslint` for the browser extension in `apps/extension`
+11. `node scripts/check-links.mjs` (relative links and anchors in the Markdown files) and the tests
+    of the release scripts (`node --test scripts/set-release-version.test.mjs`)
 
 The engine tests spawn `riptide-testserver` in-process; nothing in the test suite touches the
 network.
@@ -91,16 +94,21 @@ crates/
   riptide-core/        download model, state machine, segment planner, filename sanitiser (pure)
   riptide-net/         HTTP engine: probe, ranges, multi-connection transfer, retry, auth
   riptide-store/       SQLite persistence (WAL) and migrations
-  riptide-engine/      the runtime: queue, scheduler, crash recovery, event stream
+  riptide-engine/      the runtime: queues, scheduler, batch, crash recovery, event stream
+  riptide-media/       video pages through the bundled yt-dlp
+  riptide-crawl/       the site grabber
+  riptide-host/        Native Messaging host for the browser extension
   riptide-ipc/         local pipe transport and message schema
   riptide-log/         logging with secret redaction, installed and portable paths
-  riptide-cli/         `riptide fetch | bench | ping | paths`
+  riptide-cli/         `riptide fetch | batch | grab | bench | ping | paths`
   riptide-testserver/  local HTTP server with every failure mode the tests need (dev only)
 apps/
   desktop/src-tauri/   Tauri shell: commands, event bridge, engine lifetime
-  apps/desktop/src/    Angular UI
+  desktop/src/         Angular UI
+  extension/           the browser extension (Manifest V3)
   website/             the public site (static, bilingual)
-scripts/check.ps1      the gate
+scripts/               check.ps1 (the gate), release.ps1, publish-release.ps1, verify-update-feed.ps1,
+                       set-release-version.mjs, check-links.mjs
 ```
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) explains how the pieces fit and which guarantees the engine
@@ -158,27 +166,95 @@ and keep the Arabic natural rather than literal.
 - Design decisions that change an established choice (storage, HTTP stack, UI framework,
   install model) need a short written rationale in the pull request so the reasoning survives.
 
-## Releasing
+## Publishing an update
 
-Maintainers only. `.\scripts\release.ps1 -Version 0.1.0-alpha.3 -Prerelease` bumps the version
-(workspace `Cargo.toml`, `Cargo.lock`, `apps/desktop/package.json`), builds the signed NSIS
-installer, its updater `.sig` and the portable zip, writes the update manifests and
-`SHA256SUMS.txt` into `target/release-artifacts/<version>/`, and prints the `gh` commands. It
-publishes nothing. Pushing a `v*` tag runs `.github/workflows/release.yml`, which does the same
-and publishes.
+Maintainers only. Every number below is a command you can paste. The app's update path is
+`apps/desktop/src-tauri/src/updater.rs`: stable reads `releases/latest/download/latest.json`, beta
+reads `releases/download/channel-beta/latest-beta.json`. Every alpha is a pre-release, so while we
+are in alpha only the beta channel sees new versions, and beta is the app's default channel.
+
+1. **Bump and build.** From a clean `main`:
+
+   ```powershell
+   git switch main; git pull
+   git switch -c release/0.1.0-alpha.5
+   .\scripts\release.ps1 -Version 0.1.0-alpha.5 -Prerelease -Notes "One line for Settings > About"
+   ```
+
+   This bumps the workspace `Cargo.toml`, `Cargo.lock` and `apps/desktop/package.json`, builds the
+   signed NSIS installer, its `.sig` and the portable zip, and writes `latest-beta.json` (plus
+   `latest.json` for a stable version) and `SHA256SUMS.txt` into
+   `target\release-artifacts\0.1.0-alpha.5\`. It publishes nothing. Add the release to
+   `CHANGELOG.md` and write the release notes (a Markdown file outside the repository).
+2. **Test the portable build.** Unzip `Riptide-0.1.0-alpha.5-portable.zip` somewhere else, start
+   it, add a download, pause and resume it, and check *Settings → About* shows the new version.
+   Also install the installer over the previous alpha once and confirm the downloads list survived.
+3. **Merge.** Commit the version bump and `CHANGELOG.md`, open a PR, wait for the `ci` check, merge
+   it, then `git switch main; git pull`.
+4. **Publish.** The script refuses a dirty tree, a HEAD that is not on `origin/main` and artifacts
+   that do not match `SHA256SUMS.txt`. Without `-Publish` it is a dry run:
+
+   ```powershell
+   .\scripts\publish-release.ps1 -Version 0.1.0-alpha.5 -NotesFile C:\path\to\notes.md
+   .\scripts\publish-release.ps1 -Version 0.1.0-alpha.5 -NotesFile C:\path\to\notes.md -Publish
+   ```
+
+   It creates the release `v0.1.0-alpha.5` (a pre-release because the version has a `-`) with the
+   installer, `.sig`, portable zip, `SHA256SUMS.txt`, `latest-beta.json` (and `latest.json` for
+   stable), uploads `latest-beta.json` to the fixed pre-release `channel-beta` with `--clobber`,
+   and then runs the next step. Pushing a `v*` tag instead lets
+   `.github/workflows/release.yml` do the same on GitHub's runners.
+5. **Verify the feed.** This is the proof that people on an older version will be notified. It
+   fetches the public feed without any token, validates it, checks the installer URL answers 200
+   and that the feed announces the new version:
+
+   ```powershell
+   .\scripts\verify-update-feed.ps1 -ExpectVersion 0.1.0-alpha.5
+   ```
+
+   Add `-Stable` for a stable release. A non-zero exit means nobody will be told about the update
+   until you fix it.
+6. **Site and README.** Point the download links at the new version, then review and merge:
+
+   ```powershell
+   node scripts/set-release-version.mjs 0.1.0-alpha.5
+   git switch -c site/0.1.0-alpha.5
+   git add README.md apps/website/build.mjs
+   git commit -m "docs: download links for 0.1.0-alpha.5"
+   ```
+
+   `node scripts/set-release-version.mjs 0.1.0-alpha.5 --check` exits 1 when they still differ.
+7. **Back up the signing key.** Keep a copy of `%USERPROFILE%\.riptide-keys` (the key and its
+   password file) in a password manager or offline storage, never in the repository. Losing the
+   key means installed copies can no longer update themselves.
+8. **How users are told.** Riptide checks the beta feed at most once a day (and on *Check for
+   updates*), shows a system notification once per version and a badge in *Settings → About*, and
+   installs only after a click. While we are in alpha the default channel is beta. At the first
+   stable release, publish it without `-Prerelease` (so `latest.json` exists), run
+   `verify-update-feed.ps1 -Stable`, and switch the default channel to stable in the app.
+
+**If an update is bad.** Mark the release as a draft on GitHub (*Edit → Set as a draft*, or
+`gh release edit v0.1.0-alpha.5 --draft`) so the installer link stops working, then restore the
+feed of the previous good version: download the previous release's `latest-beta.json` from
+`target\release-artifacts\<previous>\` (or re-create it with `release.ps1`'s output) and run
+
+```powershell
+gh release upload channel-beta target\release-artifacts\0.1.0-alpha.4\latest-beta.json --clobber --repo LayanJarrar1/Riptide
+.\scripts\verify-update-feed.ps1 -ExpectVersion 0.1.0-alpha.4
+```
+
+Never reuse a version number: publish the fix as the next version. Users who already installed the
+bad build get the fix through the normal update.
+
+Other release facts:
 
 - **Signing key.** The updater key pair lives outside the repository
-  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, its password in `riptide-updater.password` next to it); only the public key is in
-  `tauri.conf.json`. CI reads it from the `TAURI_SIGNING_PRIVATE_KEY` secret. Losing the key
-  means installed copies can no longer update themselves.
-- **Update channels.** Stable reads `releases/latest/download/latest.json`; GitHub's `latest`
-  skips pre-releases, so `latest.json` is attached to stable releases only. Beta reads
-  `releases/download/channel-beta/latest-beta.json`: GitHub has no "latest including
-  pre-releases" link, so every release re-uploads `latest-beta.json` to the fixed pre-release
-  `channel-beta`.
-- **Privacy.** The update check is the only network call that is not a download. It runs when
-  the user clicks *Check for updates*, or at most once a day while *Check for updates
-  automatically* is on (Settings > About), and installing always waits for a click.
+  (`%USERPROFILE%\.riptide-keys\riptide-updater.key`, its password in `riptide-updater.password`
+  next to it); only the public key is in `tauri.conf.json`. CI reads it from the
+  `TAURI_SIGNING_PRIVATE_KEY` secret.
+- **Privacy.** The update check is the only network call that is not a download. It runs when the
+  user clicks *Check for updates*, or at most once a day while *Check for updates automatically*
+  is on (Settings → About), and installing always waits for a click.
 - **Uninstall.** `src-tauri/windows/hooks.nsh` removes the Native Messaging registry keys and
   manifests and the autostart value, and asks whether to keep the download history and settings
   (silent uninstalls keep them). Downloaded files are never touched.

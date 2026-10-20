@@ -42,4 +42,17 @@ global_speed_limit: number | null,
 /**
  * Which proxy new connections use.
  */
-proxy: ProxySettings, };
+proxy: ProxySettings, 
+/**
+ * Windows: mark finished downloads as coming from the internet (the NTFS
+ * `Zone.Identifier` stream browsers write), so SmartScreen and Office warn before an
+ * executable or macro document opens. On by default; see [`motw`]. Ignored elsewhere.
+ */
+mark_of_the_web: boolean, 
+/**
+ * Follow a redirect from a public host to a private network address (NAS relay services
+ * such as QuickConnect, split-horizon intranet names). Off by default: a public page
+ * could otherwise send a download to a device on your network. Downloads that start on a
+ * private address are never affected.
+ */
+allow_private_redirects: boolean, };

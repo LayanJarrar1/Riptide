@@ -5,7 +5,7 @@
 //
 //   node scripts/verify-dist.mjs [chrome|edge|firefox ...]
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { extensionIdFromKey } from './gen-key.mjs';
@@ -79,6 +79,18 @@ for (const target of targets) {
   const files = collectFiles(manifest);
   for (const f of files) {
     if (!existsSync(join(dir, f))) fail(`referenced file missing: ${f}`);
+  }
+
+  // Icons: every manifest icon must really be <size> x <size> and be the brand-kit file from brand/.
+  for (const [size, f] of Object.entries(manifest.icons ?? {})) {
+    const p = join(dir, f);
+    if (!existsSync(p)) continue;
+    const buf = readFileSync(p);
+    if (buf.readUInt32BE(16) !== Number(size) || buf.readUInt32BE(20) !== Number(size)) {
+      fail(`icon ${f} is not ${size}x${size}`);
+    }
+    const brand = join(root, 'brand', basename(f));
+    if (!existsSync(brand) || !buf.equals(readFileSync(brand))) fail(`icon ${f} differs from brand/${basename(f)}`);
   }
 
   // Locales: same keys everywhere, every __MSG_ used by the manifest defined.

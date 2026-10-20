@@ -64,7 +64,33 @@ export const CATEGORY_KEYS: readonly CategoryKey[] = [
 export type Priority = 'low' | 'normal' | 'high';
 
 /** Why a download failed, for the status text and the retry affordance. */
-export type FailureKind = 'network' | 'checksum' | 'expired' | 'disk' | 'server';
+export type FailureKind = 'network' | 'checksum' | 'expired' | 'disk' | 'server' | 'login' | 'refused' | 'auth' | 'denied' | 'notfound';
+
+/** What the user can do about a failed download: a retry, a trip back to the add dialog, or nothing. */
+export interface FailureFix {
+  readonly action: 'retry' | 'refreshLink';
+  /** The i18n key of the button label. */
+  readonly labelKey: string;
+}
+
+/**
+ * The fix offered for a failure kind. A missing file (404/410) is permanent, so nothing is
+ * offered; a rejected login or a refused request goes back to the add dialog to enter
+ * credentials; an expired signed link asks for a new link; everything else is worth a retry.
+ */
+export function failureFix(failure: FailureKind | null): FailureFix | null {
+  switch (failure) {
+    case 'notfound':
+      return null;
+    case 'expired':
+      return { action: 'refreshLink', labelKey: 'action.refreshLink' };
+    case 'auth':
+    case 'denied':
+      return { action: 'refreshLink', labelKey: 'action.enterCredentials' };
+    default:
+      return { action: 'retry', labelKey: 'action.retry' };
+  }
+}
 
 /** One download as the UI sees it. */
 export interface Download {
@@ -92,6 +118,8 @@ export interface Download {
   readonly startedAt: number | null;
   readonly completedAt: number | null;
   readonly failure: FailureKind | null;
+  /** For a refused video: yt-dlp's own error line (plain text, at most 300 characters), shown behind "Details". */
+  readonly errorDetail?: string | null;
   /** This download's own cap in bytes per second; `null` or absent = unlimited. */
   readonly speedLimitBps?: number | null;
   /** Expected digest, if the user gave one. */

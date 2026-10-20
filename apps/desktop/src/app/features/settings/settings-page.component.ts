@@ -6,6 +6,7 @@ import {
   ExtensionBrowserName,
 } from '../../core/browser-integration.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
+import { effectiveChannel, isPrerelease } from '../../core/update-channel';
 import { UpdateService } from '../../core/update.service';
 import { I18nService, Lang, LANGS } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey } from '../../model/download';
@@ -230,9 +231,12 @@ export function isValidProxyUrl(raw: string): boolean {
           <div class="setting-text">
             <span class="setting-name">Riptide <span class="num">{{ tauri.appInfo()?.version ?? '0.1.0' }}</span></span>
             <span class="setting-desc">{{ i18n.t('settings.aboutDesc') }}</span>
+            @if (prerelease()) {
+              <span class="setting-desc">{{ i18n.t('settings.channel.prerelease') }}</span>
+            }
           </div>
           <div class="about-actions">
-            <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="s().channel" (valueChange)="patch({ channel: $event })" />
+            <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="channel()" (valueChange)="setChannel($event)" />
             <button appButton variant="secondary" icon="retry" type="button" [disabled]="updates.status() === 'checking' || updates.status() === 'installing'" (click)="checkUpdates()">{{ i18n.t(updates.status() === 'checking' ? 'settings.checkingUpdates' : 'settings.checkUpdates') }}</button>
           </div>
         </div>
@@ -705,9 +709,11 @@ export class SettingsPageComponent {
   protected readonly proxyInvalid = signal(false);
   protected readonly langAttr: Readonly<Record<Lang, string>> = { ar: 'ar', en: 'en' };
 
-  protected readonly toggles: readonly { key: 'confirmOnExit' | 'startWithWindows' | 'closeToTray' | 'clipboardMonitor' | 'notifyOnComplete' }[] = [
+  protected readonly toggles: readonly { key: 'confirmOnExit' | 'startWithWindows' | 'closeToTray' | 'clipboardMonitor' | 'notifyOnComplete' | 'markDownloads' | 'allowPrivateRedirects' }[] = [
     { key: 'clipboardMonitor' },
     { key: 'notifyOnComplete' },
+    { key: 'markDownloads' },
+    { key: 'allowPrivateRedirects' },
     { key: 'confirmOnExit' },
     { key: 'closeToTray' },
     { key: 'startWithWindows' },
@@ -728,6 +734,18 @@ export class SettingsPageComponent {
   protected readonly channelOptions = computed<readonly SegmentedOption<Settings['channel']>[]>(() =>
     (['stable', 'beta'] as const).map((value) => ({ value, label: this.i18n.t(`settings.channel.${value}`) })),
   );
+
+  /** A pre-release build only has the beta feed, so the selector shows (and keeps) Beta. */
+  protected readonly prerelease = computed(() => isPrerelease(this.tauri.appInfo()?.version));
+  /** The channel the selector shows: Beta for a pre-release build, the saved choice otherwise. */
+  protected readonly channel = computed(() => effectiveChannel(this.s().channel, this.tauri.appInfo()?.version));
+
+  protected setChannel(channel: Settings['channel']): void {
+    // the saved setting stays untouched on a pre-release build: only a stable build has a choice
+    if (!this.prerelease()) {
+      this.patch({ channel });
+    }
+  }
 
   protected value(event: Event): string {
     return (event.target as HTMLInputElement).value;
@@ -786,7 +804,7 @@ export class SettingsPageComponent {
 
   protected async checkUpdates(): Promise<void> {
     try {
-      const update = await this.updates.check(this.s().channel);
+      const update = await this.updates.check(this.channel());
       if (update === null) {
         this.toasts.show('success', this.i18n.t('toast.upToDate'));
       }

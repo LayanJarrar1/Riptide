@@ -43,8 +43,13 @@ use tauri::State;
 
 use crate::integration::{self, platform_registry, IntegrationStatus, Layout, Registry};
 
-/// Build label embedded in the binary (`dev` for local builds).
-pub const BUILD_LABEL: &str = "dev";
+/// Build label embedded in the binary: `release` for optimised builds (what ships), `dev` for
+/// debug builds. The version is reported separately.
+pub const BUILD_LABEL: &str = if cfg!(debug_assertions) {
+    "dev"
+} else {
+    "release"
+};
 
 /// Product name shown in the window title and the About screen.
 pub const PRODUCT_NAME: &str = "Riptide";
@@ -365,6 +370,13 @@ mod tests {
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
         assert!(!info.version.is_empty());
         assert_eq!(info.build, BUILD_LABEL);
+    }
+
+    #[test]
+    fn the_build_label_follows_the_profile() {
+        // an optimised build says `release`, never `dev`
+        assert_eq!(BUILD_LABEL == "dev", cfg!(debug_assertions));
+        assert!(BUILD_LABEL == "dev" || BUILD_LABEL == "release");
     }
 
     #[test]

@@ -34,6 +34,7 @@ pub async fn send<F>(
 where
     F: Fn(RequestBuilder) -> RequestBuilder,
 {
+    let first_url = url.clone();
     let mut url = url;
     let mut method = method;
     for hop in 0..=MAX_REDIRECTS {
@@ -55,6 +56,7 @@ where
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| Error::Protocol(format!("{status} without a Location header")))?;
         let next = resolve_location(&url, location)?;
+        ctx.guard().check_redirect(&first_url, &next).await?;
         tracing::debug!(
             status,
             from = %strip_query(url.as_str()),

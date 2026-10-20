@@ -24,13 +24,16 @@
 
 pub mod args;
 pub mod cookies;
+pub mod ladder;
 pub mod parse;
 pub mod runner;
 
 use std::path::PathBuf;
 
-pub use cookies::CookieFile;
-pub use parse::{parse_info, parse_progress_line, ProgressLine, ProgressTracker};
+pub use args::PlayerClients;
+pub use cookies::{sweep_stale_cookie_files, CookieFile, STALE_AFTER};
+pub use ladder::{Attempt, Ladder, MAX_ATTEMPTS};
+pub use parse::{parse_info, parse_progress_line, ErrorClass, ProgressLine, ProgressTracker};
 pub use runner::{is_partial_name, partial_files, DownloadJob, MediaOutcome, YtDlp};
 
 /// Errors from probing or downloading a media page.
@@ -57,13 +60,20 @@ pub enum Error {
     /// The quality key is not one of [`riptide_core::MediaSelection`]'s.
     #[error("unknown quality {0:?}")]
     InvalidFormat(String),
-    /// yt-dlp reported an error (its message, without the `ERROR:` prefix).
-    #[error("{message}")]
+    /// yt-dlp reported an error (its message, without the `ERROR:` prefix). The text is
+    /// `[rt:login] ...` or `[rt:refused] ...` when the error is a known kind of refusal, so the
+    /// apps can show a friendly message and keep the raw line behind "Details"; a missing
+    /// JavaScript runtime adds a hint after ` | `.
+    #[error("{}", tool_text(message, *class, *js_runtime_missing))]
     Tool {
-        /// What yt-dlp said.
+        /// What yt-dlp said (one line, at most 300 characters).
         message: String,
-        /// Worth retrying later (network trouble, HTTP 5xx, rate limits).
+        /// Worth retrying later (network trouble, HTTP 5xx, rate limits, site refusals).
         retryable: bool,
+        /// Which kind of refusal this is.
+        class: ErrorClass,
+        /// yt-dlp warned that no JavaScript runtime is available.
+        js_runtime_missing: bool,
     },
     /// yt-dlp printed something this crate could not understand.
     #[error("unexpected yt-dlp output: {0}")]
@@ -76,7 +86,53 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
+/// The Details hint for a failure that happened without a JavaScript runtime.
+pub const JS_RUNTIME_HINT: &str = "YouTube extraction needs a JavaScript runtime for some videos; Riptide will gain one in a future release";
+
+fn tool_text(message: &str, class: ErrorClass, js_runtime_missing: bool) -> String {
+    let mut text = match class.tag() {
+        Some(tag) => format!("[rt:{tag}] {message}"),
+        None => message.to_string(),
+    };
+    if js_runtime_missing {
+        text.push_str(" | ");
+        text.push_str(JS_RUNTIME_HINT);
+    }
+    text
+}
+
 impl Error {
+    /// The refusal class of a yt-dlp error, [`ErrorClass::Other`] for everything else.
+    pub fn class(&self) -> ErrorClass {
+        match self {
+            Error::Tool { class, .. } => *class,
+            _ => ErrorClass::Other,
+        }
+    }
+
+    fn lower_message(&self) -> Option<String> {
+        match self {
+            Error::Tool { message, .. } => Some(message.to_ascii_lowercase()),
+            _ => None,
+        }
+    }
+
+    /// The error says a signed-in user is needed (age gate, private video, bot check).
+    pub fn needs_login(&self) -> bool {
+        self.lower_message().is_some_and(|m| parse::needs_login(&m))
+    }
+
+    /// The error says the page state or the cookies bound to it are stale.
+    pub fn is_stale_page(&self) -> bool {
+        self.lower_message().is_some_and(|m| parse::page_reload(&m))
+    }
+
+    /// Another YouTube player client may get past this error.
+    pub fn client_retryable(&self) -> bool {
+        self.lower_message()
+            .is_some_and(|m| parse::client_retryable(&m))
+    }
+
     /// Whether a later retry may succeed.
     pub fn is_retryable(&self) -> bool {
         match self {

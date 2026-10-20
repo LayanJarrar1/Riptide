@@ -19,7 +19,7 @@ import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow, DownloadsStore, SortKey } from '../../data/downloads.store';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
-import { canPause, canResume, Download } from '../../model/download';
+import { canPause, canResume, Download, failureFix } from '../../model/download';
 import { MAIN_QUEUE_ID, moveBy, moveManyBeside, sameOrder } from '../../model/queue';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
@@ -799,9 +799,11 @@ export class DownloadsPageComponent {
     const items: MenuItem[] = [];
     if (canPause(s)) {
       items.push({ id: 'pause', label: t('action.pause'), icon: 'pause', shortcut: 'Space' });
-    } else if (s === 'failed' && row.d.failure === 'expired') {
-      items.push({ id: 'refreshLink', label: t('action.refreshLink'), icon: 'link' });
+    } else if (s === 'failed' && failureFix(row.d.failure)?.action === 'refreshLink') {
+      items.push({ id: 'refreshLink', label: t(failureFix(row.d.failure)?.labelKey ?? 'action.refreshLink'), icon: 'link' });
       items.push({ id: 'retry', label: t('action.retry'), icon: 'retry', shortcut: 'Space' });
+    } else if (s === 'failed' && failureFix(row.d.failure) === null) {
+      // a missing file (404/410) cannot be fixed by retrying: no Retry in the menu
     } else if (canResume(s)) {
       items.push({ id: s === 'failed' ? 'retry' : 'resume', label: t(s === 'failed' ? 'action.retry' : 'action.resume'), icon: s === 'failed' ? 'retry' : 'play', shortcut: 'Space' });
     }

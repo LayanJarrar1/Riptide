@@ -3924,6 +3924,7 @@ name = "riptide-desktop"
 version = "0.1.0-alpha.4"
 dependencies = [
  "dirs 6.0.0",
+ "notify-rust",
  "riptide-core",
  "riptide-crawl",
  "riptide-engine",
@@ -3973,6 +3974,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "ts-rs",
  "url",
  "windows-sys 0.59.0",
@@ -4050,6 +4052,7 @@ dependencies = [
  "http",
  "md-5",
  "percent-encoding",
+ "proptest",
  "rand 0.9.5",
  "reqwest 0.12.28",
  "riptide-core",

@@ -20,13 +20,17 @@ const ext = dirname(store);
 const built = join(ext, 'dist', 'chrome');
 const fonts = join(ext, '..', 'website', 'src', 'assets', 'fonts');
 const tmp = join(ext, 'dist', 'store-tmp');
+// Brand-kit logos, unchanged: light variant on light backgrounds, dark variant on dark ones.
+const LOGO_LIGHT = pathToFileURL(join(store, 'src', 'brand', 'riptide-logo-light.svg')).href;
+const LOGO_DARK = pathToFileURL(join(store, 'src', 'brand', 'riptide-logo-dark.svg')).href;
 const shots = join(store, 'screenshots');
 const promo = join(store, 'promo');
 for (const d of [tmp, shots, promo]) mkdirSync(d, { recursive: true });
 
 const pw = await import(process.env.PLAYWRIGHT_CORE ? pathToFileURL(process.env.PLAYWRIGHT_CORE).href : 'playwright-core');
 const { chromium } = pw.default ?? pw;
-const browser = await chromium.launch();
+// PW_CHANNEL=msedge (or chrome) drives an installed browser when Playwright's own Chromium is absent.
+const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {});
 const stub = readFileSync(join(store, 'src', 'stub.js'), 'utf8');
 const url = (p) => pathToFileURL(p).href;
 
@@ -77,8 +81,6 @@ const FONT_CSS = `
 * { box-sizing: border-box; margin: 0; }
 body { font-family: Inter, Plex, sans-serif; color: #0f1d24; background: #fff; overflow: hidden; }
 :root[lang="ar"] body { font-family: Plex, Inter, sans-serif; }
-.r { display: inline-flex; align-items: center; justify-content: center; background: #19C6B5; color: #fff;
-  font-family: Inter; font-weight: 800; letter-spacing: -0.04em; }
 `;
 
 async function compose(html, size, out) {
@@ -95,30 +97,30 @@ function popupFrame(lang, img, title, sub) {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   return `<!doctype html><html lang="${lang}" dir="${dir}"><head><meta charset="utf-8"><style>${FONT_CSS}
 body { width: 1280px; height: 800px; display: grid; grid-template-columns: 1fr 456px; align-items: center; gap: 64px; padding: 0 96px; }
-.mark { width: 56px; height: 56px; border-radius: 14px; font-size: 34px; margin-bottom: 36px; }
+.logo { display: block; height: 64px; width: auto; margin-bottom: 40px; }
+:root[dir="rtl"] .logo { margin-inline-end: auto; }
 h1 { font-size: 52px; line-height: 1.12; letter-spacing: -0.025em; font-weight: 700; }
 :root[lang="ar"] h1 { letter-spacing: 0; line-height: 1.35; }
 p { margin-top: 22px; font-size: 21px; line-height: 1.6; color: #4b5b66; max-width: 34ch; }
-.bar { width: 64px; height: 4px; background: #19C6B5; border-radius: 2px; margin-top: 36px; }
+.bar { width: 64px; height: 4px; background: #00D5E8; border-radius: 2px; margin-top: 36px; }
 .shot { justify-self: center; background: #f3f6f7; border-radius: 22px; padding: 28px; }
 .shot img { display: block; width: 400px; border-radius: 12px; box-shadow: 0 1px 2px rgb(15 29 36 / 10%), 0 18px 48px rgb(15 29 36 / 16%); }
 </style></head><body>
-<div><div class="r mark">R</div><h1>${title}</h1><p>${sub}</p><div class="bar"></div></div>
+<div><img class="logo" src="${LOGO_LIGHT}" alt="Riptide"><h1>${title}</h1><p>${sub}</p><div class="bar"></div></div>
 <div class="shot"><img src="${url(img)}" alt=""></div></body></html>`;
 }
 
 function tile(w, h, big) {
-  const s = big
-    ? { mark: 220, radius: 52, font: 150, name: 96, tag: 30, gap: 72 }
-    : { mark: 104, radius: 26, font: 72, name: 44, tag: 15, gap: 28 };
+  // Abyss background, brand dark logo, short tagline from the store listing, Cyan accent rule.
+  const s = big ? { logo: 760, tag: 36, gap: 40, rule: 6 } : { logo: 280, tag: 18, gap: 20, rule: 4 };
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>${FONT_CSS}
-body { width: ${w}px; height: ${h}px; display: flex; align-items: center; justify-content: center; gap: ${s.gap}px; border-bottom: ${big ? 14 : 6}px solid #19C6B5; }
-.mark { width: ${s.mark}px; height: ${s.mark}px; border-radius: ${s.radius}px; font-size: ${s.font}px; }
-.name { font-size: ${s.name}px; font-weight: 750; letter-spacing: -0.035em; line-height: 1; }
-.tag { margin-top: ${big ? 18 : 10}px; font-size: ${s.tag}px; color: #4b5b66; font-weight: 500; }
-.tag b { color: #0e8f83; font-weight: 600; }
-</style></head><body><div class="r mark">R</div>
-<div><div class="name">Riptide</div><div class="tag">Free, open-source<br><b>download manager</b></div></div></body></html>`;
+body { width: ${w}px; height: ${h}px; background: #071A26; color: #D9F8FA; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: ${s.gap}px; text-align: center; }
+img { display: block; width: ${s.logo}px; height: auto; }
+.rule { width: ${s.logo / 8}px; height: ${s.rule}px; border-radius: 3px; background: #00D5E8; }
+.tag { font-size: ${s.tag}px; line-height: 1.4; font-weight: 500; color: #D9F8FA; }
+</style></head><body><img src="${LOGO_DARK}" alt="Riptide"><div class="rule"></div>
+<div class="tag">${big ? 'Hands your downloads to Riptide, the free download manager,<br>automatically or with one click.' : 'Free, open-source<br>download manager'}</div></body></html>`;
 }
 
 // ---- run -----------------------------------------------------------------------------------
