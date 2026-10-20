@@ -16,6 +16,7 @@
 
 pub mod batch;
 pub mod category;
+pub mod dedup;
 pub mod dispatch;
 pub mod download;
 pub mod error;

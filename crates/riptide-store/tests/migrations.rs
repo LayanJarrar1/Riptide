@@ -90,7 +90,7 @@ fn migrate_from_v1_fixture_keeps_every_row() {
 fn v1_to_v3_adds_media_and_queue_columns_and_keeps_item_order() {
     let (_dir, path) = fixture_db(V1_FIXTURE);
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(SCHEMA_VERSION, 3);
+    assert_eq!(SCHEMA_VERSION, 4);
 
     // the v1 queues survive with an empty schedule and no post action
     let queues = store.queues().unwrap();
@@ -141,7 +141,7 @@ fn v2_database_with_a_media_row_migrates_to_v3() {
         .unwrap();
     }
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 3);
+    assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
 
     let all = store.list_downloads().unwrap();
     assert_eq!(all[0].kind, DownloadKind::Http);

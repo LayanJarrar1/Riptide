@@ -1,0 +1,31 @@
+[package]
+name = "riptide-research"
+description = "Riptide download manager - open-access research search: adapters for OpenAlex, Crossref, arXiv, Europe PMC, Internet Archive, Wikimedia Commons, GitHub releases and Data.gov, plus optional AI query planning and ranking with citation validation"
+license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+riptide-ai = { workspace = true }
+riptide-core = { workspace = true }
+async-trait = "0.1"
+futures = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

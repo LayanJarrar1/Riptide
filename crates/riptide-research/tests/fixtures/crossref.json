@@ -1,0 +1,545 @@
+{
+ "status": "ok",
+ "message-type": "work-list",
+ "message-version": "1.0.0",
+ "message": {
+  "facets": {},
+  "total-results": 46,
+  "items": [
+   {
+    "DOI": "10.59350/bqfjn-rgj08",
+    "title": [
+     "BitTorrent: In \u00d6sterreich ausgezeichnet, in den USA ausgebuht"
+    ],
+    "author": [
+     {
+      "given": "Valie",
+      "family": "Djordjevic",
+      "sequence": "first",
+      "affiliation": [],
+      "role": [
+       {
+        "vocabulary": "crossref",
+        "role": "author"
+       }
+      ]
+     }
+    ],
+    "issued": {
+     "date-parts": [
+      [
+       2005,
+       5,
+       27
+      ]
+     ]
+    },
+    "license": [
+     {
+      "start": {
+       "date-parts": [
+        [
+         2005,
+         5,
+         27
+        ]
+       ],
+       "date-time": "2005-05-27T00:00:00Z",
+       "timestamp": 1117152000000
+      },
+      "content-version": "vor",
+      "delay-in-days": 0,
+      "URL": "https://creativecommons.org/licenses/by/4.0/legalcode"
+     },
+     {
+      "start": {
+       "date-parts": [
+        [
+         2005,
+         5,
+         27
+        ]
+       ],
+       "date-time": "2005-05-27T00:00:00Z",
+       "timestamp": 1117152000000
+      },
+      "content-version": "tdm",
+      "delay-in-days": 0,
+      "URL": "https://creativecommons.org/licenses/by/4.0/legalcode"
+     }
+    ],
+    "link": [
+     {
+      "URL": "https://irights.info/artikel/bittorrent-in-sterreich-ausgezeichnet-in-den-usa-ausgebuht/6050",
+      "content-type": "text/html",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://api.rogue-scholar.org/posts/10.59350/bqfjn-rgj08.md",
+      "content-type": "text/plain",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://rogue-scholar.org/api/records/a4612-p0n23/files/10.59350_bqfjn-rgj08.pdf/content",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://api.rogue-scholar.org/posts/10.59350/bqfjn-rgj08.epub",
+      "content-type": "application/epub+zip",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://api.rogue-scholar.org/posts/10.59350/bqfjn-rgj08.xml",
+      "content-type": "application/xml",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     }
+    ]
+   },
+   {
+    "DOI": "10.59350/896rv-g9763",
+    "title": [
+     "Norwegisches Fernsehen setzt auf eigenen Bittorrent-Tracker"
+    ],
+    "author": [
+     {
+      "given": "Robert A.",
+      "family": "Gehring",
+      "sequence": "first",
+      "affiliation": [],
+      "role": [
+       {
+        "vocabulary": "crossref",
+        "role": "author"
+       }
+      ]
+     }
+    ],
+    "issued": {
+     "date-parts": [
+      [
+       2009,
+       3,
+       10
+      ]
+     ]
+    },
+    "license": [
+     {
+      "start": {
+       "date-parts": [
+        [
+         2009,
+         3,
+         10
+        ]
+       ],
+       "date-time": "2009-03-10T00:00:00Z",
+       "timestamp": 1236643200000
+      },
+      "content-version": "vor",
+      "delay-in-days": 0,
+      "URL": "https://creativecommons.org/licenses/by/4.0/legalcode"
+     },
+     {
+      "start": {
+       "date-parts": [
+        [
+         2009,
+         3,
+         10
+        ]
+       ],
+       "date-time": "2009-03-10T00:00:00Z",
+       "timestamp": 1236643200000
+      },
+      "content-version": "tdm",
+      "delay-in-days": 0,
+      "URL": "https://creativecommons.org/licenses/by/4.0/legalcode"
+     }
+    ],
+    "link": [
+     {
+      "URL": "https://irights.info/2009/03/10/norwegisches-fernsehen-setzt-auf-eigenen-bittorrent-tracker/956",
+      "content-type": "text/html",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://api.rogue-scholar.org/posts/10.59350/896rv-g9763.md",
+      "content-type": "text/plain",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://rogue-scholar.org/api/records/bp1s2-02859/files/10.59350_896rv-g9763.pdf/content",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://api.rogue-scholar.org/posts/10.59350/896rv-g9763.epub",
+      "content-type": "application/epub+zip",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://api.rogue-scholar.org/posts/10.59350/896rv-g9763.xml",
+      "content-type": "application/xml",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     }
+    ]
+   },
+   {
+    "DOI": "10.1186/s12859-014-0424-9",
+    "title": [
+     "BitTorious: global controlled genomics data publication, research and archiving via BitTorrent extensions"
+    ],
+    "author": [
+     {
+      "given": "Preston V",
+      "family": "Lee",
+      "sequence": "first",
+      "affiliation": [],
+      "role": [
+       {
+        "role": "author",
+        "vocabulary": "crossref"
+       }
+      ]
+     },
+     {
+      "given": "Valentin",
+      "family": "Dinu",
+      "sequence": "additional",
+      "affiliation": [],
+      "role": [
+       {
+        "role": "author",
+        "vocabulary": "crossref"
+       }
+      ]
+     }
+    ],
+    "issued": {
+     "date-parts": [
+      [
+       2014,
+       12
+      ]
+     ]
+    },
+    "license": [
+     {
+      "start": {
+       "date-parts": [
+        [
+         2014,
+         12,
+         1
+        ]
+       ],
+       "date-time": "2014-12-01T00:00:00Z",
+       "timestamp": 1417392000000
+      },
+      "content-version": "unspecified",
+      "delay-in-days": 0,
+      "URL": "http://creativecommons.org/licenses/by/4.0"
+     }
+    ],
+    "link": [
+     {
+      "URL": "http://link.springer.com/article/10.1186/s12859-014-0424-9/fulltext.html",
+      "content-type": "text/html",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "http://link.springer.com/content/pdf/10.1186/s12859-014-0424-9.pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "http://link.springer.com/content/pdf/10.1186/s12859-014-0424-9",
+      "content-type": "unspecified",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     },
+     {
+      "URL": "http://link.springer.com/content/pdf/10.1186/s12859-014-0424-9.pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     }
+    ]
+   },
+   {
+    "DOI": "10.2966/scrip.020305.327",
+    "title": [
+     "Give and Ye Shall Receive! The Copyright Implications of BitTorrent"
+    ],
+    "author": [
+     {
+      "given": "Bob",
+      "family": "Rietjens",
+      "sequence": "first",
+      "affiliation": [],
+      "role": [
+       {
+        "vocabulary": "crossref",
+        "role": "author"
+       }
+      ]
+     }
+    ],
+    "issued": {
+     "date-parts": [
+      [
+       2005,
+       9,
+       1
+      ]
+     ]
+    },
+    "license": [
+     {
+      "start": {
+       "date-parts": [
+        [
+         2005,
+         9,
+         1
+        ]
+       ],
+       "date-time": "2005-09-01T00:00:00Z",
+       "timestamp": 1125532800000
+      },
+      "content-version": "unspecified",
+      "delay-in-days": 0,
+      "URL": "https://creativecommons.org/licenses/by-nc-nd/4.0"
+     }
+    ],
+    "link": [
+     {
+      "URL": "http://api.wiley.com/onlinelibrary/tdm/v1/articles/10.2966%2Fscrip.020305.327",
+      "content-type": "unspecified",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://journals.ed.ac.uk/script-ed/article/download/11089/13447",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://journals.ed.ac.uk/script-ed/article/download/11089/13447",
+      "content-type": "unspecified",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     }
+    ]
+   },
+   {
+    "DOI": "10.1088/1742-6596/1693/1/012043",
+    "title": [
+     "DS-Bit: Delay-Sensitive BitTorrent-Based Data Synchronization Protocol"
+    ],
+    "author": [
+     {
+      "given": "Genwei",
+      "family": "Zhu",
+      "sequence": "first",
+      "affiliation": [],
+      "role": [
+       {
+        "role": "author",
+        "vocabulary": "crossref"
+       }
+      ]
+     },
+     {
+      "given": "Yongli",
+      "family": "Wang",
+      "sequence": "additional",
+      "affiliation": [],
+      "role": [
+       {
+        "role": "author",
+        "vocabulary": "crossref"
+       }
+      ]
+     }
+    ],
+    "issued": {
+     "date-parts": [
+      [
+       2020,
+       12,
+       1
+      ]
+     ]
+    },
+    "license": [
+     {
+      "start": {
+       "date-parts": [
+        [
+         2020,
+         12,
+         1
+        ]
+       ],
+       "date-time": "2020-12-01T00:00:00Z",
+       "timestamp": 1606780800000
+      },
+      "content-version": "vor",
+      "delay-in-days": 0,
+      "URL": "http://creativecommons.org/licenses/by/3.0/"
+     },
+     {
+      "start": {
+       "date-parts": [
+        [
+         2020,
+         12,
+         1
+        ]
+       ],
+       "date-time": "2020-12-01T00:00:00Z",
+       "timestamp": 1606780800000
+      },
+      "content-version": "tdm",
+      "delay-in-days": 0,
+      "URL": "https://iopscience.iop.org/info/page/text-and-data-mining"
+     }
+    ],
+    "link": [
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043/pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043",
+      "content-type": "text/html",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043",
+      "content-type": "text/html",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043/pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043/pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "syndication"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043/pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043",
+      "content-type": "text/html",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     },
+     {
+      "URL": "https://iopscience.iop.org/article/10.1088/1742-6596/1693/1/012043/pdf",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     }
+    ]
+   },
+   {
+    "DOI": "10.35546/kntu2078-4481.2025.3.2.66",
+    "title": [
+     "\u041c\u0415\u0422\u041e\u0414 \u041e\u0420\u0413\u0410\u041d\u0406\u0417\u0410\u0426\u0406\u0407 \u0417\u0410\u0425\u0418\u0429\u0415\u041d\u041e\u0413\u041e \u0421\u0415\u0413\u041c\u0415\u041d\u0422\u0410 \u041f\u0420\u0418\u0412\u0410\u0422\u041d\u0418\u0425 SDN-\u041c\u0415\u0420\u0415\u0416 \u041d\u0410 \u041e\u0421\u041d\u041e\u0412\u0406 \u041f\u0420\u041e\u0422\u041e\u041a\u041e\u041b\u0423 BITTORRENT"
+    ],
+    "author": [
+     {
+      "ORCID": "https://orcid.org/0009-0008-2442-6221",
+      "authenticated-orcid": false,
+      "given": "\u0406. \u0421.",
+      "family": "\u0427\u0415\u041f\u0423\u0420\u041d\u0410",
+      "sequence": "first",
+      "affiliation": [],
+      "role": [
+       {
+        "vocabulary": "crossref",
+        "role": "author"
+       }
+      ]
+     }
+    ],
+    "issued": {
+     "date-parts": [
+      [
+       2025,
+       11,
+       28
+      ]
+     ]
+    },
+    "license": [
+     {
+      "start": {
+       "date-parts": [
+        [
+         2025,
+         11,
+         28
+        ]
+       ],
+       "date-time": "2025-11-28T00:00:00Z",
+       "timestamp": 1764288000000
+      },
+      "content-version": "unspecified",
+      "delay-in-days": 0,
+      "URL": "https://creativecommons.org/licenses/by/4.0"
+     }
+    ],
+    "link": [
+     {
+      "URL": "https://journals.kntu.kherson.ua/index.php/visnyk_kntu/article/download/1192/1149",
+      "content-type": "application/pdf",
+      "content-version": "vor",
+      "intended-application": "text-mining"
+     },
+     {
+      "URL": "https://journals.kntu.kherson.ua/index.php/visnyk_kntu/article/download/1192/1149",
+      "content-type": "unspecified",
+      "content-version": "vor",
+      "intended-application": "similarity-checking"
+     }
+    ]
+   }
+  ],
+  "items-per-page": 40,
+  "query": {
+   "start-index": 0,
+   "search-terms": "bittorrent"
+  }
+ }
+}
