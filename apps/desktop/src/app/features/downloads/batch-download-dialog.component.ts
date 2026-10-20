@@ -553,7 +553,10 @@ export class BatchDownloadDialogComponent {
   constructor() {
     effect(() => {
       if (this.open()) {
-        untracked(() => this.reset());
+        untracked(() => {
+          this.reset();
+          this.tab.set(this.ui.batchTab());
+        });
       }
     });
     effect(() => this.scheduleExpand(this.pattern()));

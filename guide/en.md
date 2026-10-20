@@ -29,7 +29,11 @@ development build. Get the alpha preview (installer or portable zip) from
 
 ## The window
 
-Three areas:
+Four areas, under a **title bar** that holds the menus (File, Downloads, Tools, View, Window,
+Help) and the window buttons (minimize, maximize or restore, close). The window buttons stay at the
+right edge in Arabic too. *View* switches theme, language, display density (comfortable or compact)
+and shows or hides the sidebar. Press `Alt` or `F10` to reach the menus from the keyboard; the
+arrow keys move, `Esc` leaves, and `Alt` plus the underlined letter opens a menu.
 
 - **Sidebar** (start side): views (All, Active, Waiting, Completed, Needs attention), categories
   (Archives, Documents, Music, Video, Programs, Images, Other) and queues, each with a live count.
@@ -164,8 +168,14 @@ build; the interface marks them as such where it matters.
 |---|---|
 | `Ctrl+N` | Add download |
 | `Ctrl+F` | Search |
+| `Ctrl+Shift+N` | Batch download |
 | `Ctrl+,` | Settings |
-| `↑` / `↓` | Move the selection |
+| `Ctrl+B` | Show or hide the sidebar |
+| `Alt` or `F10` | Go to the menu bar |
+| `↑` / `↓` | Move the selection (with `Shift`, extend it) |
+| `Home` / `End` | First or last download |
+| `Page Up` / `Page Down` | Move a page at a time |
+| `Ctrl+A` | Select every download in the list |
 | `Enter` | Open details |
 | `Space` | Pause or resume the selected download |
 | `Delete` | Remove the selected downloads |
