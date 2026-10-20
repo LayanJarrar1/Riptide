@@ -31,6 +31,10 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 - Several magnet links pasted at once (one per line), dropped on the window, or read from the
   clipboard (File, Open magnet link from clipboard) open the file choice one after the other.
 - Magnet links and tracker announce addresses are masked in the log.
+- Torrents that list web seeds (HTTP mirrors, BEP 19), such as Internet Archive item torrents, can be
+  downloaded from the web seed as ordinary downloads when few peers are online; the file choice says
+  so and that those downloads are not checked against the torrent piece hashes. `.torrent` files
+  dropped on the window open the file choice.
 
 - An integrated title bar with menus (File, Downloads, Tools, View, Window, Help), keyboard
   accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls
