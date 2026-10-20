@@ -100,6 +100,40 @@ pub fn check_media(request: &mut Request, frame: &Value) -> Result<(), Response>
                 if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
                     return Err(refuse(id, "only http and https urls are accepted"));
                 }
+                // The browser never picks the folder, plain downloads included: the app would
+                // otherwise write the file wherever the message says.
+                if add.dir.is_some() {
+                    return Err(refuse(id, "the browser cannot choose a folder"));
+                }
+                if add
+                    .filename
+                    .as_deref()
+                    .is_some_and(|n| !text_ok(n, MAX_NAME_LEN))
+                {
+                    return Err(refuse(id, "filename is too long or has control characters"));
+                }
+                if add
+                    .user_agent
+                    .as_deref()
+                    .is_some_and(|u| !text_ok(u, MAX_UA_LEN))
+                {
+                    return Err(refuse(
+                        id,
+                        "user agent is too long or has control characters",
+                    ));
+                }
+                // Only the cookies of the download's own address travel with a plain add (the
+                // extension reads them for that URL); extra headers and credentials from the
+                // browser are dropped.
+                add.secrets = add
+                    .secrets
+                    .take()
+                    .and_then(|s| s.cookies)
+                    .filter(|c| !c.is_empty() && c.len() <= MAX_COOKIE_LEN)
+                    .map(|c| Secrets {
+                        cookies: Some(c),
+                        ..Secrets::default()
+                    });
                 return Ok(());
             }
             let page = http_url(&add.url).map_err(|r| refuse(id, r))?;
@@ -236,6 +270,45 @@ mod tests {
             assert_eq!(e.id, 5);
             message(&e);
         }
+    }
+
+    #[test]
+    fn plain_adds_cannot_choose_a_folder_or_send_headers() {
+        let plain = |extra: Value| {
+            let mut request = json!({"url": "https://example.com/a.zip"});
+            for (k, v) in extra.as_object().unwrap() {
+                request[k] = v.clone();
+            }
+            json!({"id": 6, "type": "add", "request": request})
+        };
+        // rule 5: nothing from the browser is used as a filesystem path
+        for dir in [
+            "C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu",
+            "/tmp",
+        ] {
+            let e = run(plain(json!({"dir": dir}))).unwrap_err();
+            assert_eq!(message(&e), "the browser cannot choose a folder");
+        }
+        let e = run(plain(json!({"filename": "a\u{0}b.zip"}))).unwrap_err();
+        message(&e);
+        let e = run(plain(json!({"user_agent": "u".repeat(MAX_UA_LEN + 1)}))).unwrap_err();
+        message(&e);
+
+        // cookies of the download's own address survive; headers and credentials do not
+        let ok = run(plain(json!({
+            "secrets": {
+                "cookies": "SID=1",
+                "headers": [["Authorization", "Bearer x"]],
+                "auth": {"username": "u", "password": "p"}
+            }
+        })))
+        .unwrap();
+        let RequestBody::Add { request } = ok.body else {
+            panic!()
+        };
+        let s = request.secrets.unwrap();
+        assert_eq!(s.cookies.as_deref(), Some("SID=1"));
+        assert!(s.headers.is_empty() && s.auth.is_none());
     }
 
     #[test]
