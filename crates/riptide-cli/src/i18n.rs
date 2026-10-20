@@ -98,6 +98,7 @@ pub const STRINGS: &[Entry] = &[
     ("cmd.grab", "زحف موقع واستخراج ملفاته ثم تحميلها (أو عرضها مع --list)؛ يحترم robots.txt", "Crawl a site for its files and download them (or just list them with --list); obeys robots.txt"),
     ("cmd.paths", "عرض مجلد البيانات والسجلات ووضع التشغيل", "Show the data directory, logs directory and run mode"),
     ("cmd.ping", "التحقق من أن تطبيق ريبتايد يعمل", "Check whether the Riptide app is running"),
+    ("cmd.torrent", "تورنت (غير مُصدر بعد)", "BitTorrent (not released yet)"),
     ("fetch.changed", "تغيّر الملف على الخادم منذ آخر مرة؛ البدء من الصفر.", "The file on the server changed since last time; starting from zero."),
     ("fetch.conn", "اتصال", "conn"),
     ("fetch.done", "تم: {path} ({bytes} في {time}، {speed})", "Done: {path} ({bytes} in {time}, {speed})"),
@@ -134,6 +135,13 @@ pub const STRINGS: &[Entry] = &[
     ("msg.paths.mode.portable", "محمول (portable.txt موجود)", "portable (portable.txt present)"),
     ("msg.pong", "التطبيق يعمل — الإصدار {version}، البروتوكول {protocol}", "App is running — version {version}, protocol {protocol}"),
     ("msg.unexpected", "رد غير متوقع من التطبيق", "Unexpected reply from the app"),
+    ("torrent.done", "اكتمل التحميل وتم التحقق من كل القطع: {name}", "Finished and every piece verified: {name}"),
+    ("torrent.interrupted", "توقّف التحميل والحالة محفوظة؛ للمتابعة: riptide torrent resume {id}", "Stopped, progress is saved; continue with: riptide torrent resume {id}"),
+    ("torrent.none", "لا توجد تورنتات.", "No torrents."),
+    ("torrent.paused", "تم الإيقاف المؤقت.", "Paused."),
+    ("torrent.progress", "{state} {percent}٪ — {done} من {total} — {speed} — الأقران: {peers}", "{state} {percent}% — {done} of {total} — {speed} — peers: {peers}"),
+    ("torrent.removed", "تمت الإزالة.", "Removed."),
+    ("torrent.seeding", "جارٍ البذر (Ctrl-C للإيقاف)", "Seeding (Ctrl-C to stop)"),
 ];
 
 /// Looks up `key` in `lang`; a missing key logs a warning and yields an empty string.

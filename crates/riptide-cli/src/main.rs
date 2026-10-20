@@ -8,6 +8,7 @@ mod batch;
 mod fetch;
 mod grab;
 mod i18n;
+mod torrent;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -179,6 +180,9 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// BitTorrent (not released yet).
+    #[command(hide = true, subcommand)]
+    Torrent(torrent::TorrentCmd),
     /// Ping the running app.
     Ping,
     /// Show resolved paths.
@@ -249,6 +253,7 @@ fn localized_command(lang: Lang) -> clap::Command {
                 .mut_arg("connections", |a| a.help(about("arg.bench_connections")))
                 .mut_arg("json", |a| a.help(about("arg.json")))
         })
+        .mut_subcommand("torrent", |s| s.about(about("cmd.torrent")))
         .mut_subcommand("ping", |s| s.about(about("cmd.ping")))
         .mut_subcommand("paths", |s| s.about(about("cmd.paths")));
     cmd
@@ -486,6 +491,10 @@ fn main() -> anyhow::Result<()> {
             };
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(grab::grab(opts, lang))
+        }
+        Command::Torrent(cmd) => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(torrent::run(cmd, &paths.data_dir, lang))
         }
         Command::Bench {
             url,

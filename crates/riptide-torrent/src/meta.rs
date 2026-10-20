@@ -1,0 +1,295 @@
+//! Reading and vetting `.torrent` data before the engine ever sees it.
+//!
+//! [`inspect_torrent`] parses the bytes, enforces every limit in [`crate::limits`], and returns a
+//! [`TorrentPreview`] whose file paths are already sanitised ([`crate::paths`]). The user picks
+//! files from that preview, so what they see is exactly what would be written.
+
+use std::path::{Path, PathBuf};
+
+use librqbit::{torrent_from_bytes, ValidatedTorrentMetaV1Info};
+use serde::{Deserialize, Serialize};
+
+use crate::error::{Error, Result};
+use crate::limits::{
+    MAX_FILES, MAX_PIECES, MAX_PIECE_LENGTH, MAX_TORRENT_FILE_BYTES, MAX_TOTAL_BYTES,
+    MIN_PIECE_LENGTH,
+};
+use crate::paths::{plan_layout, RawFile};
+
+/// One file in a [`TorrentPreview`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileEntry {
+    /// Index to use in [`crate::AddOptions::only_files`].
+    pub index: usize,
+    /// Sanitised path relative to the download folder.
+    pub path: PathBuf,
+    /// Size in bytes.
+    pub len: u64,
+    /// BEP 47 padding file (never written, never shown to users).
+    pub padding: bool,
+}
+
+/// What a torrent contains, as it would be written to disk.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TorrentPreview {
+    /// Info-hash, 40 lowercase hex digits (also the id of the torrent in the engine).
+    pub info_hash: String,
+    /// Sanitised torrent name.
+    pub name: String,
+    /// Files, in torrent order.
+    pub files: Vec<FileEntry>,
+    /// Sum of all file sizes.
+    pub total_bytes: u64,
+    /// Piece length in bytes.
+    pub piece_length: u32,
+    /// Number of pieces.
+    pub piece_count: u64,
+    /// `private` flag (no DHT / PEX for this torrent).
+    pub private: bool,
+    /// The complete `.torrent` file; feed it back to [`crate::TorrentSource::Bytes`] to add the
+    /// torrent without resolving the magnet link a second time.
+    #[serde(skip)]
+    pub torrent_bytes: Vec<u8>,
+}
+
+/// Checks that `data` is a well-formed bencode value no deeper than 32 levels, without
+/// allocating. Guards the (recursive) parser against stack exhaustion.
+pub fn check_bencode_shape(data: &[u8]) -> Result<()> {
+    const MAX_DEPTH: usize = 32;
+    let bad = |m: &str| Error::InvalidTorrent(format!("not valid bencode: {m}"));
+    let mut i = 0usize;
+    let mut depth = 0usize;
+    let mut top_values = 0usize;
+    while i < data.len() {
+        match data[i] {
+            b'i' => {
+                let end = data[i..]
+                    .iter()
+                    .position(|&b| b == b'e')
+                    .ok_or_else(|| bad("unterminated integer"))?;
+                i += end + 1;
+                if depth == 0 {
+                    top_values += 1;
+                }
+            }
+            b'l' | b'd' => {
+                depth += 1;
+                if depth > MAX_DEPTH {
+                    return Err(bad("nested too deeply"));
+                }
+                i += 1;
+            }
+            b'e' => {
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or_else(|| bad("stray end marker"))?;
+                i += 1;
+                if depth == 0 {
+                    top_values += 1;
+                }
+            }
+            b'0'..=b'9' => {
+                let colon = data[i..]
+                    .iter()
+                    .position(|&b| b == b':')
+                    .ok_or_else(|| bad("string without length"))?;
+                if colon > 12 {
+                    return Err(bad("string length too long"));
+                }
+                let len: usize = std::str::from_utf8(&data[i..i + colon])
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .ok_or_else(|| bad("bad string length"))?;
+                let start = i + colon + 1;
+                let end = start.checked_add(len).ok_or_else(|| bad("overflow"))?;
+                if end > data.len() {
+                    return Err(bad("string runs past the end"));
+                }
+                i = end;
+                if depth == 0 {
+                    top_values += 1;
+                }
+            }
+            _ => return Err(bad("unexpected byte")),
+        }
+    }
+    if depth != 0 || top_values != 1 {
+        return Err(bad("truncated or trailing data"));
+    }
+    Ok(())
+}
+
+/// Numeric sanity limits shared by `.torrent` files and metadata fetched through a magnet link.
+fn check_numbers(
+    piece_length: u32,
+    pieces_len: usize,
+    file_lens: impl Iterator<Item = u64>,
+) -> Result<(u64, u64)> {
+    if !(MIN_PIECE_LENGTH..=MAX_PIECE_LENGTH).contains(&piece_length) {
+        return Err(Error::InvalidTorrent(format!(
+            "piece length {piece_length} is outside {MIN_PIECE_LENGTH}..={MAX_PIECE_LENGTH}"
+        )));
+    }
+    let mut total: u64 = 0;
+    let mut count = 0usize;
+    for len in file_lens {
+        count += 1;
+        if count > MAX_FILES {
+            return Err(Error::InvalidTorrent(format!(
+                "more than {MAX_FILES} files"
+            )));
+        }
+        total = total
+            .checked_add(len)
+            .filter(|t| *t <= MAX_TOTAL_BYTES)
+            .ok_or_else(|| Error::InvalidTorrent("total size is absurdly large".into()))?;
+    }
+    if count == 0 || total == 0 {
+        return Err(Error::InvalidTorrent("the torrent has no data".into()));
+    }
+    let pieces = total.div_ceil(u64::from(piece_length));
+    if pieces > MAX_PIECES {
+        return Err(Error::InvalidTorrent(format!(
+            "{pieces} pieces is more than the limit of {MAX_PIECES}"
+        )));
+    }
+    if pieces_len as u64 != pieces * 20 {
+        return Err(Error::InvalidTorrent(
+            "piece hash list does not match the size and piece length".into(),
+        ));
+    }
+    Ok((total, pieces))
+}
+
+/// Builds the preview of a validated info dictionary (the one already parsed by the engine
+/// library, either from a `.torrent` or fetched through a magnet link).
+pub fn preview_from_info<B: AsRef<[u8]>>(
+    info_hash: String,
+    info: &ValidatedTorrentMetaV1Info<B>,
+    torrent_bytes: Vec<u8>,
+    exists: &dyn Fn(&Path) -> bool,
+) -> Result<TorrentPreview> {
+    let raw = info.info();
+    let (total_bytes, piece_count) = check_numbers(
+        raw.piece_length,
+        raw.pieces.as_ref().len(),
+        info.iter_file_lengths(),
+    )?;
+
+    let name = info
+        .name()
+        .map(|n| n.into_owned())
+        .unwrap_or_else(|| "torrent".to_string());
+    let raw_files: Vec<RawFile> = info
+        .iter_file_details()
+        .map(|fd| RawFile {
+            components: fd
+                .filename
+                .iter_components()
+                .map(|c| c.into_owned())
+                .collect(),
+            len: fd.len,
+            padding: fd.attrs().padding,
+        })
+        .collect();
+    let layout = plan_layout(&name, &raw_files, exists)?;
+    let files = raw_files
+        .iter()
+        .zip(layout)
+        .enumerate()
+        .map(|(index, (f, path))| FileEntry {
+            index,
+            path,
+            len: f.len,
+            padding: f.padding,
+        })
+        .collect();
+    Ok(TorrentPreview {
+        info_hash,
+        name: crate::paths::sanitize_component(&name),
+        files,
+        total_bytes,
+        piece_length: raw.piece_length,
+        piece_count,
+        private: raw.private,
+        torrent_bytes,
+    })
+}
+
+/// Parses and vets `.torrent` data.
+pub fn inspect_torrent(bytes: &[u8], exists: &dyn Fn(&Path) -> bool) -> Result<TorrentPreview> {
+    if bytes.len() > MAX_TORRENT_FILE_BYTES {
+        return Err(Error::InvalidTorrent(format!(
+            "file is larger than {MAX_TORRENT_FILE_BYTES} bytes"
+        )));
+    }
+    check_bencode_shape(bytes)?;
+    let parsed = torrent_from_bytes(bytes)
+        .map_err(|e| Error::InvalidTorrent(format!("cannot parse: {e}")))?;
+    let info = &parsed.info.data;
+
+    // numeric limits on the raw fields first: validate() sums lengths and divides by the piece
+    // length, so it must only ever see numbers we already accepted
+    let single = info.length;
+    let lens: Vec<u64> = match (&info.files, single) {
+        (Some(files), _) => files.iter().map(|f| f.length).collect(),
+        (None, Some(l)) => vec![l],
+        (None, None) => {
+            return Err(Error::InvalidTorrent(
+                "neither a length nor a file list".into(),
+            ))
+        }
+    };
+    check_numbers(
+        info.piece_length,
+        info.pieces.as_ref().len(),
+        lens.into_iter(),
+    )?;
+
+    let validated = info
+        .clone()
+        .validate()
+        .map_err(|e| Error::InvalidTorrent(e.to_string()))?;
+    preview_from_info(
+        parsed.info_hash.as_string(),
+        &validated,
+        bytes.to_vec(),
+        exists,
+    )
+}
+
+/// Reads a `.torrent` file from disk (size-capped) and vets it.
+pub fn inspect_torrent_file(path: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<TorrentPreview> {
+    let len = std::fs::metadata(path)?.len();
+    if len > MAX_TORRENT_FILE_BYTES as u64 {
+        return Err(Error::InvalidTorrent(format!(
+            "file is larger than {MAX_TORRENT_FILE_BYTES} bytes"
+        )));
+    }
+    inspect_torrent(&std::fs::read(path)?, exists)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bencode_shape_accepts_and_rejects() {
+        assert!(check_bencode_shape(b"d3:foo3:bare").is_ok());
+        assert!(check_bencode_shape(b"l4:spami42ee").is_ok());
+        for bad in [
+            &b""[..],
+            b"d3:foo",
+            b"i12",
+            b"5:ab",
+            b"x",
+            b"de3:foo",
+            b"e",
+            b"99999999999999:a",
+        ] {
+            assert!(check_bencode_shape(bad).is_err(), "{:?}", bad);
+        }
+        let deep = [vec![b'l'; 10_000], vec![b'e'; 10_000]].concat();
+        assert!(check_bencode_shape(&deep).is_err());
+    }
+}

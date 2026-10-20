@@ -8,6 +8,7 @@ members = [
     "crates/riptide-log",
     "crates/riptide-engine",
     "crates/riptide-media",
+    "crates/riptide-torrent",
     "crates/riptide-crawl",
     "crates/riptide-cli",
     "crates/riptide-host",
@@ -40,6 +41,7 @@ riptide-log = { path = "crates/riptide-log" }
 riptide-engine = { path = "crates/riptide-engine" }
 riptide-media = { path = "crates/riptide-media" }
 riptide-crawl = { path = "crates/riptide-crawl" }
+riptide-torrent = { path = "crates/riptide-torrent" }
 riptide-host = { path = "crates/riptide-host" }
 riptide-testserver = { path = "crates/riptide-testserver" }
 

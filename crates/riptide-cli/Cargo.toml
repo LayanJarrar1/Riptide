@@ -21,6 +21,7 @@ riptide-log = { workspace = true }
 riptide-ipc = { workspace = true }
 riptide-engine = { workspace = true }
 riptide-crawl = { workspace = true }
+riptide-torrent = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
