@@ -1,5 +1,4 @@
 import {
-  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -7,6 +6,7 @@ import {
   effect,
   ElementRef,
   inject,
+  NgZone,
   signal,
   untracked,
   viewChild,
@@ -17,6 +17,7 @@ import { DUR, MotionService } from '../../core/motion.service';
 import { finalPath } from '../../data/bridge-mapping';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow, DownloadsStore, SortKey } from '../../data/downloads.store';
+import { navFromKey, scrollToReveal } from '../../data/list-nav';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { canPause, canResume, Download } from '../../model/download';
@@ -24,12 +25,14 @@ import { MAIN_QUEUE_ID, moveBy, moveManyBeside, sameOrder } from '../../model/qu
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
-import { EmptyStateComponent, EmptyStep } from '../../ui/empty-state.component';
+import { EmptyStateComponent } from '../../ui/empty-state.component';
+import type { EmptyStep } from '../../ui/empty-state.component';
 import { IconComponent } from '../../ui/icon.component';
 import { MenuComponent, MenuItem } from '../../ui/menu.component';
 import { ToastService } from '../../ui/toast.service';
 import { DOWNLOAD_DRAG_TYPE, dragHas, inLowerHalf } from '../queues/dnd';
 import { MoveToQueueDialogComponent } from '../queues/move-to-queue-dialog.component';
+import { SettingsService } from '../settings/settings.service';
 import { UiState } from '../shell/ui-state.service';
 import { DownloadDetailsComponent } from './download-details.component';
 import { DownloadRowComponent, RowAction } from './download-row.component';
@@ -52,7 +55,8 @@ const COLUMNS: readonly Column[] = [
   { key: 'added', labelKey: 'column.added', align: 'start' },
 ];
 
-const ROW_HEIGHT = 46;
+/** Row heights in px for the two display densities (they match `--row-height` in tokens.css). */
+export const ROW_HEIGHTS = { comfortable: 46, compact: 36 } as const;
 /** Rows rendered above and below the viewport so fast scrolling never shows a gap. */
 const OVERSCAN = 6;
 /** How many rows take part in the first-paint cascade. */
@@ -127,7 +131,16 @@ const FRESH_MS = 600;
         }
       </div>
 
-      <div class="grid" role="grid" [attr.aria-rowcount]="store.rows().length" [attr.aria-multiselectable]="true">
+      <div
+        #grid
+        class="grid"
+        role="grid"
+        tabindex="0"
+        [attr.aria-label]="i18n.t('view.' + store.view())"
+        [attr.aria-rowcount]="store.rows().length + 1"
+        [attr.aria-multiselectable]="true"
+        [attr.aria-activedescendant]="activeRowId()"
+      >
         <div class="header" role="row" [class.boot]="ui.booting()">
           @for (c of columns; track c.key) {
             <button
@@ -165,25 +178,30 @@ const FRESH_MS = 600;
             }
           </div>
         } @else if (store.rows().length === 0) {
-          <app-empty-state
-            [icon]="emptyIcon()"
-            [illustration]="emptyKind() === 'all' ? 'segments' : null"
-            [heading]="i18n.t('empty.' + emptyKind() + '.heading')"
-            [body]="i18n.t('empty.' + emptyKind() + '.body')"
-            [steps]="emptyKind() === 'all' ? steps() : []"
-            [stepsLabel]="i18n.t('empty.steps.title')"
-          >
-            @if (emptyKind() === 'all') {
-              <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">{{ i18n.t('action.add') }}</button>
-            } @else if (emptyKind() === 'search') {
-              <button appButton variant="secondary" type="button" (click)="store.query.set('')">{{ i18n.t('empty.search.clear') }}</button>
-            }
-          </app-empty-state>
+          @defer (on immediate; prefetch on idle) {
+            <app-empty-state
+              [icon]="emptyIcon()"
+              [illustration]="emptyKind() === 'all' ? 'segments' : null"
+              [heading]="i18n.t('empty.' + emptyKind() + '.heading')"
+              [body]="i18n.t('empty.' + emptyKind() + '.body')"
+              [steps]="emptyKind() === 'all' ? steps() : []"
+              [stepsLabel]="i18n.t('empty.steps.title')"
+            >
+              @if (emptyKind() === 'all') {
+                <button appButton variant="primary" icon="plus" type="button" (click)="ui.openAdd()">{{ i18n.t('action.add') }}</button>
+              } @else if (emptyKind() === 'search') {
+                <button appButton variant="secondary" type="button" (click)="store.query.set('')">{{ i18n.t('empty.search.clear') }}</button>
+              }
+            </app-empty-state>
+          }
         } @else {
-          <div #viewport class="viewport" (scroll)="onScroll()" tabindex="0" [attr.aria-label]="i18n.t('view.' + store.view())">
+          <div #viewport class="viewport" role="presentation">
             <div class="spacer" [style.block-size.px]="window().top"></div>
             @for (row of window().rows; track row.d.id; let i = $index) {
               <app-download-row
+                [id]="'dl-row-' + row.d.id"
+                [attr.aria-rowindex]="window().start + i + 2"
+                [class.is-active]="store.cursor() === row.d.id"
                 [row]="row"
                 [selected]="store.selected().has(row.d.id)"
                 [open]="store.detailsId() === row.d.id"
@@ -504,6 +522,16 @@ const FRESH_MS = 600;
       }
     }
 
+    .grid:focus {
+      outline: none;
+    }
+
+    /* the grid holds focus (aria-activedescendant); the ring is drawn on the active row */
+    .grid:focus-visible app-download-row.is-active {
+      outline: 2px solid var(--color-focus, var(--color-accent));
+      outline-offset: -2px;
+    }
+
     .viewport {
       overflow-y: auto;
       overflow-x: hidden;
@@ -697,6 +725,9 @@ export class DownloadsPageComponent {
   private readonly queues = inject(QueuesService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
+  private readonly gridRef = viewChild<ElementRef<HTMLElement>>('grid');
+  private readonly zone = inject(NgZone);
+  private readonly settings = inject(SettingsService);
 
   protected readonly columns = COLUMNS;
   protected readonly skeletonRows = SKELETON_ROWS;
@@ -704,6 +735,9 @@ export class DownloadsPageComponent {
 
   private readonly scrollTop = signal(0);
   private readonly viewportHeight = signal(600);
+
+  /** Row height for the display density chosen in the View menu. */
+  protected readonly rowHeight = computed(() => ROW_HEIGHTS[this.settings.settings().density]);
 
   protected readonly menu = signal<{ open: boolean; x: number; y: number; row: DownloadRow | null }>({ open: false, x: 0, y: 0, row: null });
   protected readonly removal = signal<readonly DownloadRow[] | null>(null);
@@ -728,21 +762,37 @@ export class DownloadsPageComponent {
   /** Ids the user is removing; their rows play the leave animation before the engine drops them. */
   protected readonly leavingIds = signal<ReadonlySet<number>>(new Set());
 
-  /** Ids seen since the list first arrived; a download outside this set is new and slides in. */
-  private readonly seenIds = signal<ReadonlySet<number> | null>(null);
+  /** Highest download id when the first list arrived; anything above it was added this session. */
+  private readonly freshBaseline = signal<number | null>(null);
+  /** Session-added ids whose enter animation is over. */
+  private readonly settled = signal<ReadonlySet<number>>(new Set());
 
-  protected readonly freshIds = computed<ReadonlySet<number>>(() => {
-    const seen = this.seenIds();
-    const fresh = new Set<number>();
-    if (seen !== null) {
-      for (const d of this.engine.downloads()) {
-        if (!seen.has(d.id)) {
-          fresh.add(d.id);
+  /**
+   * Ids added since the list first arrived whose slide-in is still running. The engine's list
+   * is oldest first, so only its tail is walked: a tick costs nothing however long the list is.
+   */
+  protected readonly freshIds = computed<ReadonlySet<number>>(
+    () => {
+      const baseline = this.freshBaseline();
+      const fresh = new Set<number>();
+      if (baseline === null) {
+        return fresh;
+      }
+      const settled = this.settled();
+      const all = this.engine.downloads();
+      for (let i = all.length - 1; i >= 0; i--) {
+        const id = all[i].id;
+        if (id <= baseline) {
+          break;
+        }
+        if (!settled.has(id)) {
+          fresh.add(id);
         }
       }
-    }
-    return fresh;
-  });
+      return fresh;
+    },
+    { equal: (a, b) => a.size === b.size && [...a].every((id) => b.has(id)) },
+  );
 
   protected readonly title = computed(() => {
     const queue = this.selectedQueue();
@@ -753,18 +803,38 @@ export class DownloadsPageComponent {
     return category === null ? this.i18n.t(`view.${this.store.view()}`) : this.i18n.t(`category.${category}`);
   });
 
+  /**
+   * First and last (exclusive) row to render. Two primitive computeds, so a scroll that stays
+   * inside the same rows (most scroll events) does not recompute the window at all.
+   */
+  private readonly firstIndex = computed(() => {
+    const count = this.store.rows().length;
+    return Math.min(count, Math.max(0, Math.floor(this.scrollTop() / this.rowHeight()) - OVERSCAN));
+  });
+
+  private readonly endIndex = computed(() => {
+    const count = this.store.rows().length;
+    return Math.min(count, Math.ceil((this.scrollTop() + this.viewportHeight()) / this.rowHeight()) + OVERSCAN);
+  });
+
   /** The rows inside the scroll window plus spacers that stand in for the rest. */
   protected readonly window = computed(() => {
     const rows = this.store.rows();
-    const top = this.scrollTop();
-    const height = this.viewportHeight();
-    const start = Math.max(0, Math.floor(top / ROW_HEIGHT) - OVERSCAN);
-    const end = Math.min(rows.length, Math.ceil((top + height) / ROW_HEIGHT) + OVERSCAN);
+    const start = this.firstIndex();
+    const end = Math.max(start, this.endIndex());
+    const rowHeight = this.rowHeight();
     return {
       rows: rows.slice(start, end),
-      top: start * ROW_HEIGHT,
-      bottom: Math.max(0, (rows.length - end) * ROW_HEIGHT),
+      start,
+      top: start * rowHeight,
+      bottom: Math.max(0, (rows.length - end) * rowHeight),
     };
+  });
+
+  /** DOM id of the row the keyboard is on, for `aria-activedescendant` (only while that row is rendered). */
+  protected readonly activeRowId = computed(() => {
+    const id = this.store.cursor();
+    return id !== null && this.window().rows.some((r) => r.d.id === id) ? `dl-row-${id}` : null;
   });
 
   protected readonly emptyKind = computed<'all' | 'search' | 'view'>(() => {
@@ -838,15 +908,12 @@ export class DownloadsPageComponent {
   private lastListKey: string | null = null;
 
   constructor() {
-    afterNextRender(() => this.observeViewport());
-
     // the first list to arrive is the baseline: nothing in it is "new"
     effect(() => {
       const loaded = this.engine.loaded();
-      const ids = this.engine.downloads().map((d) => d.id);
       untracked(() => {
-        if (loaded && this.seenIds() === null) {
-          this.seenIds.set(new Set(ids));
+        if (loaded && this.freshBaseline() === null) {
+          this.freshBaseline.set(this.engine.downloads().reduce((max, d) => Math.max(max, d.id), 0));
         }
       });
     });
@@ -858,26 +925,50 @@ export class DownloadsPageComponent {
         return;
       }
       const handle = setTimeout(() => {
-        this.seenIds.update((seen) => new Set([...(seen ?? []), ...fresh]));
+        this.settled.update((seen) => new Set([...seen, ...fresh]));
       }, FRESH_MS);
       onCleanup(() => clearTimeout(handle));
+    });
+
+    // the viewport element comes and goes (skeleton, empty state): listen to whichever is there.
+    // Scroll events run outside the zone; a signal write schedules its own refresh, and only a
+    // scroll that crosses a row boundary changes what the window computes.
+    effect((onCleanup) => {
+      const el = this.viewportRef()?.nativeElement;
+      if (!el) {
+        return;
+      }
+      const onScroll = (): void => this.scrollTop.set(el.scrollTop);
+      this.zone.runOutsideAngular(() => el.addEventListener('scroll', onScroll, { passive: true }));
+      onCleanup(() => el.removeEventListener('scroll', onScroll));
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => this.viewportHeight.set(el.clientHeight));
+        ro.observe(el);
+        onCleanup(() => ro.disconnect());
+      }
+      this.viewportHeight.set(el.clientHeight);
+      this.scrollTop.set(el.scrollTop);
+    });
+
+    // Downloads > Remove (menu): the page owns the confirmation
+    let seenRemoveRequests = this.ui.removeRequests();
+    effect(() => {
+      const n = this.ui.removeRequests();
+      if (n > seenRemoveRequests) {
+        seenRemoveRequests = n;
+        untracked(() => {
+          const rows = this.store.selectedRows();
+          if (rows.length > 0) {
+            this.askRemove(rows);
+          }
+        });
+      }
     });
 
     effect(() => {
       const key = this.listKey();
       untracked(() => this.onListChanged(key));
     });
-  }
-
-  private observeViewport(): void {
-    const el = this.viewportRef()?.nativeElement;
-    if (!el || typeof ResizeObserver === 'undefined') {
-      return;
-    }
-    const ro = new ResizeObserver(() => this.viewportHeight.set(el.clientHeight));
-    ro.observe(el);
-    this.viewportHeight.set(el.clientHeight);
-    this.destroyRef.onDestroy(() => ro.disconnect());
   }
 
   /** View, filter, search or sort changed: back to the top, and the list crossfades. */
@@ -906,16 +997,6 @@ export class DownloadsPageComponent {
           ],
       { duration: reduced ? 80 : DUR.d2, easing: 'cubic-bezier(0.05, 0.7, 0.1, 1)' },
     );
-  }
-
-  protected onScroll(): void {
-    const el = this.viewportRef()?.nativeElement;
-    if (el) {
-      this.scrollTop.set(el.scrollTop);
-      if (el.clientHeight !== this.viewportHeight()) {
-        this.viewportHeight.set(el.clientHeight);
-      }
-    }
   }
 
   protected onRowClick(row: DownloadRow, event: MouseEvent): void {
@@ -1161,28 +1242,48 @@ export class DownloadsPageComponent {
 
   protected onKey(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+    if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+    if (event.key === 'Escape') {
+      if (this.menu().open) {
+        this.closeMenu();
+      } else if (this.store.detailsId() !== null) {
+        this.store.closeDetails();
+      } else {
+        this.store.clearSelection();
+      }
+      return;
+    }
+    // buttons and links inside the page (toolbar, headers, row actions, drawer) keep their own keys
+    if (target !== null && target !== this.gridRef()?.nativeElement && target.closest('button, a, [role="menuitem"], app-download-details')) {
+      return;
+    }
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && (event.key === 'a' || event.key === 'A')) {
+      event.preventDefault();
+      this.store.selectAll();
       return;
     }
     const selected = this.store.selectedRows();
     const first = selected[0];
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        event.preventDefault();
-        if (event.altKey) {
-          // Alt + arrow: move the selected download in its queue (manual order only)
-          if (first && this.store.manualOrder()) {
-            this.moveInQueue(first.d, event.key === 'ArrowDown' ? 1 : -1);
-          }
-          break;
+    const nav = navFromKey(event.key);
+    if (nav !== null && !mod) {
+      event.preventDefault();
+      if (event.altKey) {
+        // Alt + arrow: move the selected download in its queue (manual order only)
+        if (first && this.store.manualOrder() && (nav === 'next' || nav === 'prev')) {
+          this.moveInQueue(first.d, nav === 'next' ? 1 : -1);
         }
-        const id = this.store.moveSelection(event.key === 'ArrowDown' ? 1 : -1);
-        if (id !== null) {
-          this.scrollIntoView(id);
-        }
-        break;
+        return;
       }
+      const landed = this.store.navigate(nav, this.pageSize(), event.shiftKey);
+      if (landed !== null) {
+        this.revealIndex(landed.index);
+      }
+      return;
+    }
+    switch (event.key) {
       case 'Enter':
         if (first) {
           event.preventDefault();
@@ -1206,32 +1307,24 @@ export class DownloadsPageComponent {
           this.askRemove(selected);
         }
         break;
-      case 'Escape':
-        if (this.menu().open) {
-          this.closeMenu();
-        } else if (this.store.detailsId() !== null) {
-          this.store.closeDetails();
-        } else {
-          this.store.clearSelection();
-        }
-        break;
     }
   }
 
-  private scrollIntoView(id: number): void {
+  /** Rows that fit the viewport, for PageUp / PageDown. */
+  private pageSize(): number {
+    return Math.max(1, Math.floor(this.viewportHeight() / this.rowHeight()));
+  }
+
+  /** Scrolls the viewport just far enough to show row `index` (the row need not be in the DOM). */
+  private revealIndex(index: number): void {
     const el = this.viewportRef()?.nativeElement;
     if (!el) {
       return;
     }
-    const index = this.store.rows().findIndex((r) => r.d.id === id);
-    if (index < 0) {
-      return;
-    }
-    const top = index * ROW_HEIGHT;
-    if (top < el.scrollTop) {
-      el.scrollTop = top;
-    } else if (top + ROW_HEIGHT > el.scrollTop + el.clientHeight) {
-      el.scrollTop = top + ROW_HEIGHT - el.clientHeight;
+    const to = scrollToReveal(index, this.rowHeight(), el.scrollTop, el.clientHeight);
+    if (to !== null) {
+      el.scrollTop = to;
+      this.scrollTop.set(el.scrollTop);
     }
   }
 

@@ -19,12 +19,33 @@ import {
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
-import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
+import { GB, generateDownloads, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
 
 /** Whether the simulated engine advances on its own (tests turn it off). */
 export const MOCK_ENGINE_AUTOSTART = new InjectionToken<boolean>('riptide.mockEngine.autostart', {
   providedIn: 'root',
   factory: () => true,
+});
+
+/**
+ * Size of the generated list for the list-performance harness: `?mockCount=N` (and
+ * `&mockActive=K` for how many of them download, `&mockTickMs=T` for the update period) on the page URL. `0` = the normal demo data.
+ * Only the simulated engine reads it, and that engine is never created inside the Tauri
+ * webview (see `provideDownloadEngine`), so the desktop build cannot be steered by a URL.
+ */
+export const MOCK_LIST_SIZE = new InjectionToken<{ readonly count: number; readonly active: number; readonly tickMs: number }>('riptide.mockEngine.listSize', {
+  providedIn: 'root',
+  factory: () => {
+    try {
+      const q = new URLSearchParams(globalThis.location?.search ?? '');
+      const count = Math.min(100_000, Math.max(0, Number.parseInt(q.get('mockCount') ?? '0', 10) || 0));
+      const active = Math.min(count, Math.max(0, Number.parseInt(q.get('mockActive') ?? '4', 10) || 0));
+      const tickMs = Math.min(1000, Math.max(20, Number.parseInt(q.get('mockTickMs') ?? '0', 10) || TICK_MS));
+      return { count, active, tickMs };
+    } catch {
+      return { count: 0, active: 0, tickMs: TICK_MS };
+    }
+  },
 });
 
 /** How often the simulation advances. */
@@ -52,7 +73,10 @@ const MIN_SPLIT = 2 * MB;
 @Injectable({ providedIn: 'root' })
 export class MockEngineService extends DownloadEngine {
   private readonly rng = mulberry32(42);
-  private readonly list = signal<readonly Download[]>(seedDownloads(Date.now()));
+  private readonly size = inject(MOCK_LIST_SIZE);
+  private readonly list = signal<readonly Download[]>(
+    this.size.count > 0 ? generateDownloads(this.size.count, this.size.active, Date.now()) : seedDownloads(Date.now()),
+  );
   private nextId = this.list().length + 1;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastSample = Date.now();
@@ -70,7 +94,7 @@ export class MockEngineService extends DownloadEngine {
   readonly totalSpeedHistory = signal<readonly number[]>(new Array<number>(60).fill(0));
 
   /** Queue slots in the simulation. */
-  readonly maxActive = signal(MAX_ACTIVE);
+  readonly maxActive = signal(Math.max(MAX_ACTIVE, this.size.active));
 
   constructor() {
     super();
@@ -82,7 +106,7 @@ export class MockEngineService extends DownloadEngine {
   /** Starts the simulation timer (idempotent). */
   start(): void {
     if (this.timer === null) {
-      this.timer = setInterval(() => this.tick(TICK_MS), TICK_MS);
+      this.timer = setInterval(() => this.tick(this.size.tickMs), this.size.tickMs);
     }
   }
 

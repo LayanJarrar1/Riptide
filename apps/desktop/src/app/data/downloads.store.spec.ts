@@ -151,4 +151,108 @@ describe('DownloadsStore', () => {
       expect((main?.total ?? 0) + 3).toBe(engine.downloads().length);
     });
   });
+
+  describe('keyboard navigation and selection by id', () => {
+    const visibleIds = (): number[] => store.rows().map((r) => r.d.id);
+
+    it('Home / End / PageDown / PageUp move the cursor and the selection follows', () => {
+      const ids = visibleIds();
+      expect(store.navigate('last', 10)?.id).toBe(ids[ids.length - 1]);
+      expect([...store.selected()]).toEqual([ids[ids.length - 1]]);
+      expect(store.navigate('first', 10)?.index).toBe(0);
+      expect(store.navigate('pageDown', 5)?.index).toBe(4);
+      expect(store.navigate('pageUp', 5)?.index).toBe(0);
+      expect(store.cursor()).toBe(ids[0]);
+    });
+
+    it('Shift extends the selection from the anchor, Ctrl+A takes every visible row', () => {
+      const ids = visibleIds();
+      store.select(ids[3]);
+      store.navigate('next', 10, true);
+      store.navigate('next', 10, true);
+      expect([...store.selected()].sort((a, b) => a - b)).toEqual([ids[3], ids[4], ids[5]].sort((a, b) => a - b));
+      store.navigate('prev', 10, true);
+      expect(store.selected().size).toBe(2);
+      store.selectAll();
+      expect(store.selected().size).toBe(ids.length);
+      store.setView('completed');
+      store.selectAll();
+      expect(store.selected().size).toBe(store.rows().length);
+    });
+
+    it('keeps the cursor and selection by id when the list re-sorts or the engine ticks', () => {
+      const running = engine.downloads().find((d) => d.state === 'downloading');
+      expect(running).toBeDefined();
+      store.select(running?.id ?? -1);
+      store.sortBy('progress');
+      engine.tick(250);
+      engine.tick(250);
+      expect(store.cursor()).toBe(running?.id ?? -1);
+      expect(store.selectedRows().map((r) => r.d.id)).toEqual([running?.id ?? -1]);
+    });
+
+    it('starts from the top when neither the cursor row nor a selected row is in the list any more', () => {
+      const ids = visibleIds();
+      store.select(ids[5]);
+      store.setView('completed');
+      const completed = visibleIds();
+      expect(completed).not.toContain(ids[5]);
+      expect(store.navigate('next', 10)?.index).toBe(0);
+    });
+
+    it('answers null for an empty list', () => {
+      store.query.set('no download is called this');
+      expect(store.navigate('next', 10)).toBeNull();
+      expect(store.navigate('last', 10)).toBeNull();
+    });
+
+    it('unticking a Ctrl-clicked row falls back to the first selected row as the anchor', () => {
+      const ids = visibleIds();
+      store.select(ids[1]);
+      store.toggle(ids[6]);
+      store.toggle(ids[6]);
+      store.selectRange(ids[3]);
+      expect([...store.selected()].sort((a, b) => a - b)).toEqual([ids[1], ids[2], ids[3]].sort((a, b) => a - b));
+    });
+  });
+
+  describe('order and rows are reused between ticks', () => {
+    it('unchanged downloads keep their row object; only the moving ones get new ones', () => {
+      const before = new Map(store.allRows().map((r) => [r.d.id, r]));
+      engine.tick(250);
+      const after = store.allRows();
+      const changed = after.filter((r) => before.get(r.d.id) !== r).length;
+      const moving = engine.downloads().filter((d) => ['probing', 'downloading', 'verifying', 'queued'].includes(d.state)).length;
+      expect(changed).toBeGreaterThan(0);
+      expect(changed).toBeLessThanOrEqual(moving);
+      expect(changed).toBeLessThan(after.length);
+    });
+
+    it('re-sorts correctly after a tick changes the sort key of some rows', () => {
+      store.sortBy('progress');
+      for (let i = 0; i < 6; i++) {
+        engine.tick(250);
+      }
+      const progress = store.rows().map((r) => r.progress ?? -1);
+      expect(progress).toEqual([...progress].sort((a, b) => b - a));
+    });
+
+    it('follows an add and a removal in the middle of the list', async () => {
+      const id = await engine.add({ url: 'https://example.com/zzz-new.zip' });
+      // newest first (a seed added in the same millisecond may tie with it)
+      expect(store.rows().slice(0, 2).map((r) => r.d.id)).toContain(id);
+      await engine.remove(3);
+      expect(store.rows().some((r) => r.d.id === 3)).toBeFalse();
+      expect(store.rows().length).toBe(engine.downloads().length);
+      const added = store.rows().map((r) => r.d.addedAt);
+      expect(added).toEqual([...added].sort((a, b) => b - a));
+    });
+
+    it('sorts Arabic and Latin names with one shared collator', () => {
+      store.sortBy('name');
+      const names = store.rows().map((r) => r.d.filename);
+      const collator = new Intl.Collator();
+      expect(names).toEqual([...names].sort((a, b) => collator.compare(a, b)));
+    });
+  });
 });

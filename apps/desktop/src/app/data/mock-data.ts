@@ -280,4 +280,92 @@ export function seedDownloads(now: number, seed = 7): Download[] {
   });
 }
 
+const GEN_NAMES = [
+  'ubuntu-desktop', 'blender-release', 'city-sounds', 'مشروع-التخرج', 'lecture-physics', 'backup-photos',
+  'dataset-train', 'التقرير-السنوي', 'game-patch', 'movie-trailer', 'podcast-episode', 'invoice-scan',
+  'مسلسل-الحلقة', 'source-snapshot', 'driver-pack', 'ebook-collection',
+] as const;
+const GEN_EXTS = ['iso', 'zip', 'mp4', 'pdf', 'mp3', 'exe', 'jpg', '7z', 'mkv', 'docx'] as const;
+const GEN_SIZES = [180 * KB, 4 * MB, 38 * MB, 220 * MB, 1.2 * GB, 4.7 * GB] as const;
+/** One shared, immutable history for every download that is not moving. */
+const IDLE_HISTORY: readonly number[] = new Array<number>(60).fill(0);
+
+/**
+ * `count` believable downloads for the list-performance harness (`?mockCount=N`): about 60 %
+ * completed, the rest spread over queued, paused, failed and cancelled, with `active` of them
+ * downloading. Built to be cheap at 50 000 rows: finished and waiting rows share their segment
+ * and history arrays instead of owning copies.
+ */
+export function generateDownloads(count: number, active: number, now: number, seed = 11): Download[] {
+  const rng = mulberry32(seed);
+  const out: Download[] = new Array<Download>(count);
+  const sharedSegments = new Map<number, readonly Segment[]>();
+  const done = (size: number): readonly Segment[] => {
+    let segs = sharedSegments.get(size);
+    if (segs === undefined) {
+      segs = planSegments(size, 4).map((g) => ({ ...g, written: g.end - g.start, state: 'done' as const }));
+      sharedSegments.set(size, segs);
+    }
+    return segs;
+  };
+  const fresh = (size: number): readonly Segment[] => planSegments(size, 4);
+  for (let i = 0; i < count; i++) {
+    const name = GEN_NAMES[Math.floor(rng() * GEN_NAMES.length)];
+    const ext = GEN_EXTS[Math.floor(rng() * GEN_EXTS.length)];
+    const filename = `${name}-${String(i + 1).padStart(5, '0')}.${ext}`;
+    const size = Math.round(GEN_SIZES[Math.floor(rng() * GEN_SIZES.length)] * (0.5 + rng()));
+    const roll = rng();
+    // the newest `active` rows are the moving ones, so a list sorted newest-first shows them at the top
+    const isActive = i >= count - active;
+    const state: Download['state'] = isActive
+      ? 'downloading'
+      : roll < 0.6
+        ? 'completed'
+        : roll < 0.75
+          ? 'queued'
+          : roll < 0.87
+            ? 'paused'
+            : roll < 0.96
+              ? 'failed'
+              : 'cancelled';
+    let segments: readonly Segment[];
+    let speed = 0;
+    let history: readonly number[] = IDLE_HISTORY;
+    if (state === 'completed') {
+      segments = done(size);
+    } else if (isActive) {
+      const f = 0.05 + rng() * 0.8;
+      segments = filled(size, 4, f, rng, 'active');
+      speed = (2 + rng() * 40) * MB;
+      history = new Array<number>(60).fill(speed);
+    } else {
+      segments = fresh(size);
+    }
+    const addedAt = now - (count - i) * 1000;
+    out[i] = {
+      id: i + 1,
+      url: `https://files.example.com/${encodeURIComponent(filename)}`,
+      filename,
+      dir: DOWNLOADS,
+      size,
+      supportsRanges: true,
+      state,
+      category: categoryOf(filename),
+      queueId: 1,
+      queuePosition: i,
+      priority: 'normal',
+      connections: 4,
+      segments,
+      speedBps: speed,
+      speedHistory: history,
+      addedAt,
+      startedAt: state === 'queued' ? null : addedAt + 1000,
+      completedAt: state === 'completed' ? addedAt + 60_000 : null,
+      failure: state === 'failed' ? 'network' : null,
+      checksum: null,
+    };
+  }
+  return out;
+}
+
 export { GB, KB, MB };

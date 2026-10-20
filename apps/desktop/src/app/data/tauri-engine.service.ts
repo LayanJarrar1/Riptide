@@ -56,6 +56,8 @@ export class TauriEngineService extends DownloadEngine {
   private readonly listen = inject(TAURI_LISTEN);
 
   private readonly list = signal<readonly Download[]>([]);
+  /** Download id to position in `list` (a hint, see `position`). */
+  private index = new Map<number, number>();
   /** Events received before the initial list arrived; `null` once live. */
   private pending: EngineEvent[] | null = [];
   /** Last time a speed sample was appended, per download. */
@@ -91,7 +93,23 @@ export class TauriEngineService extends DownloadEngine {
   }
 
   get(id: number): Download | undefined {
-    return this.list().find((d) => d.id === id);
+    const i = this.position(id);
+    return i < 0 ? undefined : this.list()[i];
+  }
+
+  /**
+   * Where a download sits in the list. Every progress event looks its download up and replaces it,
+   * so with tens of thousands of downloads a linear search per event would be the engine's main
+   * cost; the index is a hint that is checked on use and rebuilt when it is stale or unknown.
+   */
+  private position(id: number): number {
+    const all = this.list();
+    let i = this.index.get(id);
+    if (i === undefined || all[i]?.id !== id) {
+      this.index = new Map(all.map((d, k) => [d.id, k]));
+      i = this.index.get(id);
+    }
+    return i ?? -1;
   }
 
   async probe(url: string): Promise<ProbeResult> {
@@ -398,17 +416,38 @@ export class TauriEngineService extends DownloadEngine {
   }
 
   private upsert(d: Download): void {
-    this.list.update((all) => (all.some((x) => x.id === d.id) ? all.map((x) => (x.id === d.id ? d : x)) : [...all, d]));
+    const i = this.position(d.id);
+    if (i < 0) {
+      this.index.set(d.id, this.list().length);
+      this.list.update((all) => [...all, d]);
+    } else {
+      this.replaceAt(i, d);
+    }
   }
 
   private update(id: number, fn: (d: Download) => Download): void {
-    this.list.update((all) => all.map((d) => (d.id === id ? fn(d) : d)));
+    const i = this.position(id);
+    if (i >= 0) {
+      this.replaceAt(i, fn(this.list()[i]));
+    }
+  }
+
+  /** A new list with one download swapped; every other download keeps its object (the UI relies on that). */
+  private replaceAt(i: number, d: Download): void {
+    this.list.update((all) => {
+      const next = all.slice();
+      next[i] = d;
+      return next;
+    });
   }
 
   private drop(id: number): void {
     this.lastSample.delete(id);
     this.refreshSeq.delete(id);
-    this.list.update((all) => (all.some((d) => d.id === id) ? all.filter((d) => d.id !== id) : all));
+    if (this.position(id) >= 0) {
+      this.list.update((all) => all.filter((d) => d.id !== id));
+      this.index.clear();
+    }
   }
 }
 
