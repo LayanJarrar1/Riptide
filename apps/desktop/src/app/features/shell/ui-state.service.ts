@@ -18,6 +18,8 @@ export class UiState {
   readonly batchTab = signal<'pattern' | 'list'>('pattern');
   /** The site grabber dialog (crawl a site for files). */
   readonly grabberOpen = signal(false);
+  /** A page to look into when the grabber opens (Research "Find files on this page"); the grabber takes it and clears it. */
+  readonly grabberPreset = signal<string | null>(null);
   /** The torrent being added (magnet link or `.torrent` file); the file-choice dialog shows while set. */
   readonly torrentSource = signal<TorrentSource | null>(null);
   /** The keyboard-shortcuts dialog. */
@@ -69,6 +71,7 @@ export class UiState {
 
   closeGrabber(): void {
     this.grabberOpen.set(false);
+    this.grabberPreset.set(null);
   }
 
   openShortcuts(): void {

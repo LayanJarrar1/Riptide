@@ -250,6 +250,35 @@ impl AiService {
         Ok(key.masked())
     }
 
+    /// The folder this service keeps its files in (the Research settings live next to them).
+    pub fn data_dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// A secret that is not a provider key (`brave`, `jamendo`), from the secret store.
+    pub fn named_secret(&self, name: &str) -> Option<ApiKey> {
+        self.secrets.get_named(name).ok().flatten()
+    }
+
+    /// `••••abcd` of a named secret, if stored.
+    pub fn named_hint(&self, name: &str) -> Option<String> {
+        self.named_secret(name).map(|k| k.masked())
+    }
+
+    /// Stores a named secret in the secret store; returns the masked hint.
+    pub fn set_named_secret(&self, name: &str, raw: String) -> Result<String, AiFail> {
+        let key = ApiKey::new(raw).map_err(|e| fail(&e, None))?;
+        self.secrets
+            .set_named(name, &key)
+            .map_err(|e| fail(&e, Some(&key)))?;
+        Ok(key.masked())
+    }
+
+    /// Removes a named secret.
+    pub fn remove_named_secret(&self, name: &str) -> Result<(), AiFail> {
+        self.secrets.delete_named(name).map_err(|e| fail(&e, None))
+    }
+
     /// Removes the key of `provider`.
     pub fn remove_key(&self, provider: ProviderKind) -> Result<(), AiFail> {
         self.secrets.delete(provider).map_err(|e| fail(&e, None))
@@ -401,7 +430,12 @@ impl AiService {
         for kind in ProviderKind::ALL {
             self.secrets.delete(kind).map_err(|e| fail(&e, None))?;
         }
-        for f in [SETTINGS_FILE, USAGE_FILE] {
+        for name in crate::research::SECRET_NAMES {
+            self.secrets
+                .delete_named(name)
+                .map_err(|e| fail(&e, None))?;
+        }
+        for f in [SETTINGS_FILE, USAGE_FILE, crate::research::SETTINGS_FILE] {
             match std::fs::remove_file(self.dir.join(f)) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

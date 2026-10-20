@@ -51,3 +51,32 @@ fn credential_manager_round_trip() {
         .expect("delete twice is fine");
     assert!(store.get(ProviderKind::Groq).expect("get").is_none());
 }
+
+#[test]
+fn named_secrets_round_trip_in_credential_manager() {
+    let prefix = format!("RiptideTest/named/{}", std::process::id());
+    let store = CredentialManagerStore::new(prefix);
+    struct Gone(CredentialManagerStore);
+    impl Drop for Gone {
+        fn drop(&mut self) {
+            let _ = self.0.delete_named("brave");
+        }
+    }
+    let _g = Gone(store.clone());
+    let key = ApiKey::new("brave-token-1234567890").expect("key");
+    if let Err(e) = store.set_named("brave", &key) {
+        eprintln!("SKIP: Credential Manager unavailable: {e}");
+        return;
+    }
+    assert_eq!(
+        store
+            .get_named("brave")
+            .expect("get")
+            .expect("present")
+            .expose(),
+        key.expose()
+    );
+    assert!(store.get_named("jamendo").expect("get").is_none());
+    store.delete_named("brave").expect("delete");
+    assert!(store.get_named("brave").expect("get").is_none());
+}

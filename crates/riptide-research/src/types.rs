@@ -273,6 +273,12 @@ impl Rights {
                 label: "Public domain".into(),
             };
         }
+        if squashed.starts_with("oga-by") {
+            return Rights {
+                kind: RightsKind::Cc,
+                label: tidy(raw, 40),
+            };
+        }
         if let Some(label) = cc_label(&low, &squashed) {
             return Rights {
                 kind: RightsKind::Cc,

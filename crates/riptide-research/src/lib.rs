@@ -26,7 +26,7 @@ pub mod types;
 pub use error::{ResearchError, Result};
 pub use search::{
     merge, search_all, search_all_in, search_stream, Dedup, SearchEvent, SearchOutcome,
-    SourceFailure,
+    SourceFailure, SOURCE_DEADLINE,
 };
 pub use sources::{default_source, SearchSource};
 pub use types::{Category, Hit, HitKind, Rights, RightsKind, Source};

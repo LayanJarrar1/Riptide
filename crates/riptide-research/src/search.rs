@@ -3,7 +3,7 @@
 //! list, and a failing source is reported next to the results instead of failing the search.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -159,7 +159,8 @@ async fn run_source(
 }
 
 /// Searches every adapter concurrently and reports each source's hits the moment they arrive
-/// (`on_event` is called from this task, never concurrently). Returns when all sources ended.
+/// (`on_event` is called from this task, never concurrently). `dedup` is shared between rounds
+/// and retries of one search. Returns when all sources ended.
 /// Dropping the future cancels everything in flight.
 pub async fn search_stream(
     adapters: &[Arc<dyn SearchSource>],
@@ -167,7 +168,7 @@ pub async fn search_stream(
     per_source: usize,
     category: Category,
     deadline: Duration,
-    dedup: &mut Dedup,
+    dedup: &Mutex<Dedup>,
     mut on_event: impl FnMut(SearchEvent),
 ) {
     let queries = clean_queries(queries);
@@ -191,7 +192,10 @@ pub async fn search_stream(
         while let Some((source, result, last)) = rx.recv().await {
             match (result, last) {
                 (Ok(hits), false) => {
-                    let new: Vec<Hit> = hits.into_iter().filter(|h| dedup.admit(h)).collect();
+                    let new: Vec<Hit> = {
+                        let mut d = dedup.lock().unwrap_or_else(|p| p.into_inner());
+                        hits.into_iter().filter(|h| d.admit(h)).collect()
+                    };
                     if !new.is_empty() {
                         *found.entry(source).or_default() += new.len();
                         on_event(SearchEvent::Hits { source, hits: new });
@@ -226,14 +230,14 @@ pub async fn search_all_in(
 ) -> SearchOutcome {
     let mut per_source_hits: Vec<(Source, Vec<Hit>)> = Vec::new();
     let mut failures = Vec::new();
-    let mut dedup = Dedup::new();
+    let dedup = Mutex::new(Dedup::new());
     search_stream(
         adapters,
         queries,
         per_source,
         category,
         SOURCE_DEADLINE,
-        &mut dedup,
+        &dedup,
         |ev| match ev {
             SearchEvent::Hits { source, hits } => {
                 match per_source_hits.iter_mut().find(|(s, _)| *s == source) {

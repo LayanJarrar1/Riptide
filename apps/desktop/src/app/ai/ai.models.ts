@@ -81,10 +81,6 @@ export function isAiFail(e: unknown): e is AiFail {
 
 // ---------------------------------------------------------------- research / seen
 
-export type SourceId = 'open-alex' | 'crossref' | 'arxiv' | 'europe-pmc' | 'internet-archive' | 'commons' | 'github' | 'data-gov';
-
-export const SOURCE_IDS: readonly SourceId[] = ['open-alex', 'crossref', 'arxiv', 'europe-pmc', 'internet-archive', 'commons', 'github', 'data-gov'];
-
 export interface SeenMatch {
   readonly downloadId: number;
   readonly title: string;
@@ -107,59 +103,6 @@ export interface SeenQuery {
   readonly sha256?: string;
 }
 
-export interface ResearchHit {
-  readonly id: string;
-  readonly source: SourceId;
-  readonly title: string;
-  readonly authors: readonly string[];
-  readonly year: number | null;
-  readonly summary: string | null;
-  readonly license: string | null;
-  readonly size: number | null;
-  readonly pageUrl: string | null;
-  readonly downloadUrl: string;
-  readonly filename: string | null;
-  readonly doi: string | null;
-  readonly arxiv: string | null;
-  readonly pmid: string | null;
-  readonly pmcid: string | null;
-}
-
-/** A hit plus what the AI and the download index know about it. */
-export interface ResultItem extends ResearchHit {
-  readonly score: number | null;
-  readonly why: string | null;
-  readonly seen: SeenMatch | null;
-}
-
-export interface SourceFailure {
-  readonly source: SourceId;
-  readonly code: string;
-  readonly message: string;
-}
-
-export interface AiOutcome {
-  readonly requested: boolean;
-  readonly used: boolean;
-  readonly error: AiFail | null;
-  readonly tokens: number;
-  readonly dropped: number;
-}
-
-export interface SearchResponse {
-  readonly queries: readonly string[];
-  readonly items: readonly ResultItem[];
-  readonly failures: readonly SourceFailure[];
-  readonly ai: AiOutcome;
-}
-
-export interface SearchRequest {
-  readonly topic: string;
-  readonly useAi: boolean;
-  readonly lang: string;
-  readonly sources?: readonly SourceId[];
-}
-
 export interface AddRequest {
   readonly ids: readonly string[];
   readonly queueId?: number | null;
@@ -170,5 +113,5 @@ export interface AddRequest {
 
 export interface AddResponse {
   readonly added: readonly number[];
-  readonly skipped: readonly { readonly id: string; readonly reason: 'unknown' | 'already_downloaded' | 'failed' }[];
+  readonly skipped: readonly { readonly id: string; readonly reason: 'unknown' | 'page' | 'already_downloaded' | 'failed' }[];
 }

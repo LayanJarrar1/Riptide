@@ -2,9 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 import { AiSettingsComponent } from '../features/settings/ai-settings.component';
-import { ResearchPageComponent } from '../features/research/research-page.component';
 import { InvokeFn, TAURI_AVAILABLE, TAURI_INVOKE } from '../tauri/tauri-bridge';
-import { AiSettings, AiStatus, SearchResponse } from './ai.models';
+import { AiSettings, AiStatus } from './ai.models';
 import { AiService } from './ai.service';
 import { SeenNoticeComponent } from './seen-notice.component';
 
@@ -176,139 +175,6 @@ describe('AiSettingsComponent', () => {
     // a rejection arrives as the typed object; the sentence is the translated one
     expect(el.textContent).not.toContain('Connected.');
     expect(el.textContent).toContain('The provider rejected the key');
-  });
-});
-
-describe('ResearchPageComponent', () => {
-  function response(): SearchResponse {
-    return {
-      queries: ['bittorrent piece selection'],
-      items: [
-        {
-          id: 'arxiv:1705.00548',
-          source: 'arxiv',
-          title: 'Rarest first and choke algorithms',
-          authors: ['A. Author', 'B. Writer'],
-          year: 2017,
-          summary: 'A paper.',
-          license: null,
-          size: null,
-          pageUrl: 'https://arxiv.org/abs/1705.00548',
-          downloadUrl: 'https://arxiv.org/pdf/1705.00548v1',
-          filename: '1705.00548.pdf',
-          doi: null,
-          arxiv: '1705.00548',
-          pmid: null,
-          pmcid: null,
-          score: null,
-          why: null,
-          seen: null,
-        },
-        {
-          id: 'open-alex:W1',
-          source: 'open-alex',
-          title: 'Swarming',
-          authors: [],
-          year: 2010,
-          summary: null,
-          license: 'cc-by',
-          size: 1048576,
-          pageUrl: null,
-          downloadUrl: 'https://example.org/swarm.pdf',
-          filename: null,
-          doi: '10.1234/swarm',
-          arxiv: null,
-          pmid: null,
-          pmcid: null,
-          score: 91,
-          why: 'Covers swarming behaviour.',
-          seen: { downloadId: 7, title: 'Swarming', filename: 'swarm.pdf', dir: 'C:\\d', path: 'C:\\d\\swarm.pdf', completedAt: 1_760_000_000_000, stale: false, matchedBy: 'doi' },
-        },
-      ],
-      failures: [{ source: 'github', code: 'rate_limited', message: 'x' }],
-      ai: { requested: true, used: true, error: null, tokens: 321, dropped: 2 },
-    };
-  }
-
-  it('without AI it is a keyword search and explains how to enable AI', async () => {
-    const { calls } = setup({
-      handler: (cmd) => {
-        if (cmd === 'ai_status') {
-          return status();
-        }
-        if (cmd === 'research_search') {
-          return { ...response(), ai: { requested: false, used: false, error: null, tokens: 0, dropped: 0 } };
-        }
-        if (cmd === 'list_queues') {
-          return [];
-        }
-        return undefined;
-      },
-    });
-    const fixture = TestBed.createComponent(ResearchPageComponent);
-    fixture.detectChanges();
-    await settle(fixture);
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Keyword mode');
-    expect(el.querySelector('input[role="switch"]')).toBeNull();
-    const input = el.querySelector<HTMLInputElement>('input[name="topic"]') as HTMLInputElement;
-    input.value = 'bittorrent piece selection';
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
-    await settle(fixture);
-    const search = calls.find((c) => c.cmd === 'research_search');
-    expect(search?.args).toEqual({ request: { topic: 'bittorrent piece selection', useAi: false, lang: 'en', sources: undefined } });
-  });
-
-  it('renders cards with source badge, licence, size, AI reason, already-downloaded badge and failures', async () => {
-    const { calls } = setup({
-      handler: (cmd) => {
-        if (cmd === 'ai_status') {
-          return status({ keyHint: '••••wxyz', configured: true, settings: settings({ model: 'm' }) });
-        }
-        if (cmd === 'research_search') {
-          return response();
-        }
-        if (cmd === 'research_add') {
-          return { added: [11], skipped: [] };
-        }
-        if (cmd === 'seen_check') {
-          return [null, null];
-        }
-        return undefined;
-      },
-    });
-    const fixture = TestBed.createComponent(ResearchPageComponent);
-    fixture.detectChanges();
-    await settle(fixture);
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('input[role="switch"]')).not.toBeNull();
-    const input = el.querySelector<HTMLInputElement>('input[name="topic"]') as HTMLInputElement;
-    input.value = 'x';
-    input.dispatchEvent(new Event('input'));
-    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
-    await settle(fixture);
-    const cards = [...el.querySelectorAll('li.card')];
-    expect(cards.length).toBe(2);
-    expect(cards[0].textContent).toContain('arXiv');
-    expect(cards[0].textContent).toContain('Licence not stated');
-    expect(cards[1].textContent).toContain('OpenAlex');
-    expect(cards[1].textContent).toContain('Licence: cc-by');
-    expect(cards[1].textContent).toContain('1.00 MB');
-    expect(cards[1].textContent).toContain('Already downloaded');
-    expect(cards[1].textContent).toContain('You already downloaded this on');
-    expect(cards[1].textContent).toContain('Covers swarming behaviour.');
-    expect(el.textContent).toContain('AI used 321 tokens');
-    expect(el.textContent).toContain('2 AI suggestion(s) ignored');
-    expect(el.textContent).toContain('GitHub did not answer');
-    // select the first card and add it
-    (cards[0].querySelector('input[type="checkbox"]') as HTMLInputElement).click();
-    fixture.detectChanges();
-    const add = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Add selected to Riptide (1)')) as HTMLButtonElement;
-    add.click();
-    await settle(fixture);
-    expect(calls.find((c) => c.cmd === 'research_add')?.args).toEqual({ request: { ids: ['arxiv:1705.00548'], queueId: null, category: null, startPaused: false, allowDuplicates: true } });
   });
 });
 

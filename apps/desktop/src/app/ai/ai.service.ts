@@ -14,12 +14,11 @@ import {
   NameSuggestion,
   ProviderId,
   RequestPreview,
-  SearchRequest,
-  SearchResponse,
   SeenMatch,
   SeenQuery,
 } from './ai.models';
 import type { AiMessage } from './ai.models';
+import type { ResearchSettings, ResearchSettingsView } from './research.models';
 
 /**
  * The webview's side of Settings → AI, the Research page and the download memory. Every call is
@@ -94,8 +93,20 @@ export class AiService {
 
   // ---- research and download memory
 
-  search(request: SearchRequest): Promise<SearchResponse> {
-    return this.invoke<SearchResponse>('research_search', { request });
+  settingsView(): Promise<ResearchSettingsView> {
+    return this.invoke<ResearchSettingsView>('research_settings');
+  }
+
+  saveResearchSettings(settings: ResearchSettings): Promise<ResearchSettingsView> {
+    return this.invoke<ResearchSettingsView>('research_save_settings', { settings });
+  }
+
+  setResearchSecret(name: 'brave' | 'jamendo', value: string): Promise<ResearchSettingsView> {
+    return this.invoke<ResearchSettingsView>('research_set_secret', { name, value });
+  }
+
+  removeResearchSecret(name: 'brave' | 'jamendo'): Promise<ResearchSettingsView> {
+    return this.invoke<ResearchSettingsView>('research_remove_secret', { name });
   }
 
   previewSearch(topic: string): Promise<AiMessage[]> {

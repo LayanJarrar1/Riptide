@@ -43,7 +43,11 @@ impl SearchSource for Fake {
     }
 }
 
-fn fake(source: Source, delay_ms: u64, result: Result<usize, ResearchError>) -> Arc<dyn SearchSource> {
+fn fake(
+    source: Source,
+    delay_ms: u64,
+    result: Result<usize, ResearchError>,
+) -> Arc<dyn SearchSource> {
     Arc::new(Fake {
         source,
         delay_ms,
@@ -61,19 +65,21 @@ async fn fast_sources_report_before_slow_ones_and_failures_do_not_stop_others() 
     ];
     let start = Instant::now();
     let mut log: Vec<(Duration, String)> = Vec::new();
-    let mut dedup = Dedup::new();
+    let dedup = std::sync::Mutex::new(Dedup::new());
     search_stream(
         &adapters,
         &["frogs".to_string()],
         5,
         Category::All,
         Duration::from_millis(900),
-        &mut dedup,
+        &dedup,
         |ev| {
             let t = start.elapsed();
             let s = match ev {
                 SearchEvent::Started(s) => format!("start {}", s.id()),
-                SearchEvent::Hits { source, hits } => format!("hits {} {}", source.id(), hits.len()),
+                SearchEvent::Hits { source, hits } => {
+                    format!("hits {} {}", source.id(), hits.len())
+                }
                 SearchEvent::Finished { source, found } => format!("done {} {found}", source.id()),
                 SearchEvent::Failed(f) => format!("failed {} {}", f.source.id(), f.code),
             };
@@ -93,18 +99,21 @@ async fn fast_sources_report_before_slow_ones_and_failures_do_not_stop_others() 
     assert!(at("hits gutenberg 3") < Duration::from_millis(200));
     assert!(at("hits arxiv 2") > Duration::from_millis(350));
     assert!(at("hits gutenberg 3") < at("hits arxiv 2"));
-    assert_eq!(at("done gutenberg 3") >= at("hits gutenberg 3"), true);
+    assert!(at("done gutenberg 3") >= at("hits gutenberg 3"));
     // a failing source is reported as failed, the rest carry on
     assert!(log.iter().any(|(_, s)| s == "failed nasa http"));
     // the slow source hit the per-source deadline
-    assert!(log.iter().any(|(_, s)| s == "failed commons timeout"), "{log:?}");
+    assert!(
+        log.iter().any(|(_, s)| s == "failed commons timeout"),
+        "{log:?}"
+    );
     assert!(start.elapsed() < Duration::from_millis(2500));
 }
 
 #[tokio::test]
 async fn the_same_item_is_reported_once_across_rounds() {
     let adapters = vec![fake(Source::Arxiv, 1, Ok(2))];
-    let mut dedup = Dedup::new();
+    let dedup = std::sync::Mutex::new(Dedup::new());
     let mut n = 0;
     for _ in 0..2 {
         search_stream(
@@ -113,7 +122,7 @@ async fn the_same_item_is_reported_once_across_rounds() {
             5,
             Category::Papers,
             Duration::from_secs(1),
-            &mut dedup,
+            &dedup,
             |ev| {
                 if let SearchEvent::Hits { hits, .. } = ev {
                     n += hits.len();

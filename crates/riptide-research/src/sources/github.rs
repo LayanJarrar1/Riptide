@@ -9,7 +9,7 @@ use serde_json::Value;
 use super::{check_query, clamp, client_for, SearchSource};
 use crate::error::{ResearchError, Result};
 use crate::http::{enc, Http};
-use crate::types::{is_web_url, jstr, tidy, year_of, Hit, Source};
+use crate::types::{is_web_url, jstr, tidy, year_of, Category, Hit, Source};
 
 /// Repositories whose latest release is looked at per search.
 const MAX_REPOS: usize = 4;
@@ -84,6 +84,27 @@ pub(crate) fn parse_repos(body: &Value) -> Vec<Repo> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Does this SPDX id name an open-source (or public-domain) licence? Used for games, where only
+/// repositories that clearly declare one are offered. `NOASSERTION`, `LicenseRef-*`, Creative
+/// Commons non-software licences (except CC0) and anything with a non-commercial or
+/// no-derivatives clause are not.
+pub(crate) fn is_open_licence(spdx: &str) -> bool {
+    let u = spdx.trim().to_ascii_uppercase();
+    if u.is_empty()
+        || u == "NOASSERTION"
+        || u == "OTHER"
+        || u.starts_with("LICENSEREF")
+        || u.contains("-NC")
+        || u.contains("-ND")
+    {
+        return false;
+    }
+    if u.starts_with("CC-") {
+        return false;
+    }
+    true
 }
 
 /// Signatures and checksums are not what someone searching for software wants to download.
@@ -169,21 +190,40 @@ impl SearchSource for Github {
         1
     }
 
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
+    async fn search_in(&self, category: Category, query: &str, limit: usize) -> Result<Vec<Hit>> {
         let q = check_query(query)?;
         let wanted = clamp(limit);
+        if category != Category::Games {
+            return self.run(&q, wanted, false).await;
+        }
+        // Games: repositories tagged `game`, then `games` when the first topic found nothing
+        let first = self.run(&format!("{q} topic:game"), wanted, true).await?;
+        if !first.is_empty() {
+            return Ok(first);
+        }
+        self.run(&format!("{q} topic:games"), wanted, true).await
+    }
+}
+
+impl Github {
+    /// One repository search plus the latest release of the first few repositories.
+    /// `open_only`: skip repositories that do not declare an open-source licence.
+    async fn run(&self, q: &str, wanted: usize, open_only: bool) -> Result<Vec<Hit>> {
         let url = format!(
             "{}/search/repositories?q={}&sort=stars&order=desc&per_page={}",
             self.base,
-            enc(&q),
-            MAX_REPOS * 2
+            enc(q),
+            if open_only { 12 } else { MAX_REPOS * 2 }
         );
         let body = self.http.json(|| self.request(&url)).await?;
         if body.get("items").is_none() {
             return Err(ResearchError::Parse("no items field".into()));
         }
         let mut hits = Vec::new();
-        for repo in parse_repos(&body).into_iter().take(MAX_REPOS) {
+        let repos = parse_repos(&body)
+            .into_iter()
+            .filter(|r| !open_only || r.license.as_deref().is_some_and(is_open_licence));
+        for repo in repos.take(MAX_REPOS) {
             if hits.len() >= wanted {
                 break;
             }

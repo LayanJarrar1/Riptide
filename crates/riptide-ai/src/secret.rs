@@ -16,13 +16,37 @@ pub trait SecretStore: Send + Sync + std::fmt::Debug {
     fn set(&self, provider: ProviderKind, key: &ApiKey) -> Result<()>;
     /// Removes the key; removing a missing key is not an error.
     fn delete(&self, provider: ProviderKind) -> Result<()>;
+    /// A secret that is not a provider key (a Brave Search token, a Jamendo client id), stored
+    /// under its own name next to the provider keys. `name` is a short ascii id such as
+    /// `brave`.
+    fn get_named(&self, name: &str) -> Result<Option<ApiKey>>;
+    /// Stores or replaces a named secret.
+    fn set_named(&self, name: &str, key: &ApiKey) -> Result<()>;
+    /// Removes a named secret; removing a missing one is not an error.
+    fn delete_named(&self, name: &str) -> Result<()>;
+}
+
+/// Names are used in credential targets: only lowercase ascii letters, digits and dashes.
+fn check_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || name.len() > 32
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err(AiError::Store("invalid secret name".into()));
+    }
+    Ok(())
 }
 
 /// Volatile store: tests, and the fallback on platforms without a native backend yet
 /// (macOS Keychain / Secret Service come with the cross-platform milestone; until then keys
 /// on those platforms are not persisted and the user re-enters them each run).
 #[derive(Default)]
-pub struct MemorySecretStore(Mutex<HashMap<ProviderKind, ApiKey>>);
+pub struct MemorySecretStore(
+    Mutex<HashMap<ProviderKind, ApiKey>>,
+    Mutex<HashMap<String, ApiKey>>,
+);
 
 impl MemorySecretStore {
     /// An empty store.
@@ -59,6 +83,32 @@ impl SecretStore for MemorySecretStore {
             .lock()
             .map_err(|_| AiError::Store("lock poisoned".into()))?;
         m.remove(&provider);
+        Ok(())
+    }
+    fn get_named(&self, name: &str) -> Result<Option<ApiKey>> {
+        check_name(name)?;
+        let m = self
+            .1
+            .lock()
+            .map_err(|_| AiError::Store("lock poisoned".into()))?;
+        Ok(m.get(name).cloned())
+    }
+    fn set_named(&self, name: &str, key: &ApiKey) -> Result<()> {
+        check_name(name)?;
+        let mut m = self
+            .1
+            .lock()
+            .map_err(|_| AiError::Store("lock poisoned".into()))?;
+        m.insert(name.to_string(), key.clone());
+        Ok(())
+    }
+    fn delete_named(&self, name: &str) -> Result<()> {
+        check_name(name)?;
+        let mut m = self
+            .1
+            .lock()
+            .map_err(|_| AiError::Store("lock poisoned".into()))?;
+        m.remove(name);
         Ok(())
     }
 }
@@ -114,9 +164,19 @@ mod windows {
             }
         }
 
-        fn target(&self, p: ProviderKind) -> Vec<u16> {
-            let s = format!("{}/{}", self.prefix, p.id());
+        fn target_of(&self, leaf: &str) -> Vec<u16> {
+            let s = format!("{}/{}", self.prefix, leaf);
             s.encode_utf16().chain(std::iter::once(0)).collect()
+        }
+
+        fn target(&self, p: ProviderKind) -> Vec<u16> {
+            self.target_of(p.id())
+        }
+
+        /// Named secrets live at `<prefix>/ext-<name>`, which no provider id can equal.
+        fn named_target(&self, name: &str) -> Result<Vec<u16>> {
+            super::check_name(name)?;
+            Ok(self.target_of(&format!("ext-{name}")))
         }
     }
 
@@ -125,9 +185,8 @@ mod windows {
         unsafe { GetLastError() }
     }
 
-    impl SecretStore for CredentialManagerStore {
-        fn get(&self, provider: ProviderKind) -> Result<Option<ApiKey>> {
-            let target = self.target(provider);
+    fn read(target: &[u16]) -> Result<Option<ApiKey>> {
+        {
             let mut cred: *mut CREDENTIALW = ptr::null_mut();
             // SAFETY: `target` is NUL-terminated; on success `cred` points to a block we free
             // with CredFree after copying the blob out.
@@ -159,9 +218,10 @@ mod windows {
                 .map_err(|_| AiError::Store("stored credential is not valid text".into()))?;
             ApiKey::new(text).map(Some)
         }
+    }
 
-        fn set(&self, provider: ProviderKind, key: &ApiKey) -> Result<()> {
-            let mut target = self.target(provider);
+    fn write(mut target: Vec<u16>, key: &ApiKey) -> Result<()> {
+        {
             let mut user: Vec<u16> = "riptide".encode_utf16().chain(std::iter::once(0)).collect();
             let blob = key.expose().as_bytes();
             let blob_len =
@@ -184,9 +244,10 @@ mod windows {
             }
             Ok(())
         }
+    }
 
-        fn delete(&self, provider: ProviderKind) -> Result<()> {
-            let target = self.target(provider);
+    fn remove(target: &[u16]) -> Result<()> {
+        {
             // SAFETY: `target` is NUL-terminated.
             let ok = unsafe { CredDeleteW(target.as_ptr(), CRED_TYPE_GENERIC, 0) };
             if ok == FALSE {
@@ -198,6 +259,27 @@ mod windows {
                 }
             }
             Ok(())
+        }
+    }
+
+    impl SecretStore for CredentialManagerStore {
+        fn get(&self, provider: ProviderKind) -> Result<Option<ApiKey>> {
+            read(&self.target(provider))
+        }
+        fn set(&self, provider: ProviderKind, key: &ApiKey) -> Result<()> {
+            write(self.target(provider), key)
+        }
+        fn delete(&self, provider: ProviderKind) -> Result<()> {
+            remove(&self.target(provider))
+        }
+        fn get_named(&self, name: &str) -> Result<Option<ApiKey>> {
+            read(&self.named_target(name)?)
+        }
+        fn set_named(&self, name: &str, key: &ApiKey) -> Result<()> {
+            write(self.named_target(name)?, key)
+        }
+        fn delete_named(&self, name: &str) -> Result<()> {
+            remove(&self.named_target(name)?)
         }
     }
 }
@@ -221,5 +303,20 @@ mod tests {
         s.delete(ProviderKind::Groq).unwrap();
         assert!(s.get(ProviderKind::Groq).unwrap().is_none());
         assert!(!format!("{s:?}").contains("sk-test"));
+    }
+
+    #[test]
+    fn named_secrets_are_separate_from_provider_keys() {
+        let s = MemorySecretStore::new();
+        let k = ApiKey::new("brave-token-123456").unwrap();
+        s.set_named("brave", &k).unwrap();
+        assert_eq!(s.get_named("brave").unwrap().unwrap().expose(), k.expose());
+        assert!(s.get(ProviderKind::OpenAi).unwrap().is_none());
+        assert!(s.get_named("jamendo").unwrap().is_none());
+        assert!(s.set_named("../evil", &k).is_err());
+        assert!(s.get_named("").is_err());
+        s.delete_named("brave").unwrap();
+        s.delete_named("brave").unwrap();
+        assert!(s.get_named("brave").unwrap().is_none());
     }
 }

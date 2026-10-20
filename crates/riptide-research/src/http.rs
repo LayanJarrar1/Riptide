@@ -60,11 +60,21 @@ impl Http {
         Self::with_tuning(min_interval, Tuning::default())
     }
 
+    /// A client that never follows redirects: for requests that carry a secret header (Brave
+    /// token), which must not be forwarded anywhere.
+    pub fn without_redirects(min_interval: Duration) -> Self {
+        Self::build(min_interval, Tuning::default(), redirect::Policy::none())
+    }
+
     /// Like [`Http::new`] with explicit timing.
     pub fn with_tuning(min_interval: Duration, tuning: Tuning) -> Self {
+        Self::build(min_interval, tuning, redirect::Policy::limited(5))
+    }
+
+    fn build(min_interval: Duration, tuning: Tuning, policy: redirect::Policy) -> Self {
         let client = Client::builder()
             .user_agent(USER_AGENT)
-            .redirect(redirect::Policy::limited(5))
+            .redirect(policy)
             .connect_timeout(Duration::from_secs(10))
             .build()
             .unwrap_or_else(|_| Client::new());

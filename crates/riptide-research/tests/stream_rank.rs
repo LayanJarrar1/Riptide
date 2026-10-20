@@ -13,8 +13,10 @@ use riptide_research::{Hit, Source};
 use sse::{chunk, serve, Script, Step};
 
 fn provider(url: &str, timeout_ms: u64) -> Box<dyn Provider> {
-    let mut opts = ProviderOptions::default();
-    opts.timeout = Duration::from_millis(timeout_ms);
+    let mut opts = ProviderOptions {
+        timeout: Duration::from_millis(timeout_ms),
+        ..ProviderOptions::default()
+    };
     opts.retry.max_attempts = 1;
     build_provider(
         ProviderKind::DeepInfra,

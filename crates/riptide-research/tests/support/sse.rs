@@ -142,8 +142,7 @@ pub async fn serve(scripts: Vec<Script>) -> SseServer {
                             let mut framed = format!("{:x}\r\n", b.len()).into_bytes();
                             framed.extend_from_slice(b);
                             framed.extend_from_slice(b"\r\n");
-                            if sock.write_all(&framed).await.is_err()
-                                || sock.flush().await.is_err()
+                            if sock.write_all(&framed).await.is_err() || sock.flush().await.is_err()
                             {
                                 seen3.lock().expect("lock").write_failures += 1;
                                 return;

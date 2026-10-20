@@ -1,0 +1,54 @@
+{
+  "_note": "NOT recorded: built by hand from the documented response shape of https://api-dashboard.search.brave.com/app/documentation/web-search/responses (no API key was available on 2026-10-20). The field names (type, query, web.results[].title/url/description/age/language/family_friendly) follow that documentation; the values are invented.",
+  "type": "search",
+  "query": { "original": "open source download manager", "show_strict_warning": false, "is_navigational": false },
+  "web": {
+    "type": "search",
+    "results": [
+      {
+        "title": "Free <strong>Download</strong> Manager &amp; Accelerator",
+        "url": "https://www.example.org/fdm/",
+        "is_source_local": false,
+        "is_source_both": false,
+        "description": "A <strong>download</strong> manager that splits files into <strong>segments</strong>.   Free &amp; open.",
+        "page_age": "2026-03-02T09:30:00",
+        "profile": { "name": "Example", "url": "https://www.example.org/fdm/", "long_name": "www.example.org", "img": "https://imgs.search.brave.com/x" },
+        "language": "en",
+        "family_friendly": true,
+        "type": "search_result",
+        "subtype": "generic",
+        "age": "March 2, 2026"
+      },
+      {
+        "title": "aria2 - the ultra fast download utility",
+        "url": "https://aria2.github.io/#features",
+        "description": "aria2 is a lightweight multi-protocol &amp; multi-source command-line download utility.",
+        "language": "en",
+        "type": "search_result"
+      },
+      {
+        "title": "Duplicate of the first result",
+        "url": "https://www.example.org/fdm/#again",
+        "description": "Same page with a different fragment.",
+        "type": "search_result"
+      },
+      {
+        "title": "Hostile entry",
+        "url": "javascript:alert(1)",
+        "description": "must be dropped",
+        "type": "search_result"
+      },
+      {
+        "title": "Local file",
+        "url": "file:///C:/Windows/system.ini",
+        "description": "must be dropped",
+        "type": "search_result"
+      },
+      {
+        "title": "",
+        "url": "https://untitled.example.net/page",
+        "type": "search_result"
+      }
+    ]
+  }
+}
