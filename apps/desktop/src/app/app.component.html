@@ -1,4 +1,5 @@
-<div class="frame" [class.is-booting]="ui.booting()">
+<div class="frame" [class.is-booting]="ui.booting()" [class.no-sidebar]="!settings.settings().sidebarVisible">
+  <app-title-bar class="titlebar" />
   <header class="topbar">
     <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
       <img class="brand-logo brand-logo-light" src="brand-logo-light.svg" alt="" width="91" height="34" />
