@@ -5,7 +5,7 @@ import { FormatService } from '../../core/format.service';
 import { TickerDirective } from '../../core/ticker.directive';
 import { I18nService } from '../../i18n/i18n.service';
 import { DownloadRow } from '../../data/downloads.store';
-import { canPause, canResume, CategoryKey } from '../../model/download';
+import { canPause, canResume, CategoryKey, failureFix } from '../../model/download';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent, IconName } from '../../ui/icon.component';
 import { ProgressFlowComponent } from '../../ui/progress-flow.component';
@@ -81,11 +81,13 @@ export function hostOf(url: string): string {
         @if (row().d.state === 'failed') {
           <span class="reason">
             <app-icon name="alert" [size]="12" />
-            <span class="reason-text" [attr.title]="failureLabel()">{{ failureLabel() }}</span>
-            <span class="reason-sep" aria-hidden="true">·</span>
-            <button type="button" class="reason-action" (click)="act($event, failedAction())">
-              {{ i18n.t(failedAction() === 'refreshLink' ? 'action.refreshLink' : 'action.retry') }}
-            </button>
+            <span class="reason-text" [attr.title]="failureTitle()">{{ failureLabel() }}</span>
+            @if (fix(); as f) {
+              <span class="reason-sep" aria-hidden="true">·</span>
+              <button type="button" class="reason-action" (click)="act($event, f.action)">
+                {{ i18n.t(f.labelKey) }}
+              </button>
+            }
           </span>
         } @else {
           <span class="host" dir="ltr">{{ host() }}</span>
@@ -121,7 +123,7 @@ export function hostOf(url: string): string {
     <div class="cell c-actions" role="gridcell">
       @if (canPause(row().d.state)) {
         <button appButton size="sm" variant="ghost" icon="pause" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.pause')" [attr.title]="i18n.t('action.pause')" (click)="act($event, 'pause')"></button>
-      } @else if (canResume(row().d.state)) {
+      } @else if (canResume(row().d.state) && (row().d.state !== 'failed' || fix()?.action === 'retry')) {
         <button appButton size="sm" variant="ghost" [icon]="row().d.state === 'failed' ? 'retry' : 'play'" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t(row().d.state === 'failed' ? 'action.retry' : 'action.resume')" [attr.title]="i18n.t(row().d.state === 'failed' ? 'action.retry' : 'action.resume')" (click)="act($event, row().d.state === 'failed' ? 'retry' : 'resume')"></button>
       } @else if (row().d.state === 'completed') {
         <button appButton size="sm" variant="ghost" icon="folderOpen" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.openFolder')" [attr.title]="i18n.t('action.openFolder')" (click)="act($event, 'openFolder')"></button>
@@ -501,8 +503,14 @@ export class DownloadRowComponent {
     return failure === null ? this.i18n.t('state.failed') : this.i18n.t(`failure.${failure}`);
   });
 
-  /** The fix for a failed row: a fresh link for an expired one, a retry otherwise. */
-  protected readonly failedAction = computed<RowAction>(() => (this.row().d.failure === 'expired' ? 'refreshLink' : 'retry'));
+  /** The tooltip of the reason: the long explanation where there is one. */
+  protected readonly failureTitle = computed(() => {
+    const failure = this.row().d.failure;
+    return failure === 'denied' || failure === 'auth' || failure === 'notfound' ? this.i18n.t(`failure.${failure}.long`) : this.failureLabel();
+  });
+
+  /** The fix for a failed row (see `failureFix`); `null` when nothing helps, e.g. a 404. */
+  protected readonly fix = computed(() => failureFix(this.row().d.failure));
 
   /** Stable formatter for the speed ticker (follows the language through the service). */
   protected readonly speedFormat = (bps: number): string => this.format.speed(bps);

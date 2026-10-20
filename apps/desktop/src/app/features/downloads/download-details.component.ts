@@ -6,7 +6,7 @@ import { TickerDirective } from '../../core/ticker.directive';
 import { DownloadRow } from '../../data/downloads.store';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
-import { canPause, canResume } from '../../model/download';
+import { canPause, canResume, failureFix } from '../../model/download';
 import { MAIN_QUEUE_ID } from '../../model/queue';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
@@ -188,8 +188,10 @@ interface LogLine {
     <footer class="actions">
       @if (canPause(d().state)) {
         <button appButton variant="secondary" icon="pause" type="button" (click)="action.emit('pause')">{{ i18n.t('action.pause') }}</button>
-      } @else if (d().state === 'failed' && d().failure === 'expired') {
-        <button appButton variant="primary" icon="link" type="button" (click)="action.emit('refreshLink')">{{ i18n.t('action.refreshLink') }}</button>
+      } @else if (d().state === 'failed' && fix()?.action === 'refreshLink') {
+        <button appButton variant="primary" icon="link" type="button" (click)="action.emit('refreshLink')">{{ i18n.t(fix()?.labelKey ?? 'action.refreshLink') }}</button>
+      } @else if (d().state === 'failed' && fix() === null) {
+        <!-- permanent failure (404/410): retrying cannot help -->
       } @else if (canResume(d().state)) {
         <button appButton variant="primary" [icon]="d().state === 'failed' ? 'retry' : 'play'" type="button" (click)="action.emit(d().state === 'failed' ? 'retry' : 'resume')">{{ i18n.t(d().state === 'failed' ? 'action.retry' : 'action.resume') }}</button>
       } @else if (d().state === 'completed') {
@@ -506,8 +508,9 @@ export class DownloadDetailsComponent {
   /** The i18n key of the long, friendly explanation for a refused video; `null` for other failures. */
   protected readonly friendlyError = computed(() => {
     const failure = this.d().failure;
-    return failure === 'login' || failure === 'refused' ? `failure.${failure}.long` : null;
+    return failure === 'login' || failure === 'refused' || failure === 'auth' || failure === 'denied' || failure === 'notfound' ? `failure.${failure}.long` : null;
   });
+  protected readonly fix = computed(() => failureFix(this.d().failure));
   protected readonly isMedia = computed(() => this.d().kind === 'media');
   protected readonly icon = computed(() => CATEGORY_ICONS[this.d().category]);
   protected readonly host = computed(() => hostOf(this.d().url));

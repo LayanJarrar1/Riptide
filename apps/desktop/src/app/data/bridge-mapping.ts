@@ -44,12 +44,17 @@ export function toUiState(state: DownloadState): UiDownloadState {
   return state.state;
 }
 
+/** Query words that make a 403 plausibly an expired signed link rather than a plain refusal. */
+const SIGNED_URL = /[?&](expires?|signature|sig|token|x-amz-[a-z-]+|se|exp|hdnts|policy|key-pair-id)=|\/expires\b/i;
+
 /**
  * The UI's failure kind, derived from the engine's human-readable error text (case-insensitive):
- * "checksum" → `checksum`; "403" or "expired" → `expired`; "Content-Length" or "declared" →
- * `server`; "disk" or "space" → `disk`; anything else (including no text) → `network`.
+ * "checksum" → `checksum`; "authentication failed" or 401/407 → `auth`; 404/410 → `notfound`;
+ * "expired", or a 403 on a URL that looks signed (`url`) → `expired`; any other 403 → `denied`;
+ * "Content-Length" or "declared" → `server`; "disk" or "space" → `disk`; anything else
+ * (including no text) → `network`.
  */
-export function failureKindOf(error: string | null | undefined): FailureKind {
+export function failureKindOf(error: string | null | undefined, url?: string | null): FailureKind {
   const text = (error ?? '').toLowerCase();
   // a tagged video refusal first: its raw text may say "403" without the link having expired
   const tagged = parseMediaError(error ?? '').kind;
@@ -59,8 +64,17 @@ export function failureKindOf(error: string | null | undefined): FailureKind {
   if (text.includes('checksum')) {
     return 'checksum';
   }
-  if (text.includes('403') || text.includes('expired')) {
+  if (text.includes('expired')) {
     return 'expired';
+  }
+  if (text.includes('authentication failed') || /\b(401|407)\b/.test(text)) {
+    return 'auth';
+  }
+  if (/\b(404|410)\b/.test(text) || text.includes('not found')) {
+    return 'notfound';
+  }
+  if (text.includes('403')) {
+    return SIGNED_URL.test(url ?? '') ? 'expired' : 'denied';
   }
   if (text.includes('content-length') || text.includes('declared')) {
     return 'server';
@@ -147,7 +161,7 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     addedAt: toMillis(d.added_at) ?? previous?.addedAt ?? 0,
     startedAt: toMillis(d.started_at),
     completedAt: toMillis(d.completed_at),
-    failure: state === 'failed' ? failureKindOf(d.error) : null,
+    failure: state === 'failed' ? failureKindOf(d.error, d.url) : null,
     errorDetail: state === 'failed' && d.kind === 'media' ? errorDetailOf(d.error) : null,
     checksum: d.checksum_expected === null ? null : { algo: d.checksum_expected.algo, hex: d.checksum_expected.hex },
   };

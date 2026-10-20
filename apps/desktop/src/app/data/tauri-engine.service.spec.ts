@@ -291,7 +291,7 @@ describe('TauriEngineService', () => {
     bridge.emit({ type: 'failed', id: 1, error: 'server answered 403 Forbidden', retryable: false });
     await settle();
     expect(engine.get(1)?.state).toBe('failed');
-    expect(engine.get(1)?.failure).toBe('expired');
+    expect(engine.get(1)?.failure).toBe('denied');
   });
 
   it('removed: drops the row; a refresh of a record the engine lost drops it too', async () => {
