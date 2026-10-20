@@ -75,6 +75,22 @@
     hint.querySelector('.mo-x').addEventListener('click', close);
     hint.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   });
+  safe('release pill', () => {
+    // Shown once per version: a dismissal is remembered for that version only. Absolutely positioned under the
+    // header, so showing it never moves anything (no layout shift). The motion hint, when open, pushes it down.
+    const pill = document.querySelector('.rel-pill');
+    if (!pill) return;
+    const version = pill.dataset.version;
+    const hint = document.querySelector('.mo-hint');
+    if (!version || store.get('riptide-release-seen') === version) return;
+    // When the motion hint is open (reduced-motion visitors, first visit) the pill sits below it instead of beside it.
+    const place = () => { pill.style.top = hint && !hint.hidden ? 'calc(100% + 16px + ' + hint.offsetHeight + 'px)' : ''; };
+    place();
+    if (hint && window.MutationObserver) new MutationObserver(place).observe(hint, { attributes: true, attributeFilter: ['hidden'] });
+    pill.hidden = false;
+    pill.querySelector('.rel-x').addEventListener('click', () => { pill.hidden = true; store.set('riptide-release-seen', version); });
+    pill.addEventListener('keydown', (e) => { if (e.key === 'Escape') { pill.hidden = true; store.set('riptide-release-seen', version); } });
+  });
   const header = document.querySelector('.site-header');
   safe('menu', () => {
     const navToggle = document.querySelector('.nav-toggle');

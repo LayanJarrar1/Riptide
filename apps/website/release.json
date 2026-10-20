@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "repo": "LayanJarrar1/Riptide",
+  "latest": {
+    "stable": null,
+    "prerelease": "v0.1.0-alpha.4"
+  },
+  "releases": [
+    {
+      "tag": "v0.1.0-alpha.4",
+      "version": "0.1.0-alpha.4",
+      "channel": "alpha",
+      "prerelease": true,
+      "publishedAt": "2026-10-20T09:34:29Z",
+      "notesUrl": "https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.4",
+      "installer": {
+        "name": "Riptide_0.1.0-alpha.4_x64-setup.exe",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide_0.1.0-alpha.4_x64-setup.exe",
+        "size": 68800095,
+        "sha256": "d176543484c616cb140a6596825e484afa7d3450bef107393d311a26d6444271"
+      },
+      "portable": {
+        "name": "Riptide-0.1.0-alpha.4-portable.zip",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/Riptide-0.1.0-alpha.4-portable.zip",
+        "size": 85851465,
+        "sha256": "e2e29a02a1850e1cce53785b23fc18a0c9e3af1f58dfeb3cbf14dc8176a532f5"
+      },
+      "sums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.4/SHA256SUMS.txt"
+      }
+    },
+    {
+      "tag": "v0.1.0-alpha.3",
+      "version": "0.1.0-alpha.3",
+      "channel": "alpha",
+      "prerelease": true,
+      "publishedAt": "2026-10-18T20:10:03Z",
+      "notesUrl": "https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.3",
+      "installer": {
+        "name": "Riptide_0.1.0-alpha.3_x64-setup.exe",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.3/Riptide_0.1.0-alpha.3_x64-setup.exe",
+        "size": 8134198,
+        "sha256": "3de93fc5508492344228c3aaf16bfcd89571b6b5783827d4c41e9ee247e16dee"
+      },
+      "portable": {
+        "name": "Riptide-0.1.0-alpha.3-portable.zip",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.3/Riptide-0.1.0-alpha.3-portable.zip",
+        "size": 10909466,
+        "sha256": "e7f4cf395a421e64c3242cca87ba2cf84cb69ca31fe67e8b56145bdfbaff3158"
+      },
+      "sums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.3/SHA256SUMS.txt"
+      }
+    }
+  ]
+}

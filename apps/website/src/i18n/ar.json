@@ -29,6 +29,15 @@
     "motionOn": "تشغيل",
     "motionDismiss": "إغلاق"
   },
+  "release": {
+    "label": "أحدث إصدار",
+    "text": "Riptide v{v} متاح الآن.",
+    "link": "شاهد الجديد ←",
+    "dismiss": "إغلاق"
+  },
+  "hero": {
+    "status": "{channel} لويندوز 10 و11",
+  },
   "hero": {
     "status": "ألفا {n} لويندوز 10 و11",
     "titleA": "حمّل أسرع.",
@@ -380,6 +389,7 @@
   },
   "download": {
     "eyebrow": "التحميل",
+    "badge": "{channel}",
     "badge": "ألفا {n}",
     "title": "حمّل أحدث ريبتايد.",
     "lead": "مجاني. ويندوز 10 و11، 64 بت. بلا طلب صلاحيات.",

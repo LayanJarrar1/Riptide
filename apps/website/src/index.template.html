@@ -112,6 +112,7 @@
       </div>
     </nav>
     <div class="mo-hint" hidden role="group" aria-label="{{nav.motionHintLabel}}"><p>{{nav.motionHint}}</p><button class="btn btn-primary btn-sm mo-on" type="button">{{nav.motionOn}}</button><button class="icon-btn mo-x" type="button" aria-label="{{nav.motionDismiss}}">{{{svg close}}}</button></div>
+    <div class="rel-pill" hidden role="group" aria-label="{{release.label}}" data-version="{{version}}"><a class="rel-link" href="{{releaseUrl}}" rel="noopener"><span>{{release.text}}</span> <b>{{release.link}}</b></a><button class="icon-btn rel-x" type="button" aria-label="{{release.dismiss}}">{{{svg close}}}</button></div>
   </header>
 
   <main id="main">
@@ -479,6 +480,7 @@
             <h3 class="h3">{{download.new.title}} <bdi dir="ltr">{{version}}</bdi></h3>
             <ul>
               {{#each download.new.items}}<li>{{.}}</li>
+              {{/each}}{{#each features}}<li><b>{{title}}.</b> {{text}}</li>
               {{/each}}
             </ul>
             <a class="text-link" href="{{releaseUrl}}" rel="noopener">{{download.new.notes}}</a>

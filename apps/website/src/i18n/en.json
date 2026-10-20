@@ -29,6 +29,15 @@
     "motionOn": "On",
     "motionDismiss": "Dismiss"
   },
+  "release": {
+    "label": "Latest release",
+    "text": "Riptide v{v} is out.",
+    "link": "See what's new →",
+    "dismiss": "Dismiss"
+  },
+  "hero": {
+    "status": "{channel} for Windows 10 and 11",
+  },
   "hero": {
     "status": "Alpha {n} for Windows 10 and 11",
     "titleA": "Download faster.",
@@ -380,6 +389,7 @@
   },
   "download": {
     "eyebrow": "Download",
+    "badge": "{channel}",
     "badge": "Alpha {n}",
     "title": "Get the latest Riptide.",
     "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
