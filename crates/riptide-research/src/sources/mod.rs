@@ -8,16 +8,25 @@ use async_trait::async_trait;
 
 use crate::error::{ResearchError, Result};
 use crate::http::Http;
-use crate::types::{Hit, Source};
+use crate::types::{Category, Hit, Source};
 
 pub mod arxiv;
+pub mod blender;
 pub mod commons;
 pub mod crossref;
 pub mod datagov;
 pub mod europepmc;
 pub mod github;
+pub mod gutenberg;
 pub mod internet_archive;
+pub mod jamendo;
+pub mod librivox;
+pub mod nasa;
 pub mod openalex;
+pub mod opengameart;
+pub mod openlibrary;
+pub mod openverse;
+pub mod websearch;
 
 /// A searchable open source.
 #[async_trait]
@@ -30,12 +39,25 @@ pub trait SearchSource: Send + Sync {
         3
     }
     /// Searches for `query` and returns at most `limit` hits (limit is clamped to 1..=50).
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>>;
+    /// Used for [`Category::All`] and by sources that serve one kind of thing only.
+    async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        self.search_in(Category::All, query, limit).await
+    }
+
+    /// Like [`SearchSource::search`] for one category. Sources that cover several kinds of
+    /// media (Internet Archive, Commons, Openverse, GitHub...) override this; the default
+    /// ignores the category.
+    async fn search_in(&self, category: Category, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        let _ = category;
+        self.search(query, limit).await
+    }
 }
 
-/// Builds the adapter for `source` talking to the real service.
-pub fn default_source(source: Source) -> Arc<dyn SearchSource> {
-    match source {
+/// Builds the adapter for `source` talking to the real service. `None` for the two sources
+/// that need the user's own setup ([`Source::Jamendo`]: client id, [`Source::Web`]: backend):
+/// build those with [`jamendo::Jamendo::new`] and [`websearch::WebSearch::new`].
+pub fn default_source(source: Source) -> Option<Arc<dyn SearchSource>> {
+    Some(match source {
         Source::OpenAlex => Arc::new(openalex::OpenAlex::new()),
         Source::Crossref => Arc::new(crossref::Crossref::new()),
         Source::Arxiv => Arc::new(arxiv::Arxiv::new()),
@@ -44,7 +66,15 @@ pub fn default_source(source: Source) -> Arc<dyn SearchSource> {
         Source::Commons => Arc::new(commons::Commons::new()),
         Source::Github => Arc::new(github::Github::new()),
         Source::DataGov => Arc::new(datagov::DataGov::new()),
-    }
+        Source::Gutenberg => Arc::new(gutenberg::Gutenberg::new()),
+        Source::OpenLibrary => Arc::new(openlibrary::OpenLibrary::new()),
+        Source::LibriVox => Arc::new(librivox::LibriVox::new()),
+        Source::Openverse => Arc::new(openverse::Openverse::new()),
+        Source::Blender => Arc::new(blender::Blender::new()),
+        Source::OpenGameArt => Arc::new(opengameart::OpenGameArt::new()),
+        Source::Nasa => Arc::new(nasa::Nasa::new()),
+        Source::Jamendo | Source::Web => return None,
+    })
 }
 
 /// Minimum spacing between two requests to each service, from their published etiquette
@@ -54,9 +84,20 @@ pub(crate) fn pacing(source: Source) -> Duration {
         Source::Arxiv => Duration::from_millis(3100),
         Source::Github => Duration::from_millis(2200),
         Source::OpenAlex | Source::Crossref => Duration::from_millis(250),
-        Source::EuropePmc | Source::InternetArchive | Source::Commons | Source::DataGov => {
-            Duration::from_millis(300)
-        }
+        // Brave's free plan allows one request per second
+        Source::Web => Duration::from_millis(1100),
+        Source::OpenGameArt => Duration::from_millis(1000),
+        Source::EuropePmc
+        | Source::InternetArchive
+        | Source::Commons
+        | Source::DataGov
+        | Source::Gutenberg
+        | Source::OpenLibrary
+        | Source::LibriVox
+        | Source::Jamendo
+        | Source::Openverse
+        | Source::Blender
+        | Source::Nasa => Duration::from_millis(300),
     }
 }
 

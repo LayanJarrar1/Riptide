@@ -24,6 +24,9 @@ pub mod sources;
 pub mod types;
 
 pub use error::{ResearchError, Result};
-pub use search::{merge, search_all, SearchOutcome, SourceFailure};
+pub use search::{
+    merge, search_all, search_all_in, search_stream, Dedup, SearchEvent, SearchOutcome,
+    SourceFailure,
+};
 pub use sources::{default_source, SearchSource};
-pub use types::{Hit, Source};
+pub use types::{Category, Hit, HitKind, Rights, RightsKind, Source};
