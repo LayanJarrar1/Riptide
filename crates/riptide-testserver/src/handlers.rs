@@ -146,7 +146,18 @@ impl Resource {
     fn from_params(q: &Params) -> Result<Self, HttpError> {
         let seed = param_u64(q, "seed", DEFAULT_SEED)?;
         let size = param_u64(q, "size", DEFAULT_SIZE)?;
-        Ok(Self::new(seed, size))
+        let mut res = Self::new(seed, size);
+        // `?ct=` and `?cd=` let a test pick the Content-Type and the raw Content-Disposition
+        // value (percent-decoded by the query parser) of any /ok-like endpoint.
+        if let Some(ct) = q.get("ct") {
+            let v = HeaderValue::from_str(ct).map_err(|_| bad("invalid ct"))?;
+            res.extra.push((header::CONTENT_TYPE, v));
+        }
+        if let Some(cd) = q.get("cd") {
+            let v = HeaderValue::from_bytes(cd.as_bytes()).map_err(|_| bad("invalid cd"))?;
+            res.extra.push((header::CONTENT_DISPOSITION, v));
+        }
+        Ok(res)
     }
 }
 
@@ -234,7 +245,11 @@ fn common_headers(h: &mut HeaderMap, res: &Resource) -> Result<(), HttpError> {
         h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
     }
     for (name, value) in &res.extra {
-        h.append(name.clone(), value.clone());
+        if *name == header::CONTENT_TYPE {
+            h.insert(name.clone(), value.clone());
+        } else {
+            h.append(name.clone(), value.clone());
+        }
     }
     Ok(())
 }
@@ -333,8 +348,11 @@ pub(crate) async fn index(State(st): App) -> Response {
          origin: {}\nalt origin: {}\n\n\
          Common query parameters: size= (bytes, default 1048576), seed= (u64, default {DEFAULT_SEED}).\n\n\
          /ok                      ranges, ETag, Last-Modified, Content-Length, If-Range, 416\n\
+         /file/<name.ext>         like /ok with the name in the path; ?ct= sets Content-Type, ?cd= Content-Disposition\n\
          /noranges                ignores Range, always 200, no Accept-Ranges\n\
-         /nolength                chunked transfer, no Content-Length\n\
+         /nohead                  like /ok, HEAD answers 405
+\n         /range-lie?lie=          206 Content-Range total smaller than the body (CDN on-the-fly compression)
+\n         /nolength                chunked transfer, no Content-Length\n\
          /slow?bps=               throttled bandwidth (bytes per second), ranges like /ok\n\
          /drop?after=             closes the connection after N body bytes\n\
          /flaky?rate=             5xx or connection reset with probability rate (deterministic PRNG)\n\
@@ -374,6 +392,22 @@ pub(crate) async fn ok(
     )
 }
 
+/// `/file/<any/path/name.ext>` — like `/ok`, but the name lives in the URL path (so tests can
+/// exercise percent-encoded, Unicode and extensionless names taken from the URL).
+pub(crate) async fn file(
+    method: Method,
+    Path(_name): Path<String>,
+    Query(q): Query<Params>,
+    headers: HeaderMap,
+) -> HandlerResult {
+    serve(
+        &method,
+        &headers,
+        Resource::from_params(&q)?,
+        Shaping::default(),
+    )
+}
+
 /// `/noranges`
 pub(crate) async fn noranges(
     method: Method,
@@ -382,7 +416,7 @@ pub(crate) async fn noranges(
 ) -> HandlerResult {
     let mut res = Resource::from_params(&q)?;
     res.ranges = false;
-    serve(&method, &headers, res, Shaping::default())
+    serve(&method, &headers, res, optional_throttle(&q)?)
 }
 
 /// `/nolength`
@@ -394,7 +428,20 @@ pub(crate) async fn nolength(
     let mut res = Resource::from_params(&q)?;
     res.ranges = false;
     res.known_length = false;
-    serve(&method, &headers, res, Shaping::default())
+    serve(&method, &headers, res, optional_throttle(&q)?)
+}
+
+/// Optional `?bps=` throttle for endpoints that are not `/slow`, so a test can interrupt them.
+fn optional_throttle(q: &Params) -> Result<Shaping, HttpError> {
+    let bps = param_u64(q, "bps", 0)?;
+    if bps == 0 {
+        return Ok(Shaping::default());
+    }
+    Ok(Shaping {
+        bps: Some(bps),
+        chunk: Some((bps / 8).clamp(1024, CHUNK_SIZE as u64) as usize),
+        ..Shaping::default()
+    })
 }
 
 /// `/slow?bps=`
@@ -601,7 +648,7 @@ pub(crate) async fn etag_changes(
         let inner = content::etag(res.seed, res.size);
         res.etag = format!("\"v2-{}\"", inner.trim_matches('"'));
     }
-    serve(&method, &headers, res, Shaping::default())
+    serve(&method, &headers, res, optional_throttle(&q)?)
 }
 
 /// `/wrong-length?delta=`
@@ -638,7 +685,7 @@ pub(crate) async fn expires(
         &method,
         &headers,
         Resource::from_params(&q)?,
-        Shaping::default(),
+        optional_throttle(&q)?,
     )
 }
 
@@ -1005,6 +1052,66 @@ pub(crate) async fn batch_item(
         Resource::new(item.seed, size),
         Shaping::default(),
     )
+}
+
+/// `/nohead` — like `/ok` but `HEAD` is refused with `405` (many real servers do this).
+pub(crate) async fn nohead(
+    method: Method,
+    Query(q): Query<Params>,
+    headers: HeaderMap,
+) -> HandlerResult {
+    if method == Method::HEAD {
+        return Ok(plain(StatusCode::METHOD_NOT_ALLOWED, "HEAD is not allowed"));
+    }
+    serve(
+        &method,
+        &headers,
+        Resource::from_params(&q)?,
+        Shaping::default(),
+    )
+}
+
+/// `/range-lie?lie=` — what some CDNs do when they compress on the fly: `Range` requests are
+/// answered `206` with a `Content-Range` whose total (`lie`, the compressed size) is smaller than
+/// the real resource, while the body carries the real, longer bytes. No `Content-Length`, no
+/// `Accept-Ranges`; the first byte (`bytes=0-0`) is honest.
+pub(crate) async fn range_lie(Query(q): Query<Params>, headers: HeaderMap) -> HandlerResult {
+    let res = Resource::from_params(&q)?;
+    let shaping = optional_throttle(&q)?;
+    let lie = param_u64(&q, "lie", (res.size / 3).max(1))?.min(res.size);
+    let (status, start, end) = match parse_range(&headers, res.size) {
+        // a one-byte probe is answered honestly; any longer range gets everything from `start`
+        RangeSpec::Part(s, e) if e - s <= 1 => (StatusCode::PARTIAL_CONTENT, s, e),
+        RangeSpec::Part(s, _) => (StatusCode::PARTIAL_CONTENT, s, res.size),
+        RangeSpec::Unsatisfiable => return range_not_satisfiable(&res),
+        RangeSpec::Whole => (StatusCode::OK, 0, res.size),
+    };
+    let body = Body::from_stream(content::body_stream(Delivery {
+        seed: res.seed,
+        start,
+        end,
+        chunk: shaping.chunk.unwrap_or(CHUNK_SIZE),
+        bps: shaping.bps,
+        drop_after: None,
+        flips: Arc::from(Vec::new()),
+        _guard: None,
+    }));
+    let mut resp = Response::new(body);
+    *resp.status_mut() = status;
+    let h = resp.headers_mut();
+    h.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    h.insert(header::ETAG, HeaderValue::from_str(&res.etag)?);
+    if status == StatusCode::PARTIAL_CONTENT {
+        let last = (end - 1).min(lie.saturating_sub(1)).max(start);
+        h.insert(
+            header::CONTENT_RANGE,
+            HeaderValue::from_str(&format!("bytes {start}-{last}/{lie}"))?,
+        );
+    }
+    Ok(resp)
 }
 
 #[cfg(test)]

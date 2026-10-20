@@ -96,12 +96,47 @@ pub fn parse_http_url(raw: &str) -> Result<Url> {
     Ok(url)
 }
 
-/// URL without its query string, for logs and error messages.
+/// URL without its query string and without `user:password@`, for logs and error messages.
 pub fn strip_query(raw: &str) -> String {
+    let raw = redact_userinfo(raw);
     match raw.find(['?', '#']) {
         Some(i) => format!("{}?[stripped]", &raw[..i]),
+        None => raw,
+    }
+}
+
+/// Removes a `user:password@` part from the authority of a URL string (hard rule 4: credentials
+/// never reach logs, errors or the downloads table).
+fn redact_userinfo(raw: &str) -> String {
+    let Some(scheme_end) = raw.find("://") else {
+        return raw.to_string();
+    };
+    let auth_start = scheme_end + 3;
+    let rest = &raw[auth_start..];
+    let auth_len = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    match rest[..auth_len].rfind('@') {
+        Some(at) => format!("{}{}", &raw[..auth_start], &rest[at + 1..]),
         None => raw.to_string(),
     }
+}
+
+/// Splits `user:password@` off a URL: returns the URL without it and the percent-decoded
+/// credentials when there were any. The engine stores the clean URL in the downloads table and
+/// the credentials in the `secrets` table.
+pub fn split_userinfo(url: &Url) -> (Url, Option<(String, String)>) {
+    if url.username().is_empty() && url.password().is_none() {
+        return (url.clone(), None);
+    }
+    let decode = |s: &str| {
+        percent_encoding::percent_decode_str(s)
+            .decode_utf8_lossy()
+            .into_owned()
+    };
+    let creds = (decode(url.username()), decode(url.password().unwrap_or("")));
+    let mut clean = url.clone();
+    let _ = clean.set_username("");
+    let _ = clean.set_password(None);
+    (clean, Some(creds))
 }
 
 #[cfg(test)]
@@ -158,5 +193,24 @@ mod tests {
             Err(Error::InvalidUrl { url, .. }) => assert_eq!(url, "ftp://h/p?[stripped]"),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn userinfo_is_split_off_and_redacted_from_logs() {
+        assert_eq!(
+            strip_query("https://user:p%40ss@host.example:8443/f.zip?x=1"),
+            "https://host.example:8443/f.zip?[stripped]"
+        );
+        assert_eq!(strip_query("https://u:p@h/a@b"), "https://h/a@b");
+        assert_eq!(strip_query("https://h/a@b"), "https://h/a@b");
+        let url = Url::parse("https://us%20er:p%40ss@host.example/f?x=1").unwrap();
+        let (clean, creds) = split_userinfo(&url);
+        assert_eq!(clean.as_str(), "https://host.example/f?x=1");
+        assert_eq!(creds, Some(("us er".to_string(), "p@ss".to_string())));
+        let plain = Url::parse("https://host.example/f").unwrap();
+        assert_eq!(split_userinfo(&plain), (plain.clone(), None));
+        let (clean, creds) = split_userinfo(&Url::parse("https://only@host.example/").unwrap());
+        assert_eq!(clean.as_str(), "https://host.example/");
+        assert_eq!(creds, Some(("only".to_string(), String::new())));
     }
 }

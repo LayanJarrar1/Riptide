@@ -440,10 +440,30 @@ fn delete_partials(d: &Download) {
     }
 }
 
+/// A folder compared the way the file system does: separators folded, trailing slash dropped,
+/// case ignored on Windows.
+fn dir_key(dir: &Path) -> String {
+    let s = dir
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    if cfg!(windows) {
+        s.to_lowercase()
+    } else {
+        s
+    }
+}
+
+/// How long `pause` / `cancel` / `remove` wait for a transfer to stop.
+const STOP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 struct Running {
     stop: CancellationToken,
     reason: Arc<Mutex<StopReason>>,
     task: JoinHandle<()>,
+    /// Turns `true` when the task has ended and left the `running` map.
+    done: tokio::sync::watch::Receiver<bool>,
     /// The download's own bandwidth bucket (its `speed_limit`), shared by its connections.
     limit: Arc<RateLimiter>,
     /// Queue the download counts against; kept current by `move_to_queue` / `delete_queue`.
@@ -472,8 +492,16 @@ struct Inner {
     wake: Notify,
     settings: RwLock<EngineSettings>,
     shutting_down: AtomicBool,
+    /// Test knobs (0 = off): stop-wait timeout and an artificial delay before a stopping task
+    /// reacts, to exercise the stuck-stop path.
+    test_stop_timeout_ms: std::sync::atomic::AtomicU64,
+    test_stop_delay_ms: std::sync::atomic::AtomicU64,
+    test_crash_after_rename: AtomicBool,
     /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
     media: RwLock<Option<YtDlp>>,
+    /// Serialises the choice of an on-disk file name, so two downloads that start at the same
+    /// moment can never settle on the same name (and share one part file).
+    name_lock: tokio::sync::Mutex<()>,
 }
 
 /// The runtime. Cheap to clone; all clones share one state.
@@ -529,6 +557,9 @@ struct Prepared {
 /// Validates `request` and builds the record [`Engine::add`] inserts.
 fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<Prepared> {
     let url = riptide_net::parse_http_url(&request.url)?;
+    // `user:password@` in the link is a credential, not part of the address: the record keeps
+    // the clean URL and the secrets table gets the credentials (hard rule 4)
+    let (clean_url, url_auth) = riptide_net::split_userinfo(&url);
     let media_selection = match request.kind {
         DownloadKind::Http => None,
         DownloadKind::Media => {
@@ -569,7 +600,11 @@ fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<P
         .unwrap_or_else(|| settings.dir_for(category));
     let mut d = Download::new(
         DownloadId(0),
-        request.url.clone(),
+        if url_auth.is_some() {
+            clean_url.to_string()
+        } else {
+            request.url.clone()
+        },
         filename,
         dir,
         now_millis(),
@@ -594,6 +629,9 @@ fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<P
 
     // referrer and user agent ride along as same-origin headers (the record has no columns)
     let mut secrets = request.secrets.clone().unwrap_or_default();
+    if let (Some((username, password)), None) = (url_auth, &secrets.auth) {
+        secrets.auth = Some(riptide_core::Credentials { username, password });
+    }
     if let Some(r) = &request.referrer {
         secrets.headers.push(("Referer".into(), r.clone()));
     }
@@ -691,12 +729,53 @@ pub struct BatchOutcome {
 
 /// `url` without its fragment, for duplicate comparison; `None` if it does not parse.
 fn comparable_url(url: &str) -> Option<String> {
-    let mut parsed = Url::parse(url).ok()?;
+    let mut parsed = riptide_net::split_userinfo(&Url::parse(url).ok()?).0;
     parsed.set_fragment(None);
     Some(parsed.into())
 }
 
 impl Engine {
+    /// Picks the on-disk name for a download that starts from zero and saves it before anyone
+    /// else can pick: a name is taken when the file exists, or when another download of this
+    /// engine (queued, running, paused or failed with its part file kept) already claims it.
+    /// Without the claims two downloads starting together both saw "free" and wrote into one
+    /// part file. This download's own stale part file is deliberately not a claim: it is reused.
+    async fn reserve_file_name(&self, record: &mut Download) -> Result<()> {
+        let _guard = self.inner.name_lock.lock().await;
+        let id = record.id;
+        let claimed: Vec<(String, String)> = self
+            .list()
+            .await?
+            .into_iter()
+            .filter(|d| {
+                d.id != id
+                    && !matches!(d.state, DownloadState::Completed | DownloadState::Cancelled)
+            })
+            .map(|d| (dir_key(&d.dir), d.filename.to_lowercase()))
+            .collect();
+        // a name that is another download's part file would be opened as that part file
+        if record.filename.to_lowercase().ends_with(".rtpart") {
+            record.filename.push('_');
+        }
+        let taken = |p: &Path| {
+            p.exists()
+                || p.file_name().is_some_and(|n| {
+                    let n = n.to_string_lossy().to_lowercase();
+                    let parent = p.parent().map(dir_key);
+                    claimed.iter().any(|(dir, name)| {
+                        Some(dir) == parent.as_ref()
+                            && (*name == n || format!("{name}.rtpart") == n)
+                    })
+                })
+        };
+        let unique = riptide_core::unique_path(&record.dir, &record.filename, taken);
+        if let Some(name) = unique.file_name() {
+            record.filename = name.to_string_lossy().into_owned();
+        }
+        let to_save = record.clone();
+        db(&self.inner.store, move |s| s.update_download(&to_save)).await
+    }
+
     /// Opens the store, loads settings, re-queues downloads a crash left active, and starts
     /// the scheduler.
     pub async fn open(config: EngineConfig) -> Result<Engine> {
@@ -783,7 +862,11 @@ impl Engine {
             wake: Notify::new(),
             settings: RwLock::new(settings),
             shutting_down: AtomicBool::new(false),
+            test_stop_timeout_ms: std::sync::atomic::AtomicU64::new(0),
+            test_stop_delay_ms: std::sync::atomic::AtomicU64::new(0),
+            test_crash_after_rename: AtomicBool::new(false),
             media: RwLock::new(None),
+            name_lock: tokio::sync::Mutex::new(()),
         });
         let engine = Engine { inner };
         tokio::spawn(engine.clone().scheduler());
@@ -929,15 +1012,20 @@ impl Engine {
         referrer: Option<&str>,
     ) -> Result<ProbeInfo> {
         let parsed = riptide_net::parse_http_url(url)?;
-        let mut ctx = RequestContext::new(&parsed)
+        let (clean, url_auth) = riptide_net::split_userinfo(&parsed);
+        let mut ctx = RequestContext::new(&clean)
             .with_referrer(referrer)
             .with_guard(self.redirect_guard());
-        if let Some(s) = secrets {
-            ctx = ctx.with_secrets(s);
+        let mut merged = secrets.cloned().unwrap_or_default();
+        if let (Some((username, password)), None) = (url_auth, &merged.auth) {
+            merged.auth = Some(riptide_core::Credentials { username, password });
         }
-        let p = probe(&self.client(), url, &ctx).await?;
+        if !merged.is_empty() {
+            ctx = ctx.with_secrets(&merged);
+        }
+        let p = probe(&self.client(), clean.as_str(), &ctx).await?;
         Ok(ProbeInfo {
-            final_url: p.final_url.to_string(),
+            final_url: riptide_net::split_userinfo(&p.final_url).0.to_string(),
             filename: p.filename.clone(),
             size: p.size,
             supports_ranges: p.supports_ranges,
@@ -1077,9 +1165,10 @@ impl Engine {
             .unwrap_or_else(|p| p.into_inner().clone())
     }
 
-    /// Pauses a queued or running download.
+    /// Pauses a queued or running download. For a running one it returns once the transfer
+    /// has stopped and the record is `Paused`, so a `resume` right after is never ignored.
     pub async fn pause(&self, id: DownloadId) -> Result<()> {
-        if self.stop_running(id, StopReason::Pause) {
+        if self.stop_and_wait(id, StopReason::Pause).await? {
             return Ok(());
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
@@ -1104,7 +1193,7 @@ impl Engine {
 
     /// Cancels a download; the row stays, the part file is deleted.
     pub async fn cancel(&self, id: DownloadId) -> Result<()> {
-        if self.stop_running(id, StopReason::Cancel) {
+        if self.stop_and_wait(id, StopReason::Cancel).await? {
             return Ok(());
         }
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
@@ -1118,10 +1207,7 @@ impl Engine {
     /// Removes a download from the list, stopping it first; `delete_file` also removes the
     /// finished file. The part file always goes.
     pub async fn remove(&self, id: DownloadId, delete_file: bool) -> Result<()> {
-        if let Some(running) = self.take_running(id, StopReason::Remove) {
-            running.stop.cancel();
-            let _ = running.task.await;
-        }
+        self.stop_and_wait(id, StopReason::Remove).await?;
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
         delete_partials(&d);
         if delete_file && d.state == DownloadState::Completed {
@@ -1150,7 +1236,7 @@ impl Engine {
         filename: Option<&str>,
         dir: Option<&Path>,
     ) -> Result<Option<Download>> {
-        let mut wanted = url.clone();
+        let mut wanted = riptide_net::split_userinfo(url).0;
         wanted.set_fragment(None);
         let wanted: String = wanted.into();
         let filename = filename
@@ -1179,10 +1265,7 @@ impl Engine {
     /// state does not change (it was `Paused` or `Queued`) or the record is reborn from a
     /// terminal state, [`Event::Added`] is emitted again so listeners re-read the record.
     pub async fn restart(&self, id: DownloadId) -> Result<()> {
-        if let Some(running) = self.take_running(id, StopReason::Restart) {
-            running.stop.cancel();
-            let _ = running.task.await;
-        }
+        self.stop_and_wait(id, StopReason::Restart).await?;
         let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
         let was_paused = before.state == DownloadState::Paused;
 
@@ -1285,7 +1368,8 @@ impl Engine {
         referrer: Option<&str>,
         secrets: Option<Secrets>,
     ) -> Result<()> {
-        riptide_net::parse_http_url(url)?;
+        let parsed = riptide_net::parse_http_url(url)?;
+        let (clean_url, url_auth) = riptide_net::split_userinfo(&parsed);
         let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
         if matches!(
             before.state,
@@ -1296,22 +1380,19 @@ impl Engine {
                 id.0, before.state
             ))));
         }
-        let was_running = match self.take_running(id, StopReason::Pause) {
-            Some(running) => {
-                running.stop.cancel();
-                let _ = running.task.await;
-                true
-            }
-            None => false,
-        };
+        let was_running = self.stop_and_wait(id, StopReason::Pause).await?;
 
         let mut fresh = self.get(id).await?.ok_or(Error::NotFound(id))?;
-        fresh.url = url.to_string();
+        fresh.url = if url_auth.is_some() {
+            clean_url.to_string()
+        } else {
+            url.to_string()
+        };
         fresh.final_url = None;
         fresh.error = None;
         let referrer = referrer.map(str::to_string);
         db(&self.inner.store, move |s| {
-            let changed = secrets.is_some() || referrer.is_some();
+            let changed = secrets.is_some() || referrer.is_some() || url_auth.is_some();
             let old = s.secrets(id)?.unwrap_or_default();
             let mut next = match secrets {
                 Some(mut new) => {
@@ -1331,6 +1412,9 @@ impl Engine {
                 }
                 None => old,
             };
+            if let (Some((username, password)), None) = (url_auth, &next.auth) {
+                next.auth = Some(riptide_core::Credentials { username, password });
+            }
             if let Some(r) = referrer {
                 next.headers
                     .retain(|(k, _)| !k.eq_ignore_ascii_case("referer"));
@@ -1364,13 +1448,29 @@ impl Engine {
 
     /// Pauses every queued or running download.
     pub async fn pause_all(&self) -> Result<()> {
-        for d in self.list().await? {
-            if matches!(
-                d.state,
-                DownloadState::Queued | DownloadState::Probing | DownloadState::Downloading
-            ) {
-                self.pause(d.id).await?;
+        let all = self.list().await?;
+        // queued items first, so no slot freed below can start (and probe) one of them; each
+        // is re-read right before the change and only paused if it is still queued, untouched
+        for d in &all {
+            if d.state != DownloadState::Queued {
+                continue;
             }
+            let still_queued = self
+                .get(d.id)
+                .await?
+                .is_some_and(|f| f.state == DownloadState::Queued);
+            if still_queued && !self.running_ids().contains(&d.id) {
+                self.transition(d.id, DownloadState::Paused, None).await?;
+            }
+        }
+        // then stop every running transfer together (including any that started meanwhile)
+        let waits: Vec<_> = self
+            .running_ids()
+            .into_iter()
+            .filter_map(|id| self.signal_stop(id, StopReason::Pause).map(|rx| (id, rx)))
+            .collect();
+        for (id, rx) in waits {
+            self.wait_done(id, rx).await?;
         }
         Ok(())
     }
@@ -1461,13 +1561,95 @@ impl Engine {
         }
     }
 
-    fn take_running(&self, id: DownloadId, reason: StopReason) -> Option<Running> {
-        let mut map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
-        let r = map.remove(&id)?;
+    /// Marks the running task with `reason`, cancels it and returns its completion signal. The
+    /// entry stays in the `running` map until the task has really ended.
+    fn signal_stop(
+        &self,
+        id: DownloadId,
+        reason: StopReason,
+    ) -> Option<tokio::sync::watch::Receiver<bool>> {
+        let map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
+        let r = map.get(&id)?;
         if let Ok(mut current) = r.reason.lock() {
             *current = reason;
         }
-        Some(r)
+        r.stop.cancel();
+        Some(r.done.clone())
+    }
+
+    /// Test hook: make transfers fail right after the atomic rename (see
+    /// `TransferConfig::crash_after_rename`).
+    #[doc(hidden)]
+    pub fn set_test_crash_after_rename(&self, on: bool) {
+        self.inner
+            .test_crash_after_rename
+            .store(on, Ordering::SeqCst);
+    }
+
+    /// Test hook: shorten the stop wait and/or make a stopping task hang for `delay_ms`.
+    #[doc(hidden)]
+    pub fn set_test_stop_knobs(&self, timeout_ms: u64, delay_ms: u64) {
+        self.inner
+            .test_stop_timeout_ms
+            .store(timeout_ms, Ordering::SeqCst);
+        self.inner
+            .test_stop_delay_ms
+            .store(delay_ms, Ordering::SeqCst);
+    }
+
+    /// Waits for the task of `id` to end. If it does not within the timeout the task is
+    /// aborted, its entry dropped and the record put in a non-running state, so nothing is left
+    /// claiming to download; the caller gets an error and can simply try again.
+    async fn wait_done(
+        &self,
+        id: DownloadId,
+        mut done: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<()> {
+        let ms = self.inner.test_stop_timeout_ms.load(Ordering::SeqCst);
+        let limit = if ms > 0 {
+            std::time::Duration::from_millis(ms)
+        } else {
+            STOP_TIMEOUT
+        };
+        // a dropped sender also means the task is gone
+        if tokio::time::timeout(limit, done.wait_for(|d| *d))
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+        let stale = self
+            .inner
+            .running
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&id);
+        if let Some(r) = stale {
+            r.task.abort();
+            let _ = r.task.await;
+        }
+        if let Some(d) = self.get(id).await? {
+            let to = match d.state {
+                DownloadState::Probing | DownloadState::Downloading => Some(DownloadState::Paused),
+                DownloadState::Verifying => Some(DownloadState::Failed { retryable: true }),
+                _ => None,
+            };
+            if let Some(to) = to {
+                let _ = self.transition(id, to, None).await;
+            }
+        }
+        self.inner.wake.notify_one();
+        Err(Error::Core(riptide_core::Error::Invalid(
+            "the transfer did not stop in time; try again".into(),
+        )))
+    }
+
+    /// Stops the running task of `id` (if any) and waits until it has ended. `true` if one ran.
+    async fn stop_and_wait(&self, id: DownloadId, reason: StopReason) -> Result<bool> {
+        match self.signal_stop(id, reason) {
+            Some(rx) => self.wait_done(id, rx).await.map(|()| true),
+            None => Ok(false),
+        }
     }
 
     /// Starts queued downloads while slots are free; sleeps until something changes.
@@ -1531,11 +1713,13 @@ impl Engine {
         let limit = Arc::new(RateLimiter::new(next.speed_limit));
         let task_limit = Arc::clone(&limit);
         // the map lock is held across the spawn so the task's own `remove` cannot run first
+        let (done_tx, done_rx) = tokio::sync::watch::channel(false);
         let mut running = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
         let task = tokio::spawn(async move {
             engine
                 .run_download(id, task_stop, task_reason, task_limit)
                 .await;
+            let _ = done_tx.send(true);
         });
         running.insert(
             id,
@@ -1543,6 +1727,7 @@ impl Engine {
                 stop,
                 reason,
                 task,
+                done: done_rx,
                 limit,
                 queue_id: next.queue_id,
             },
@@ -1558,9 +1743,21 @@ impl Engine {
         reason: Arc<Mutex<StopReason>>,
         limit: Arc<RateLimiter>,
     ) {
-        let outcome = self
-            .run_download_inner(id, stop.clone(), &reason, &limit)
-            .await;
+        let outcome = {
+            let inner = self.run_download_inner(id, stop.clone(), &reason, &limit);
+            tokio::pin!(inner);
+            tokio::select! {
+                r = &mut inner => r,
+                () = stop.cancelled() => {
+                    // test knob: a task that is slow to react to its stop
+                    let delay_ms = self.inner.test_stop_delay_ms.load(Ordering::SeqCst);
+                    if delay_ms > 0 {
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                    inner.await
+                }
+            }
+        };
         if let Err(e) = outcome {
             let retryable = match &e {
                 Error::Net(n) => n.is_retryable(),
@@ -1572,11 +1769,16 @@ impl Engine {
                 .transition(id, DownloadState::Failed { retryable }, Some(e.to_string()))
                 .await;
         }
-        self.inner
-            .running
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .remove(&id);
+        {
+            let mut map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
+            // only this task's own entry (a successor may already have been inserted)
+            if map
+                .get(&id)
+                .is_some_and(|r| Arc::ptr_eq(&r.reason, &reason))
+            {
+                map.remove(&id);
+            }
+        }
         self.inner.wake.notify_one();
     }
 
@@ -1638,7 +1840,7 @@ impl Engine {
             segments.clear();
         }
 
-        record.final_url = Some(probed.final_url.to_string());
+        record.final_url = Some(riptide_net::split_userinfo(&probed.final_url).0.to_string());
         record.size = probed.size;
         record.supports_ranges = probed.supports_ranges;
         record.etag = probed.etag.clone();
@@ -1660,10 +1862,7 @@ impl Engine {
         }
         if segments.is_empty() {
             // a fresh start must not clobber a file that is already there
-            let unique = riptide_core::unique_path(&record.dir, &record.filename, |p| p.exists());
-            if let Some(name) = unique.file_name() {
-                record.filename = name.to_string_lossy().into_owned();
-            }
+            self.reserve_file_name(&mut record).await?;
         }
         // the bucket is the truth while running: `set_speed_limit` may have changed it after
         // the record was read
@@ -1696,6 +1895,7 @@ impl Engine {
         let cfg = TransferConfig {
             connections: record.connections,
             rate_limits: vec![Arc::clone(limit), Arc::clone(&self.inner.global_limit)],
+            crash_after_rename: self.inner.test_crash_after_rename.load(Ordering::SeqCst),
             ..TransferConfig::default()
         };
         let limiter = self
@@ -1777,6 +1977,14 @@ impl Engine {
                     .unwrap_or(DownloadState::Downloading);
                 if current != DownloadState::Verifying {
                     self.transition(id, DownloadState::Verifying, None).await?;
+                }
+                // the file on disk is the truth: a stream of unknown length, or a server whose
+                // announced size was wrong, leaves the record with a size that is not the file's
+                if let (Ok(meta), Some(mut d)) = (std::fs::metadata(&path), self.get(id).await?) {
+                    if d.size != Some(meta.len()) {
+                        d.size = Some(meta.len());
+                        db(&self.inner.store, move |s| s.update_download(&d)).await?;
+                    }
                 }
                 self.mark_downloaded(&path, &secrets, Some(final_url)).await;
                 self.transition(id, DownloadState::Completed, None).await?;
@@ -1905,13 +2113,13 @@ impl Engine {
                     record.dir = self.settings().dir_for(category);
                 }
             }
-            let unique = riptide_core::unique_path(&record.dir, &record.filename, |p| p.exists());
-            if let Some(name) = unique.file_name() {
-                record.filename = name.to_string_lossy().into_owned();
-            }
+            self.reserve_file_name(&mut record).await?;
         }
         if !info.url.is_empty() {
-            record.final_url = Some(info.url.clone());
+            record.final_url = Some(Url::parse(&info.url).map_or_else(
+                |_| info.url.clone(),
+                |u| riptide_net::split_userinfo(&u).0.to_string(),
+            ));
         }
         record.size = info
             .choices

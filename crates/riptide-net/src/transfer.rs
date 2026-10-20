@@ -57,6 +57,10 @@ pub struct TransferConfig {
     /// Bandwidth buckets every connection draws from before a chunk reaches the writer (the
     /// download's own limit, the global one). Their rates may change while the transfer runs.
     pub rate_limits: Vec<Arc<RateLimiter>>,
+    /// Test fault point: fail right after the atomic rename, before `Completed` is reported,
+    /// the way a crash at that instant would leave things.
+    #[doc(hidden)]
+    pub crash_after_rename: bool,
 }
 
 impl Default for TransferConfig {
@@ -70,6 +74,7 @@ impl Default for TransferConfig {
             checkpoint_interval: Duration::from_secs(1),
             overwrite: false,
             rate_limits: Vec::new(),
+            crash_after_rename: false,
         }
     }
 }
@@ -193,6 +198,9 @@ pub async fn transfer(
     limiter: Arc<HostLimiter>,
 ) -> Result<Outcome> {
     let mut plan = plan;
+    if let Some(outcome) = adopt_finished_file(&plan, &events).await? {
+        return Ok(outcome);
+    }
     let mut restarts = 0u32;
     loop {
         match run_once(&client, &ctx, &plan, &cfg, &events, &stop, &limiter).await? {
@@ -201,18 +209,32 @@ pub async fn transfer(
                 validator,
                 size,
                 reason,
+                no_ranges,
             } => {
                 restarts += 1;
                 tracing::warn!(restarts, %reason, "restarting transfer from zero");
                 if restarts > 2 {
                     return Err(Error::ValidatorChanged);
                 }
+                // the stored table must stop describing the old part file and before anyone is told:
+                // events are ordered, so this reset is saved ahead of anything the next run says
+                let _ = events
+                    .send(TransferEvent::Checkpoint {
+                        segments: Vec::new(),
+                    })
+                    .await;
                 let _ = events.send(TransferEvent::Restarted { reason }).await;
                 if let Some(v) = validator {
                     plan.validator = Some(v);
                 }
                 if let Some(s) = size {
                     plan.size = Some(s);
+                }
+                if no_ranges {
+                    // the server's range support is broken (it sends more than it announced):
+                    // one plain streaming connection, and its announced total is not trusted
+                    plan.supports_ranges = false;
+                    plan.size = None;
                 }
                 // second restart: the server keeps answering 200, so it does not really do ranges
                 if restarts == 2 {
@@ -231,6 +253,7 @@ enum Run {
         validator: Option<String>,
         size: Option<u64>,
         reason: String,
+        no_ranges: bool,
     },
 }
 
@@ -257,6 +280,8 @@ enum SegEnd {
         validator: Option<String>,
         size: Option<u64>,
         reason: String,
+        /// Ranges are not trustworthy on this server: continue without them.
+        no_ranges: bool,
     },
 }
 
@@ -293,10 +318,14 @@ async fn run_once(
             ..s.clone()
         })
         .collect();
-    let can_resume = !segments.is_empty()
-        && plan.supports_ranges
-        && plan.size.is_some()
-        && plan.validator.is_some();
+    // the part file must still be there with exactly the preallocated length: a deleted,
+    // truncated or extended file is not what the table describes
+    let part_ok = |size: u64| std::fs::metadata(&plan.part_path).is_ok_and(|m| m.len() == size);
+    let can_resume = plan.supports_ranges
+        && plan.validator.is_some()
+        && plan
+            .size
+            .is_some_and(|size| covers(&segments, size) && part_ok(size));
     if !can_resume {
         segments.clear();
     }
@@ -346,7 +375,7 @@ async fn run_once(
 
     // the plan itself is worth persisting before the first byte: a crash in the first second
     // then resumes against the same segment table instead of re-planning
-    checkpoint(&file, &state, events).await?;
+    checkpoint(&file, &state, events, streaming).await?;
 
     // --- writer ------------------------------------------------------------------------------
     let (tx, rx) = mpsc::channel::<Chunk>(64);
@@ -398,7 +427,7 @@ async fn run_once(
     progress_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut last_checkpoint = Instant::now();
     let mut failure: Option<Error> = None;
-    let mut restart: Option<(Option<String>, Option<u64>, String)> = None;
+    let mut restart: Option<(Option<String>, Option<u64>, String, bool)> = None;
     let mut stopped = false;
 
     loop {
@@ -429,9 +458,9 @@ async fn run_once(
                             lock(&state).segments[index].state = SegmentState::Pending;
                         }
                     }
-                    Ok(SegEnd::Restart { validator, size, reason }) => {
+                    Ok(SegEnd::Restart { validator, size, reason, no_ranges }) => {
                         if restart.is_none() {
-                            restart = Some((validator, size, reason));
+                            restart = Some((validator, size, reason, no_ranges));
                             run_token.cancel();
                         }
                     }
@@ -466,7 +495,7 @@ async fn run_once(
                 }
                 if last_checkpoint.elapsed() >= cfg.checkpoint_interval {
                     last_checkpoint = Instant::now();
-                    checkpoint(&file, &state, events).await?;
+                    checkpoint(&file, &state, events, streaming).await?;
                 }
             }
         }
@@ -480,13 +509,14 @@ async fn run_once(
     writer
         .await
         .map_err(|e| Error::Protocol(format!("writer task failed: {e}")))??;
-    checkpoint(&file, &state, events).await?;
+    checkpoint(&file, &state, events, streaming).await?;
 
-    if let Some((validator, size, reason)) = restart {
+    if let Some((validator, size, reason, no_ranges)) = restart {
         return Ok(Run::Restart {
             validator,
             size,
             reason,
+            no_ranges,
         });
     }
     if let Some(e) = failure {
@@ -497,10 +527,21 @@ async fn run_once(
         .iter()
         .all(|s| s.state == SegmentState::Done && (streaming || s.is_complete()));
     if stopped || !complete {
-        return Ok(Run::Finished(Outcome::Stopped { segments }));
+        return Ok(Run::Finished(Outcome::Stopped {
+            segments: persistable(streaming, segments),
+        }));
     }
 
     // --- verify + rename ----------------------------------------------------------------------
+    if streaming {
+        // every byte is in: only now may the table say so (earlier checkpoints of a stream
+        // never do), so a crash right after the rename can recognise its own finished file
+        let _ = events
+            .send(TransferEvent::Checkpoint {
+                segments: segments.clone(),
+            })
+            .await;
+    }
     let _ = events.send(TransferEvent::Verifying).await;
     if let Some(expected) = &plan.checksum {
         verify_file(plan.part_path.clone(), expected).await?;
@@ -519,6 +560,9 @@ async fn run_once(
                 Error::Io(e)
             }
         })?;
+    if cfg.crash_after_rename {
+        return Err(Error::Protocol("injected crash after the rename".into()));
+    }
     let _ = events
         .send(TransferEvent::Completed {
             path: plan.final_path.clone(),
@@ -528,6 +572,86 @@ async fn run_once(
         path: plan.final_path.clone(),
         segments,
     }))
+}
+
+/// Crash recovery for the instant between the atomic rename and the record becoming
+/// `Completed`: the part file is gone, the final file is there, and the stored table says every
+/// byte was written. The file is adopted only if its length is exactly what the table (and the
+/// probe) say and, when a checksum is expected, its content matches. Anything else is left
+/// alone for the normal path, which never overwrites a file it did not write.
+async fn adopt_finished_file(
+    plan: &TransferPlan,
+    events: &mpsc::Sender<TransferEvent>,
+) -> Result<Option<Outcome>> {
+    if plan.segments.is_empty() || plan.part_path.exists() {
+        return Ok(None);
+    }
+    let Ok(meta) = std::fs::metadata(&plan.final_path) else {
+        return Ok(None);
+    };
+    let total: u64 = plan.segments.iter().map(|s| s.written).sum();
+    let table_done =
+        covers(&plan.segments, total) && plan.segments.iter().all(Segment::is_complete);
+    if !meta.is_file()
+        || !table_done
+        || meta.len() != total
+        || plan.size.is_some_and(|s| s != total)
+    {
+        return Ok(None);
+    }
+    let _ = events.send(TransferEvent::Verifying).await;
+    if let Some(expected) = &plan.checksum {
+        verify_file(plan.final_path.clone(), expected).await?;
+    }
+    let _ = events
+        .send(TransferEvent::Completed {
+            path: plan.final_path.clone(),
+        })
+        .await;
+    Ok(Some(Outcome::Completed {
+        path: plan.final_path.clone(),
+        segments: plan.segments.clone(),
+    }))
+}
+
+/// The server sent more bytes than its `Content-Range` announced: ranges cannot be trusted.
+fn overrun_restart() -> SegEnd {
+    SegEnd::Restart {
+        validator: None,
+        size: None,
+        reason:
+            "server sent more bytes than its Content-Range announced; downloading without ranges"
+                .into(),
+        no_ranges: true,
+    }
+}
+
+/// A segment table is resumable only if it proves itself: contiguous from 0 to exactly `size`,
+/// with no segment claiming more bytes than it spans. Anything else restarts from zero.
+fn covers(segments: &[Segment], size: u64) -> bool {
+    !segments.is_empty()
+        && segments[0].start == 0
+        && segments.windows(2).all(|w| w[0].end == w[1].start)
+        && segments.last().map(|s| s.end) == Some(size)
+        && segments.iter().all(|s| s.written <= s.len())
+}
+
+/// What may be persisted: a streaming transfer cannot resume (it restarts at byte 0), so its
+/// progress is never recorded; otherwise a stored "complete" streaming segment could later be
+/// mistaken for a finished ranged one.
+fn persistable(streaming: bool, segments: Vec<Segment>) -> Vec<Segment> {
+    if !streaming {
+        return segments;
+    }
+    segments
+        .into_iter()
+        .map(|mut g| {
+            g.written = 0;
+            g.end = 0;
+            g.state = SegmentState::Pending;
+            g
+        })
+        .collect()
 }
 
 /// Total size for progress: only the declared size counts; an unknown-length stream reports
@@ -592,12 +716,13 @@ async fn checkpoint(
     file: &Arc<PartFile>,
     state: &State,
     events: &mpsc::Sender<TransferEvent>,
+    streaming: bool,
 ) -> Result<()> {
     let f = Arc::clone(file);
     tokio::task::spawn_blocking(move || f.sync())
         .await
         .map_err(|e| Error::Protocol(format!("sync task failed: {e}")))??;
-    let segments = lock(state).segments.clone();
+    let segments = persistable(streaming, lock(state).segments.clone());
     let _ = events.send(TransferEvent::Checkpoint { segments }).await;
     Ok(())
 }
@@ -822,7 +947,9 @@ impl SegmentTask {
                         return Err(Error::Protocol("206 without a usable Content-Range".into()))
                     }
                 }
-                self.pump(sent.response, offset).await.map(|(end, _)| end)
+                self.pump(sent.response, offset, Some(end))
+                    .await
+                    .map(|(end, _)| end)
             }
             200 => Ok(SegEnd::Restart {
                 validator: headers
@@ -837,6 +964,7 @@ impl SegmentTask {
                 reason:
                     "server answered 200 to a ranged request (file changed or ranges unsupported)"
                         .into(),
+                no_ranges: false,
             }),
             416 => {
                 let actual = headers
@@ -852,6 +980,7 @@ impl SegmentTask {
                         validator: None,
                         size: actual,
                         reason: "416 for a range inside the known size".into(),
+                        no_ranges: false,
                     }),
                 }
             }
@@ -890,7 +1019,7 @@ impl SegmentTask {
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<u64>().ok())
             .or(self.declared);
-        let (end, received) = self.pump(sent.response, 0).await?;
+        let (end, received) = self.pump(sent.response, 0, None).await?;
         if let SegEnd::Done = end {
             // `received` counts bytes handed to the writer (exact); the writer's own accounting
             // may lag by a few chunks, so it is not consulted here
@@ -908,7 +1037,17 @@ impl SegmentTask {
 
     /// Streams the body to the writer from `offset`, honouring a shrinking `end` and the stop.
     /// Returns how the segment ended and the offset reached (bytes sent to the writer).
-    async fn pump(&self, response: reqwest::Response, mut pos: u64) -> Result<(SegEnd, u64)> {
+    ///
+    /// `request_end` is the end of the range this response was asked for (`None` when
+    /// streaming). Reaching it without the segment having been shrunk by work stealing, the body
+    /// must be over: a server that keeps sending is not honouring its own `Content-Range`
+    /// (CDNs that compress on the fly do this), so ranges cannot be trusted on it.
+    async fn pump(
+        &self,
+        response: reqwest::Response,
+        mut pos: u64,
+        request_end: Option<u64>,
+    ) -> Result<(SegEnd, u64)> {
         let mut body = response.bytes_stream();
         loop {
             let next = tokio::select! {
@@ -924,9 +1063,13 @@ impl SegmentTask {
                 lock(&self.state).segments[self.index].end
             };
             if pos >= cur_end {
-                return Ok((SegEnd::Done, pos));
+                return self.range_done(&mut body, pos, cur_end, request_end).await;
             }
             let allowed = (cur_end - pos).min(chunk.len() as u64) as usize;
+            if allowed < chunk.len() && request_end == Some(cur_end) {
+                // the excess sits inside this very chunk: same lie, same answer
+                return Ok((overrun_restart(), pos));
+            }
             let data = if allowed < chunk.len() {
                 chunk.slice(..allowed)
             } else {
@@ -954,7 +1097,7 @@ impl SegmentTask {
             }
             pos += len;
             if pos >= cur_end {
-                return Ok((SegEnd::Done, pos));
+                return self.range_done(&mut body, pos, cur_end, request_end).await;
             }
         }
         if self.streaming {
@@ -969,5 +1112,62 @@ impl SegmentTask {
             )));
         }
         Ok((SegEnd::Done, pos))
+    }
+
+    /// The segment's bytes are all here. If it was not shrunk by work stealing, peek at the body
+    /// once: more data means the server ignores the range it announced.
+    async fn range_done<S>(
+        &self,
+        body: &mut S,
+        pos: u64,
+        cur_end: u64,
+        request_end: Option<u64>,
+    ) -> Result<(SegEnd, u64)>
+    where
+        S: futures::Stream<Item = reqwest::Result<Bytes>> + Unpin,
+    {
+        if request_end == Some(cur_end) {
+            let peek = tokio::time::timeout(std::time::Duration::from_secs(1), body.next()).await;
+            if let Ok(Some(Ok(extra))) = peek {
+                if !extra.is_empty() {
+                    return Ok((overrun_restart(), pos));
+                }
+            }
+        }
+        Ok((SegEnd::Done, pos))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use riptide_core::ByteRange;
+
+    fn seg(i: u32, a: u64, b: u64) -> Segment {
+        Segment::pending(DownloadId(1), i, ByteRange::new(a, b))
+    }
+
+    #[test]
+    fn only_a_table_covering_exactly_the_size_is_resumable() {
+        assert!(covers(&[seg(0, 0, 10)], 10));
+        assert!(covers(&[seg(0, 0, 4), seg(1, 4, 10)], 10));
+        assert!(!covers(&[], 10));
+        assert!(!covers(&[seg(0, 0, 9)], 10), "short table");
+        assert!(!covers(&[seg(0, 0, 11)], 10), "long table");
+        assert!(!covers(&[seg(0, 1, 10)], 10), "does not start at 0");
+        assert!(!covers(&[seg(0, 0, 4), seg(1, 5, 10)], 10), "gap");
+        let mut over = seg(0, 0, 10);
+        over.written = 11;
+        assert!(!covers(&[over], 10), "claims more than it spans");
+    }
+
+    #[test]
+    fn streaming_progress_is_never_persisted() {
+        let mut g = seg(0, 0, 500);
+        g.written = 500;
+        g.state = SegmentState::Done;
+        let kept = persistable(true, vec![g.clone()]);
+        assert_eq!((kept[0].written, kept[0].end), (0, 0));
+        assert_eq!(persistable(false, vec![g.clone()])[0].written, 500);
     }
 }

@@ -227,6 +227,16 @@ fn extension_for(content_type: &str) -> Option<&'static str> {
         "image/gif" => "gif",
         "text/plain" => "txt",
         "application/json" => "json",
+        "text/csv" => "csv",
+        "application/xml" | "text/xml" => "xml",
+        "image/svg+xml" => "svg",
+        "audio/wav" | "audio/x-wav" | "audio/wave" => "wav",
+        "application/epub+zip" => "epub",
+        "application/msword" => "doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => "docx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => "xlsx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation" => "pptx",
+        "application/msix" => "msix",
         _ => return None,
     })
 }
