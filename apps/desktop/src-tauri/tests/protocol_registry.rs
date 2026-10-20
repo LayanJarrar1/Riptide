@@ -45,11 +45,21 @@ fn registering_and_unregistering_through_the_registry_root_knob() {
         Some(r#""C:\Riptide Test\riptide-desktop.exe" "%1""#)
     );
     assert_eq!(
-        read(&root, r"Software\Classes\Riptide.Torrent\shell\open\command", "").as_deref(),
+        read(
+            &root,
+            r"Software\Classes\Riptide.Torrent\shell\open\command",
+            ""
+        )
+        .as_deref(),
         Some(r#""C:\Riptide Test\riptide-desktop.exe" "%1""#)
     );
     assert_eq!(
-        read(&root, r"Software\Classes\.torrent\OpenWithProgids", "Riptide.Torrent").as_deref(),
+        read(
+            &root,
+            r"Software\Classes\.torrent\OpenWithProgids",
+            "Riptide.Torrent"
+        )
+        .as_deref(),
         Some("")
     );
     assert_eq!(
@@ -68,7 +78,12 @@ fn registering_and_unregistering_through_the_registry_root_knob() {
     assert!(!s.magnet && !s.torrent);
     assert!(read(&root, r"Software\Classes\magnet", "").is_none());
     assert!(read(&root, r"Software\Classes\Riptide.Torrent", "").is_none());
-    assert!(read(&root, r"Software\Classes\.torrent\OpenWithProgids", "Riptide.Torrent").is_none());
+    assert!(read(
+        &root,
+        r"Software\Classes\.torrent\OpenWithProgids",
+        "Riptide.Torrent"
+    )
+    .is_none());
     assert!(read(&root, r"Software\Classes\.torrent", "").is_none());
 
     // clean up the throw-away root
