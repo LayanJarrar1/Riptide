@@ -1,6 +1,7 @@
 /** Toolbar popup: connection status, pause toggle, last hand-offs, Open / Options. */
 import browser from 'webextension-polyfill';
 
+import { HELP_URL } from '../help';
 import { localiseDocument, resolveLang, t } from '../i18n';
 import type { Lang, MessageKey } from '../i18n';
 import type { Message, RecentItem, StatusReply } from '../messages';
@@ -89,6 +90,24 @@ function render(reply: StatusReply | undefined): void {
   $('captured').textContent = tr('popup.captured', { n: reply?.captured ?? 0 });
 }
 
+/** "Open Riptide": the host may need up to ~10 s to start the app, so show that we are working. */
+async function openApp(): Promise<void> {
+  const button = $<HTMLButtonElement>('open');
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = tr('popup.open.busy');
+  $('status').dataset['busy'] = 'true';
+  try {
+    const reply = await send({ kind: 'open-app' });
+    render(reply);
+    if (reply?.status === 'app_not_running') $('status-hint').textContent = tr('popup.open.failed');
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+    delete $('status').dataset['busy'];
+  }
+}
+
 async function checkFirefoxAccess(): Promise<void> {
   if (!IS_FIREFOX) return;
   try {
@@ -108,7 +127,14 @@ async function main(): Promise<void> {
   void checkFirefoxAccess();
 
   $('open').addEventListener('click', () => {
-    void send({ kind: 'open-app' }).then(render);
+    void openApp();
+  });
+  $('help').addEventListener('click', () => {
+    // close the popup only once the tab exists: closing first can drop the request
+    void browser.tabs.create({ url: HELP_URL }).then(
+      () => window.close(),
+      () => undefined,
+    );
   });
   $('options').addEventListener('click', () => {
     void browser.runtime.openOptionsPage();

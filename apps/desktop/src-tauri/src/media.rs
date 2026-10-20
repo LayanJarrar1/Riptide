@@ -89,13 +89,24 @@ fn ffmpeg() -> Option<PathBuf> {
 
 /// The tools to use, or `None` when yt-dlp is not installed.
 pub fn resolve(data: &Path) -> Option<YtDlp> {
+    // cookie temp files live in <data>\tmp; a hard kill leaves them behind, so sweep at start-up
+    let removed =
+        riptide_media::sweep_stale_cookie_files(&cookie_dir(data), riptide_media::STALE_AFTER);
+    if removed > 0 {
+        tracing::info!(removed, "removed leftover cookie temp files");
+    }
     let copy = updated_copy(data);
     let exe = if copy.is_file() {
         Some(copy)
     } else {
         bundled_yt_dlp()
     }?;
-    Some(YtDlp::new(exe, ffmpeg()))
+    Some(YtDlp::new(exe, ffmpeg()).with_cookie_dir(cookie_dir(data)))
+}
+
+/// The app's private folder for cookie temp files (inside the per-user data folder).
+fn cookie_dir(data: &Path) -> PathBuf {
+    data.join("tmp")
 }
 
 /// What Settings → About shows.
@@ -151,7 +162,7 @@ pub async fn update_media_tools(
         }
         std::fs::copy(&bundled, &copy).map_err(|e| e.to_string())?;
     }
-    let tool = YtDlp::new(copy, ffmpeg());
+    let tool = YtDlp::new(copy, ffmpeg()).with_cookie_dir(cookie_dir(&data.0));
     let version = tool
         .update()
         .await

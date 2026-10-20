@@ -52,7 +52,7 @@ pub mod robots;
 pub mod scope;
 mod types;
 
-pub use crawler::crawl;
+pub use crawler::{crawl, crawl_with_guard};
 pub use riptide_core::Category;
 pub use scope::{normalize_url, Scope};
 pub use types::{

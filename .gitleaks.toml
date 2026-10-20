@@ -1,0 +1,22 @@
+# gitleaks configuration for Riptide (https://github.com/gitleaks/gitleaks).
+# Run with scripts/scan-secrets.ps1. Keep allowlists narrow: each entry names the exact false
+# positive it silences, so a real secret next to it still fails the scan.
+
+title = "Riptide gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Build outputs and local tooling folders. Not shipped; committed copies are still caught by the git-history scan"
+paths = ['''(^|/)(target|node_modules|dist|\.angular|\.claude|\.git)/''']
+
+[[allowlists]]
+description = "Chrome/Edge extension public keys: RSA SubjectPublicKeyInfo (not secrets, they only pin the extension id)"
+paths = ['''(^|/)apps/extension/manifest/(chrome|edge)\.json$''']
+regexTarget = "match"
+regexes = ['''"key"\s*:\s*"MIIBIjANBgkq''']
+
+[[allowlists]]
+description = "Known fake test fixtures: redaction and auth tests use hunter2-style passwords"
+regexes = ['''hunter2''']

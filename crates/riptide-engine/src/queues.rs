@@ -292,6 +292,7 @@ impl Engine {
 
     /// One pass; returns how long to sleep before the next one.
     async fn evaluate_schedules(&self) -> Result<Duration> {
+        let _pass = self.inner.sched_pass.lock().await;
         let now = self.inner.clock.now();
         let mut soonest: Option<LocalDateTime> = None;
         for q in self.queues().await? {

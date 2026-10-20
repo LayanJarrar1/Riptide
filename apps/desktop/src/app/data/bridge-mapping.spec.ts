@@ -1,4 +1,4 @@
-import { Download as UiDownload, DownloadState as UiDownloadState } from '../model/download';
+import { Download as UiDownload, DownloadState as UiDownloadState, failureFix } from '../model/download';
 import type { Download } from '../tauri/bridge/Download';
 import type { DownloadState } from '../tauri/bridge/DownloadState';
 import type { MediaInfo } from '../tauri/bridge/MediaInfo';
@@ -81,13 +81,37 @@ describe('bridge-mapping', () => {
     it('derives the kind from the error text, case-insensitively', () => {
       expect(failureKindOf('SHA-256 checksum mismatch')).toBe('checksum');
       expect(failureKindOf('Checksum: expected ab, got cd')).toBe('checksum');
-      expect(failureKindOf('server answered 403')).toBe('expired');
+      expect(failureKindOf('server answered 403')).toBe('denied');
       expect(failureKindOf('signed link expired')).toBe('expired');
       expect(failureKindOf('Content-Length lied: 10 declared, 9 received')).toBe('server');
       expect(failureKindOf('body shorter than declared')).toBe('server');
       expect(failureKindOf('disk full')).toBe('disk');
       expect(failureKindOf('not enough space on D:')).toBe('disk');
       expect(failureKindOf('connection reset by peer')).toBe('network');
+    });
+
+    it('maps authentication, missing files and refusals to accurate kinds', () => {
+      expect(failureKindOf('authentication failed (Basic)')).toBe('auth');
+      expect(failureKindOf('server answered 401')).toBe('auth');
+      expect(failureKindOf('server answered 407')).toBe('auth');
+      expect(failureKindOf('server answered 404')).toBe('notfound');
+      expect(failureKindOf('gave up after 3 attempts: server answered 410')).toBe('notfound');
+      expect(failureKindOf('server answered 403', 'http://x/needs-cookie?size=10')).toBe('denied');
+      // a 403 on a URL that looks signed is the classic expired link
+      expect(failureKindOf('server answered 403', 'http://x/file?X-Amz-Expires=60&X-Amz-Signature=ab')).toBe('expired');
+      expect(failureKindOf('server answered 403', 'http://x/expires?after=1')).toBe('expired');
+      expect(failureKindOf('server answered 503')).toBe('network');
+      expect(failureKindOf('connection reset by peer')).toBe('network');
+    });
+
+    it('offers a retry only where retrying can help', () => {
+      expect(failureFix('notfound')).toBeNull();
+      expect(failureFix('network')?.action).toBe('retry');
+      expect(failureFix('server')?.action).toBe('retry');
+      expect(failureFix('expired')).toEqual({ action: 'refreshLink', labelKey: 'action.refreshLink' });
+      expect(failureFix('auth')).toEqual({ action: 'refreshLink', labelKey: 'action.enterCredentials' });
+      expect(failureFix('denied')?.labelKey).toBe('action.enterCredentials');
+      expect(failureFix(null)?.action).toBe('retry');
     });
 
     it('tagged video refusals win over the words in their raw text', () => {

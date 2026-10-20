@@ -61,7 +61,10 @@ pub fn build_run_spec(command: &str) -> Result<RunSpec, String> {
     if !program.is_absolute() {
         return Err("the program must be a full path (for example C:\\Tools\\done.exe)".into());
     }
-    let is_script = program
+    // Windows drops trailing dots and spaces from the last component, so `run.bat.` and
+    // `run.bat .` start `run.bat`: look at the name the way Windows will
+    let normalized = text.trim_end_matches(['.', ' ']);
+    let is_script = Path::new(normalized)
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| SHELL_SCRIPTS.iter().any(|s| e.eq_ignore_ascii_case(s)));
@@ -305,6 +308,19 @@ mod tests {
         ];
         for (text, why) in cases {
             assert!(build_run_spec(text).is_err(), "{why} must be refused");
+        }
+        // Windows ignores trailing dots and spaces, so these still start the script
+        let script = script.to_str().unwrap();
+        for tricky in [
+            format!("{script}."),
+            format!("{script} ."),
+            format!("{script}. ."),
+        ] {
+            let err = build_run_spec(&tricky).unwrap_err();
+            assert!(
+                err.contains("scripts"),
+                "{tricky:?} must be refused as a script: {err}"
+            );
         }
         let with_control = format!("{exe}\u{7}");
         assert!(build_run_spec(&with_control).is_err(), "control characters");

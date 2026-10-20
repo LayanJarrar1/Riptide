@@ -77,7 +77,7 @@ where
 /// Runs one download to completion, a pause (Ctrl+C) or a failure. The record and its segments
 /// live in `store`, so running the same command again resumes.
 pub async fn fetch(
-    opts: FetchOptions,
+    mut opts: FetchOptions,
     store: SharedStore,
     lang: Lang,
 ) -> anyhow::Result<FetchReport> {
@@ -87,6 +87,15 @@ pub async fn fetch(
         ..ClientOptions::default()
     })?;
     let url = riptide_net::parse_http_url(&opts.url)?;
+    // `user:password@` in the link is a credential: it goes to the secrets, never into the
+    // downloads table the app shares
+    let (url, url_auth) = riptide_net::split_userinfo(&url);
+    if let Some((username, password)) = url_auth {
+        if opts.credentials.is_none() {
+            opts.credentials = Some(Credentials { username, password });
+        }
+        opts.url = url.to_string();
+    }
     if opts.insecure && !opts.quiet {
         eprintln!("{}", t(lang, "fetch.insecure"));
     }
@@ -196,7 +205,8 @@ pub async fn fetch(
         }
     };
 
-    record.final_url = Some(probe.final_url.to_string());
+    let final_url_text = probe.final_url.to_string();
+    record.final_url = Some(final_url_text.clone());
     record.size = probe.size;
     record.supports_ranges = probe.supports_ranges;
     record.etag = probe.etag.clone();
@@ -348,6 +358,12 @@ pub async fn fetch(
 
     match result {
         Ok(Outcome::Completed { path, .. }) => {
+            // same Mark-of-the-Web as the app writes (best effort, NTFS only)
+            riptide_engine::motw::mark_from_internet(
+                &path,
+                opts.referrer.as_deref(),
+                Some(final_url_text.as_str()),
+            );
             db(&store, move |s| {
                 s.set_state(id, DownloadState::Verifying, None)?;
                 s.set_state(id, DownloadState::Completed, None)?;

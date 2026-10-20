@@ -42,6 +42,8 @@ pub struct ShellLabels {
     pub completed: String,
     /// Notification body when a download fails; `{reason}` is replaced.
     pub failed: String,
+    /// Summary notification after a burst of completions; `{count}` is replaced.
+    pub completed_many: String,
     /// Byte units, smallest first: B, KB, MB, GB, TB.
     pub units: [String; 5],
     /// Suffix that turns a size into a speed (`/s`).
@@ -59,6 +61,7 @@ impl Default for ShellLabels {
             tooltip_active: "Riptide: {count} active, {speed}".into(),
             completed: "Download complete".into(),
             failed: "Download failed: {reason}".into(),
+            completed_many: "{count} downloads complete".into(),
             units: [
                 "B".into(),
                 "KB".into(),

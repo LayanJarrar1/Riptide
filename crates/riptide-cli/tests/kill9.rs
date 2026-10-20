@@ -240,3 +240,203 @@ async fn arabic_name_from_content_disposition_lands_on_disk() {
     assert!(out_dir.join("_CON.txt").exists());
     assert!(!tmp.path().join("CON.txt").exists());
 }
+
+/// Runs `riptide fetch` and kills it `kill_after` into its life (whatever it is doing: probing,
+/// preallocating, writing, verifying, renaming). Returns `true` when it was killed, `false`
+/// when it had already finished successfully.
+fn fetch_and_maybe_kill(data_dir: &Path, url: &str, out: &Path, kill_after: Duration) -> bool {
+    let mut child = riptide(
+        data_dir,
+        &["fetch", url, "-o", out.to_str().unwrap(), "-c", "3"],
+    )
+    .spawn()
+    .unwrap();
+    let started = Instant::now();
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            let output = child.wait_with_output().unwrap();
+            assert!(
+                status.success(),
+                "fetch failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return false;
+        }
+        if started.elapsed() >= kill_after {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Kill at a uniformly random instant of the whole process life (start-up, write, verify,
+/// rename), restart until it finishes: always byte-exact, never a `.rtpart` left behind.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn killed_at_any_instant_still_ends_byte_exact_with_no_leftovers() {
+    let server = TestServer::spawn().await;
+    let size = 6 * MIB;
+    let url = server.url(&format!("/slow?bps=524288&size={size}"));
+    let mut rng = rand::rng();
+    let mut total_kills = 0;
+    for round in 0..6 {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path().join("data");
+        let out = tmp.path().join("any.bin");
+        let mut kills = 0;
+        loop {
+            // the first runs are cut at a random instant, later ones are left to finish
+            let kill_after = if kills < 3 {
+                Duration::from_millis(rng.random_range(0..2000))
+            } else {
+                Duration::from_secs(120)
+            };
+            if fetch_and_maybe_kill(&data_dir, &url, &out, kill_after) {
+                kills += 1;
+                assert!(
+                    !out.exists() || riptide_net::part_path_for(&out).exists() || {
+                        // a kill after the atomic rename: the final file must already be whole
+                        std::fs::metadata(&out).unwrap().len() == size
+                    },
+                    "round {round}: a half-written final file after a kill"
+                );
+            } else {
+                break;
+            }
+        }
+        total_kills += kills;
+        assert!(out.exists(), "round {round}: no file");
+        assert!(
+            !riptide_net::part_path_for(&out).exists(),
+            "round {round}: .rtpart left"
+        );
+        let actual = riptide_net::checksum_of(out.clone(), ChecksumAlgo::Sha256)
+            .await
+            .unwrap();
+        assert_eq!(
+            actual,
+            expected_sha256_hex(DEFAULT_SEED, size),
+            "round {round}: not byte-exact after {kills} kills"
+        );
+    }
+    assert!(
+        total_kills >= 6,
+        "the test barely killed anything: {total_kills}"
+    );
+}
+
+/// A server without ranges cannot resume: after a kill the download restarts from zero and
+/// must still produce exactly the source bytes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn killed_download_from_a_server_without_ranges_restarts_clean() {
+    let server = TestServer::spawn().await;
+    let size = 3 * MIB;
+    for route in ["noranges", "nolength"] {
+        // 1 MiB/s: the 3 s transfer is certainly still running when it is killed at 1 s
+        let url = server.url(&format!("/{route}?size={size}&bps=1048576"));
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path().join("data");
+        let out = tmp.path().join("nr.bin");
+        let killed = fetch_and_maybe_kill(&data_dir, &url, &out, Duration::from_millis(1000));
+        assert!(killed, "{route}: the download finished before the kill");
+        assert!(
+            !out.exists(),
+            "{route}: no final file after a kill mid-transfer"
+        );
+        assert!(!fetch_and_maybe_kill(
+            &data_dir,
+            &url,
+            &out,
+            Duration::from_secs(120)
+        ));
+        assert!(
+            !riptide_net::part_path_for(&out).exists(),
+            "{route}: .rtpart left"
+        );
+        let actual = riptide_net::checksum_of(out.clone(), ChecksumAlgo::Sha256)
+            .await
+            .unwrap();
+        assert_eq!(actual, expected_sha256_hex(DEFAULT_SEED, size), "{route}");
+    }
+}
+
+/// A server whose `Content-Range` lies (CDN compression) makes the transfer fall back to one
+/// plain connection. Killing the process at any moment of that, any number of times, must still
+/// end with the real size and bytes: never a "Done in 0.0 s" over a zero-filled file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn killed_during_the_content_range_fallback_restarts_clean() {
+    let server = TestServer::spawn().await;
+    let size = 12 * MIB;
+    let url = server.url(&format!(
+        "/range-lie?size={size}&lie={}&bps=2097152",
+        4 * MIB
+    ));
+    let mut rng = rand::rng();
+    for round in 0..4 {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path().join("data");
+        let out = tmp.path().join("lie.bin");
+        let mut kills = 0;
+        loop {
+            let kill_after = if kills < 3 {
+                Duration::from_millis(rng.random_range(300..4500))
+            } else {
+                Duration::from_secs(120)
+            };
+            if fetch_and_maybe_kill(&data_dir, &url, &out, kill_after) {
+                kills += 1;
+            } else {
+                break;
+            }
+        }
+        let actual = riptide_net::checksum_of(out.clone(), ChecksumAlgo::Sha256)
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::metadata(&out).unwrap().len(),
+            size,
+            "round {round}: wrong size after {kills} kills"
+        );
+        assert_eq!(
+            actual,
+            expected_sha256_hex(DEFAULT_SEED, size),
+            "round {round}"
+        );
+        assert!(!riptide_net::part_path_for(&out).exists());
+    }
+}
+
+/// `riptide fetch http://user:pass@host/...` works, but the password never reaches the
+/// downloads table that the desktop app shares.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn fetch_with_userinfo_never_stores_the_password() {
+    let server = TestServer::spawn().await;
+    let url = server
+        .url("/needs-auth/basic?size=5000")
+        .replace("http://", "http://user:pass@");
+    let tmp = tempfile::tempdir().unwrap();
+    let data_dir = tmp.path().join("data");
+    let out = tmp.path().join("auth.bin");
+    let output = riptide(&data_dir, &["fetch", &url, "-o", out.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        !stderr.contains("pass@"),
+        "password in the output: {stderr}"
+    );
+    assert_eq!(std::fs::metadata(&out).unwrap().len(), 5000);
+    let store = riptide_store::Store::open(data_dir.join("riptide.sqlite")).unwrap();
+    let rows = store.list_downloads().unwrap();
+    assert!(!rows.is_empty());
+    for d in rows {
+        for text in [Some(d.url.clone()), d.final_url.clone(), d.error.clone()]
+            .into_iter()
+            .flatten()
+        {
+            assert!(!text.contains("pass"), "password stored: {text}");
+        }
+    }
+}

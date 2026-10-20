@@ -38,6 +38,7 @@ export interface ShellPrefs {
     readonly tooltipActive: string;
     readonly completed: string;
     readonly failed: string;
+    readonly completedMany: string;
     readonly units: readonly [string, string, string, string, string];
     readonly perSecond: string;
   };
@@ -111,6 +112,7 @@ export class DesktopShellService {
         tooltipActive: t('tray.active'),
         completed: t('notify.completed'),
         failed: t('notify.failed'),
+        completedMany: t('notify.completedMany'),
         units: [t('unit.B'), t('unit.KB'), t('unit.MB'), t('unit.GB'), t('unit.TB')],
         perSecond: t('unit.perSecond'),
       },
