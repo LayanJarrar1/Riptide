@@ -1,0 +1,217 @@
+{
+ "created": 1792486898,
+ "d1": "dn601302.us.archive.org",
+ "dir": "/0/items/DWK123",
+ "files": [
+  {
+   "name": "DWK123_archive.torrent",
+   "source": "metadata",
+   "format": "Archive BitTorrent",
+   "size": "28976",
+   "md5": "2b2907cba115cf015fabb5ec2a1909dc"
+  },
+  {
+   "name": "DWK123_files.xml",
+   "source": "metadata",
+   "format": "Metadata",
+   "md5": "8ab7e1ae0a16389a114c1c735fa8af7a"
+  },
+  {
+   "name": "DWK123_meta.xml",
+   "source": "metadata",
+   "format": "Metadata",
+   "size": "1820",
+   "md5": "5234e32bfaec493ecc45e03f011bc633"
+  },
+  {
+   "name": "DWK123_reviews.xml",
+   "source": "original",
+   "format": "Metadata",
+   "size": "6343",
+   "md5": "7c71dbf1a15b6c0a9ab11561b9169eca"
+  },
+  {
+   "name": "ProleteR_-_01_-_April_Showers.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "10764625",
+   "md5": "7b9d55b4298e4e83765ae4959336c109"
+  },
+  {
+   "name": "ProleteR_-_01_-_April_Showers.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2642862",
+   "md5": "e3298724c16d9cf6e98d99d67fc863b5"
+  },
+  {
+   "name": "ProleteR_-_02_-_Downtown_Irony.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "10460560",
+   "md5": "9dc19436c4fcb9cfea77b11846c8ff5f"
+  },
+  {
+   "name": "ProleteR_-_02_-_Downtown_Irony.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2635135",
+   "md5": "4a7426e493a1bfc33f69a28acabd8dca"
+  },
+  {
+   "name": "ProleteR_-_03_-_Soul_Key.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "12151205",
+   "md5": "b5dd71ba302042efa1d81d4de58d3478"
+  },
+  {
+   "name": "ProleteR_-_03_-_Soul_Key.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "3103448",
+   "md5": "525e1f7b13d520de156630abb245bc7e"
+  },
+  {
+   "name": "ProleteR_-_04_-_A_Million_Dollar.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "9939156",
+   "md5": "51917010e18f9819492123ee6a0271a2"
+  },
+  {
+   "name": "ProleteR_-_04_-_A_Million_Dollar.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2739771",
+   "md5": "757a393db6429946bb7a9f28f4d8c268"
+  },
+  {
+   "name": "ProleteR_-_05_-_U_Can_Get_It.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "10380103",
+   "md5": "eea95c2ea27750d304fcc2204988edd0"
+  },
+  {
+   "name": "ProleteR_-_05_-_U_Can_Get_It.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2743149",
+   "md5": "7e67afa6acd75673e5f2e9dc0121d2aa"
+  },
+  {
+   "name": "ProleteR_-_06_-_Back_Home.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "11423956",
+   "md5": "d7f1bb534efc30216cc40b81d1a11c31"
+  },
+  {
+   "name": "ProleteR_-_06_-_Back_Home.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2978595",
+   "md5": "867bb4ac8cd3e4ea98ae9018376a7969"
+  },
+  {
+   "name": "ProleteR_-_07_-_Muhammad_Ali.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "9582845",
+   "md5": "9d1786e19eea0dfb91165505f10235a7"
+  },
+  {
+   "name": "ProleteR_-_07_-_Muhammad_Ali.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2414393",
+   "md5": "abab01e5cc8d11e4477f2086d586b4b8"
+  },
+  {
+   "name": "ProleteR_-_08_-_The_Misfit_Song.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "11435449",
+   "md5": "7c5989cc1e64560df81609c689c7a39d"
+  },
+  {
+   "name": "ProleteR_-_08_-_The_Misfit_Song.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2972293",
+   "md5": "5e83a6ddef655bdefae7a3039755455b"
+  },
+  {
+   "name": "ProleteR_-_09_-_May_Flowers_feat._Taskrok.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "6183792",
+   "md5": "1a2cbccc4507b73c2ecb68c3b562ed6f"
+  },
+  {
+   "name": "ProleteR_-_09_-_May_Flowers_feat._Taskrok.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "1550007",
+   "md5": "9ec4c361e6559bdc161c0bf289f94ae0"
+  },
+  {
+   "name": "ProleteR_-_10_-_Faidherbe_Square_feat._Mister_Colfer_and_DJ_Crabees.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "9289229",
+   "md5": "8ccd15d5173268ec3dc89056a5817851"
+  },
+  {
+   "name": "ProleteR_-_10_-_Faidherbe_Square_feat._Mister_Colfer_and_DJ_Crabees.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2415491",
+   "md5": "f6aa317106343227d753a69c5b1c9652"
+  },
+  {
+   "name": "ProleteR_-_11_-_Do_A_Stupid_Little_Dance_feat._Taskrok.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "8500331",
+   "md5": "6189edddb80515b6406497a5f9bcbed4"
+  },
+  {
+   "name": "ProleteR_-_11_-_Do_A_Stupid_Little_Dance_feat._Taskrok.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "2202547",
+   "md5": "16d32a49a756f8b3b44268fcbc60fd30"
+  },
+  {
+   "name": "ProleteR_-_12_-_Thats_Life_Frank_Sinatra_Tribute.mp3",
+   "source": "original",
+   "format": "VBR MP3",
+   "size": "6222454",
+   "md5": "ed2b10ee441b6e3a393caf29e285202e"
+  },
+  {
+   "name": "ProleteR_-_12_-_Thats_Life_Frank_Sinatra_Tribute.ogg",
+   "source": "derivative",
+   "format": "Ogg Vorbis",
+   "size": "1609400",
+   "md5": "fee9defc003e7e65144afe178dbcaf1a"
+  }
+ ],
+ "files_count": 28,
+ "item_last_updated": 1785623243,
+ "metadata": {
+  "mediatype": "audio",
+  "collection": [
+   "dustedwaxkingdom",
+   "netlabels"
+  ],
+  "title": "Curses From Past Times (LP)",
+  "description": "After the self-release in late 2011, the French producer ProleteR drops his \"Curses From Past Times\" for Dusted Wax Kingdom with 4 extra bonus tracks. The beat tape features heavy-weight boom bap beats cooked with sprightly chanson samples.\n\nLinks:\n<a href=\"https://www.facebook.com/pages/ProleteR/147932295265600\" rel=\"ugc nofollow\">ProleteR</a> @Facebook\n<a href=\"http://soundcloud.com/proleter-beatmaker\" rel=\"ugc nofollow\">ProleteR</a> @SoundCloud\n<a href=\"http://www.youtube.com/user/proleterbeats\" rel=\"ugc nofollow\">ProleteR</a> @Youtube\n<a href=\"http://proleter.bandcamp.com\" rel=\"ugc nofollow\">ProleteR</a> @BandCamp\n\nTags:\nProleteR, Dusted Wax Kingdom, instrumental hip-hop, jazz, lo-fi, trip-hop",
+  "creator": "ProleteR",
+  "licenseurl": "http://creativecommons.org/licenses/by-nc-nd/3.0/",
+  "identifier": "DWK123",
+  "date": "2012-03-21"
+ }
+}

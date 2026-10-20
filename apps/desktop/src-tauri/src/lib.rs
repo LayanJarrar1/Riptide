@@ -300,6 +300,7 @@ pub fn run() {
             ai::ai_last_request,
             ai::ai_forget_all,
             ai::ai_suggest_name,
+            clipboard::clipboard_magnets,
             research::research_start,
             research::research_cancel,
             research::research_retry_source,

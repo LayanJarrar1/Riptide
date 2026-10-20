@@ -17,8 +17,9 @@ use crate::error::{Error, Result};
 use crate::limits::{MAX_MAGNET_BYTES, MAX_TRACKERS};
 use crate::paths::sanitize_component;
 
-/// A validated magnet link.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A validated magnet link. `Debug` shows the info-hash and the tracker count only: tracker
+/// URLs may carry a private passkey and must not end up in a log by accident.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Magnet {
     /// BitTorrent v1 info-hash, 40 lowercase hex digits.
     pub info_hash: String,
@@ -26,6 +27,19 @@ pub struct Magnet {
     pub display_name: Option<String>,
     /// Tracker URLs (`tr`), deduplicated and restricted to `http`, `https` and `udp`.
     pub trackers: Vec<Url>,
+}
+
+impl std::fmt::Debug for Magnet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Magnet")
+            .field("info_hash", &self.info_hash)
+            .field("display_name", &self.display_name)
+            .field(
+                "trackers",
+                &format_args!("[{} hidden]", self.trackers.len()),
+            )
+            .finish()
+    }
 }
 
 impl Magnet {
@@ -42,20 +56,22 @@ impl Magnet {
         )
     }
 
-    /// Rebuilds a clean magnet URI from the validated parts (what the engine is given).
+    /// Rebuilds a clean magnet URI from the validated parts (what the engine is given):
+    /// `xt=urn:btih:<hash>` literally, then the name and each tracker percent-encoded as one
+    /// parameter value (so a tracker's own `?uk=` stays inside it).
     pub fn to_uri(&self) -> String {
-        let mut url = Url::parse("magnet:?").expect("static magnet base is valid");
-        {
-            let mut q = url.query_pairs_mut();
-            q.append_pair("xt", &format!("urn:btih:{}", self.info_hash));
-            if let Some(n) = &self.display_name {
-                q.append_pair("dn", n);
-            }
-            for t in &self.trackers {
-                q.append_pair("tr", t.as_str());
-            }
+        let enc =
+            |s: &str| -> String { url::form_urlencoded::byte_serialize(s.as_bytes()).collect() };
+        let mut out = format!("magnet:?xt=urn:btih:{}", self.info_hash);
+        if let Some(n) = &self.display_name {
+            out.push_str("&dn=");
+            out.push_str(&enc(n));
         }
-        url.to_string()
+        for t in &self.trackers {
+            out.push_str("&tr=");
+            out.push_str(&enc(t.as_str()));
+        }
+        out
     }
 }
 

@@ -2,6 +2,9 @@
 //! Commons or public-domain licence and are not access-restricted (no lending-library scans;
 //! unlicensed uploads are not offered, since their copyright status is unknown). Two steps: the advanced search finds items,
 //! then each item's metadata names the PDF file that gets downloaded.
+//!
+//! Music and video searches (`search_in`) follow the same two steps with stricter
+//! collection rules, see [`AUDIO_FILTER`] and [`VIDEO_FILTER`].
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -9,7 +12,7 @@ use serde_json::Value;
 use super::{check_query, clamp, client_for, SearchSource};
 use crate::error::{ResearchError, Result};
 use crate::http::{enc, Http};
-use crate::types::{jstr, tidy, year_of, Hit, Source};
+use crate::types::{jstr, tidy, year_of, Category, Hit, Source};
 
 /// Internet Archive adapter.
 pub struct InternetArchive {
@@ -160,6 +163,228 @@ pub(crate) fn parse_metadata(base: &str, doc: &Doc, meta: &Value) -> Option<Hit>
     Some(h)
 }
 
+/// Audio items are offered when they carry a Creative Commons licence or sit in the
+/// `netlabels` (Creative Commons netlabels) or `etree` (Live Music Archive, bands that allow
+/// taping) collections.
+pub const AUDIO_FILTER: &str = "mediatype:audio AND (licenseurl:(*creativecommons.org*) OR collection:(netlabels OR etree)) AND -access-restricted-item:true";
+
+/// Films are offered when they carry a Creative Commons licence or sit in a collection of
+/// public-domain material: `prelinger` (Prelinger Archives ephemeral films), `silent_films`
+/// and `feature_films` (older features). `classic_tv` is left out: its copyright status is
+/// mixed.
+pub const VIDEO_FILTER: &str = "mediatype:movies AND (licenseurl:(*creativecommons.org*) OR collection:(prelinger OR silent_films OR feature_films)) AND -access-restricted-item:true";
+
+/// Longest album offered as one zip.
+const MAX_ALBUM_TRACKS: usize = 60;
+
+/// Largest album offered as one zip (1.5 GiB).
+const MAX_ALBUM_BYTES: u64 = 1_610_612_736;
+
+/// Which audible or moving kind of item a media search looks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Media {
+    Audio,
+    Video,
+}
+
+fn collections(m: &Value) -> Vec<String> {
+    match m.get("collection") {
+        Some(Value::String(s)) => vec![s.clone()],
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|c| c.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn is_open_licence(url: &str) -> bool {
+    let u = url.to_ascii_lowercase();
+    u.contains("creativecommons.org") && (u.starts_with("http://") || u.starts_with("https://"))
+}
+
+fn size_of(f: &Value) -> Option<u64> {
+    f.get("size")
+        .and_then(as_text)
+        .and_then(|s| s.parse::<u64>().ok())
+}
+
+fn download_url(base: &str, id: &str, name: &str) -> String {
+    format!(
+        "{}/download/{}/{}",
+        base.trim_end_matches('/'),
+        enc(id).replace('+', "%20"),
+        enc(name).replace('+', "%20")
+    )
+}
+
+/// The item's metadata becomes a music or film hit, or `None` when the item is restricted,
+/// fails the licence/collection rule or has no suitable file.
+///
+/// Music: the best audio format present (VBR MP3, MP3, Ogg Vorbis, FLAC). One file is linked
+/// directly; an album of several files is linked as the Archive's on-the-fly zip of that
+/// format (`/compress/<id>/formats=...`). Film: an MP4 (h.264, then 512Kb MPEG4, then MPEG4).
+pub(crate) fn parse_media_metadata(
+    base: &str,
+    doc: &Doc,
+    meta: &Value,
+    media: Media,
+) -> Option<Hit> {
+    let m = meta.get("metadata")?;
+    if m.get("access-restricted-item")
+        .and_then(as_text)
+        .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+    {
+        return None;
+    }
+    let licence = m
+        .get("licenseurl")
+        .and_then(as_text)
+        .filter(|l| is_open_licence(l));
+    let cols = collections(m);
+    let in_any = |names: &[&str]| cols.iter().any(|c| names.contains(&c.as_str()));
+    let allowed = match media {
+        Media::Audio => licence.is_some() || in_any(&["netlabels", "etree"]),
+        Media::Video => {
+            licence.is_some() || in_any(&["prelinger", "silent_films", "feature_films"])
+        }
+    };
+    if !allowed {
+        return None;
+    }
+    let files = meta.get("files")?.as_array()?;
+    let id = doc.identifier.as_str();
+    let (url, size, filename, title) = match media {
+        Media::Audio => {
+            let fmt_files = |fmt: &str| -> Vec<&Value> {
+                files
+                    .iter()
+                    .filter(|f| {
+                        f.get("format")
+                            .and_then(jstr)
+                            .is_some_and(|x| x.eq_ignore_ascii_case(fmt))
+                            && f.get("name")
+                                .and_then(jstr)
+                                .is_some_and(|n| !n.contains("_sample"))
+                    })
+                    .collect()
+            };
+            let (fmt, list) = ["VBR MP3", "MP3", "Ogg Vorbis", "Flac"]
+                .into_iter()
+                .map(|f| (f, fmt_files(f)))
+                .find(|(_, l)| !l.is_empty())?;
+            if list.len() == 1 {
+                let name = list[0].get("name").and_then(jstr)?;
+                (
+                    download_url(base, id, name),
+                    size_of(list[0]),
+                    name.rsplit('/').next().unwrap_or(name).to_string(),
+                    doc.title.clone(),
+                )
+            } else {
+                let total: Option<u64> = list.iter().map(|f| size_of(f)).sum();
+                // a whole radio-show run or a 300-track dump is not an album
+                if list.len() > MAX_ALBUM_TRACKS || total.is_some_and(|t| t > MAX_ALBUM_BYTES) {
+                    return None;
+                }
+                (
+                    format!(
+                        "{}/compress/{}/formats={}&file=/{}.zip",
+                        base.trim_end_matches('/'),
+                        enc(id).replace('+', "%20"),
+                        enc(fmt).replace('+', "%20"),
+                        enc(id).replace('+', "%20")
+                    ),
+                    total,
+                    format!("{id}.zip"),
+                    format!("{} ({} tracks)", doc.title, list.len()),
+                )
+            }
+        }
+        Media::Video => {
+            let (_, name, size) = files
+                .iter()
+                .filter_map(|f| {
+                    let name = f.get("name").and_then(jstr)?;
+                    if !name.to_ascii_lowercase().ends_with(".mp4") {
+                        return None;
+                    }
+                    let rank = match f
+                        .get("format")
+                        .and_then(jstr)?
+                        .to_ascii_lowercase()
+                        .as_str()
+                    {
+                        "h.264" | "h.264 hd" => 0u8,
+                        "512kb mpeg4" => 1,
+                        "mpeg4" => 2,
+                        _ => return None,
+                    };
+                    Some((rank, name, size_of(f)))
+                })
+                .min_by_key(|(rank, _, _)| *rank)?;
+            (
+                download_url(base, id, name),
+                size,
+                name.rsplit('/').next().unwrap_or(name).to_string(),
+                doc.title.clone(),
+            )
+        }
+    };
+    let mut h = Hit::new(Source::InternetArchive, id, &title, &url);
+    h.size = size;
+    h.filename = Some(filename);
+    h.page_url = Some(format!("{}/details/{id}", base.trim_end_matches('/')));
+    h.authors = doc.creator.iter().cloned().collect();
+    h.year = doc
+        .year
+        .or_else(|| m.get("date").and_then(as_text).and_then(|d| year_of(&d)));
+    // without a licence URL the reason for offering a film is its public-domain collection
+    h.license = licence.or_else(|| {
+        (media == Media::Video && in_any(&["prelinger", "silent_films"]))
+            .then(|| "Public domain".to_string())
+    });
+    h.summary = m
+        .get("description")
+        .and_then(as_text)
+        .map(|d| tidy(&crate::types::strip_html(&d), 300));
+    Some(h)
+}
+
+impl InternetArchive {
+    async fn search_media(&self, media: Media, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        let q = check_query(query)?;
+        let wanted = clamp(limit);
+        let filter = match media {
+            Media::Audio => AUDIO_FILTER,
+            Media::Video => VIDEO_FILTER,
+        };
+        let lucene = format!("({q}) AND {filter}");
+        let url = format!(
+            "{}/advancedsearch.php?q={}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&sort[]=downloads+desc&rows={}&page=1&output=json",
+            self.base,
+            enc(&lucene),
+            (wanted * 2).min(30)
+        );
+        let body = self.http.json(|| self.http.get(&url)).await?;
+        if body.pointer("/response/docs").is_none() {
+            return Err(ResearchError::Parse("no response.docs".into()));
+        }
+        let mut hits = Vec::new();
+        for doc in parse_search(&body) {
+            if hits.len() >= wanted {
+                break;
+            }
+            let murl = format!("{}/metadata/{}", self.base, enc(&doc.identifier));
+            match self.http.json(|| self.http.get(&murl)).await {
+                Ok(meta) => hits.extend(parse_media_metadata(&self.base, &doc, &meta, media)),
+                Err(e) => tracing::debug!(error = %e, "archive item skipped"),
+            }
+        }
+        Ok(hits)
+    }
+}
+
 #[async_trait]
 impl SearchSource for InternetArchive {
     fn source(&self) -> Source {
@@ -199,5 +424,13 @@ impl SearchSource for InternetArchive {
             }
         }
         Ok(hits)
+    }
+
+    async fn search_in(&self, category: Category, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        match category {
+            Category::Music => self.search_media(Media::Audio, query, limit).await,
+            Category::Video => self.search_media(Media::Video, query, limit).await,
+            _ => self.search(query, limit).await,
+        }
     }
 }

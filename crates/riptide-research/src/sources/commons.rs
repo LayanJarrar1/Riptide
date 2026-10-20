@@ -7,7 +7,7 @@ use serde_json::Value;
 use super::{check_query, clamp, client_for, SearchSource};
 use crate::error::{ResearchError, Result};
 use crate::http::{enc, Http};
-use crate::types::{is_web_url, jstr, strip_html, tidy, year_of, Hit, Source};
+use crate::types::{is_web_url, jstr, strip_html, tidy, year_of, Category, Hit, Source};
 
 /// Commons adapter.
 pub struct Commons {
@@ -79,19 +79,21 @@ pub(crate) fn parse(body: &Value) -> Vec<Hit> {
     rows.into_iter().map(|(_, h)| h).collect()
 }
 
-#[async_trait]
-impl SearchSource for Commons {
-    fn source(&self) -> Source {
-        Source::Commons
-    }
-
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
+impl Commons {
+    /// Runs the file search; `filter` is a CirrusSearch term such as `filetype:audio` that
+    /// narrows the namespace to one kind of media (empty for all files).
+    async fn run(&self, filter: &str, query: &str, limit: usize) -> Result<Vec<Hit>> {
         let q = check_query(query)?;
+        let term = if filter.is_empty() {
+            q
+        } else {
+            format!("{filter} {q}")
+        };
         let url = format!(
             "{}/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit={}&gsrsearch={}&prop=imageinfo&iiprop=url|size|mime|extmetadata&iiextmetadatafilter=LicenseShortName|Artist|DateTimeOriginal|DateTime|ImageDescription",
             self.base,
             clamp(limit),
-            enc(&q)
+            enc(&term)
         );
         let body = self.http.json(|| self.http.get(&url)).await?;
         if let Some(err) = body.get("error") {
@@ -100,5 +102,28 @@ impl SearchSource for Commons {
         }
         // no matches: the API omits `query` entirely
         Ok(parse(&body))
+    }
+}
+
+#[async_trait]
+impl SearchSource for Commons {
+    fn source(&self) -> Source {
+        Source::Commons
+    }
+
+    async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        self.run("", query, limit).await
+    }
+
+    /// Music, video and images are searched with Commons' `filetype:` filter (audio, video,
+    /// bitmap); every other category behaves like the unfiltered search.
+    async fn search_in(&self, category: Category, query: &str, limit: usize) -> Result<Vec<Hit>> {
+        let filter = match category {
+            Category::Music => "filetype:audio",
+            Category::Video => "filetype:video",
+            Category::Images => "filetype:bitmap",
+            _ => "",
+        };
+        self.run(filter, query, limit).await
     }
 }

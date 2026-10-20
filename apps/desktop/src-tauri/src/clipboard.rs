@@ -78,7 +78,10 @@ fn magnet_link(text: &str) -> Option<ClipboardLink> {
     let mut hash = None;
     let mut name = None;
     for pair in rest.split('&') {
-        let (k, v) = pair.split_once('=')?;
+        // a stray `&&`, a bare `&kt` or an empty value must not hide the link
+        let Some((k, v)) = pair.split_once('=') else {
+            continue;
+        };
         match k.to_ascii_lowercase().as_str() {
             "xt" => {
                 let Some(h) = v
@@ -163,6 +166,40 @@ impl Watcher {
     }
 }
 
+/// Most magnet links taken from one block of text.
+const MAX_MAGNETS: usize = 50;
+
+/// The magnet links in `text`, one per line (blank lines and other text are skipped, repeats of
+/// the same info-hash collapse). Used by "Open magnet from clipboard" and by the Add dialog when
+/// several links are pasted at once.
+pub fn magnet_lines(text: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if line.len() > MAX_URL_LEN || line.chars().any(char::is_whitespace) {
+            continue;
+        }
+        let Some(link) = magnet_link(line) else {
+            continue;
+        };
+        let key = link.name.to_ascii_lowercase();
+        if out.len() < MAX_MAGNETS && seen.insert(key) {
+            out.push(link.url);
+        }
+    }
+    out
+}
+
+/// The magnet links currently on the clipboard (File menu, "Open magnet from clipboard"). The
+/// text is only read; nothing is logged.
+#[tauri::command]
+pub fn clipboard_magnets<R: Runtime>(app: AppHandle<R>) -> Vec<String> {
+    app.clipboard()
+        .read_text()
+        .map(|t| magnet_lines(&t))
+        .unwrap_or_default()
+}
+
 /// Starts the polling thread.
 pub fn install<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
@@ -231,6 +268,39 @@ mod tests {
         assert!(downloadable_link("magnet:?xt=urn:btih:short").is_none());
         assert!(downloadable_link("magnet:?dn=only-a-name").is_none());
         assert!(downloadable_link(&format!("magnet:?xt=urn:btih:{hash} extra")).is_none());
+    }
+
+    #[test]
+    fn offers_a_pasted_magnet_with_an_encoded_tracker_and_an_empty_value() {
+        let owner = "magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&tr=http%3A%2F%2Frutracker.ru%2Fbt%2Fannounce.php%3Fuk%3D";
+        let link = downloadable_link(owner).unwrap();
+        assert_eq!(link.url, owner);
+        assert_eq!(link.name, "428c72ff4aac627830cfacdc8622be0e908c3b65");
+        // stray separators and bare keys do not hide it
+        let loose = "magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&&kt&dn=&tr=";
+        assert_eq!(
+            downloadable_link(loose).unwrap().name,
+            "428c72ff4aac627830cfacdc8622be0e908c3b65"
+        );
+    }
+
+    #[test]
+    fn magnet_lines_picks_links_one_per_line() {
+        let a = "magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&tr=http%3A%2F%2Frutracker.ru%2Fbt%2Fannounce.php%3Fuk%3D";
+        let b = "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny";
+        let text = format!(
+            "notes
+{a}
+
+  {b}  
+{a}
+https://example.com/x.zip
+magnet:?xt=urn:sha1:abc
+"
+        );
+        assert_eq!(magnet_lines(&text), [a.to_string(), b.to_string()]);
+        assert!(magnet_lines("no links here").is_empty());
+        assert!(magnet_lines("").is_empty());
     }
 
     #[test]

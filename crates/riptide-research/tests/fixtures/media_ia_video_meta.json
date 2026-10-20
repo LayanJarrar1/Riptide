@@ -1,0 +1,88 @@
+{
+ "created": 1792440602,
+ "d1": "dn800309.us.archive.org",
+ "dir": "/0/items/FromtheG1954",
+ "files": [
+  {
+   "name": "FromtheG1954.avi",
+   "source": "original",
+   "format": "Cinepack",
+   "size": "63169092",
+   "md5": "1a195f236ad8b3d248bba503d8c77a9b"
+  },
+  {
+   "name": "FromtheG1954.gif",
+   "source": "derivative",
+   "format": "Animated GIF",
+   "size": "301121",
+   "md5": "4a7c5be978f38e25ece875aac3127348"
+  },
+  {
+   "name": "FromtheG1954.mp4",
+   "source": "derivative",
+   "format": "h.264",
+   "size": "119087429",
+   "md5": "ece645d91b956c740e22f52c39f58cb6"
+  },
+  {
+   "name": "FromtheG1954.mpeg",
+   "source": "original",
+   "format": "MPEG2",
+   "size": "528778390",
+   "md5": "c1ea912e0dfcce075b5b4ca81f521196"
+  },
+  {
+   "name": "FromtheG1954.ogv",
+   "source": "derivative",
+   "format": "Ogg Video",
+   "size": "82166348",
+   "md5": "2e5592586bcf3adf58716cd2510c8d40"
+  },
+  {
+   "name": "FromtheG1954_archive.torrent",
+   "source": "metadata",
+   "format": "Archive BitTorrent",
+   "size": "33367",
+   "md5": "73c49082a526f3e6cdf8e3938fec8b34"
+  },
+  {
+   "name": "FromtheG1954_files.xml",
+   "source": "metadata",
+   "format": "Metadata",
+   "md5": "bb14ceacb16526d7209cbb4b711cd1ed"
+  },
+  {
+   "name": "FromtheG1954_meta.sqlite",
+   "source": "original",
+   "format": "Metadata",
+   "size": "20480",
+   "md5": "9506690733957614445f59bc0f6666db"
+  },
+  {
+   "name": "FromtheG1954_meta.xml",
+   "source": "metadata",
+   "format": "Metadata",
+   "size": "1438",
+   "md5": "d6797609503029143df5abbf8f0ba3b6"
+  },
+  {
+   "name": "FromtheG1954_reviews.xml",
+   "source": "original",
+   "format": "Metadata",
+   "size": "8039",
+   "md5": "c588af39e23ea19d275d9b6785b2dc25"
+  }
+ ],
+ "files_count": 10,
+ "item_last_updated": 1780870897,
+ "metadata": {
+  "mediatype": "movies",
+  "identifier": "FromtheG1954",
+  "creator": "Unknown",
+  "description": "Promotional film for \"Nutrilite,\" a 1950s-vintage food supplement.",
+  "date": "ca. 1954",
+  "licenseurl": "http://creativecommons.org/licenses/publicdomain/",
+  "collection": "prelinger",
+  "title": "From the Ground Up"
+ }
+}

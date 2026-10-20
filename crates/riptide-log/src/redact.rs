@@ -33,6 +33,23 @@ static QUERY: LazyLock<Regex> = LazyLock::new(|| {
         .unwrap_or_else(|e| unreachable!("static regex is valid: {e}"))
 });
 
+/// A whole magnet link (the `tr` trackers inside it may carry a private passkey).
+static MAGNET: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)magnet:\?[^\s"'<>]*"#)
+        .unwrap_or_else(|e| unreachable!("static regex is valid: {e}"))
+});
+
+static BTIH: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)xt=urn:btih:([a-z0-9]{32,40})")
+        .unwrap_or_else(|e| unreachable!("static regex is valid: {e}"))
+});
+
+/// A tracker announce URL: private trackers keep the passkey in the path.
+static ANNOUNCE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)(?P<host>(?:https?|udp)://[^/\s"'<>?#]+)/[^\s"'<>?#]*announce[^\s"'<>?#]*"#)
+        .unwrap_or_else(|e| unreachable!("static regex is valid: {e}"))
+});
+
 static AUTH_SCHEME: LazyLock<Regex> = LazyLock::new(|| {
     // `[` is excluded so an already-masked `Bearer [REDACTED]` is left alone (idempotence).
     RegexBuilder::new(
@@ -56,7 +73,13 @@ static SECRET_KEY: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Scrubs one line of text. Idempotent.
 pub fn redact_line(line: &str) -> String {
-    let s = USERINFO.replace_all(line, "${scheme}[REDACTED]@");
+    // magnet links keep their info-hash and lose everything else (trackers, names)
+    let s = MAGNET.replace_all(line, |c: &regex::Captures<'_>| match BTIH.captures(&c[0]) {
+        Some(h) => format!("magnet:?xt=urn:btih:{}&{QUERY_MASK}", &h[1]),
+        None => format!("magnet:?{QUERY_MASK}"),
+    });
+    let s = ANNOUNCE.replace_all(&s, "${host}/[stripped]");
+    let s = USERINFO.replace_all(&s, "${scheme}[REDACTED]@");
     let s = QUERY.replace_all(&s, |c: &regex::Captures<'_>| {
         format!("{}?{QUERY_MASK}", &c["url"])
     });
@@ -181,6 +204,36 @@ impl<W: Write> Drop for RedactingWriter<W> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn magnet_links_keep_only_the_info_hash() {
+        let line = "adding magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&tr=http%3A%2F%2Frutracker.ru%2Fbt%2Fannounce.php%3Fuk%3D&dn=X done";
+        let out = super::redact_line(line);
+        assert_eq!(
+            out,
+            "adding magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&[stripped] done"
+        );
+        assert_eq!(super::redact_line(&out), out, "idempotent");
+        assert!(!super::redact_line("MAGNET:?tr=udp://x").contains("udp"));
+    }
+
+    #[test]
+    fn announce_urls_lose_their_passkey_path() {
+        let out = super::redact_line(
+            "announce to https://tracker.example:8443/SECRETPASSKEY/announce failed",
+        );
+        assert_eq!(
+            out,
+            "announce to https://tracker.example:8443/[stripped] failed"
+        );
+        let out = super::redact_line("udp://open.tracker.example:1337/announce");
+        assert_eq!(out, "udp://open.tracker.example:1337/[stripped]");
+        // ordinary download URLs keep their path
+        assert_eq!(
+            super::redact_line("GET https://cdn.example/files/a.zip"),
+            "GET https://cdn.example/files/a.zip"
+        );
+    }
+
     use super::*;
 
     #[test]
