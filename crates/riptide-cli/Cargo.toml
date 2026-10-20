@@ -22,6 +22,7 @@ riptide-ipc = { workspace = true }
 riptide-engine = { workspace = true }
 riptide-crawl = { workspace = true }
 riptide-ai = { workspace = true }
+riptide-torrent = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
