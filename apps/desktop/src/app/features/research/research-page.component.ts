@@ -114,7 +114,7 @@ import { UiState } from '../shell/ui-state.service';
 
             <div class="chips" role="group" [attr.aria-label]="i18n.t('research.sources')">
               @for (s of session.sources(); track s.id) {
-                <span class="chip" [class.is-busy]="s.state === 'searching'" [class.is-failed]="s.state === 'failed'" [class.is-active]="session.onlySource() === s.id">
+                <span class="chip" [class.is-busy]="s.state === 'searching'" [class.is-failed]="s.state === 'failed'" [class.is-stopped]="s.state === 'stopped'" [class.is-active]="session.onlySource() === s.id">
                   <button type="button" class="chip-main" [attr.aria-pressed]="session.onlySource() === s.id" [attr.aria-label]="chipLabel(s)" [disabled]="s.found === 0" (click)="toggleOnly(s.id)">
                     <span class="chip-dot" aria-hidden="true"></span>
                     <span class="chip-name">{{ sourceLabel(s.id) }}</span>
@@ -595,6 +595,10 @@ import { UiState } from '../shell/ui-state.service';
         background: var(--color-danger);
       }
 
+      .chip.is-stopped .chip-dot {
+        background: var(--color-text-muted);
+      }
+
       @keyframes pulse {
         50% {
           opacity: 0.25;
@@ -1033,6 +1037,8 @@ export class ResearchPageComponent implements OnInit, AfterViewChecked {
         return s.found > 0 ? this.i18n.t('research.state.partial').replace('{n}', this.fmt.int(s.found)) : this.i18n.t('research.state.searching');
       case 'failed':
         return this.i18n.t(`research.err.${s.code ?? 'network'}`);
+      case 'stopped':
+        return this.i18n.t('research.state.stopped');
       default:
         return this.i18n.t('research.state.done').replace('{n}', this.fmt.int(s.found));
     }
@@ -1098,7 +1104,7 @@ export class ResearchPageComponent implements OnInit, AfterViewChecked {
 
   private async loadPreview(): Promise<void> {
     try {
-      this.preview.set(await this.ai.previewSearch(this.topic().trim() || '…'));
+      this.preview.set(await this.ai.previewSearch(this.topic().trim() || '…', this.category()));
     } catch {
       this.preview.set([]);
     }

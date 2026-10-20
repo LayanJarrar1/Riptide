@@ -854,6 +854,7 @@
   "research.state.searching": "جارٍ البحث…",
   "research.state.partial": "{n} حتى الآن…",
   "research.state.done": "{n} نتيجة",
+  "research.state.stopped": "متوقف",
   "research.retry": "أعد المحاولة مع {source}",
   "research.unavailable.jamendo": "أضف معرّف عميل مجانيًا لتضمين Jamendo",
   "research.unavailable.web": "اختر بحث الويب من الإعدادات",

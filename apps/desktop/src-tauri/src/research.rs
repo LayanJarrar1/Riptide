@@ -634,9 +634,9 @@ async fn run_search(app: AppHandle, run: Arc<Run>, use_ai: bool, lang: String) {
         ai.note_request(
             "research-plan",
             s,
-            &assist::plan_messages(&topic, history.as_deref()),
+            &assist::plan_messages(&topic, history.as_deref(), run.category),
         );
-        match assist::plan_queries(p.as_ref(), &topic, history.as_deref()).await {
+        match assist::plan_queries(p.as_ref(), &topic, history.as_deref(), run.category).await {
             Ok(plan) => {
                 let extra: Vec<String> = plan
                     .queries
@@ -821,11 +821,13 @@ pub async fn research_preview(
     ai: State<'_, AiService>,
     engine: State<'_, Engine>,
     topic: String,
+    category: Option<Category>,
 ) -> Result<Vec<Message>, String> {
     let history = history_for_ai(&ai, &engine).await;
     Ok(assist::plan_messages(
         &topic.split_whitespace().collect::<Vec<_>>().join(" "),
         history.as_deref(),
+        category.unwrap_or(Category::All),
     ))
 }
 

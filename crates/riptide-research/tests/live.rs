@@ -122,9 +122,14 @@ async fn ai_end_to_end_with_deepinfra() {
 
     // 2. plan
     let topic = "open access papers about BitTorrent piece selection";
-    let plan = assist::plan_queries(provider.as_ref(), topic, None)
-        .await
-        .unwrap();
+    let plan = assist::plan_queries(
+        provider.as_ref(),
+        topic,
+        None,
+        riptide_research::Category::All,
+    )
+    .await
+    .unwrap();
     println!(
         "LIVE ai: plan = {:?} ({} tokens)",
         plan.queries, plan.usage.total_tokens

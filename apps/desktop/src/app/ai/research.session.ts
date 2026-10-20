@@ -191,6 +191,9 @@ export class ResearchSession implements OnDestroy {
       case 'phase':
         // `done` / `cancelled` can arrive while a retried source is still running; the chips show that
         this.phase.set(e.phase);
+        if (e.phase === 'cancelled') {
+          this.sources.update((list) => list.map((s) => (s.state === 'searching' ? { ...s, state: 'stopped' as const } : s)));
+        }
         break;
       case 'source':
         this.patchSource(e.source, { state: e.state, found: e.found, code: e.code });

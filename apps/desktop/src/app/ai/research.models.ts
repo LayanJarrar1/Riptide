@@ -100,7 +100,7 @@ export interface AiOutcome {
   readonly dropped: number;
 }
 
-export type SourceState = 'searching' | 'done' | 'failed';
+export type SourceState = 'searching' | 'done' | 'failed' | 'stopped';
 export type Phase = 'searching' | 'ranking' | 'done' | 'cancelled';
 
 /** One event of a search (the `t` tag is the Rust enum's). */

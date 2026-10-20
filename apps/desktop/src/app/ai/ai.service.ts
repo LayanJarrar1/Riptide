@@ -18,7 +18,7 @@ import {
   SeenQuery,
 } from './ai.models';
 import type { AiMessage } from './ai.models';
-import type { ResearchSettings, ResearchSettingsView } from './research.models';
+import type { CategoryId, ResearchSettings, ResearchSettingsView } from './research.models';
 
 /**
  * The webview's side of Settings → AI, the Research page and the download memory. Every call is
@@ -109,8 +109,8 @@ export class AiService {
     return this.invoke<ResearchSettingsView>('research_remove_secret', { name });
   }
 
-  previewSearch(topic: string): Promise<AiMessage[]> {
-    return this.invoke<AiMessage[]>('research_preview', { topic });
+  previewSearch(topic: string, category: CategoryId = 'all'): Promise<AiMessage[]> {
+    return this.invoke<AiMessage[]>('research_preview', { topic, category });
   }
 
   addResults(request: AddRequest): Promise<AddResponse> {

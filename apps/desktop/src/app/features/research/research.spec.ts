@@ -295,3 +295,18 @@ describe('ResearchPageComponent', () => {
     expect(cards[0].textContent).toContain('Match 88%');
   });
 });
+
+describe('ResearchSession cancel', () => {
+  it('shows the sources that had not answered as stopped', async () => {
+    const h = setup();
+    TestBed.configureTestingModule({ providers: [ResearchSession] });
+    const s = TestBed.inject(ResearchSession);
+    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'all' });
+    h.emit({ searchId: 5, events: [{ t: 'source', source: 'gutenberg', state: 'done', found: 2, code: null }, { t: 'phase', phase: 'cancelled' }] });
+    expect(s.sources().map((c) => [c.id, c.state])).toEqual([
+      ['arxiv', 'stopped'],
+      ['gutenberg', 'done'],
+    ]);
+    expect(s.busy()).toBe(false);
+  });
+});

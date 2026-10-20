@@ -854,6 +854,7 @@
   "research.state.searching": "searching…",
   "research.state.partial": "{n} so far…",
   "research.state.done": "{n} results",
+  "research.state.stopped": "stopped",
   "research.retry": "Try {source} again",
   "research.unavailable.jamendo": "Add a free client id to include Jamendo",
   "research.unavailable.web": "Choose a web search in Settings",
