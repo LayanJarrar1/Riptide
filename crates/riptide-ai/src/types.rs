@@ -245,7 +245,7 @@ pub struct Capabilities {
     pub json_mode: bool,
     /// Tool / function calling exists in the API (not yet exposed by this layer).
     pub tools: bool,
-    /// Streaming exists in the API (not yet exposed by this layer).
+    /// Streaming (SSE) is implemented: see [`Provider::complete_stream`].
     pub streaming: bool,
 }
 
@@ -280,6 +280,21 @@ pub trait Provider: Send + Sync + fmt::Debug {
     async fn list_models(&self) -> Result<Vec<ModelInfo>>;
     /// Runs one completion. Enforces the token budget, `max_tokens` cap, timeout and retries.
     async fn complete(&self, request: CompletionRequest) -> Result<Completion>;
+    /// Like [`Provider::complete`] but streams: `on_delta` receives each piece of text as the
+    /// model produces it, and the finished [`Completion`] is returned at the end. Same retry
+    /// (before the first byte), timeout (per chunk), token-budget and redaction rules.
+    /// Dropping the returned future closes the connection (that is how callers cancel). On an
+    /// error after some text was delivered, that text stays with the caller. The default
+    /// implementation is not streaming: it completes and delivers the whole text at once.
+    async fn complete_stream(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> Result<Completion> {
+        let done = self.complete(request).await?;
+        on_delta(done.text.clone());
+        Ok(done)
+    }
     /// Cheap authenticated check (a model-list call); proves the key and the URL work.
     async fn test_connection(&self) -> Result<ConnectionReport> {
         let start = std::time::Instant::now();

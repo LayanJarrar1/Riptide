@@ -20,6 +20,7 @@ pub mod http;
 pub mod key;
 pub mod openai_compat;
 pub mod secret;
+pub mod stream;
 pub mod types;
 
 pub use anthropic::Anthropic;

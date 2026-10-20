@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use crate::error::{AiError, Result};
 use crate::http::{HttpCore, ProviderOptions};
 use crate::key::ApiKey;
+use crate::stream::openai_event;
 use crate::types::{
     Capabilities, Completion, CompletionRequest, Message, ModelInfo, Provider, ProviderKind, Role,
     Usage,
@@ -78,6 +79,11 @@ impl OpenAiCompat {
                 .header("X-Title", OPENROUTER_TITLE);
         }
         Ok(rb)
+    }
+
+    /// Providers documented to honour `stream_options.include_usage`; others get an estimate.
+    fn wants_stream_usage(&self) -> bool {
+        !matches!(self.kind, ProviderKind::Mistral | ProviderKind::OpenRouter)
     }
 
     fn body(&self, req: &CompletionRequest, max_tokens: u32) -> Value {
@@ -223,5 +229,33 @@ impl Provider for OpenAiCompat {
                 .and_then(Value::as_str)
                 .map(str::to_string),
         })
+    }
+
+    async fn complete_stream(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> Result<Completion> {
+        let max_tokens = self.core.begin(&request)?;
+        let mut body = self.body(&request, max_tokens);
+        body["stream"] = json!(true);
+        if self.wants_stream_usage() {
+            body["stream_options"] = json!({ "include_usage": true });
+        }
+        let prompt_chars = request.messages.iter().map(|m| m.content.len()).sum();
+        self.core
+            .run_stream(
+                "complete_stream",
+                || {
+                    Ok(self
+                        .request(self.core.post("/chat/completions"))?
+                        .json(&body))
+                },
+                openai_event,
+                prompt_chars,
+                &self.model,
+                on_delta,
+            )
+            .await
     }
 }

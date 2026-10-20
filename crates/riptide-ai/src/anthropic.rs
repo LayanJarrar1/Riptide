@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use crate::error::{AiError, Result};
 use crate::http::{HttpCore, ProviderOptions};
 use crate::key::ApiKey;
+use crate::stream::anthropic_event;
 use crate::types::{
     Capabilities, Completion, CompletionRequest, ModelInfo, Provider, ProviderKind, Role, Usage,
 };
@@ -61,6 +62,51 @@ impl Anthropic {
             .header(n, v)
             .header("anthropic-version", ANTHROPIC_VERSION))
     }
+
+    /// The request body shared by `complete` and `complete_stream`.
+    fn build_body(&self, request: &CompletionRequest) -> Result<Value> {
+        let max_tokens = self.core.begin(request)?;
+        let mut system: Vec<String> = request
+            .messages
+            .iter()
+            .filter(|m| m.role == Role::System)
+            .map(|m| m.content.clone())
+            .collect();
+        if request.json_mode {
+            system.push(JSON_HINT.to_string());
+        }
+        let messages: Vec<Value> = request
+            .messages
+            .iter()
+            .filter(|m| m.role != Role::System)
+            .map(|m| {
+                let role = if m.role == Role::Assistant {
+                    "assistant"
+                } else {
+                    "user"
+                };
+                json!({ "role": role, "content": m.content })
+            })
+            .collect();
+        if messages.is_empty() {
+            return Err(AiError::BadRequest {
+                message: "no user message".into(),
+            });
+        }
+        let mut body =
+            json!({ "model": self.model, "max_tokens": max_tokens, "messages": messages });
+        if !system.is_empty() {
+            body["system"] = json!(system.join(
+                "
+
+"
+            ));
+        }
+        if let Some(t) = request.temperature {
+            body["temperature"] = json!(t);
+        }
+        Ok(body)
+    }
 }
 
 #[async_trait]
@@ -108,42 +154,7 @@ impl Provider for Anthropic {
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<Completion> {
-        let max_tokens = self.core.begin(&request)?;
-        let mut system: Vec<String> = request
-            .messages
-            .iter()
-            .filter(|m| m.role == Role::System)
-            .map(|m| m.content.clone())
-            .collect();
-        if request.json_mode {
-            system.push(JSON_HINT.to_string());
-        }
-        let messages: Vec<Value> = request
-            .messages
-            .iter()
-            .filter(|m| m.role != Role::System)
-            .map(|m| {
-                let role = if m.role == Role::Assistant {
-                    "assistant"
-                } else {
-                    "user"
-                };
-                json!({ "role": role, "content": m.content })
-            })
-            .collect();
-        if messages.is_empty() {
-            return Err(AiError::BadRequest {
-                message: "no user message".into(),
-            });
-        }
-        let mut body =
-            json!({ "model": self.model, "max_tokens": max_tokens, "messages": messages });
-        if !system.is_empty() {
-            body["system"] = json!(system.join("\n\n"));
-        }
-        if let Some(t) = request.temperature {
-            body["temperature"] = json!(t);
-        }
+        let body = self.build_body(&request)?;
         let v = self
             .core
             .send_json("complete", || {
@@ -187,5 +198,25 @@ impl Provider for Anthropic {
                 .and_then(Value::as_str)
                 .map(str::to_string),
         })
+    }
+
+    async fn complete_stream(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> Result<Completion> {
+        let mut body = self.build_body(&request)?;
+        body["stream"] = json!(true);
+        let prompt_chars = request.messages.iter().map(|m| m.content.len()).sum();
+        self.core
+            .run_stream(
+                "complete_stream",
+                || Ok(self.request(self.core.post("/messages"))?.json(&body)),
+                anthropic_event,
+                prompt_chars,
+                &self.model,
+                on_delta,
+            )
+            .await
     }
 }

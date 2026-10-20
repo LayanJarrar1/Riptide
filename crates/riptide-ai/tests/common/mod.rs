@@ -1,6 +1,8 @@
 //! Shared helpers for the mock-server tests. No network beyond loopback.
 #![allow(dead_code, missing_docs)]
 
+pub mod sse;
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

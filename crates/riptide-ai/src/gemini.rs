@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use crate::error::{AiError, Result};
 use crate::http::{HttpCore, ProviderOptions};
 use crate::key::ApiKey;
+use crate::stream::gemini_event;
 use crate::types::{
     Capabilities, Completion, CompletionRequest, ModelInfo, Provider, ProviderKind, Role, Usage,
 };
@@ -54,6 +55,47 @@ impl Gemini {
     fn request(&self, rb: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
         let (n, v) = self.core.secret_header("x-goog-api-key")?;
         Ok(rb.header(n, v))
+    }
+
+    /// The request body shared by `complete` and `complete_stream`.
+    fn build_body(&self, request: &CompletionRequest) -> Result<Value> {
+        let max_tokens = self.core.begin(request)?;
+        let system: Vec<&str> = request
+            .messages
+            .iter()
+            .filter(|m| m.role == Role::System)
+            .map(|m| m.content.as_str())
+            .collect();
+        let contents: Vec<Value> = request
+            .messages
+            .iter()
+            .filter(|m| m.role != Role::System)
+            .map(|m| {
+                let role = if m.role == Role::Assistant {
+                    "model"
+                } else {
+                    "user"
+                };
+                json!({ "role": role, "parts": [{ "text": m.content }] })
+            })
+            .collect();
+        if contents.is_empty() {
+            return Err(AiError::BadRequest {
+                message: "no user message".into(),
+            });
+        }
+        let mut gen = json!({ "maxOutputTokens": max_tokens });
+        if let Some(t) = request.temperature {
+            gen["temperature"] = json!(t);
+        }
+        if request.json_mode {
+            gen["responseMimeType"] = json!("application/json");
+        }
+        let mut body = json!({ "contents": contents, "generationConfig": gen });
+        if !system.is_empty() {
+            body["systemInstruction"] = json!({ "parts": [{ "text": system.join("\n\n") }] });
+        }
+        Ok(body)
     }
 }
 
@@ -107,42 +149,7 @@ impl Provider for Gemini {
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<Completion> {
-        let max_tokens = self.core.begin(&request)?;
-        let system: Vec<&str> = request
-            .messages
-            .iter()
-            .filter(|m| m.role == Role::System)
-            .map(|m| m.content.as_str())
-            .collect();
-        let contents: Vec<Value> = request
-            .messages
-            .iter()
-            .filter(|m| m.role != Role::System)
-            .map(|m| {
-                let role = if m.role == Role::Assistant {
-                    "model"
-                } else {
-                    "user"
-                };
-                json!({ "role": role, "parts": [{ "text": m.content }] })
-            })
-            .collect();
-        if contents.is_empty() {
-            return Err(AiError::BadRequest {
-                message: "no user message".into(),
-            });
-        }
-        let mut gen = json!({ "maxOutputTokens": max_tokens });
-        if let Some(t) = request.temperature {
-            gen["temperature"] = json!(t);
-        }
-        if request.json_mode {
-            gen["responseMimeType"] = json!("application/json");
-        }
-        let mut body = json!({ "contents": contents, "generationConfig": gen });
-        if !system.is_empty() {
-            body["systemInstruction"] = json!({ "parts": [{ "text": system.join("\n\n") }] });
-        }
+        let body = self.build_body(&request)?;
         let path = format!("/models/{}:generateContent", self.model);
         let v = self
             .core
@@ -194,5 +201,25 @@ impl Provider for Gemini {
                 .and_then(Value::as_str)
                 .map(str::to_string),
         })
+    }
+
+    async fn complete_stream(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> Result<Completion> {
+        let body = self.build_body(&request)?;
+        let path = format!("/models/{}:streamGenerateContent?alt=sse", self.model);
+        let prompt_chars = request.messages.iter().map(|m| m.content.len()).sum();
+        self.core
+            .run_stream(
+                "complete_stream",
+                || Ok(self.request(self.core.post(&path))?.json(&body)),
+                gemini_event,
+                prompt_chars,
+                &self.model,
+                on_delta,
+            )
+            .await
     }
 }

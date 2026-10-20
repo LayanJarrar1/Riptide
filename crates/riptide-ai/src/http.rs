@@ -12,7 +12,8 @@ use url::Url;
 
 use crate::error::{AiError, Result};
 use crate::key::ApiKey;
-use crate::types::{CompletionRequest, Usage};
+use crate::stream::{Acc, Flow, SseEvent, SseParser};
+use crate::types::{Completion, CompletionRequest, Usage};
 
 /// Hard ceiling for a response body we are willing to read.
 const MAX_BODY: usize = 8 * 1024 * 1024;
@@ -260,6 +261,162 @@ impl HttpCore {
             tokio::time::sleep(wait).await;
             attempt += 1;
         }
+    }
+
+    /// Runs a streaming completion: `decode` turns each SSE event into text deltas (passed to
+    /// `on_delta` as they arrive). Spent tokens are charged to the budget even when the stream
+    /// breaks half way (an estimate from what was received).
+    pub(crate) async fn run_stream<F, D>(
+        &self,
+        label: &str,
+        make: F,
+        decode: D,
+        prompt_chars: usize,
+        default_model: &str,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) -> Result<Completion>
+    where
+        F: Fn() -> Result<RequestBuilder>,
+        D: Fn(
+            &SseEvent,
+            &mut Acc,
+            &mut (dyn FnMut(String) + Send),
+            &dyn Fn(&str) -> String,
+        ) -> Result<Flow>,
+    {
+        let mut acc = Acc::default();
+        let key = self.key.clone();
+        let scrub = move |t: &str| key.scrub(t);
+        let outcome = self
+            .stream_events(label, make, |ev| decode(ev, &mut acc, on_delta, &scrub))
+            .await;
+        match outcome {
+            Ok(_) if acc.ended => {}
+            Ok(_) => {
+                self.finish(&Usage::estimate(prompt_chars, acc.text.len()));
+                return Err(AiError::Network(
+                    "the stream ended before the model finished".into(),
+                ));
+            }
+            Err(e) => {
+                if !acc.text.is_empty() {
+                    self.finish(&Usage::estimate(prompt_chars, acc.text.len()));
+                }
+                return Err(e);
+            }
+        }
+        let usage = acc.usage(prompt_chars);
+        self.finish(&usage);
+        Ok(Completion {
+            text: acc.text,
+            model: acc.model.unwrap_or_else(|| default_model.to_string()),
+            usage,
+            finish_reason: acc.finish_reason,
+        })
+    }
+
+    /// How long to wait before retry number `attempt`, or `None` when the error is final.
+    fn retry_wait(&self, err: &AiError, attempt: u32) -> Option<Duration> {
+        let policy = self.opts.retry;
+        if !err.is_retryable() || attempt >= policy.max_attempts {
+            return None;
+        }
+        match err {
+            AiError::RateLimited {
+                retry_after: Some(ra),
+            } => (*ra <= policy.max_retry_after).then_some(*ra),
+            _ => Some(backoff(&policy, attempt)),
+        }
+    }
+
+    /// Opens a streaming (SSE) response and feeds every event to `on_event` until it returns
+    /// [`Flow::Done`] or the body ends. Connecting is retried like [`HttpCore::send_json`];
+    /// once the body started nothing is retried. `opts.timeout` bounds the wait for the first
+    /// byte and the silence between two chunks (a slow but live stream is not cut off). The
+    /// returned flag says whether the body ended (true) or `on_event` stopped it (false).
+    pub(crate) async fn stream_events<F, H>(
+        &self,
+        label: &str,
+        make: F,
+        mut on_event: H,
+    ) -> Result<bool>
+    where
+        F: Fn() -> Result<RequestBuilder>,
+        H: FnMut(&SseEvent) -> Result<Flow>,
+    {
+        let mut attempt: u32 = 1;
+        let mut resp = loop {
+            match self.open_stream(label, make()?).await {
+                Ok(r) => break r,
+                Err(e) => match self.retry_wait(&e, attempt) {
+                    Some(wait) => {
+                        tracing::debug!(
+                            op = label,
+                            attempt,
+                            wait_ms = wait.as_millis() as u64,
+                            "retrying"
+                        );
+                        tokio::time::sleep(wait).await;
+                        attempt += 1;
+                    }
+                    None => return Err(e),
+                },
+            }
+        };
+        let mut parser = SseParser::new();
+        let mut total: usize = 0;
+        loop {
+            let chunk = match tokio::time::timeout(self.opts.timeout, resp.chunk()).await {
+                Err(_) => return Err(AiError::Timeout),
+                Ok(Err(e)) => return Err(self.net_err(&e)),
+                Ok(Ok(c)) => c,
+            };
+            let Some(chunk) = chunk else { break };
+            total += chunk.len();
+            if total > MAX_BODY {
+                return Err(AiError::InvalidResponse("response too large".into()));
+            }
+            for ev in parser.push(&chunk)? {
+                if on_event(&ev)? == Flow::Done {
+                    return Ok(false);
+                }
+            }
+        }
+        for ev in parser.finish() {
+            if on_event(&ev)? == Flow::Done {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    async fn open_stream(&self, label: &str, rb: RequestBuilder) -> Result<reqwest::Response> {
+        let rb = rb.header("accept", "text/event-stream");
+        let mut resp = match tokio::time::timeout(self.opts.timeout, rb.send()).await {
+            Err(_) => return Err(AiError::Timeout),
+            Ok(Err(e)) => return Err(self.net_err(&e)),
+            Ok(Ok(r)) => r,
+        };
+        let status = resp.status();
+        tracing::debug!(op = label, status = status.as_u16(), "stream response");
+        if status.is_success() {
+            return Ok(resp);
+        }
+        let retry_after = resp
+            .headers()
+            .get(RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map(Duration::from_secs);
+        let mut body = Vec::new();
+        while body.len() < 64 * 1024 {
+            match tokio::time::timeout(self.opts.timeout, resp.chunk()).await {
+                Ok(Ok(Some(c))) => body.extend_from_slice(&c),
+                _ => break,
+            }
+        }
+        let message = self.error_message(&body);
+        Err(map_status(status, retry_after, message, &body))
     }
 
     async fn attempt(&self, label: &str, rb: RequestBuilder) -> Result<Value> {
