@@ -1,41 +1,52 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{en.notFound.title}} · Riptide</title>
   <meta name="robots" content="noindex">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#071a26" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#071a26">
   <link rel="icon" href="{{base}}assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{base}}css/site.css?v={{v}}">
   <script>
     (function () {
+      var d = document.documentElement;
+      var q = null, mo = null, full;
       try {
-        var saved = localStorage.getItem('riptide-theme');
-        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
-      } catch (e) { /* stay light */ }
+        q = /[?&]motion=(on|off)(&|$)/.exec(location.search);
+        if (q) {
+          localStorage.setItem('riptide-motion', q[1]);
+          history.replaceState(null, '', location.pathname + location.search.replace(/([?&])motion=(on|off)&?/, '$1').replace(/[?&]$/, '') + location.hash);
+        }
+        mo = localStorage.getItem('riptide-motion');
+      } catch (e) { if (q) mo = q[1]; }
+      // data-motion: the saved or ?motion= choice wins; otherwise follow the OS setting.
+      full = mo === 'on' ? true : mo === 'off' ? false : !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+      d.dataset.motion = full ? 'full' : 'reduced';
+      try {
+        var t = localStorage.getItem('riptide-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) { /* storage blocked */ }
     })();
   </script>
 </head>
-<body class="not-found">
-  <main class="container not-found-main">
-    <a class="brand" href="{{base}}">
-      <img class="brand-logo logo-light" src="{{base}}assets/riptide-logo-light.svg" alt="Riptide" width="690" height="254">
-      <img class="brand-logo logo-dark" src="{{base}}assets/riptide-logo-dark.svg" alt="Riptide" width="690" height="254">
-      
-    </a>
-    <section class="not-found-block font-latin" lang="en" dir="ltr">
-      <h1>{{en.notFound.title}}</h1>
-      <p>{{en.notFound.text}}</p>
-      <a class="btn btn-primary" href="{{base}}">{{en.notFound.home}}</a>
-    </section>
-    <section class="not-found-block font-arabic" lang="ar" dir="rtl">
-      <h1>{{ar.notFound.title}}</h1>
-      <p>{{ar.notFound.text}}</p>
-      <a class="btn btn-primary" href="{{base}}ar/">{{ar.notFound.home}}</a>
-    </section>
+<body class="tone-dark">
+  <main class="wrap nf">
+    <a class="brand" href="{{base}}"><img class="footer-logo" src="{{base}}assets/riptide-logo-dark.svg" alt="Riptide" width="690" height="254"></a>
+    <p class="nf-code" aria-hidden="true">404</p>
+    <div class="nf-blocks">
+      <section class="nf-block font-latin" lang="en" dir="ltr">
+        <h1 class="h3">{{en.notFound.title}}</h1>
+        <p>{{en.notFound.text}}</p>
+        <a class="btn btn-primary btn-lg" href="{{base}}">{{en.notFound.home}}</a>
+      </section>
+      <section class="nf-block font-arabic" lang="ar" dir="rtl">
+        <h1 class="h3">{{ar.notFound.title}}</h1>
+        <p>{{ar.notFound.text}}</p>
+        <a class="btn btn-primary btn-lg" href="{{base}}ar/">{{ar.notFound.home}}</a>
+      </section>
+    </div>
   </main>
 </body>
 </html>

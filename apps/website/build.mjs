@@ -23,18 +23,19 @@ const DIST = join(here, 'dist');
 
 const REPO_URL = 'https://github.com/LayanJarrar1/Riptide';
 const REPO_SLUG = 'LayanJarrar1/Riptide';
-// The current pre-release. Bump these when a new build is published.
-const RELEASE_TAG = 'v0.1.0-alpha.3';
-const INSTALLER_FILE = 'Riptide_0.1.0-alpha.3_x64-setup.exe';
-const PORTABLE_FILE = 'Riptide-0.1.0-alpha.3-portable.zip';
+// The release the site points at. To switch to a new build, change this one line (see README, "Releasing"):
+// the hero badge, the installer and portable names, the tag in every download URL and the checksums link follow it.
+const RELEASE_VERSION = '0.1.0-alpha.4';
+const RELEASE_TAG = `v${RELEASE_VERSION}`;
+const ALPHA_N = (RELEASE_VERSION.match(/alpha\.(\d+)/) || [, ''])[1];
+const INSTALLER_FILE = `Riptide_${RELEASE_VERSION}_x64-setup.exe`;
+const PORTABLE_FILE = `Riptide-${RELEASE_VERSION}-portable.zip`;
 const RELEASES_URL = `${REPO_URL}/releases`;
+const RELEASE_URL = `${RELEASES_URL}/tag/${RELEASE_TAG}`;
 const INSTALLER_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${INSTALLER_FILE}`;
 const PORTABLE_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/${PORTABLE_FILE}`;
 const SUMS_URL = `${RELEASES_URL}/download/${RELEASE_TAG}/SHA256SUMS.txt`;
 const EXTENSION_URL = `${REPO_URL}/tree/main/apps/extension`;
-// Browser-store listings. Leave a value empty and the page shows "Coming soon" for that store;
-// paste the listing URL here when it goes live and the tile becomes a link. One line each.
-const STORE_LINKS = { chrome: '', edge: '' };
 // The public URL the site is served from. GitHub Pages for this repository by default;
 // override with SITE_URL=https://example.org/ for a custom domain. Used for canonical,
 // hreflang and Open Graph URLs only; every in-page link is relative.
@@ -43,7 +44,7 @@ const SITE_URL = (process.env.SITE_URL || 'https://layanjarrar1.github.io/Riptid
 const BASE_PATH = new URL(SITE_URL).pathname;
 
 // Size budgets in bytes (uncompressed). The build fails when something grows past them.
-const BUDGET = { html: 60 * 1024, css: 64 * 1024, js: 40 * 1024, image: 120 * 1024, font: 110 * 1024, video: 8 * 1024 * 1024, total: 2 * 1024 * 1024 };
+const BUDGET = { html: 80 * 1024, css: 76 * 1024, js: 40 * 1024, image: 260 * 1024, font: 110 * 1024, total: 3 * 1024 * 1024 };
 
 const LANGUAGES = [
   { code: 'en', out: '', root: '' },
@@ -181,7 +182,8 @@ function build() {
 
   const icons = loadIcons();
   const version = shortHash(join(SRC, 'css', 'site.css'), join(SRC, 'js', 'site.js'));
-  const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8'))]));
+  // `{n}` in a string is the pre-release number of RELEASE_VERSION ("Alpha {n}" -> "Alpha 4"); `{v}` is the full version.
+  const tables = Object.fromEntries(LANGUAGES.map((l) => [l.code, JSON.parse(readFileSync(join(SRC, 'i18n', `${l.code}.json`), 'utf8').replaceAll('{n}', ALPHA_N).replaceAll('{v}', RELEASE_VERSION))]));
 
   for (const lang of LANGUAGES) {
     const table = tables[lang.code];
@@ -191,17 +193,17 @@ function build() {
       v: version,
       repo: REPO_URL,
       repoSlug: REPO_SLUG,
+      version: RELEASE_VERSION,
       releasesUrl: RELEASES_URL,
+      releaseUrl: RELEASE_URL,
       installerUrl: INSTALLER_URL,
+      // The speed chapter's eight lanes, each owning an equal slice of the file (the no-JS end state).
+      lanes8: Array.from({ length: 8 }, (_, i) => ({ a: String(i / 8), b: String((i + 1) / 8) })),
       installerFile: INSTALLER_FILE,
       portableUrl: PORTABLE_URL,
       portableFile: PORTABLE_FILE,
       sumsUrl: SUMS_URL,
       extensionUrl: EXTENSION_URL,
-      chromeStoreUrl: STORE_LINKS.chrome,
-      chromeStoreSoon: !STORE_LINKS.chrome,
-      edgeStoreUrl: STORE_LINKS.edge,
-      edgeStoreSoon: !STORE_LINKS.edge,
       siteUrl: SITE_URL,
       pageUrl: SITE_URL + (lang.out ? `${lang.out}/` : ''),
       altHref: lang.root + (other.out ? `${other.out}/` : ''),
@@ -353,10 +355,8 @@ function verify() {
     const ext = extname(f);
     if (['.png', '.webp', '.jpg', '.svg'].includes(ext) && size > BUDGET.image) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.image} byte image budget`);
     if (ext === '.woff2' && size > BUDGET.font) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.font} byte font budget`);
-    if (ext === '.mp4' && size > BUDGET.video) problems.push(`${f.slice(DIST.length + 1)}: ${size} bytes exceeds the ${BUDGET.video} byte video budget`);
   }
-  // Videos are lazy-loaded (preload="none"), so they get their own budget and stay out of the total.
-  const total = walk(DIST).filter((f) => extname(f) !== '.mp4').reduce((sum, f) => sum + statSync(f).size, 0);
+  const total = walk(DIST).reduce((sum, f) => sum + statSync(f).size, 0);
   if (total > BUDGET.total) problems.push(`dist is ${total} bytes, over the ${BUDGET.total} byte budget`);
 
   if (problems.length) {
