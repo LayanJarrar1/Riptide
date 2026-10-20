@@ -185,7 +185,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           </section>
         }
 
-        @if (!isMagnet()) {
+        @if (!isMagnet() && magnets().length < 2) {
         <div class="row">
           <label class="field grow">
             <span class="label">{{ i18n.t('add.filename') }}</span>

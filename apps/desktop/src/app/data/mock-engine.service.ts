@@ -246,6 +246,7 @@ export class MockEngineService extends DownloadEngine {
       files,
       totalBytes: files.reduce((n, f) => n + f.len, 0),
       isPrivate: false,
+      webSeeds: [],
       existing,
     });
   }

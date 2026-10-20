@@ -44,6 +44,16 @@ pub fn create_main_window(app: &tauri::App<Wry>, paths: &Paths) -> tauri::Result
         tracing::info!(dir = %dir.display(), "portable: WebView2 profile next to the app");
         builder = builder.data_directory(dir);
     }
+    #[cfg(all(feature = "cdp", windows))]
+    if let Some(port) = std::env::var("RIPTIDE_CDP_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+    {
+        tracing::warn!(port, "test build: WebView2 remote debugging is ON");
+        builder = builder.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port} --remote-allow-origins=*"
+        ));
+    }
     builder.build()?;
     Ok(())
 }

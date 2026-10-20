@@ -7,7 +7,7 @@ import { seedDownloads } from '../../data/mock-data';
 import { MOCK_ENGINE_AUTOSTART, MockEngineService } from '../../data/mock-engine.service';
 import { I18nService, registerTable } from '../../i18n/i18n.service';
 import { Download } from '../../model/download';
-import { magnetLabel, magnetLinesOf, TorrentPreview, TorrentSource, TorrentView } from '../../model/torrent';
+import { magnetLabel, magnetLinesOf, TorrentPreview, TorrentSource, TorrentView, webSeedUrl } from '../../model/torrent';
 import { UiState } from '../shell/ui-state.service';
 import { AddDownloadDialogComponent } from './add-download-dialog.component';
 import { DownloadRowComponent } from './download-row.component';
@@ -425,7 +425,7 @@ describe('several magnet links at once', () => {
       if (uri === SECOND_MAGNET) {
         throw new Error('timed out');
       }
-      return { token: 't1', infoHash: 'x', name: 'n', files: [], totalBytes: 0, isPrivate: false, existing: null } as TorrentPreview;
+      return { token: 't1', infoHash: 'x', name: 'n', files: [], totalBytes: 0, isPrivate: false, existing: null, webSeeds: [] } as TorrentPreview;
     });
     const add = spyOn(engine, 'addTorrent').and.resolveTo(7);
     paste(`${OWNER_MAGNET}\n${SECOND_MAGNET}`);
@@ -443,5 +443,64 @@ describe('several magnet links at once', () => {
     ui.skipQueuedTorrents();
     ui.closeTorrent();
     expect(ui.torrentSource()).toBeNull();
+  });
+});
+
+describe('web seeds', () => {
+  it('builds the address of each file on a folder seed and on a single-file seed', () => {
+    expect(webSeedUrl('https://archive.org/download/', 'item/dir one/f#1.mp4', true)).toBe('https://archive.org/download/item/dir%20one/f%231.mp4');
+    expect(webSeedUrl('https://m.example/files/a.iso', 'a.iso', false)).toBe('https://m.example/files/a.iso');
+    expect(webSeedUrl('https://m.example/files/', 'a.iso', false)).toBe('https://m.example/files/a.iso');
+    // never leaves the seed's folder, never takes credentials or other schemes
+    expect(webSeedUrl('https://m.example/f/', '../../etc/passwd', true)).toBe('https://m.example/f/etc/passwd');
+    expect(webSeedUrl('ftp://m.example/f/', 'a', true)).toBeNull();
+    expect(webSeedUrl('javascript:alert(1)', 'a', true)).toBeNull();
+    expect(webSeedUrl('https://u:p@m.example/f/', 'a', true)).toBeNull();
+    expect(webSeedUrl('not a url', 'a', true)).toBeNull();
+  });
+});
+
+describe('Torrent dialog with a torrent that lists web seeds', () => {
+  let fixture: ComponentFixture<TorrentDialogComponent>;
+  let engine: MockEngineService;
+  const el = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [TorrentDialogComponent], providers: providers() as never[] }).compileComponents();
+    engine = TestBed.inject(DownloadEngine) as MockEngineService;
+    spyOn(engine, 'torrentPreview').and.resolveTo({
+      token: 't',
+      infoHash: 'h',
+      name: 'Item',
+      files: [
+        { index: 0, path: 'Item/a b.mp4', len: 10, exists: false },
+        { index: 1, path: 'Item/sub/c.txt', len: 5, exists: false },
+      ],
+      totalBytes: 15,
+      isPrivate: false,
+      existing: null,
+      webSeeds: ['https://archive.org/download/', 'http://mirror.example/items/'],
+    } as TorrentPreview);
+    fixture = TestBed.createComponent(TorrentDialogComponent);
+    fixture.componentRef.setInput('open', true);
+    fixture.componentRef.setInput('source', { kind: 'file', path: 'C:\\x\\item.torrent' });
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+  });
+
+  it('offers the web seed and adds the chosen files as ordinary downloads in the same folders', async () => {
+    expect(el().textContent).toContain('also lists web seeds');
+    const add = spyOn(engine, 'add').and.resolveTo(1);
+    const btn = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes('Download from the web seed')) as HTMLButtonElement;
+    btn.click();
+    await flush();
+    expect(add).toHaveBeenCalledTimes(2);
+    const first = add.calls.argsFor(0)[0];
+    expect(first.url).toBe('https://archive.org/download/Item/a%20b.mp4');
+    expect(first.filename).toBe('a b.mp4');
+    expect(first.dir).toMatch(/Item$/);
+    expect(add.calls.argsFor(1)[0].url).toBe('https://archive.org/download/Item/sub/c.txt');
+    expect(add.calls.argsFor(1)[0].dir).toMatch(/Item[\\/]sub$/);
   });
 });

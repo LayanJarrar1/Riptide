@@ -264,6 +264,8 @@ import { UiState } from '../shell/ui-state.service';
         display: block;
         block-size: 100%;
         overflow: auto;
+        /* keep focused or scrolled-to cards clear of the sticky action bar */
+        scroll-padding-block-end: 96px;
       }
 
       .page {

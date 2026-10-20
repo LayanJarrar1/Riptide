@@ -1,11 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, input, output, signal, untracked, viewChild } from '@angular/core';
 
 import { DiskSpaceService } from '../../core/disk-space.service';
 import { FormatService } from '../../core/format.service';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
-import { selectedBytes, TorrentPreview, TorrentSource } from '../../model/torrent';
+import { selectedBytes, TorrentPreview, TorrentSource, webSeedUrl } from '../../model/torrent';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -29,11 +29,11 @@ type Phase = 'resolving' | 'ready' | 'error';
   imports: [ButtonComponent, DialogComponent, IconComponent, TorrentFileListComponent],
   template: `
     <app-dialog [open]="open()" [title]="i18n.t('torrent.title')" [wide]="true" (closed)="close()">
-      <div class="body">
+      <div class="body" tabindex="-1" #body>
         @if (ui.torrentQueue().length > 0) {
           <p class="queue-note" role="status">
             {{ i18n.t('torrent.queueMore').replace('{n}', '' + ui.torrentQueue().length) }}
-            <button type="button" class="queue-skip" (click)="ui.skipQueuedTorrents()">{{ i18n.t('torrent.queueSkip') }}</button>
+            <button type="button" class="queue-skip" (click)="skipQueue()">{{ i18n.t('torrent.queueSkip') }}</button>
           </p>
         }
         @switch (phase()) {
@@ -98,6 +98,16 @@ type Phase = 'resolving' | 'ready' | 'error';
                 </p>
               }
 
+              @if (p.webSeeds.length > 0 && p.existing === null) {
+                <div class="webseed" role="note">
+                  <app-icon name="globe" [size]="16" />
+                  <div class="webseed-text">
+                    <span>{{ i18n.t('torrent.webSeed') }}</span>
+                    <button appButton size="sm" variant="secondary" icon="download" type="button" [busy]="seedBusy()" [disabled]="chosenCount() === 0 || seedBusy()" (click)="downloadFromWebSeed()">{{ i18n.t('torrent.webSeedDownload') }}</button>
+                  </div>
+                </div>
+              }
+
               <label class="check-row">
                 <input type="checkbox" [checked]="sequential()" (change)="sequential.set(!sequential())" />
                 <span>
@@ -138,6 +148,30 @@ type Phase = 'resolving' | 'ready' | 'error';
     </app-dialog>
   `,
   styles: `
+    .webseed {
+      display: flex;
+      gap: var(--space-3);
+      align-items: flex-start;
+      padding: var(--space-3);
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      font-size: var(--text-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .webseed app-icon {
+      color: var(--color-accent);
+      margin-block-start: 2px;
+    }
+
+    .webseed-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-2);
+    }
+
     .queue-note {
       display: flex;
       align-items: center;
@@ -148,6 +182,10 @@ type Phase = 'resolving' | 'ready' | 'error';
       border-radius: var(--radius-sm);
       font-size: var(--text-sm);
       color: var(--color-text-secondary);
+    }
+
+    .body:focus {
+      outline: none;
     }
 
     .queue-skip {
@@ -438,6 +476,8 @@ export class TorrentDialogComponent {
   private readonly tauriAvailable = inject(TAURI_AVAILABLE);
   private readonly invoke = inject(TAURI_INVOKE);
 
+  private readonly bodyRef = viewChild<ElementRef<HTMLElement>>('body');
+
   readonly open = input.required<boolean>();
   /** The magnet link or `.torrent` file to look into. */
   readonly source = input.required<TorrentSource | null>();
@@ -455,6 +495,7 @@ export class TorrentDialogComponent {
   protected readonly dir = signal(this.settingsService.settings().defaultDir);
   protected readonly submitting = signal(false);
   protected readonly freeBytes = signal<number | null>(null);
+  protected readonly seedBusy = signal(false);
 
   private token = 0;
   private diskToken = 0;
@@ -568,6 +609,53 @@ export class TorrentDialogComponent {
   protected showExisting(id: number): void {
     this.close();
     this.store.openDetails(id);
+  }
+
+  /** Forget the waiting magnet links; focus stays inside the dialog (the button that was pressed disappears with its note), so Escape still closes it. */
+  protected skipQueue(): void {
+    this.ui.skipQueuedTorrents();
+    queueMicrotask(() => this.bodyRef()?.nativeElement.focus());
+  }
+
+  /**
+   * The torrent names HTTP mirrors (web seeds) and few peers may be around: download the chosen files from the
+   * first mirror as ordinary downloads, into the same folder layout. They are not checked against the
+   * torrent's piece hashes (a torrent download is); each is a normal download with all of Riptide's HTTP
+   * safeguards.
+   */
+  protected async downloadFromWebSeed(): Promise<void> {
+    const p = this.preview();
+    if (p === null || this.seedBusy()) {
+      return;
+    }
+    const seed = p.webSeeds[0];
+    const chosen = this.selectionArray();
+    const files = p.files.filter((f) => chosen === null || chosen.includes(f.index));
+    const base = this.dir().trim();
+    const sep = base.includes('\\') ? '\\' : '/';
+    this.seedBusy.set(true);
+    let added = 0;
+    try {
+      for (const f of files) {
+        const url = webSeedUrl(seed, f.path, p.files.length > 1);
+        if (url === null) {
+          continue;
+        }
+        const parts = f.path.split('/').filter((x) => x.length > 0);
+        const name = parts.pop() ?? p.name;
+        const dir = base.length > 0 ? [base, ...parts].join(sep) : undefined;
+        await this.engine.add({ url, filename: name, dir, allowDuplicate: true });
+        added++;
+      }
+      this.toasts.show(added > 0 ? 'success' : 'danger', this.i18n.t('torrent.webSeedAdded').replace('{n}', String(added)));
+      if (added > 0) {
+        this.closed.emit();
+      }
+    } catch (error: unknown) {
+      this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', this.describe(error)));
+    } finally {
+      this.seedBusy.set(false);
+    }
   }
 
   protected close(): void {

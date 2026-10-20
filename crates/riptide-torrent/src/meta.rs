@@ -46,6 +46,9 @@ pub struct TorrentPreview {
     pub piece_count: u64,
     /// `private` flag (no DHT / PEX for this torrent).
     pub private: bool,
+    /// Web seeds (BEP 19 `url-list`): `http(s)` URLs only, at most [`MAX_WEB_SEEDS`]. Empty for
+    /// a torrent resolved from a magnet link (the peers send the info dictionary only).
+    pub web_seeds: Vec<String>,
     /// The complete `.torrent` file; feed it back to [`crate::TorrentSource::Bytes`] to add the
     /// torrent without resolving the magnet link a second time.
     #[serde(skip)]
@@ -212,8 +215,118 @@ pub fn preview_from_info<B: AsRef<[u8]>>(
         piece_length: raw.piece_length,
         piece_count,
         private: raw.private,
+        web_seeds: web_seeds(&torrent_bytes),
         torrent_bytes,
     })
+}
+
+/// Most web seeds kept from one `.torrent` file.
+pub const MAX_WEB_SEEDS: usize = 8;
+
+/// The BEP 19 web seeds (`url-list`) in the top level of a `.torrent` file: a string or a list of
+/// strings, kept only when they are `http` or `https` URLs, at most [`MAX_WEB_SEEDS`], no repeats.
+/// Anything that does not parse gives an empty list (the data was vetted by
+/// [`check_bencode_shape`] first). Riptide never contacts a web seed by itself: the user chooses
+/// to download from one, and then it is an ordinary download.
+pub fn web_seeds(data: &[u8]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |raw: &[u8]| {
+        let Ok(text) = std::str::from_utf8(raw) else {
+            return;
+        };
+        let Ok(url) = url::Url::parse(text.trim()) else {
+            return;
+        };
+        if matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && out.len() < MAX_WEB_SEEDS
+            && !out.iter().any(|u| u == url.as_str())
+        {
+            out.push(url.to_string());
+        }
+    };
+    let mut i = 0;
+    if data.first() != Some(&b'd') {
+        return out;
+    }
+    i += 1;
+    while data.get(i).is_some_and(|b| *b != b'e') {
+        let Some(key) = bencode_str(data, &mut i) else {
+            return Vec::new();
+        };
+        if key == b"url-list" {
+            match data.get(i) {
+                Some(b'l') => {
+                    i += 1;
+                    while data.get(i).is_some_and(|b| *b != b'e') {
+                        match bencode_str(data, &mut i) {
+                            Some(s) => push(s),
+                            None => {
+                                if bencode_skip(data, &mut i, 0).is_none() {
+                                    return out;
+                                }
+                            }
+                        }
+                    }
+                    i += 1;
+                }
+                _ => {
+                    if let Some(s) = bencode_str(data, &mut i) {
+                        push(s);
+                    } else if bencode_skip(data, &mut i, 0).is_none() {
+                        return out;
+                    }
+                }
+            }
+        } else if bencode_skip(data, &mut i, 0).is_none() {
+            return out;
+        }
+    }
+    out
+}
+
+/// A bencoded byte string at `*i` (`<len>:<bytes>`); moves `*i` past it.
+fn bencode_str<'a>(data: &'a [u8], i: &mut usize) -> Option<&'a [u8]> {
+    let start = *i;
+    let mut j = start;
+    while data.get(j).is_some_and(u8::is_ascii_digit) {
+        j += 1;
+    }
+    if j == start || data.get(j) != Some(&b':') {
+        return None;
+    }
+    let len: usize = std::str::from_utf8(&data[start..j]).ok()?.parse().ok()?;
+    let from = j + 1;
+    let to = from.checked_add(len)?;
+    let bytes = data.get(from..to)?;
+    *i = to;
+    Some(bytes)
+}
+
+/// Skips one bencoded value at `*i` (depth-limited).
+fn bencode_skip(data: &[u8], i: &mut usize, depth: usize) -> Option<()> {
+    if depth > 32 {
+        return None;
+    }
+    match *data.get(*i)? {
+        b'i' => {
+            let end = data[*i..].iter().position(|b| *b == b'e')?;
+            *i += end + 1;
+            Some(())
+        }
+        b'l' | b'd' => {
+            *i += 1;
+            while *data.get(*i)? != b'e' {
+                bencode_skip(data, i, depth + 1)?;
+            }
+            *i += 1;
+            Some(())
+        }
+        b'0'..=b'9' => bencode_str(data, i).map(|_| ()),
+        _ => None,
+    }
 }
 
 /// Parses and vets `.torrent` data.

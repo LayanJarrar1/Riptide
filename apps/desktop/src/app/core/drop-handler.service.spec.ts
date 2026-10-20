@@ -16,7 +16,7 @@ describe('torrent files dropped on the window', () => {
   });
 
   it('the native drop event opens the file choice for each, one after the other', () => {
-    let handler: ((p: { paths: string[] }) => void) | null = null;
+    const box: { handler: ((p: { paths: string[] }) => void) | null } = { handler: null };
     TestBed.configureTestingModule({
       providers: [
         { provide: TAURI_AVAILABLE, useValue: true },
@@ -24,7 +24,7 @@ describe('torrent files dropped on the window', () => {
           provide: TAURI_LISTEN,
           useValue: (event: string, h: (p: { paths: string[] }) => void): Promise<() => void> => {
             expect(event).toBe(NATIVE_DROP_EVENT);
-            handler = h;
+            box.handler = h;
             return Promise.resolve(() => undefined);
           },
         },
@@ -32,13 +32,13 @@ describe('torrent files dropped on the window', () => {
     });
     TestBed.inject(DropHandlerService);
     const ui = TestBed.inject(UiState);
-    handler?.({ paths: ['C:\\x\\one.torrent', 'C:\\x\\two.torrent', 'C:\\x\\readme.txt'] });
+    box.handler?.({ paths: ['C:\\x\\one.torrent', 'C:\\x\\two.torrent', 'C:\\x\\readme.txt'] });
     expect(ui.torrentSource()).toEqual({ kind: 'file', path: 'C:\\x\\one.torrent' });
     expect(ui.torrentQueue()).toEqual([{ kind: 'file', path: 'C:\\x\\two.torrent' }]);
     // other files do nothing
     ui.skipQueuedTorrents();
     ui.closeTorrent();
-    handler?.({ paths: ['C:\\x\\readme.txt'] });
+    box.handler?.({ paths: ['C:\\x\\readme.txt'] });
     expect(ui.torrentSource()).toBeNull();
   });
 });

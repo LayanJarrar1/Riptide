@@ -94,9 +94,12 @@ describe('torrent mapping', () => {
       total_bytes: 5,
       private: true,
       existing: 3,
+      web_seeds: ['https://m.example/x/'],
     };
     const ui = toUiPreview(wire);
     expect([ui.isPrivate, ui.existing, ui.files[0].exists, ui.totalBytes]).toEqual([true, 3, true, 5]);
+    expect(ui.webSeeds).toEqual(['https://m.example/x/']);
+    expect(ui.webSeeds).toEqual(['https://m.example/x/']);
     const add = toBridgeTorrentAdd({ token: 't', onlyFiles: null, sequential: true, startPaused: false });
     expect([add.only_files, add.sequential, add.dir, add.peers]).toEqual([null, true, null, []]);
     expect(toBridgeTorrentAdd({ token: 't', dir: 'D:\\x', onlyFiles: [2, 0], sequential: false, startPaused: true }).only_files).toEqual([2, 0]);

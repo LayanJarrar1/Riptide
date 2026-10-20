@@ -45,6 +45,7 @@ export function toUiPreview(p: TorrentPreviewInfo): TorrentPreview {
     totalBytes: p.total_bytes,
     isPrivate: p.private,
     existing: p.existing,
+    webSeeds: p.web_seeds ?? [],
   };
 }
 

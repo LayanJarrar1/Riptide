@@ -131,6 +131,11 @@ pub struct TorrentPreviewInfo {
     pub private: bool,
     /// The torrent is already in the list (same info-hash).
     pub existing: Option<DownloadId>,
+    /// Web seeds (BEP 19 `url-list`, `http(s)` only) of a `.torrent` file: HTTP mirrors of the
+    /// files. Empty for a magnet link. Riptide only uses them when the user asks to download
+    /// from one.
+    #[serde(default)]
+    pub web_seeds: Vec<String>,
 }
 
 /// The add dialog's final request for a torrent.

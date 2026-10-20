@@ -49,6 +49,37 @@ export interface TorrentPreview {
   readonly isPrivate: boolean;
   /** Id of the download that already holds this torrent, if any. */
   readonly existing: number | null;
+  /** HTTP mirrors named by the `.torrent` file (BEP 19); empty for a magnet link. */
+  readonly webSeeds: readonly string[];
+}
+
+/**
+ * The HTTP address of one file of a torrent on a web seed (BEP 19). `path` is the file's path as the
+ * file list shows it (it already starts with the torrent's folder name for a multi-file torrent).
+ * A seed that ends with `/` is a folder: the path is appended, each part percent-encoded. A seed that
+ * does not is the address of the single file itself. `null` when it is not an http(s) address.
+ */
+export function webSeedUrl(seed: string, path: string, multiFile: boolean): string | null {
+  let base: URL;
+  try {
+    base = new URL(seed);
+  } catch {
+    return null;
+  }
+  if ((base.protocol !== 'https:' && base.protocol !== 'http:') || base.username !== '' || base.password !== '') {
+    return null;
+  }
+  if (!multiFile && !base.pathname.endsWith('/')) {
+    return base.href;
+  }
+  const folder = base.pathname.endsWith('/') ? base.pathname : base.pathname + '/';
+  const encoded = path
+    .split('/')
+    .filter((part) => part.length > 0 && part !== '.' && part !== '..')
+    .map(encodeURIComponent)
+    .join('/');
+  base.pathname = folder + encoded;
+  return base.href;
 }
 
 /** Where a torrent comes from. */

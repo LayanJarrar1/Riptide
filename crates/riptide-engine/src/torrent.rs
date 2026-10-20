@@ -443,6 +443,7 @@ impl Engine {
             total_bytes: preview.total_bytes,
             private: preview.private,
             existing,
+            web_seeds: preview.web_seeds.clone(),
         };
         let mut pend = lock(&rt.previews);
         pend.retain(|p| p.made.elapsed() < PREVIEW_TTL);

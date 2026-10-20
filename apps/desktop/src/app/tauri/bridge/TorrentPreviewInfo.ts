@@ -34,4 +34,10 @@ private: boolean,
 /**
  * The torrent is already in the list (same info-hash).
  */
-existing: DownloadId | null, };
+existing: DownloadId | null, 
+/**
+ * Web seeds (BEP 19 `url-list`, `http(s)` only) of a `.torrent` file: HTTP mirrors of the
+ * files. Empty for a magnet link. Riptide only uses them when the user asks to download
+ * from one.
+ */
+web_seeds: Array<string>, };
