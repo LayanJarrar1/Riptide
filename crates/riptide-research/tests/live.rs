@@ -132,10 +132,10 @@ async fn ai_end_to_end_with_deepinfra() {
     assert!(!plan.queries.is_empty());
 
     // 3. real adapters
-    let adapters: Vec<Box<dyn SearchSource>> = vec![
-        Box::new(OpenAlex::new()),
-        Box::new(Arxiv::new()),
-        Box::new(EuropePmc::new()),
+    let adapters: Vec<std::sync::Arc<dyn SearchSource>> = vec![
+        std::sync::Arc::new(OpenAlex::new()),
+        std::sync::Arc::new(Arxiv::new()),
+        std::sync::Arc::new(EuropePmc::new()),
     ];
     let out = search_all(&adapters, &plan.queries, 6).await;
     println!(

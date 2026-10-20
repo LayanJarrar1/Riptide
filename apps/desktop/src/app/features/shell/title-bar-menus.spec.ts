@@ -18,6 +18,7 @@ const EN: Record<string, string> = {
   'nav.settings': 'Settings',
   'menu.browserIntegration': 'Browser integration',
   'settings.videoUpdate': 'Update video support',
+  'menu.research': 'Research',
   'theme.label': 'Appearance',
   'theme.light': 'Light',
   'theme.dark': 'Dark',
@@ -165,16 +166,16 @@ describe('title bar menus', () => {
     const menus = buildMenus(state({ tauri: false }), recorder().actions);
     expect(menus.map((m) => m.id)).toEqual(['file', 'downloads', 'tools', 'view', 'help']);
     expect(labels(menu(menus, 'file'))).not.toContain('Exit');
-    expect(labels(menu(menus, 'tools'))).toEqual(['Settings', 'Browser integration']);
+    expect(labels(menu(menus, 'tools'))).toEqual(['Research', 'Settings', 'Browser integration']);
     expect(labels(menu(menus, 'help'))).toEqual(['Documentation', 'GitHub', 'Keyboard shortcuts', 'About Riptide']);
   });
 
   it('Tools opens Settings and its integration section, and updates video support', () => {
     const { actions, calls } = recorder();
     const tools = menu(buildMenus(state(), actions), 'tools');
-    expect(labels(tools)).toEqual(['Settings', 'Browser integration', 'Update video support']);
+    expect(labels(tools)).toEqual(['Research', 'Settings', 'Browser integration', 'Update video support']);
     actionEntries(tools.entries).forEach((e) => e.run());
-    expect(calls).toEqual(['openSettings', 'openSettings(integration)', 'updateVideoSupport']);
+    expect(calls).toEqual(['openResearch', 'openSettings', 'openSettings(integration)', 'updateVideoSupport']);
   });
 
   describe('splitMnemonic', () => {

@@ -1,6 +1,7 @@
 //! One adapter per source. Each turns a keyword query into [`Hit`]s that have a direct, open
 //! download link; items without one are dropped, never guessed.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -23,21 +24,26 @@ pub mod openalex;
 pub trait SearchSource: Send + Sync {
     /// Which source this is.
     fn source(&self) -> Source;
+    /// How many query phrasings this source can afford per search (slow or tightly rate-limited
+    /// services take fewer).
+    fn max_queries(&self) -> usize {
+        3
+    }
     /// Searches for `query` and returns at most `limit` hits (limit is clamped to 1..=50).
     async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>>;
 }
 
 /// Builds the adapter for `source` talking to the real service.
-pub fn default_source(source: Source) -> Box<dyn SearchSource> {
+pub fn default_source(source: Source) -> Arc<dyn SearchSource> {
     match source {
-        Source::OpenAlex => Box::new(openalex::OpenAlex::new()),
-        Source::Crossref => Box::new(crossref::Crossref::new()),
-        Source::Arxiv => Box::new(arxiv::Arxiv::new()),
-        Source::EuropePmc => Box::new(europepmc::EuropePmc::new()),
-        Source::InternetArchive => Box::new(internet_archive::InternetArchive::new()),
-        Source::Commons => Box::new(commons::Commons::new()),
-        Source::Github => Box::new(github::Github::new()),
-        Source::DataGov => Box::new(datagov::DataGov::new()),
+        Source::OpenAlex => Arc::new(openalex::OpenAlex::new()),
+        Source::Crossref => Arc::new(crossref::Crossref::new()),
+        Source::Arxiv => Arc::new(arxiv::Arxiv::new()),
+        Source::EuropePmc => Arc::new(europepmc::EuropePmc::new()),
+        Source::InternetArchive => Arc::new(internet_archive::InternetArchive::new()),
+        Source::Commons => Arc::new(commons::Commons::new()),
+        Source::Github => Arc::new(github::Github::new()),
+        Source::DataGov => Arc::new(datagov::DataGov::new()),
     }
 }
 

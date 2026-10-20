@@ -124,8 +124,9 @@ impl Engine {
         &self,
         request: riptide_core::DownloadRequest,
         hint: SeenHint,
+        allow_duplicates: bool,
     ) -> Result<DownloadId> {
-        let id = self.add(request).await?;
+        let id = self.add_checked(request, allow_duplicates).await?;
         if hint != SeenHint::default() {
             if let Ok(json) = serde_json::to_string(&hint) {
                 let key = hint_key(id);

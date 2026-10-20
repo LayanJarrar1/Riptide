@@ -19,6 +19,7 @@ import { SegmentedControlComponent, SegmentedOption } from '../../ui/segmented-c
 import { SpeedLimitControlComponent } from '../../ui/speed-limit-control.component';
 import { ToastService } from '../../ui/toast.service';
 import { CATEGORY_ICONS } from '../downloads/download-row.component';
+import { AiSettingsComponent } from './ai-settings.component';
 import { Settings, SettingsService } from './settings.service';
 
 /** What `media_tools_info` reports (`src-tauri/src/media.rs`). */
@@ -52,7 +53,7 @@ export function isValidProxyUrl(raw: string): boolean {
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, SegmentedControlComponent, SpeedLimitControlComponent],
+  imports: [...FORMAT_PIPES, AiSettingsComponent, ButtonComponent, IconComponent, SegmentedControlComponent, SpeedLimitControlComponent],
   template: `
     <div class="page">
       <header class="page-head">
@@ -224,6 +225,8 @@ export function isValidProxyUrl(raw: string): boolean {
           </div>
         }
       </section>
+
+      <app-ai-settings />
 
       <section class="section" id="about">
         <h2 class="section-title">{{ i18n.t('settings.about') }}</h2>

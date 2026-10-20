@@ -125,6 +125,10 @@ impl SearchSource for Arxiv {
         Source::Arxiv
     }
 
+    fn max_queries(&self) -> usize {
+        2
+    }
+
     async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
         let q = check_query(query)?;
         let url = format!(

@@ -1047,7 +1047,17 @@ impl Engine {
     /// Adds a download. It starts when a queue slot is free (or waits in `Paused` when
     /// `start_paused`). Returns its id.
     pub async fn add(&self, request: DownloadRequest) -> Result<DownloadId> {
-        if self.skip_duplicates().await {
+        self.add_checked(request, false).await
+    }
+
+    /// [`Engine::add`] with an explicit answer to "skip duplicates": `allow_duplicates` adds
+    /// even when the option is on and the same thing was downloaded before.
+    pub async fn add_checked(
+        &self,
+        request: DownloadRequest,
+        allow_duplicates: bool,
+    ) -> Result<DownloadId> {
+        if !allow_duplicates && self.skip_duplicates().await {
             let q = SeenQuery {
                 url: Some(request.url.clone()),
                 ..SeenQuery::default()

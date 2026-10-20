@@ -165,6 +165,10 @@ impl SearchSource for Github {
         Source::Github
     }
 
+    fn max_queries(&self) -> usize {
+        1
+    }
+
     async fn search(&self, query: &str, limit: usize) -> Result<Vec<Hit>> {
         let q = check_query(query)?;
         let wanted = clamp(limit);

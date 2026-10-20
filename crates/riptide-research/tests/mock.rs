@@ -456,9 +456,9 @@ async fn search_all_reports_the_failing_source_and_still_returns_the_rest() {
         .respond_with(ResponseTemplate::new(500))
         .mount(&bad)
         .await;
-    let adapters: Vec<Box<dyn SearchSource>> = vec![
-        Box::new(OpenAlex::with_base(&ok.uri(), fast())),
-        Box::new(Crossref::with_base(&bad.uri(), fast())),
+    let adapters: Vec<std::sync::Arc<dyn SearchSource>> = vec![
+        std::sync::Arc::new(OpenAlex::with_base(&ok.uri(), fast())),
+        std::sync::Arc::new(Crossref::with_base(&bad.uri(), fast())),
     ];
     let out = search_all(&adapters, &["a b".into(), "c".into()], 5).await;
     assert!(!out.hits.is_empty());

@@ -3,6 +3,7 @@
 //! list, and a failing source is reported next to the results instead of failing the search.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::future::join_all;
@@ -41,7 +42,7 @@ pub struct SearchOutcome {
 
 /// Searches every adapter with every query, `per_source` hits per adapter and query.
 pub async fn search_all(
-    adapters: &[Box<dyn SearchSource>],
+    adapters: &[Arc<dyn SearchSource>],
     queries: &[String],
     per_source: usize,
 ) -> SearchOutcome {
@@ -55,7 +56,7 @@ pub async fn search_all(
             let mut hits = Vec::new();
             let mut first_err: Option<ResearchError> = None;
             let mut any_ok = false;
-            for q in &queries {
+            for q in queries.iter().take(a.max_queries()) {
                 match a.search(q, per_source).await {
                     Ok(h) => {
                         any_ok = true;

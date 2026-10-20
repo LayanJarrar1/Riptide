@@ -3984,8 +3984,10 @@ dependencies = [
 name = "riptide-desktop"
 version = "0.1.0-alpha.4"
 dependencies = [
+ "chrono",
  "dirs 6.0.0",
  "notify-rust",
+ "riptide-ai",
  "riptide-core",
  "riptide-crawl",
  "riptide-engine",
@@ -3994,6 +3996,7 @@ dependencies = [
  "riptide-log",
  "riptide-media",
  "riptide-net",
+ "riptide-research",
  "serde",
  "serde_json",
  "tauri",
@@ -4009,9 +4012,11 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "url",
  "windows-sys 0.59.0",
  "winreg",
+ "wiremock",
 ]
 
 [[package]]

@@ -65,6 +65,7 @@ async fn duplicate_is_found_across_url_variants_and_by_hash_and_goes_stale_on_de
                 doi: Some("10.1234/Paper.One".into()),
                 ..SeenHint::default()
             },
+            false,
         )
         .await
         .unwrap();
