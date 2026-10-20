@@ -580,7 +580,7 @@ export class DownloadDetailsComponent {
     return s === null ? null : new Set(s);
   });
   protected readonly ratioText = computed(() => formatRatio(this.live()?.ratio ?? this.d().torrent?.ratio ?? 0));
-  protected readonly icon = computed(() => CATEGORY_ICONS[this.d().category]);
+  protected readonly icon = computed(() => (this.d().kind === 'torrent' ? 'magnet' : CATEGORY_ICONS[this.d().category]));
   protected readonly host = computed(() => hostOf(this.d().url));
   protected readonly queueName = computed(() => {
     const id = this.d().queueId;
@@ -635,8 +635,8 @@ export class DownloadDetailsComponent {
     const d = this.d();
     const t = (key: string, vars: Record<string, string> = {}): string =>
       Object.entries(vars).reduce((s, [k, v]) => s.replace(`{${k}}`, v), this.i18n.t(key));
-    const lines: LogLine[] = [{ at: d.addedAt, text: t('log.added', { host: this.host() }) }];
-    if (d.startedAt !== null) {
+    const lines: LogLine[] = [{ at: d.addedAt, text: d.kind === 'torrent' ? t('torrent.logAdded') : t('log.added', { host: this.host() }) }];
+    if (d.startedAt !== null && d.kind !== 'torrent') {
       lines.push({ at: d.startedAt, text: t('log.probed', { size: this.format.bytes(d.size), ranges: this.i18n.t(d.supportsRanges ? 'log.rangesYes' : 'log.rangesNo') }) });
       lines.push({ at: d.startedAt + 300, text: t('log.planned', { n: this.format.int(d.segments.length), c: this.format.int(d.connections) }) });
     }

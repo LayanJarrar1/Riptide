@@ -47,7 +47,8 @@ const OVERSCAN = 6;
               <app-icon class="file-icon" name="file" [size]="16" />
             }
             <span class="name" dir="auto" [attr.title]="f.path">
-              @if (folderOf(f.path); as folder) {
+              <!-- the narrow drawer shows the file name; the folder is in the tooltip -->
+              @if (selectable() && folderOf(f.path); as folder) {
                 <span class="folder">{{ folder }}/</span>
               }
               <span class="base">{{ baseOf(f.path) }}</span>

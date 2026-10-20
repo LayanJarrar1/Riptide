@@ -19,7 +19,8 @@
 //!   is re-hashed, so a killed process resumes without trusting partial data.
 //! * **Privacy.** Magnet trackers (which may carry a passkey) and query strings never reach the
 //!   logs ([`magnet::Magnet::redacted`], [`magnet::redact_url`]).
-#![forbid(unsafe_code)]
+// `deny`, not `forbid`: `storage::sparse` on Windows is one documented DeviceIoControl call.
+#![deny(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 pub mod engine;

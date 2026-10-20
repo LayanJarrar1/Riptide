@@ -22,11 +22,16 @@ serde_json = { workspace = true }
 unicode-normalization = { workspace = true }
 tokio-util = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+# FSCTL_SET_SPARSE for the files we create (see `storage::sparse`)
+windows-sys = { workspace = true }
+
 [dev-dependencies]
 sha1 = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 proptest = { workspace = true }
+windows-sys = { workspace = true }
 
 [lints]
 workspace = true

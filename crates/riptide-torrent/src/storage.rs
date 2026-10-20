@@ -18,6 +18,51 @@ use librqbit::{ManagedTorrentShared, TorrentMetadata};
 use crate::paths::{confine, ensure_no_symlink_escape, plan_layout, RawFile};
 use crate::registry::Registry;
 
+/// Marks a file as sparse (NTFS), so bytes written far into a file that is never completed do not
+/// reserve the whole length on disk.
+///
+/// A torrent's pieces do not respect file boundaries: to verify the piece that holds a file you
+/// asked for, the bytes of its neighbours in that piece must be written too. Without the sparse
+/// flag, writing a few kilobytes at the end of an unselected 263 MB file allocates all 263 MB
+/// (found while testing with a real torrent). librqbit's own storage does the same marking.
+mod sparse {
+    #[cfg(windows)]
+    #[allow(unsafe_code)]
+    pub fn mark(file: &std::fs::File) -> std::io::Result<()> {
+        use std::os::windows::io::AsRawHandle;
+
+        use windows_sys::Win32::System::Ioctl::FSCTL_SET_SPARSE;
+        use windows_sys::Win32::System::IO::DeviceIoControl;
+
+        let mut returned: u32 = 0;
+        // SAFETY: the handle is valid for the lifetime of `file`; FSCTL_SET_SPARSE takes no input
+        // buffer (the default, "set sparse", applies) and no output buffer, so the null pointers
+        // with zero sizes are what the API documents; `returned` outlives the call.
+        let ok = unsafe {
+            DeviceIoControl(
+                file.as_raw_handle() as _,
+                FSCTL_SET_SPARSE,
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                0,
+                &mut returned,
+                std::ptr::null_mut(),
+            )
+        };
+        if ok == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    /// Other platforms: files are sparse by default.
+    #[cfg(not(windows))]
+    pub fn mark(_file: &std::fs::File) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Positional file I/O (the only platform-specific code of the crate).
 mod posio {
     use std::fs::File;
@@ -115,6 +160,8 @@ impl TorrentStorage for SafeStorage {
                         .open(path)
                         .with_context(|| format!("cannot open {}", path.display()))?;
                     ensure_no_symlink_escape(&self.root, path)?;
+                    // best effort: a file system without sparse files (FAT, some shares) is fine
+                    let _ = sparse::mark(&file);
                     slots.push(Slot::Open {
                         file,
                         path: path.clone(),

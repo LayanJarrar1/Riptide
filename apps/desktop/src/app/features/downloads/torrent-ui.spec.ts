@@ -244,6 +244,14 @@ describe('TorrentFileListComponent', () => {
     expect(text).toContain('not selected');
   });
 
+  it('shows only the file name in the read-only list and the full path as its tooltip', () => {
+    fixture.componentRef.setInput('files', [{ index: 0, path: 'Big Buck Bunny/Big Buck Bunny.en.srt', len: 140 }]);
+    fixture.detectChanges();
+    const name = (fixture.nativeElement as HTMLElement).querySelector('.name') as HTMLElement;
+    expect(name.textContent?.trim()).toBe('Big Buck Bunny.en.srt');
+    expect(name.getAttribute('title')).toBe('Big Buck Bunny/Big Buck Bunny.en.srt');
+  });
+
   it('keeps Arabic file names bidi-safe', () => {
     fixture.componentRef.setInput('files', [{ index: 0, path: 'مجلد/ملف.mp4', len: 10 }]);
     fixture.detectChanges();
