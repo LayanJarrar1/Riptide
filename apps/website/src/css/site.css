@@ -763,6 +763,16 @@ html.tab-hidden *, html.tab-hidden *::before, html.tab-hidden *::after { animati
 .mo-hint[hidden] { display: none; }
 .mo-hint p { margin: 0; font-size: .8125rem; line-height: 1.4; }
 .mo-hint .btn { flex: none; }
+.rel-pill { position: absolute; z-index: 2; top: calc(100% + 8px); inset-inline-start: var(--gutter); display: flex; align-items: center; gap: 2px; max-width: calc(100vw - 2 * var(--gutter)); padding: 3px; padding-inline-start: 14px; border-radius: 999px; background: var(--card, #fff); color: var(--fg); font-size: .8125rem; line-height: 1.3; box-shadow: 0 0 0 1px var(--line), 0 10px 26px -16px rgba(7, 26, 38, .4); }
+.rel-pill[hidden] { display: none; }
+.rel-link { color: inherit; text-decoration: none; padding-block: 4px; }
+.rel-link b { font-weight: 600; color: var(--acc, #075C69); }
+.rel-link:hover b { text-decoration: underline; }
+.rel-x { flex: none; width: 28px; height: 28px; }
+html.anim .rel-pill { animation: fade-soft var(--dur-3) var(--ease-out) both; }
+@media (max-width: 520px) { .rel-link span { display: block; } }
+:root[data-theme="dark"] .rel-pill { background: #0d2837; box-shadow: 0 0 0 1px rgba(217, 248, 250, .18), 0 10px 26px -16px rgba(0, 0, 0, .8); }
+:root[data-theme="dark"] .rel-link b { color: #00D5E8; }
 :root[data-theme="dark"] .mo-hint { background: #0d2837; box-shadow: 0 0 0 1px rgba(217, 248, 250, .18), 0 18px 40px -18px rgba(0, 0, 0, .8); }
 @media (max-width: 699px) {
   #streams .pin { --msd: 1.7; }

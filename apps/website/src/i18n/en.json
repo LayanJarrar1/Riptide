@@ -29,8 +29,14 @@
     "motionOn": "On",
     "motionDismiss": "Dismiss"
   },
+  "release": {
+    "label": "Latest release",
+    "text": "Riptide v{v} is out.",
+    "link": "See what's new →",
+    "dismiss": "Dismiss"
+  },
   "hero": {
-    "status": "Alpha {n} for Windows 10 and 11",
+    "status": "{channel} for Windows 10 and 11",
     "titleA": "Download faster.",
     "titleB": "Every byte verified.",
     "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
@@ -380,7 +386,7 @@
   },
   "download": {
     "eyebrow": "Download",
-    "badge": "Alpha {n}",
+    "badge": "{channel}",
     "title": "Get the latest Riptide.",
     "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
     "installer": "Download the latest version",
