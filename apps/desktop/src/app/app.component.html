@@ -153,6 +153,9 @@
 @defer (when ui.addOpen(); prefetch on idle) {
   <app-add-download-dialog [open]="ui.addOpen()" [initialUrl]="ui.addUrl()" (closed)="ui.closeAdd()" />
 }
+@defer (when ui.torrentSource() !== null; prefetch on idle) {
+  <app-torrent-dialog [open]="ui.torrentSource() !== null" [source]="ui.torrentSource()" (closed)="ui.closeTorrent()" />
+}
 @if (batchDialog(); as dialog) {
   <ng-container *ngComponentOutlet="dialog" />
 }

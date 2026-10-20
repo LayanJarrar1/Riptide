@@ -164,6 +164,7 @@ describe('TitleBarComponent', () => {
         'Batch download',
         'Site grabber',
         'Import link list…',
+        'Open torrent file…',
         'Open file',
         'Show in folder',
       ]);
@@ -244,13 +245,13 @@ describe('TitleBarComponent', () => {
       key(row('Add download'), 'ArrowDown');
       expect(document.activeElement).toBe(row('Batch download'));
       key(row('Batch download'), 'End');
-      // Open file / Show in folder are unavailable: the last reachable row is the import
-      expect(document.activeElement).toBe(row('Import link list…'));
-      key(row('Import link list…'), 'ArrowDown');
+      // Open file / Show in folder are unavailable: the last reachable row is the torrent file
+      expect(document.activeElement).toBe(row('Open torrent file…'));
+      key(row('Open torrent file…'), 'ArrowDown');
       expect(document.activeElement).toBe(row('Add download'));
       key(row('Add download'), 'ArrowUp');
-      expect(document.activeElement).toBe(row('Import link list…'));
-      key(row('Import link list…'), 'Home');
+      expect(document.activeElement).toBe(row('Open torrent file…'));
+      key(row('Open torrent file…'), 'Home');
       expect(document.activeElement).toBe(row('Add download'));
     });
 

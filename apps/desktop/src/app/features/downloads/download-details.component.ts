@@ -1,13 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 
 import { FORMAT_PIPES } from '../../core/format.pipes';
 import { FormatService } from '../../core/format.service';
 import { TickerDirective } from '../../core/ticker.directive';
+import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow } from '../../data/downloads.store';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { canPause, canResume, failureFix } from '../../model/download';
 import { MAIN_QUEUE_ID } from '../../model/queue';
+import { formatRatio, TorrentLiveView } from '../../model/torrent';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ProgressFlowComponent } from '../../ui/progress-flow.component';
@@ -15,6 +17,7 @@ import { SegmentMapComponent } from '../../ui/segment-map.component';
 import { SparklineComponent } from '../../ui/sparkline.component';
 import { StatusPillComponent } from '../../ui/status-pill.component';
 import { CATEGORY_ICONS, hostOf, RowAction } from './download-row.component';
+import { TorrentFileListComponent } from './torrent-file-list.component';
 import { DownloadSpeedLimitComponent } from './download-speed-limit.component';
 
 interface LogLine {
@@ -44,6 +47,7 @@ interface LogLine {
     SparklineComponent,
     StatusPillComponent,
     TickerDirective,
+    TorrentFileListComponent,
   ],
   host: { role: 'complementary', '[attr.aria-label]': 'i18n.t("details.title")' },
   template: `
@@ -92,7 +96,12 @@ interface LogLine {
           <span class="stat-value num">{{ row().eta | duration }}</span>
           <span class="stat-label">{{ i18n.t('column.eta') }}</span>
         </div>
-        @if (!isMedia()) {
+        @if (isTorrent()) {
+          <div class="stat" style="--i: 3">
+            <span class="stat-value num">{{ live()?.peers ?? d().torrent?.peers ?? 0 }}<span class="stat-dim">/{{ live()?.peersSeen ?? d().torrent?.peersSeen ?? 0 }}</span></span>
+            <span class="stat-label">{{ i18n.t('torrent.peersLabel') }}</span>
+          </div>
+        } @else if (!isMedia()) {
           <div class="stat" style="--i: 3">
             <span class="stat-value num">{{ activeConnections() }}<span class="stat-dim">/{{ d().connections }}</span></span>
             <span class="stat-label">{{ i18n.t('details.connections') }}</span>
@@ -102,15 +111,19 @@ interface LogLine {
 
       <section class="block" style="--i: 4">
         <div class="block-head">
-          <h3 class="block-title">{{ i18n.t(isMedia() ? 'details.mediaProgress' : 'details.segments') }}</h3>
-          @if (isMedia()) {
+          <h3 class="block-title">{{ i18n.t(isMedia() || isTorrent() ? 'details.mediaProgress' : 'details.segments') }}</h3>
+          @if (isTorrent()) {
+            <span class="block-meta media-badge"><app-icon name="magnet" [size]="12" /> {{ i18n.t('torrent.badge') }}</span>
+          } @else if (isMedia()) {
             <span class="block-meta media-badge"><app-icon name="play" [size]="12" /> {{ i18n.t('details.video') }}</span>
           } @else {
             <span class="block-meta num">{{ segmentSummary() }}</span>
           }
         </div>
         <app-progress-flow [segments]="d().segments" [size]="d().size" [state]="d().state" [large]="true" />
-        @if (isMedia()) {
+        @if (isTorrent()) {
+          <p class="hint">{{ i18n.t(d().torrent?.sequential ? 'torrent.sequentialOn' : 'torrent.hint') }}</p>
+        } @else if (isMedia()) {
           <p class="hint">{{ i18n.t('details.mediaHint') }}</p>
         } @else {
           @if (d().size !== null) {
@@ -128,9 +141,33 @@ interface LogLine {
         <app-sparkline [samples]="d().speedHistory" [draw]="true" />
       </section>
 
-      <section class="block" style="--i: 5">
-        <app-download-speed-limit [download]="d()" />
-      </section>
+      @if (isTorrent() && d().torrent; as t) {
+        <section class="block" style="--i: 5">
+          <div class="block-head">
+            <h3 class="block-title">{{ i18n.t('torrent.shareTitle') }}</h3>
+            @if (t.seeding) {
+              <span class="block-meta media-badge">{{ i18n.t('torrent.seeding') }}</span>
+            }
+          </div>
+          <div class="share">
+            <span class="share-item"><span class="share-value num">{{ ratioText() }}</span><span class="stat-label">{{ i18n.t('torrent.ratioLabel') }}</span></span>
+            <span class="share-item"><span class="share-value num">{{ format.bytes(live()?.uploaded ?? t.uploaded) }}</span><span class="stat-label">{{ i18n.t('torrent.uploaded') }}</span></span>
+            <span class="share-item"><span class="share-value num">{{ format.speed(live()?.upBps ?? t.upBps) }}</span><span class="stat-label">{{ i18n.t('torrent.upSpeed') }}</span></span>
+          </div>
+        </section>
+
+        <section class="block" style="--i: 6">
+          <div class="block-head">
+            <h3 class="block-title">{{ i18n.t('torrent.filesLabel') }}</h3>
+            <span class="block-meta num">{{ i18n.t('torrent.files').replace('{n}', '' + t.files.length) }}</span>
+          </div>
+          <app-torrent-file-list [files]="t.files" [selected]="selectedSet()" [progress]="live()?.fileProgress ?? null" />
+        </section>
+      } @else {
+        <section class="block" style="--i: 5">
+          <app-download-speed-limit [download]="d()" />
+        </section>
+      }
 
       <section class="block facts" style="--i: 6">
         <h3 class="block-title">{{ i18n.t('details.source') }}</h3>
@@ -140,8 +177,13 @@ interface LogLine {
             <span dir="ltr" class="truncate" [attr.title]="d().url">{{ d().url }}</span>
             <button appButton size="sm" variant="ghost" icon="copy" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('action.copyLink')" [attr.title]="i18n.t('action.copyLink')" (click)="action.emit('copyLink')"></button>
           </dd>
-          <dt>{{ i18n.t('details.server') }}</dt>
-          <dd dir="ltr">{{ host() }}</dd>
+          @if (isTorrent() && d().torrent; as t) {
+            <dt>{{ i18n.t('torrent.hash') }}</dt>
+            <dd class="mono truncate" dir="ltr" [attr.title]="t.infoHash">{{ t.infoHash }}</dd>
+          } @else {
+            <dt>{{ i18n.t('details.server') }}</dt>
+            <dd dir="ltr">{{ host() }}</dd>
+          }
           <dt>{{ i18n.t('details.saveTo') }}</dt>
           <dd class="fact-url">
             <span dir="ltr" class="truncate" [attr.title]="d().dir">{{ d().dir }}</span>
@@ -366,6 +408,23 @@ interface LogLine {
       gap: var(--space-1);
     }
 
+    .share {
+      display: flex;
+      gap: var(--space-5);
+    }
+
+    .share-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-inline-size: 0;
+    }
+
+    .share-value {
+      font-size: var(--text-lg, 1.125rem);
+      font-weight: var(--weight-semibold, 600);
+    }
+
     .truncate {
       flex: 1;
       min-inline-size: 0;
@@ -495,8 +554,9 @@ interface LogLine {
 })
 export class DownloadDetailsComponent {
   protected readonly i18n = inject(I18nService);
-  private readonly format = inject(FormatService);
+  protected readonly format = inject(FormatService);
   private readonly queues = inject(QueuesService);
+  private readonly engine = inject(DownloadEngine);
   protected readonly canPause = canPause;
   protected readonly canResume = canResume;
 
@@ -512,6 +572,14 @@ export class DownloadDetailsComponent {
   });
   protected readonly fix = computed(() => failureFix(this.d().failure));
   protected readonly isMedia = computed(() => this.d().kind === 'media');
+  protected readonly isTorrent = computed(() => this.d().kind === 'torrent');
+  /** Per-file progress, peers and speeds of a torrent, polled once a second while the drawer shows it. */
+  protected readonly live = signal<TorrentLiveView | null>(null);
+  protected readonly selectedSet = computed<ReadonlySet<number> | null>(() => {
+    const s = this.d().torrent?.selected ?? null;
+    return s === null ? null : new Set(s);
+  });
+  protected readonly ratioText = computed(() => formatRatio(this.live()?.ratio ?? this.d().torrent?.ratio ?? 0));
   protected readonly icon = computed(() => CATEGORY_ICONS[this.d().category]);
   protected readonly host = computed(() => hostOf(this.d().url));
   protected readonly queueName = computed(() => {
@@ -533,6 +601,34 @@ export class DownloadDetailsComponent {
       .replace('{done}', this.format.int(done))
       .replace('{total}', this.format.int(segs.length));
   });
+
+  constructor() {
+    effect((onCleanup) => {
+      const d = this.d();
+      if (d.kind !== 'torrent') {
+        this.live.set(null);
+        return;
+      }
+      const id = d.id;
+      let alive = true;
+      const poll = (): void => {
+        this.engine.torrentLive(id).then(
+          (v) => {
+            if (alive) {
+              this.live.set(v);
+            }
+          },
+          () => undefined,
+        );
+      };
+      poll();
+      const timer = setInterval(poll, 1000);
+      onCleanup(() => {
+        alive = false;
+        clearInterval(timer);
+      });
+    });
+  }
 
   /** A readable timeline reconstructed from the record. */
   protected readonly log = computed<readonly LogLine[]>(() => {

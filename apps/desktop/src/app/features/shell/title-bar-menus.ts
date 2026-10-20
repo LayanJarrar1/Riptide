@@ -88,6 +88,7 @@ export interface MenuActions {
   batchDownload(): void;
   siteGrabber(): void;
   importLinkList(): void;
+  openTorrentFile(): void;
   openFile(): void;
   openFolder(): void;
   exit(): void;
@@ -137,6 +138,7 @@ export function buildMenus(s: MenuState, a: MenuActions): readonly MenuDef[] {
     item('batch', t('action.batch'), () => a.batchDownload(), { shortcut: 'Ctrl+Shift+N' }),
     item('grabber', t('action.grabber'), () => a.siteGrabber()),
     item('importList', t('menu.importList'), () => a.importLinkList()),
+    item('openTorrent', t('menu.openTorrent'), () => a.openTorrentFile()),
     SEP,
     item('openFile', t('action.openFile'), () => a.openFile(), { disabled: !s.openable }),
     item('openFolder', t('action.openFolder'), () => a.openFolder(), { disabled: !s.openable }),

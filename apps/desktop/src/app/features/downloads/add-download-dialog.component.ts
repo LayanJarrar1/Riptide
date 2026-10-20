@@ -8,12 +8,14 @@ import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, isMediaUrl, MediaChoice, MediaProbe, ProbeResult } from '../../model/download';
 import { parseMediaError } from '../../model/media-error';
+import { isMagnetLink } from '../../model/torrent';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
 import { SettingsService } from '../settings/settings.service';
+import { UiState } from '../shell/ui-state.service';
 import { CATEGORY_ICONS } from './download-row.component';
 import { DuplicateChoice, DuplicateDialogComponent } from './duplicate-dialog.component';
 
@@ -58,6 +60,11 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             <span class="help is-error">{{ i18n.t('add.urlInvalid') }}</span>
           } @else if (probe() === 'probing') {
             <span class="help">{{ i18n.t('add.probing') }}</span>
+          } @else if (isMagnet()) {
+            <span class="help preview">
+              <app-icon name="magnet" [size]="14" class="ok" />
+              {{ i18n.t('torrent.detected') }}
+            </span>
           } @else if (lowSpace()) {
             <span class="help is-warning">
               <app-icon name="alert" [size]="14" />
@@ -214,9 +221,10 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       </form>
 
       <ng-container dialogActions>
+        <button appButton variant="ghost" icon="magnet" type="button" class="torrent-file" (click)="chooseTorrentFile()">{{ i18n.t('torrent.choose') }}</button>
         <button appButton variant="ghost" type="button" (click)="close()">{{ i18n.t('action.cancel') }}</button>
-        <button appButton variant="primary" icon="download" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
-          {{ i18n.t(submitting() ? 'add.submitting' : startPaused() ? 'add.submitLater' : 'add.submit') }}
+        <button appButton variant="primary" [icon]="isMagnet() ? 'magnet' : 'download'" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
+          {{ i18n.t(submitting() ? 'add.submitting' : isMagnet() ? 'torrent.chooseFiles' : startPaused() ? 'add.submitLater' : 'add.submit') }}
         </button>
       </ng-container>
     </app-dialog>
@@ -238,6 +246,11 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
     .grow {
       flex: 1;
+    }
+
+    /* the torrent file picker sits at the start of the footer, away from Cancel / Download */
+    .torrent-file {
+      margin-inline-end: auto;
     }
 
     .category {
@@ -616,6 +629,7 @@ export class AddDownloadDialogComponent {
   private readonly settingsService = inject(SettingsService);
   private readonly disk = inject(DiskSpaceService);
   private readonly store = inject(DownloadsStore);
+  private readonly ui = inject(UiState);
   protected readonly format = inject(FormatService);
 
   readonly open = input.required<boolean>();
@@ -676,7 +690,9 @@ export class AddDownloadDialogComponent {
     const free = this.freeBytes();
     return size !== null && free !== null && size > free;
   });
-  protected readonly canSubmit = computed(() => isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError() && !this.submitting());
+  /** A pasted `magnet:` link: the torrent dialog takes over for the file choice. */
+  protected readonly isMagnet = computed(() => isMagnetLink(this.url()));
+  protected readonly canSubmit = computed(() => (this.isMagnet() || (isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError())) && !this.submitting());
 
   constructor() {
     effect(() => {
@@ -766,9 +782,29 @@ export class AddDownloadDialogComponent {
     this.closed.emit();
   }
 
+  /** "Choose .torrent file": the native dialog, then the file-choice dialog takes over. */
+  protected chooseTorrentFile(): void {
+    this.engine
+      .pickTorrentFile()
+      .then((path) => {
+        if (path !== null) {
+          this.ui.openTorrent({ kind: 'file', path });
+          this.closed.emit();
+        } else if (!this.tauriAvailable) {
+          this.toasts.show('info', this.i18n.t('torrent.desktopOnly'));
+        }
+      })
+      .catch((error: unknown) => this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error))));
+  }
+
   protected async submit(event?: Event): Promise<void> {
     event?.preventDefault();
     if (!this.canSubmit()) {
+      return;
+    }
+    if (this.isMagnet()) {
+      this.ui.openTorrent({ kind: 'magnet', uri: this.url().trim() });
+      this.closed.emit();
       return;
     }
     const hex = this.checksum().trim().toLowerCase();
@@ -840,6 +876,11 @@ export class AddDownloadDialogComponent {
     const token = ++this.probeToken;
     this.clearMedia();
     if (trimmed.length === 0) {
+      this.probe.set('idle');
+      this.result.set(null);
+      return;
+    }
+    if (isMagnetLink(trimmed)) {
       this.probe.set('idle');
       this.result.set(null);
       return;

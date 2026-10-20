@@ -52,6 +52,7 @@ const PATHS: Readonly<Record<string, string>> = {
   fileApp: 'M6 3h9l5 5v13H6zM15 3v5h5M9 12h2v2H9zM13 12h2v2h-2zM9 16h2v2H9zM13 16h2v2h-2z',
   fileImage: 'M6 3h9l5 5v13H6zM15 3v5h5M8 19l4-5 3 3 2-2 2 4M9.5 13a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
   file: 'M6 3h9l5 5v13H6zM15 3v5h5',
+  magnet: 'M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3zM6 7h4M14 7h4',
 };
 
 /** Icon names available to templates. */

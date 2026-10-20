@@ -16,6 +16,8 @@ import {
   MediaChoice,
   MediaProbe,
 } from '../model/download';
+import { isMagnetLink, magnetHash, selectedBytes } from '../model/torrent';
+import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource } from '../model/torrent';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
@@ -223,6 +225,112 @@ export class MockEngineService extends DownloadEngine {
     };
     this.list.update((all) => [...all, d]);
     return Promise.resolve(id);
+  }
+
+  /** A believable torrent for any magnet link (plain browser and Karma only; the app uses the real engine). */
+  torrentPreview(source: TorrentSource): Promise<TorrentPreview> {
+    if (source.kind === 'magnet' && !isMagnetLink(source.uri)) {
+      return Promise.reject(new Error('invalid magnet link'));
+    }
+    const hash = (source.kind === 'magnet' ? magnetHash(source.uri) : null) ?? '0123456789abcdef0123456789abcdef01234567';
+    const files = [
+      { index: 0, path: 'Big Buck Bunny/Big Buck Bunny.mp4', len: 276_134_947, exists: false },
+      { index: 1, path: 'Big Buck Bunny/Big Buck Bunny.en.srt', len: 140, exists: false },
+      { index: 2, path: 'Big Buck Bunny/poster.jpg', len: 310_380, exists: false },
+    ];
+    const existing = this.list().find((d) => d.torrent?.infoHash === hash)?.id ?? null;
+    return Promise.resolve({
+      token: `${hash}-${this.nextId}`,
+      infoHash: hash,
+      name: 'Big Buck Bunny',
+      files,
+      totalBytes: files.reduce((n, f) => n + f.len, 0),
+      isPrivate: false,
+      existing,
+    });
+  }
+
+  addTorrent(request: TorrentAddRequest): Promise<number> {
+    const id = this.nextId++;
+    const hash = request.token.split('-')[0] ?? '';
+    const all = [
+      { index: 0, path: 'Big Buck Bunny/Big Buck Bunny.mp4', len: 276_134_947 },
+      { index: 1, path: 'Big Buck Bunny/Big Buck Bunny.en.srt', len: 140 },
+      { index: 2, path: 'Big Buck Bunny/poster.jpg', len: 310_380 },
+    ];
+    const size = selectedBytes(all, request.onlyFiles);
+    const d: Download = {
+      id,
+      url: `magnet:?xt=urn:btih:${hash}`,
+      filename: 'Big Buck Bunny',
+      dir: request.dir ?? 'D:\\Downloads',
+      size,
+      supportsRanges: false,
+      state: request.startPaused ? 'paused' : 'queued',
+      category: 'other',
+      queueId: 1,
+      priority: 'normal',
+      connections: 1,
+      segments: [{ index: 0, start: 0, end: size, written: 0, state: 'pending' }],
+      speedBps: 0,
+      speedHistory: new Array<number>(60).fill(0),
+      addedAt: Date.now(),
+      startedAt: null,
+      completedAt: null,
+      failure: null,
+      checksum: null,
+      kind: 'torrent',
+      torrent: {
+        infoHash: hash,
+        files: all,
+        selected: request.onlyFiles,
+        sequential: request.sequential,
+        downloaded: 0,
+        seeding: false,
+        peers: 0,
+        peersSeen: 0,
+        upBps: 0,
+        uploaded: 0,
+        ratio: 0,
+      },
+    };
+    this.list.update((l) => [...l, d]);
+    return Promise.resolve(id);
+  }
+
+  torrentLive(id: number): Promise<TorrentLiveView> {
+    const d = this.get(id);
+    const t = d?.torrent;
+    if (d === undefined || t === undefined) {
+      return Promise.reject(new Error('not a torrent'));
+    }
+    const done = d.segments.reduce((n, s) => n + s.written, 0);
+    // the simulation fills the chosen files in order
+    let left = done;
+    const chosen = t.selected === null ? null : new Set(t.selected);
+    const fileProgress = t.files.map((f) => {
+      if (chosen !== null && !chosen.has(f.index)) {
+        return 0;
+      }
+      const part = Math.min(left, f.len);
+      left -= part;
+      return part;
+    });
+    return Promise.resolve({
+      files: t.files,
+      fileProgress,
+      selected: t.selected,
+      peers: d.state === 'downloading' ? 12 : 0,
+      peersSeen: d.state === 'downloading' ? 31 : 0,
+      downBps: d.speedBps,
+      upBps: 0,
+      ratio: t.ratio,
+      uploaded: t.uploaded,
+    });
+  }
+
+  pickTorrentFile(): Promise<string | null> {
+    return Promise.resolve(null);
   }
 
   /** The TypeScript port of the Rust expander (see `batch-pattern.ts`). */

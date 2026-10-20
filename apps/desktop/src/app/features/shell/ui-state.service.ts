@@ -1,5 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 
+import type { TorrentSource } from '../../model/torrent';
+
 /**
  * Cross-cutting UI state: the add dialog (opened from the top bar, the empty state, a context
  * menu or a keyboard shortcut), the shortcuts dialog, focus requests for the search field and
@@ -16,6 +18,8 @@ export class UiState {
   readonly batchTab = signal<'pattern' | 'list'>('pattern');
   /** The site grabber dialog (crawl a site for files). */
   readonly grabberOpen = signal(false);
+  /** The torrent being added (magnet link or `.torrent` file); the file-choice dialog shows while set. */
+  readonly torrentSource = signal<TorrentSource | null>(null);
   /** The keyboard-shortcuts dialog. */
   readonly shortcutsOpen = signal(false);
   /** Incremented when the menus ask the queues list to open its "New queue" dialog. */
@@ -49,6 +53,14 @@ export class UiState {
 
   closeBatch(): void {
     this.batchOpen.set(false);
+  }
+
+  openTorrent(source: TorrentSource): void {
+    this.torrentSource.set(source);
+  }
+
+  closeTorrent(): void {
+    this.torrentSource.set(null);
   }
 
   openGrabber(): void {

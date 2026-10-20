@@ -108,6 +108,10 @@ describe('AppCommands', () => {
       expect([ui.batchOpen(), ui.batchTab()]).toEqual([true, 'list']);
       cmd.siteGrabber();
       expect(ui.grabberOpen()).toBeTrue();
+      ui.openTorrent({ kind: 'magnet', uri: 'magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567' });
+      expect(ui.torrentSource()?.kind).toBe('magnet');
+      ui.closeTorrent();
+      expect(ui.torrentSource()).toBeNull();
       cmd.showShortcuts();
       expect(ui.shortcutsOpen()).toBeTrue();
     });

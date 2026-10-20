@@ -24,6 +24,7 @@ import { TickerDirective } from './core/ticker.directive';
 import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
+import { TorrentDialogComponent } from './features/downloads/torrent-dialog.component';
 import { CompletionToastService } from './features/downloads/completion-toast.service';
 import { DesktopShellService } from './features/shell/desktop-shell.service';
 import { SettingsService } from './features/settings/settings.service';
@@ -69,6 +70,7 @@ const BOOT_MS = 900;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AddDownloadDialogComponent,
+    TorrentDialogComponent,
     NgComponentOutlet,
     ButtonComponent,
     IconComponent,

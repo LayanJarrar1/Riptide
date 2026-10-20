@@ -159,6 +159,60 @@ export function isValidProxyUrl(raw: string): boolean {
         }
       </section>
 
+      <section class="section" id="torrents">
+        <h2 class="section-title">{{ i18n.t('settings.torrents') }}</h2>
+        <label class="setting toggle-row">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.torrentSeeding') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.torrentSeedingDesc') }}</span>
+          </div>
+          <span class="switch" [class.is-on]="s().torrentSeeding">
+            <input type="checkbox" role="switch" [checked]="s().torrentSeeding" (change)="patch({ torrentSeeding: checked($event) })" />
+            <span class="knob"></span>
+          </span>
+        </label>
+        @if (s().torrentSeeding) {
+          <div class="setting">
+            <div class="setting-text">
+              <span class="setting-name">{{ i18n.t('settings.torrentRatio') }}</span>
+              <span class="setting-desc">{{ i18n.t('settings.torrentRatioDesc') }}</span>
+            </div>
+            <input class="input small" type="number" min="0" max="1000" step="0.1" dir="ltr" [value]="s().torrentRatioPercent / 100" [attr.aria-label]="i18n.t('settings.torrentRatio')" (change)="patch({ torrentRatioPercent: Math.round(number($event) * 100) })" />
+          </div>
+          <div class="setting">
+            <div class="setting-text">
+              <span class="setting-name">{{ i18n.t('settings.torrentMinutes') }}</span>
+              <span class="setting-desc">{{ i18n.t('settings.torrentMinutesDesc') }}</span>
+            </div>
+            <input class="input small" type="number" min="0" max="525600" step="10" dir="ltr" [value]="s().torrentMinutes" [attr.aria-label]="i18n.t('settings.torrentMinutes')" (change)="patch({ torrentMinutes: Math.max(0, Math.round(number($event))) })" />
+          </div>
+        }
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.torrentUpload') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.torrentUploadDesc') }}</span>
+          </div>
+          <app-speed-limit-control [value]="s().torrentUploadBps" [label]="i18n.t('settings.torrentUpload')" (valueChange)="patch({ torrentUploadBps: $event })" />
+        </div>
+        <label class="setting toggle-row">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.torrentDht') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.torrentDhtDesc') }}</span>
+          </div>
+          <span class="switch" [class.is-on]="s().torrentDht">
+            <input type="checkbox" role="switch" [checked]="s().torrentDht" (change)="patch({ torrentDht: checked($event) })" />
+            <span class="knob"></span>
+          </span>
+        </label>
+        <div class="setting">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.torrentPort') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.torrentPortDesc') }}</span>
+          </div>
+          <input class="input small" type="number" min="0" max="65535" step="1" dir="ltr" [value]="s().torrentPort" [attr.aria-label]="i18n.t('settings.torrentPort')" (change)="patch({ torrentPort: Math.min(65535, Math.max(0, Math.round(number($event)))) })" />
+        </div>
+      </section>
+
       <section class="section" id="integration">
         <h2 class="section-title">{{ i18n.t('settings.integration') }}</h2>
         <div class="setting">
@@ -393,6 +447,11 @@ export function isValidProxyUrl(raw: string): boolean {
 
     .input.small {
       block-size: 30px;
+    }
+
+    .setting > .input.small[type='number'] {
+      inline-size: 140px;
+      flex: none;
     }
 
     .input:focus {
@@ -705,6 +764,7 @@ export class SettingsPageComponent {
   }
   protected readonly categories = CATEGORY_KEYS;
   protected readonly icons = CATEGORY_ICONS;
+  protected readonly Math = Math;
   /** The typed proxy URL was refused (not saved, so the engine keeps the last good one). */
   protected readonly proxyInvalid = signal(false);
   protected readonly langAttr: Readonly<Record<Lang, string>> = { ar: 'ar', en: 'en' };

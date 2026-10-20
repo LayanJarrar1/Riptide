@@ -78,6 +78,21 @@ export class AppCommands {
     this.ui.openBatch('list');
   }
 
+  /** File menu: pick a `.torrent` in the native dialog, then choose its files. */
+  openTorrentFile(): void {
+    if (!this.tauri) {
+      this.toasts.show('info', this.i18n.t('torrent.desktopOnly'));
+      return;
+    }
+    this.run(
+      this.engine.pickTorrentFile().then((path) => {
+        if (path !== null) {
+          this.ui.openTorrent({ kind: 'file', path });
+        }
+      }),
+    );
+  }
+
   openFile(): void {
     this.openPath('open_file');
   }
