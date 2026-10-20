@@ -194,6 +194,10 @@ fn target_state(snap: &TorrentSnapshot, current: DownloadState) -> Option<Downlo
     }
 }
 
+fn is_failed(s: DownloadState) -> bool {
+    matches!(s, DownloadState::Failed { .. })
+}
+
 fn files_of(preview: &TorrentPreview) -> Vec<TorrentFileInfo> {
     preview
         .files
@@ -756,14 +760,8 @@ impl Engine {
             TorrentState::Failed { error } => Some(error.clone()),
             _ => None,
         };
-        if let Some(to) = target_state(&snap, before) {
-            if let Err(e) = self.advance(rt, id, to, error).await {
-                tracing::warn!(id = id.0, error = %e, "torrent state change refused");
-            }
-        }
-        let now = self.get(id).await.ok().flatten().map(|x| x.state);
-        let finished_now =
-            before != DownloadState::Completed && now == Some(DownloadState::Completed);
+        let want = target_state(&snap, before)
+            .filter(|to| *to != before && !(is_failed(before) && is_failed(*to)));
 
         let base = lock(&rt.base_uploaded).get(&snap.id).copied().unwrap_or(0);
         let uploaded = base + snap.uploaded_bytes;
@@ -773,10 +771,12 @@ impl Engine {
             .checked_div(size)
             .map_or(0, |v| u32::try_from(v).unwrap_or(u32::MAX));
 
-        // mirror for restarts: at most once a second, and always at the moment of completion
+        // The mirror the list reads is written at most once a second, and always before a state
+        // change: the UI re-reads the record when the state changes (a pause would otherwise show
+        // the number from a second ago, which at 20 MB/s is 20 MB short).
         let due = {
             let mut p = lock(&rt.persisted);
-            let due = finished_now || p.get(&id).is_none_or(|t| t.elapsed() >= PERSIST_EVERY);
+            let due = want.is_some() || p.get(&id).is_none_or(|t| t.elapsed() >= PERSIST_EVERY);
             if due {
                 p.insert(id, Instant::now());
             }
@@ -789,6 +789,15 @@ impl Engine {
             })
             .await;
         }
+
+        if let Some(to) = want {
+            if let Err(e) = self.advance(rt, id, to, error).await {
+                tracing::warn!(id = id.0, error = %e, "torrent state change refused");
+            }
+        }
+        let now = self.get(id).await.ok().flatten().map(|x| x.state);
+        let finished_now =
+            before != DownloadState::Completed && now == Some(DownloadState::Completed);
 
         if finished_now {
             self.finish_torrent(id).await;

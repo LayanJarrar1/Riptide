@@ -894,7 +894,8 @@ export class DownloadsPageComponent {
     }
     // starting over only means something once bytes exist or the download has ended
     if (row.downloaded > 0 || s === 'completed' || s === 'failed' || s === 'cancelled') {
-      items.push({ id: 'restart', label: t('action.restart'), icon: 'retry', separator: true });
+      // a torrent is never started over: "restart" is a full re-check that keeps every verified piece
+      items.push({ id: 'restart', label: t(row.d.kind === 'torrent' ? 'torrent.recheck' : 'action.restart'), icon: 'retry', separator: true });
     }
     if (s !== 'completed' && s !== 'cancelled') {
       items.push({ id: 'cancel', label: t('action.cancel'), icon: 'stop', separator: !(row.downloaded > 0 || s === 'failed') });
@@ -1052,7 +1053,13 @@ export class DownloadsPageComponent {
         this.askRemove([row]);
         break;
       case 'restart':
-        this.restartTarget.set(d);
+        if (d.kind === 'torrent') {
+          // nothing is thrown away, so no confirmation
+          this.run(this.engine.restart(d.id));
+          this.toasts.show('info', this.i18n.t('torrent.rechecking').replace('{name}', d.filename));
+        } else {
+          this.restartTarget.set(d);
+        }
         break;
       case 'details':
         this.store.openDetails(d.id);

@@ -418,6 +418,8 @@
   "torrent.uploaded": "Uploaded",
   "torrent.upSpeed": "Upload speed",
   "torrent.hash": "Info hash",
+  "torrent.recheck": "Check files again",
+  "torrent.rechecking": "Checking the files of {name} again. Pieces that are intact are kept.",
   "torrent.logAdded": "Added to the list",
   "settings.protocols": "Magnet links and .torrent files",
   "settings.protocolsDesc": "Open them with Riptide when you click one in a browser or double-click a file. Registered for your user only; no administrator rights.",

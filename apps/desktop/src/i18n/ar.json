@@ -418,6 +418,8 @@
   "torrent.uploaded": "المرفوع",
   "torrent.upSpeed": "سرعة الرفع",
   "torrent.hash": "بصمة التورنت",
+  "torrent.recheck": "إعادة فحص الملفات",
+  "torrent.rechecking": "جارٍ فحص ملفات {name} من جديد. تبقى الأجزاء السليمة كما هي.",
   "torrent.logAdded": "أُضيف إلى القائمة",
   "settings.protocols": "روابط magnet وملفات .torrent",
   "settings.protocolsDesc": "افتحها بواسطة Riptide عند النقر على رابط في المتصفح أو النقر المزدوج على ملف. يُسجَّل لمستخدمك فقط وبدون صلاحيات المسؤول.",

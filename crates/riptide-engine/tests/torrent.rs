@@ -255,6 +255,14 @@ async fn pause_and_resume_keep_the_result_byte_exact() {
         DownloadState::Paused
     );
     let frozen = e.torrents().await.unwrap().remove(0).downloaded;
+    // the number the list shows right after a pause is the real one, not the one from a second
+    // ago (found with a real torrent at 20 MB/s: the row said 13 MB while 27 MB were on disk)
+    let live = e.torrent_live(id).await.unwrap();
+    let verified: u64 = live.file_progress.iter().sum();
+    assert!(
+        frozen.abs_diff(verified) <= 2 * u64::from(PIECE),
+        "list says {frozen}, engine has {verified}"
+    );
     tokio::time::sleep(Duration::from_millis(1500)).await;
     let later = e.torrents().await.unwrap().remove(0).downloaded;
     assert!(
