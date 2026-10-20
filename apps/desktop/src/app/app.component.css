@@ -6,8 +6,9 @@
 .frame {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: var(--topbar-height) minmax(0, 1fr) var(--statusbar-height);
+  grid-template-rows: var(--titlebar-height) var(--topbar-height) minmax(0, 1fr) var(--statusbar-height);
   grid-template-areas:
+    'titlebar titlebar'
     'topbar topbar'
     'sidebar content'
     'status status';
@@ -17,6 +18,23 @@
 }
 
 /* ---- First paint: the frame assembles once, part by part, --stagger-step apart ---------- */
+.titlebar {
+  grid-area: titlebar;
+}
+
+/* View > Sidebar: hidden. The brand keeps its logo at its own width. */
+.frame.no-sidebar {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.frame.no-sidebar .sidebar {
+  display: none;
+}
+
+.frame.no-sidebar .topbar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .frame.is-booting .topbar {
   animation: boot-down var(--dur-3) var(--ease-emphasized-out) both;
 }

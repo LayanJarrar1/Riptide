@@ -187,6 +187,8 @@ export class ShortcutsDialogComponent {
           { label: t('shortcuts.batch'), chords: [['Ctrl', 'Shift', 'N']] },
           { label: t('shortcuts.search'), chords: [['Ctrl', 'F']] },
           { label: t('shortcuts.settings'), chords: [['Ctrl', ',']] },
+          { label: t('shortcuts.sidebar'), chords: [['Ctrl', 'B']] },
+          { label: t('shortcuts.menubar'), chords: [['F10'], ['Alt']] },
           { label: t('shortcuts.help'), chords: [['?'], ['Ctrl', '/']] },
           { label: t('shortcuts.escape'), chords: [['Esc']] },
         ],
@@ -195,6 +197,9 @@ export class ShortcutsDialogComponent {
         title: t('shortcuts.list'),
         items: [
           { label: t('shortcuts.move'), chords: [['↑'], ['↓']] },
+          { label: t('shortcuts.jump'), chords: [['Home'], ['End']] },
+          { label: t('shortcuts.page'), chords: [['PgUp'], ['PgDn']] },
+          { label: t('shortcuts.selectAll'), chords: [['Ctrl', 'A']] },
           { label: t('shortcuts.details'), chords: [['Enter'], [t('key.dblclick')]] },
           { label: t('shortcuts.toggle'), chords: [[t('key.space')]] },
           { label: t('shortcuts.remove'), chords: [['Del']] },

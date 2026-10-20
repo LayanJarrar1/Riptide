@@ -12,10 +12,18 @@ export class UiState {
   readonly addUrl = signal<string | null>(null);
   /** The batch-download dialog (pattern or list). */
   readonly batchOpen = signal(false);
+  /** Which tab the batch dialog opens on (the File menu's "Import link list" opens the list tab). */
+  readonly batchTab = signal<'pattern' | 'list'>('pattern');
   /** The site grabber dialog (crawl a site for files). */
   readonly grabberOpen = signal(false);
   /** The keyboard-shortcuts dialog. */
   readonly shortcutsOpen = signal(false);
+  /** Incremented when the menus ask the queues list to open its "New queue" dialog. */
+  readonly newQueueRequests = signal(0);
+  /** Incremented when the menus ask the list page to remove the selected downloads (it owns the confirmation). */
+  readonly removeRequests = signal(0);
+  /** Active downloads to warn about when the menus ask to quit; the exit dialog takes it and resets it. */
+  readonly exitRequest = signal<number | null>(null);
   /** Incremented whenever something asks the search box to take focus. */
   readonly searchFocusRequests = signal(0);
   /**
@@ -34,7 +42,8 @@ export class UiState {
     this.addUrl.set(null);
   }
 
-  openBatch(): void {
+  openBatch(tab: 'pattern' | 'list' = 'pattern'): void {
+    this.batchTab.set(tab);
     this.batchOpen.set(true);
   }
 
@@ -60,6 +69,14 @@ export class UiState {
 
   toggleShortcuts(): void {
     this.shortcutsOpen.update((open) => !open);
+  }
+
+  requestNewQueue(): void {
+    this.newQueueRequests.update((n) => n + 1);
+  }
+
+  requestRemoveSelected(): void {
+    this.removeRequests.update((n) => n + 1);
   }
 
   focusSearch(): void {

@@ -1,0 +1,178 @@
+:host {
+  display: block;
+  position: relative;
+  z-index: var(--z-sticky);
+  block-size: var(--titlebar-height);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * The bar is laid out left to right on purpose (physical order, not logical): the window controls
+ * stay at the right edge in Arabic too, where Windows puts them. Only the inside of .start
+ * follows the language direction (it carries its own dir attribute).
+ */
+.bar {
+  display: flex;
+  align-items: stretch;
+  direction: ltr;
+  block-size: 100%;
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  transition: opacity var(--dur-2) var(--ease-standard);
+}
+
+/* another window has focus: the bar steps back, like a native one */
+.bar.is-inactive .start,
+.bar.is-inactive .ctl {
+  opacity: 0.55;
+}
+
+/* in Arabic the menus sit next to the controls and the free drag space is on the far side */
+:host-context([dir='rtl']) .start {
+  order: 2;
+}
+
+:host-context([dir='rtl']) .drag {
+  order: 1;
+}
+
+:host-context([dir='rtl']) .controls {
+  order: 3;
+}
+
+.start {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-inline-size: 0;
+  padding-inline: var(--space-2);
+  gap: var(--space-1);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 100%;
+  flex: none;
+}
+
+.mark img {
+  display: block;
+  pointer-events: auto;
+}
+
+.drag {
+  flex: 1 1 auto;
+  min-inline-size: 24px;
+}
+
+/* ---- Menu bar ------------------------------------------------------------------------ */
+.menubar {
+  display: flex;
+  align-items: center;
+  block-size: 100%;
+}
+
+.top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  block-size: 100%;
+}
+
+.top-button {
+  display: inline-flex;
+  align-items: center;
+  block-size: 28px;
+  padding-inline: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: default;
+  transition: background-color var(--dur-1) var(--ease-standard);
+}
+
+.top-button:hover,
+.top-button.is-open {
+  background: var(--color-surface-active);
+  color: var(--color-text);
+}
+
+.top-button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+  color: var(--color-text);
+}
+
+/* mnemonic letters are underlined only once the keyboard is driving */
+.mn {
+  text-decoration: none;
+}
+
+.is-keyboard .mn {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- Window controls ------------------------------------------------------------------ */
+.controls {
+  display: flex;
+  flex: none;
+}
+
+.ctl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 46px;
+  block-size: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: default;
+  transition: background-color var(--dur-1) var(--ease-standard);
+}
+
+.ctl:hover {
+  background: var(--color-surface-active);
+  color: var(--color-text);
+}
+
+.ctl:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.ctl-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* a maximized window has square corners (the OS rounds only a floating window) */
+.is-maximized {
+  border-radius: 0;
+}
+
+@media (max-width: 640px) {
+  .top-button {
+    padding-inline: var(--space-2);
+  }
+
+  .start {
+    padding-inline: var(--space-1);
+  }
+}
+
+@media (forced-colors: active) {
+  .top-button.is-open {
+    outline: 2px solid Highlight;
+  }
+}

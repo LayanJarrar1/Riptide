@@ -194,6 +194,26 @@ Language (`ar`/`en`, auto-detected, switchable live, `html[dir]` mirrored) and t
 lives in the engine's settings and is synced through `get_engine_settings` /
 `set_engine_settings`.
 
+Window chrome: the main window has `decorations: false` and `shadow: true`, and the web view
+draws its own title bar (`TitleBarComponent`: app mark, a menu bar, a drag region, minimize /
+maximize or restore / close). Resizing the undecorated window is Tauri's own (a hit-test handler
+in `tauri-runtime-wry`), and `shadow: true` keeps the drop shadow and, on Windows 11, the rounded
+corners. The bar's `data-tauri-drag-region` surfaces drag the window and a double click on one
+toggles maximize (both built into Tauri). The window controls stay at the **physical right** in
+Arabic too: that is where Windows puts them whatever the app language, so the menus mirror and
+sit next to them while the free drag space moves to the far side. Known limit: the Windows 11
+snap-layouts flyout appears only over the native maximize button, so it does not show over ours;
+Win+Z, Win+arrows and dragging to a screen edge snap as usual. The capability file grants exactly
+`minimize`, `maximize`, `unmaximize`, `close` and `start-dragging` for the window, and
+`opener:allow-open-url` for the two fixed Help addresses (documentation site, repository).
+
+The downloads list is virtualised by hand (`downloads-page.component.ts`): only the rows in the
+scroll window plus six rows of overscan exist in the DOM, tracked by download id. The store keeps
+rows, sort order and counts incrementally between engine ticks (unchanged downloads keep their
+row object; the previous sort order is the next sort's starting point), selection and the
+keyboard cursor are sets of ids, and `e2e/list_perf.py` measures it at 10 to 50 000 rows
+(`e2e/list_perf.md`).
+
 ## Logging
 
 `riptide-log` installs `tracing` with a daily rotating file appender and a redaction layer. Log

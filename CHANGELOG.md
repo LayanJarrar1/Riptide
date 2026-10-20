@@ -19,6 +19,19 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 - Pause followed at once by Resume no longer leaves the download paused.
 - Links without a file extension get one for CSV, XML, SVG, WAV, EPUB and Office types.
 
+### Added
+
+- An integrated title bar with menus (File, Downloads, Tools, View, Window, Help), keyboard
+  accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls
+  stay at the right. *View* also gets Sidebar (Ctrl+B) and Display density (comfortable or compact).
+- Home, End, Page Up, Page Down, Shift+arrows and Ctrl+A in the downloads list.
+
+### Changed
+
+- The downloads list stays smooth at tens of thousands of items (measured at 50 000): progress
+  updates touch only the rows on screen, and sorting and filtering reuse the previous work.
+
+
 ## [0.1.0-alpha.4] - 2026-10-19
 
 An alpha for Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.4).

@@ -1,4 +1,4 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, Injector, input, output, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, inject, Injector, input, output, signal, untracked } from '@angular/core';
 
 import { FormatService } from '../../core/format.service';
 import { DownloadEngine } from '../../data/download-engine';
@@ -12,6 +12,7 @@ import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
 import { MenuComponent, MenuItem } from '../../ui/menu.component';
 import { ToastService } from '../../ui/toast.service';
+import { UiState } from '../shell/ui-state.service';
 import { DOWNLOAD_DRAG_TYPE, dragHas, droppedDownloadIds, inLowerHalf, QUEUE_DRAG_TYPE } from './dnd';
 import { QueueDialogComponent } from './queue-dialog.component';
 
@@ -305,6 +306,7 @@ export class QueuesNavComponent {
   private readonly engine = inject(DownloadEngine);
   private readonly toasts = inject(ToastService);
   private readonly injector = inject(Injector);
+  private readonly ui = inject(UiState);
 
   /** The queue the list is showing (highlighted), or `null`. */
   readonly current = input<number | null>(null);
@@ -367,6 +369,16 @@ export class QueuesNavComponent {
       .replace('{name}', q.name)
       .replace('{n}', this.format.int(n));
   }
+
+  /** Opens "New queue" when the menus ask (the first value is the baseline, not a request). */
+  private readonly newQueueRequest = effect(() => {
+    const n = this.ui.newQueueRequests();
+    if (n > this.seenRequests) {
+      this.seenRequests = n;
+      untracked(() => this.create());
+    }
+  });
+  private seenRequests = this.ui.newQueueRequests();
 
   protected create(): void {
     this.dialog.set({ open: true, queue: null });

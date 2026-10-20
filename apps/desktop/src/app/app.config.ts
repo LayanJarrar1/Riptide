@@ -2,7 +2,7 @@ import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalE
 import { provideRouter, withHashLocation } from '@angular/router';
 
 import { routes } from './app.routes';
-import { provideDownloadEngine } from './data/engine.provider';
+import { provideAppDownloadEngine } from './data/engine.app-provider';
 import { I18nService } from './i18n/i18n.service';
 
 /**
@@ -19,6 +19,6 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(I18nService).ready()),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes, withHashLocation()),
-    provideDownloadEngine(),
+    provideAppDownloadEngine(),
   ],
 };

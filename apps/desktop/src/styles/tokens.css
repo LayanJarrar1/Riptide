@@ -139,6 +139,7 @@
   --dir-sign: 1; /* multiply a translateX / rotate by this to mirror it in RTL */
 
   /* ---- Layout: the app frame --------------------------------------------------------- */
+  --titlebar-height: 36px;
   --topbar-height: 52px;
   --statusbar-height: 30px;
   --sidebar-width: 224px;
@@ -257,4 +258,10 @@
 /* Icons that imply a direction (back, forward, "open in", chevrons) flip in RTL. */
 [dir="rtl"] .icon-directional {
   transform: scaleX(-1);
+}
+
+/* Display density (View menu): the downloads list's row height; the list reads the same two
+   numbers in ROW_HEIGHTS (downloads-page.component.ts). */
+:root[data-density="compact"] {
+  --row-height: 36px;
 }

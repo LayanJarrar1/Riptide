@@ -1,4 +1,5 @@
-<div class="frame" [class.is-booting]="ui.booting()">
+<div class="frame" [class.is-booting]="ui.booting()" [class.no-sidebar]="!settings.settings().sidebarVisible">
+  <app-title-bar class="titlebar" />
   <header class="topbar">
     <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
       <img class="brand-logo brand-logo-light" src="brand-logo-light.svg" alt="" width="91" height="34" />
@@ -126,7 +127,7 @@
   <footer class="statusbar">
     <div class="status-speed">
       <span class="status-dot motion-ambient" [class.is-live]="store.totals().active > 0" aria-hidden="true"></span>
-      <span class="status-value num" [appTicker]="store.totals().speedBps" [tickerFormat]="speedFormat"></span>
+      <span class="status-value num" [appTicker]="store.totals().speedBps" [tickerFormat]="speedFormat" [tickerStream]="true"></span>
       <app-sparkline class="status-chart" [samples]="store.totals().history" [compact]="true" />
     </div>
     <span class="status-text">{{ statusText() }}</span>

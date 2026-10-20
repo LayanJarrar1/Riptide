@@ -61,7 +61,6 @@ export function hostOf(url: string): string {
     '[class.is-staggered]': 'staggerIndex() !== null',
     '[class.is-leaving]': 'leaving()',
     '[style.--i]': 'staggerIndex()',
-    '[tabindex]': 'selected() ? 0 : -1',
     '(click)': 'rowClick.emit($event)',
     '(dblclick)': 'rowDblClick.emit()',
     '(contextmenu)': 'onContext($event)',
@@ -108,7 +107,7 @@ export function hostOf(url: string): string {
       <span class="pct num">{{ row().progress | pct }}</span>
     </div>
 
-    <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat"></span>
+    <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat" [tickerStream]="true"></span>
 
     <div class="cell c-eta num" role="gridcell">{{ row().eta | duration }}</div>
 

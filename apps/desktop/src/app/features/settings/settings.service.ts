@@ -29,6 +29,10 @@ export interface Settings {
   readonly proxyUrl: string;
   readonly checkUpdates: boolean;
   readonly channel: 'stable' | 'beta';
+  /** Row height of the downloads list. */
+  readonly density: 'comfortable' | 'compact';
+  /** The sidebar can be hidden from the View menu. */
+  readonly sidebarVisible: boolean;
 }
 
 /** `localStorage` key. */
@@ -60,6 +64,8 @@ export const DEFAULT_SETTINGS: Settings = {
   checkUpdates: true,
   // alpha: all releases are pre-releases; switch back to stable at the first stable release
   channel: 'beta',
+  density: 'comfortable',
+  sidebarVisible: true,
 };
 
 /**

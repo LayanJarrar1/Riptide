@@ -41,3 +41,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Python bytecode from the e2e harness
+/e2e/__pycache__/
