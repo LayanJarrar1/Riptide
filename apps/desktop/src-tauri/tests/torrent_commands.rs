@@ -40,7 +40,11 @@ async fn wait_done(e: &Engine, id: i64) {
         if d.state == DownloadState::Completed {
             return;
         }
-        assert!(t0.elapsed() < Duration::from_secs(60), "state {:?}", d.state);
+        assert!(
+            t0.elapsed() < Duration::from_secs(60),
+            "state {:?}",
+            d.state
+        );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
@@ -53,7 +57,12 @@ async fn hostile_torrent_names_stay_inside_the_chosen_folder() {
             data: bytes(1, 16 * 1024),
         },
         TFile {
-            path: vec!["C:".into(), "Windows".into(), "System32".into(), "evil.dll".into()],
+            path: vec![
+                "C:".into(),
+                "Windows".into(),
+                "System32".into(),
+                "evil.dll".into(),
+            ],
             data: bytes(2, 16 * 1024),
         },
         TFile {
@@ -84,8 +93,18 @@ async fn hostile_torrent_names_stay_inside_the_chosen_folder() {
     .unwrap();
     assert_eq!(preview.files.len(), 4);
     for f in &preview.files {
-        assert!(!f.path.contains(':') && !f.path.starts_with('/'), "{}", f.path);
-        assert!(f.path.split('/').all(|c| !c.is_empty() && c != ".." && c != "."), "{}", f.path);
+        assert!(
+            !f.path.contains(':') && !f.path.starts_with('/'),
+            "{}",
+            f.path
+        );
+        assert!(
+            f.path
+                .split('/')
+                .all(|c| !c.is_empty() && c != ".." && c != "."),
+            "{}",
+            f.path
+        );
     }
     let id = torrent::add(
         &e,

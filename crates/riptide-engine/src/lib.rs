@@ -42,7 +42,7 @@
 //! # BitTorrent
 //!
 //! A [`DownloadKind::Torrent`] record is run by `riptide-torrent` (librqbit), not by the segment
-//! scheduler; see the [`torrent`] module for the add flow (preview, file choice, add), the state
+//! scheduler; see the `torrent` module for the add flow (preview, file choice, add), the state
 //! mapping and the persistence. Call [`Engine::enable_torrents`] once after [`Engine::open`].
 //!
 //! # Site grabber

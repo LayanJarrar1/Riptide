@@ -768,11 +768,10 @@ impl Engine {
         let base = lock(&rt.base_uploaded).get(&snap.id).copied().unwrap_or(0);
         let uploaded = base + snap.uploaded_bytes;
         let size = snap.total_bytes;
-        let ratio_milli = if size == 0 {
-            0
-        } else {
-            u32::try_from(uploaded.saturating_mul(1000) / size).unwrap_or(u32::MAX)
-        };
+        let ratio_milli = uploaded
+            .saturating_mul(1000)
+            .checked_div(size)
+            .map_or(0, |v| u32::try_from(v).unwrap_or(u32::MAX));
 
         // mirror for restarts: at most once a second, and always at the moment of completion
         let due = {
