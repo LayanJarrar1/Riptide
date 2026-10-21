@@ -286,6 +286,9 @@ impl TorrentEngine {
                 error: None,
                 peers: opts.peers.iter().copied().take(MAX_STORED_PEERS).collect(),
                 created: Some(Vec::new()),
+                piece_length: Some(preview.piece_length),
+                file_lens: Some(preview.files.iter().map(|f| f.len).collect()),
+                file_progress: None,
             },
         );
         self.registry.flush()?;
@@ -511,6 +514,13 @@ impl TorrentEngine {
         }
         self.ensure_in_session(id).await?;
         let h = self.handle(id)?;
+        // the library refuses a change while it is still checking the files on disk
+        for _ in 0..1200 {
+            if !matches!(h.stats().state, TorrentStatsState::Initializing { .. }) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
         let mut sel: Vec<usize> = files.to_vec();
         sel.sort_unstable();
         sel.dedup();
@@ -703,6 +713,7 @@ impl TorrentEngine {
                     e.error = None;
                 });
                 dirty = true;
+                self.merge_file_progress(&id, &st.file_progress);
                 tracing::info!(target: "riptide_torrent", id = %id, "torrent completed and verified");
                 self.emit(TorrentEvent::Completed { id: id.clone() });
             }
@@ -835,8 +846,61 @@ impl TorrentEngine {
         if let Some(h) = handle {
             let _ = h.await;
         }
+        self.record_file_progress();
         let _ = self.registry.flush();
         self.session.stop().await;
+        // the session no longer holds any file open: placeholders can go
+        self.drop_placeholders();
+        let _ = self.registry.flush();
+    }
+
+    /// Remembers the verified bytes per file of every torrent the library can answer for now
+    /// (not while it is still checking the files: those numbers are not final).
+    fn record_file_progress(&self) {
+        for (id, entry) in self.registry.all() {
+            let Ok(h) = self.handle(&id) else { continue };
+            let st = h.stats();
+            if !matches!(
+                st.state,
+                TorrentStatsState::Live | TorrentStatsState::Paused
+            ) {
+                continue;
+            }
+            let n = entry.files.as_ref().map_or(0, Vec::len);
+            if n > 0 && st.file_progress.len() == n {
+                self.merge_file_progress(&id, &st.file_progress);
+            }
+        }
+    }
+
+    /// Keeps, per file, the most verified bytes ever seen. The library reports nothing for files
+    /// that are not selected, so a later, narrower selection must not make a file that was
+    /// downloaded earlier look empty (it would be taken for a placeholder).
+    fn merge_file_progress(&self, id: &str, now: &[u64]) {
+        self.registry.update(id, |e| {
+            let merged: Vec<u64> = match &e.file_progress {
+                Some(old) if old.len() == now.len() => {
+                    old.iter().zip(now).map(|(a, b)| *a.max(b)).collect()
+                }
+                _ => now.to_vec(),
+            };
+            e.file_progress = Some(merged);
+        });
+    }
+
+    /// Deletes the files of unselected content that hold nothing but the bytes of a boundary
+    /// piece (see [`crate::storage::placeholders`]) and forgets that this torrent created them.
+    fn drop_placeholders(&self) {
+        for (id, entry) in self.registry.all() {
+            let gone = crate::storage::remove_placeholders(&entry);
+            if !gone.is_empty() {
+                self.registry.update(&id, |e| {
+                    if let Some(c) = &mut e.created {
+                        c.retain(|p| !gone.contains(p));
+                    }
+                });
+            }
+        }
     }
 }
 

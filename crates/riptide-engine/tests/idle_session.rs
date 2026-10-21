@@ -34,7 +34,9 @@ fn sockets_on(port: u16) -> Vec<String> {
             let cols: Vec<&str> = l.split_whitespace().collect();
             cols.len() >= 4
                 && cols.last() == Some(&pid.as_str())
-                && cols.get(1).is_some_and(|a| a.ends_with(&format!(":{port}")))
+                && cols
+                    .get(1)
+                    .is_some_and(|a| a.ends_with(&format!(":{port}")))
         })
         .map(|l| l.trim().to_string())
         .collect()
@@ -69,7 +71,10 @@ fn add_for(p: &TorrentPreviewInfo, dir: &Path, peer: SocketAddr) -> TorrentAdd {
 async fn wait_for(secs: u64, what: &str, mut ok: impl FnMut() -> bool) {
     let t0 = Instant::now();
     while !ok() {
-        assert!(t0.elapsed() < Duration::from_secs(secs), "timed out: {what}");
+        assert!(
+            t0.elapsed() < Duration::from_secs(secs),
+            "timed out: {what}"
+        );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }
@@ -123,13 +128,19 @@ async fn a_finished_torrent_leaves_no_socket_and_the_engine_comes_back_when_need
     })
     .await
     .unwrap();
-    assert!(!sockets_on(port).is_empty(), "the watcher sees an open port");
+    assert!(
+        !sockets_on(port).is_empty(),
+        "the watcher sees an open port"
+    );
 
     // 1. a torrent completes (seeding is off): the engine stops, nothing is left open
     let one = make("one", 10).await;
     let dir = w.dir.path().join("out");
     let p = e
-        .torrent_preview(save_torrent(w.dir.path(), "one.torrent", &one.torrent), None)
+        .torrent_preview(
+            save_torrent(w.dir.path(), "one.torrent", &one.torrent),
+            None,
+        )
         .await
         .unwrap();
     let id1 = e
@@ -155,11 +166,17 @@ async fn a_finished_torrent_leaves_no_socket_and_the_engine_comes_back_when_need
     // 2. adding again after the stop starts the engine again (same settings) and completes
     let two = make("two", 20).await;
     let p = e
-        .torrent_preview(save_torrent(w.dir.path(), "two.torrent", &two.torrent), None)
+        .torrent_preview(
+            save_torrent(w.dir.path(), "two.torrent", &two.torrent),
+            None,
+        )
         .await
         .unwrap();
     assert!(e.torrents_enabled());
-    assert!(!sockets_on(port).is_empty(), "it listens again while it works");
+    assert!(
+        !sockets_on(port).is_empty(),
+        "it listens again while it works"
+    );
     let id2 = e
         .add_torrent(add_for(&p, &dir, two.seeder.addr))
         .await
@@ -178,14 +195,23 @@ async fn a_finished_torrent_leaves_no_socket_and_the_engine_comes_back_when_need
     let three = make("three", 30).await;
     let four = make("four", 40).await;
     let p3 = e
-        .torrent_preview(save_torrent(w.dir.path(), "three.torrent", &three.torrent), None)
+        .torrent_preview(
+            save_torrent(w.dir.path(), "three.torrent", &three.torrent),
+            None,
+        )
         .await
         .unwrap();
     let p4 = e
-        .torrent_preview(save_torrent(w.dir.path(), "four.torrent", &four.torrent), None)
+        .torrent_preview(
+            save_torrent(w.dir.path(), "four.torrent", &four.torrent),
+            None,
+        )
         .await
         .unwrap();
-    wait_for(20, "stopped with two previews waiting", || !e.torrents_enabled()).await;
+    wait_for(20, "stopped with two previews waiting", || {
+        !e.torrents_enabled()
+    })
+    .await;
     let (a, b) = tokio::join!(
         e.add_torrent(add_for(&p3, &dir, three.seeder.addr)),
         e.add_torrent(add_for(&p4, &dir, four.seeder.addr)),
@@ -204,7 +230,10 @@ async fn a_finished_torrent_leaves_no_socket_and_the_engine_comes_back_when_need
     e.set_settings(settings).await.unwrap();
     let five = make("five", 50).await;
     let p5 = e
-        .torrent_preview(save_torrent(w.dir.path(), "five.torrent", &five.torrent), None)
+        .torrent_preview(
+            save_torrent(w.dir.path(), "five.torrent", &five.torrent),
+            None,
+        )
         .await
         .unwrap();
     let id5 = e

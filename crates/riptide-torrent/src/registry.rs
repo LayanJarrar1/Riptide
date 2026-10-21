@@ -70,6 +70,16 @@ pub struct Entry {
     /// never opened its files.
     #[serde(default)]
     pub created: Option<Vec<PathBuf>>,
+    /// Piece length of the torrent (`None` for an entry written by an older build).
+    #[serde(default)]
+    pub piece_length: Option<u32>,
+    /// Size of every file (torrent order); `None` for an entry written by an older build.
+    #[serde(default)]
+    pub file_lens: Option<Vec<u64>>,
+    /// Verified bytes per file as of the last time the engine was stopped while it knew them.
+    /// Decides which files of unselected content hold only the bytes of a shared boundary piece.
+    #[serde(default)]
+    pub file_progress: Option<Vec<u64>>,
 }
 
 impl Entry {
@@ -305,6 +315,9 @@ mod tests {
             error: None,
             peers: Vec::new(),
             created: Some(Vec::new()),
+            piece_length: None,
+            file_lens: None,
+            file_progress: None,
         }
     }
 

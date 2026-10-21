@@ -557,9 +557,8 @@ impl Engine {
                 idle_since = None;
                 continue;
             }
-            let grace = Duration::from_millis(
-                self.inner.torrent_idle_grace_ms.load(Ordering::SeqCst),
-            );
+            let grace =
+                Duration::from_millis(self.inner.torrent_idle_grace_ms.load(Ordering::SeqCst));
             let since = *idle_since.get_or_insert_with(Instant::now);
             if since.elapsed() >= grace {
                 if self.stop_if_idle(&rt).await {
@@ -576,7 +575,10 @@ impl Engine {
     async fn stop_if_idle(&self, rt: &Arc<TorrentRuntime>) -> bool {
         let _l = self.inner.torrents_starting.lock().await;
         let is_current = self.torrent_rt().is_some_and(|c| Arc::ptr_eq(&c, rt));
-        if !is_current || Self::torrents_need_network(rt) || self.inner.shutting_down.load(Ordering::SeqCst) {
+        if !is_current
+            || Self::torrents_need_network(rt)
+            || self.inner.shutting_down.load(Ordering::SeqCst)
+        {
             return false;
         }
         // the rows and the lifetime upload total are written before the session goes away

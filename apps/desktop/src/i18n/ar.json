@@ -422,7 +422,7 @@
   "torrent.sequentialOn": "تُنزَّل الملفات واحدًا بعد الآخر.",
   "torrent.hint": "يُفحص كل جزء عند وصوله، وإذا كان تالفًا يُجلب من جديد.",
   "torrent.fileExists": "موجود في المجلد",
-  "torrent.skipped": "غير محدد",
+  "torrent.skipped": "لم يُنزَّل",
   "torrent.peersOf": "{n} من {seen} مصدر",
   "torrent.peersLabel": "المصادر",
   "torrent.ratio": "النسبة {ratio}",
