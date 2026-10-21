@@ -484,7 +484,7 @@ describe('Torrent dialog with a torrent that lists web seeds', () => {
     btn.click();
     await flush();
     expect(add).toHaveBeenCalledTimes(1);
-    const [token, only] = add.calls.argsFor(0);
+    const [token, only] = add.calls.argsFor(0) as unknown as [string, readonly number[] | null];
     expect(token).toBe('t');
     expect(only === null || only.length === 2).toBeTrue();
     // the page never builds an address itself: nothing it computes can aim a download anywhere
