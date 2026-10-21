@@ -126,6 +126,8 @@ pub(crate) struct TorrentRuntime {
     /// info-hash -> download row.
     ids: Mutex<HashMap<String, DownloadId>>,
     previews: Mutex<VecDeque<Pending>>,
+    /// Serialises adding, so two torrents added together cannot both plan the same free name.
+    adding: tokio::sync::Mutex<()>,
     next_token: AtomicU64,
     /// Serialises state walking, so a command and the event bridge never interleave.
     sync: tokio::sync::Mutex<()>,
@@ -257,6 +259,81 @@ impl Engine {
         })
     }
 
+    /// Names other downloads (not torrents: the torrent engine knows its own) have claimed in
+    /// their folders, whether or not a file exists yet; a torrent plans around them.
+    async fn http_name_claims(&self) -> Result<Vec<PathBuf>> {
+        Ok(self
+            .list()
+            .await?
+            .into_iter()
+            .filter(|d| {
+                d.kind != DownloadKind::Torrent
+                    && !matches!(d.state, DownloadState::Completed | DownloadState::Cancelled)
+            })
+            .map(|d| d.dir.join(&d.filename))
+            .collect())
+    }
+
+    /// Runs `f` on the stored torrent state while no torrent engine is running (`None` when one
+    /// is: the caller then goes through it). Holds the start-up lock, so the engine cannot start
+    /// halfway through and read a registry that is being edited.
+    async fn with_torrents_off<T: Send + 'static>(
+        &self,
+        f: impl FnOnce(PathBuf) -> riptide_torrent::Result<T> + Send + 'static,
+    ) -> Result<Option<T>> {
+        let _starting = self.inner.torrents_starting.lock().await;
+        if self.torrents_enabled() {
+            return Ok(None);
+        }
+        let dir = self.inner.data_dir.join("torrents");
+        let out = tokio::task::spawn_blocking(move || f(dir))
+            .await
+            .map_err(|e| Error::Internal(format!("torrent state task: {e}")))?;
+        match out {
+            Ok(v) => Ok(Some(v)),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Starts the torrent engine at launch only if a torrent needs the network right now: one
+    /// that is downloading, queued or being checked, or a finished one that is seeding by the
+    /// user choice. Returns whether it is running. Paused, finished and failed torrents leave
+    /// no listening port and no DHT node behind; the engine starts the moment one is resumed,
+    /// verified or added.
+    pub async fn enable_torrents_if_active(&self) -> Result<bool> {
+        self.enable_torrents_if_active_with(|_| {}).await
+    }
+
+    /// Like [`Engine::enable_torrents_if_active`] with a last look at the torrent engine settings.
+    pub async fn enable_torrents_if_active_with(
+        &self,
+        tweak: impl FnOnce(&mut TorrentSettings),
+    ) -> Result<bool> {
+        if self.torrents_enabled() {
+            return Ok(true);
+        }
+        let seeding_allowed = self.settings().torrent.seeding;
+        let rows = db(&self.inner.store, |s| s.list_torrents()).await?;
+        let mut needed = false;
+        for t in &rows {
+            let Some(d) = self.get(t.download_id).await? else {
+                continue;
+            };
+            needed |= match d.state {
+                DownloadState::Queued
+                | DownloadState::Probing
+                | DownloadState::Downloading
+                | DownloadState::Verifying => true,
+                DownloadState::Completed => seeding_allowed && t.seeding,
+                _ => false,
+            };
+        }
+        if needed {
+            self.enable_torrents_with(tweak).await?;
+        }
+        Ok(needed)
+    }
+
     /// `true` once [`Engine::enable_torrents`] has run.
     pub fn torrents_enabled(&self) -> bool {
         self.torrent_rt().is_some()
@@ -289,9 +366,36 @@ impl Engine {
         ts.dht = o.dht;
         ts.listen_port = o.listen_port;
         tweak(&mut ts);
+
+        // A registry entry whose row is gone (removed or cancelled while this engine was off) is
+        // a ghost: it must not be restored, or it would download and upload with no row to show
+        // for it. Dropped before the engine opens the registry.
+        let rows = db(&self.inner.store, |s| s.list_torrents()).await?;
+        let mut keep = std::collections::HashSet::new();
+        for t in &rows {
+            if self
+                .get(t.download_id)
+                .await?
+                .is_some_and(|d| d.state != DownloadState::Cancelled)
+            {
+                keep.insert(t.info_hash.clone());
+            }
+        }
+        let state_dir = ts.state_dir.clone();
+        let dropped = tokio::task::spawn_blocking(move || {
+            riptide_torrent::offline::retain(&state_dir, &keep)
+        })
+        .await
+        .map_err(|e| Error::Internal(format!("torrent state task: {e}")))??;
+        if !dropped.is_empty() {
+            tracing::warn!(
+                count = dropped.len(),
+                "dropped torrents that had no row in the list"
+            );
+        }
+
         let engine = TorrentEngine::start(ts).await?;
 
-        let rows = db(&self.inner.store, |s| s.list_torrents()).await?;
         let rt = Arc::new(TorrentRuntime {
             engine,
             ids: Mutex::new(
@@ -300,6 +404,7 @@ impl Engine {
                     .collect(),
             ),
             previews: Mutex::new(VecDeque::new()),
+            adding: tokio::sync::Mutex::new(()),
             next_token: AtomicU64::new(1),
             sync: tokio::sync::Mutex::new(()),
             persisted: Mutex::new(HashMap::new()),
@@ -399,6 +504,7 @@ impl Engine {
         let dir = dir.unwrap_or_else(|| PathBuf::from(self.settings().default_dir));
         let opts = AddOptions {
             dir: Some(dir.clone()),
+            reserved: self.http_name_claims().await?,
             ..Default::default()
         };
         let source = match source {
@@ -430,15 +536,23 @@ impl Engine {
                 preview = again;
             }
         }
+        // one pass of stat calls, off the async runtime
+        let on_disk: Vec<bool> = {
+            let paths: Vec<PathBuf> = preview.files.iter().map(|f| dir.join(&f.path)).collect();
+            tokio::task::spawn_blocking(move || paths.iter().map(|p| p.exists()).collect())
+                .await
+                .map_err(|e| Error::Internal(format!("preview task: {e}")))?
+        };
         let files = preview
             .files
             .iter()
-            .filter(|f| !f.padding)
-            .map(|f| TorrentPreviewFile {
+            .zip(on_disk)
+            .filter(|(f, _)| !f.padding)
+            .map(|(f, exists)| TorrentPreviewFile {
                 index: u32::try_from(f.index).unwrap_or(u32::MAX),
                 path: f.path.to_string_lossy().replace('\\', "/"),
                 len: f.len,
-                exists: dir.join(&f.path).exists(),
+                exists,
             })
             .collect();
         let token = format!(
@@ -474,6 +588,7 @@ impl Engine {
     /// engine then checks anything already in the folder and downloads the rest.
     pub async fn add_torrent(&self, add: TorrentAdd) -> Result<DownloadId> {
         let rt = self.require_torrents()?;
+        let _adding = rt.adding.lock().await;
         let preview = {
             let mut pend = lock(&rt.previews);
             let at = pend
@@ -501,6 +616,7 @@ impl Engine {
             sequential: add.sequential,
             start_paused: add.start_paused,
             peers: add.peers.clone(),
+            reserved: self.http_name_claims().await?,
             ..Default::default()
         };
         // the layout for the chosen folder (collisions are resolved against it)
@@ -649,6 +765,7 @@ impl Engine {
     /// A torrent that no longer verifies goes back to `Downloading` and repairs itself from
     /// peers; it is `Completed` again only after every selected piece verified.
     pub async fn verify_torrent(&self, id: DownloadId) -> Result<()> {
+        self.enable_torrents().await?;
         let rt = self.require_torrents()?;
         let hash = self.torrent_hash(id).await?;
         rt.engine.verify(&hash).await?;
@@ -666,8 +783,33 @@ impl Engine {
     }
 
     pub(crate) async fn torrent_pause(&self, id: DownloadId) -> Result<()> {
-        let rt = self.require_torrents()?;
         let hash = self.torrent_hash(id).await?;
+        let Some(rt) = self.torrent_rt() else {
+            // no engine running: record the pause in the stored state, so the next engine keeps
+            // the torrent stopped, and show it in the list
+            let h = hash.clone();
+            let paused = self
+                .with_torrents_off(move |dir| {
+                    match riptide_torrent::offline::set_paused(&dir, &h, true) {
+                        Err(riptide_torrent::Error::NotFound(_)) => Ok(()),
+                        other => other,
+                    }
+                })
+                .await?;
+            if paused.is_some() {
+                if let Some(d) = self.get(id).await? {
+                    if matches!(
+                        d.state,
+                        DownloadState::Probing | DownloadState::Downloading | DownloadState::Queued
+                    ) {
+                        self.transition(id, DownloadState::Paused, None).await?;
+                    }
+                }
+                return Ok(());
+            }
+            // the engine started meanwhile: go through it
+            return Box::pin(self.torrent_pause(id)).await;
+        };
         rt.engine.pause(&hash).await?;
         // a finished or failed torrent stays as it is; an active one becomes `Paused`
         if let Some(d) = self.get(id).await? {
@@ -682,6 +824,8 @@ impl Engine {
     }
 
     pub(crate) async fn torrent_resume(&self, id: DownloadId) -> Result<()> {
+        // the engine is started on demand: a launch with nothing to download leaves it off
+        self.enable_torrents().await?;
         let rt = self.require_torrents()?;
         let hash = self.torrent_hash(id).await?;
         rt.engine.resume(&hash).await?;
@@ -704,19 +848,13 @@ impl Engine {
         if d.state.is_terminal() {
             return Ok(());
         }
-        if let Some(rt) = self.torrent_rt() {
-            if let Some(info) = db(&self.inner.store, {
-                let id = d.id;
-                move |s| s.get_torrent(id)
-            })
-            .await?
-            {
-                lock(&rt.ids).remove(&info.info_hash);
-                match rt.engine.remove(&info.info_hash, true).await {
-                    Ok(()) | Err(riptide_torrent::Error::NotFound(_)) => {}
-                    Err(e) => return Err(e.into()),
-                }
-            }
+        if let Some(info) = db(&self.inner.store, {
+            let id = d.id;
+            move |s| s.get_torrent(id)
+        })
+        .await?
+        {
+            self.drop_torrent(&info.info_hash, true).await?;
         }
         self.transition(d.id, DownloadState::Cancelled, None)
             .await?;
@@ -726,18 +864,39 @@ impl Engine {
     /// Remove: the torrent stops and leaves the engine. Unfinished data always goes; finished
     /// files go only with `delete_file`.
     pub(crate) async fn torrent_remove(&self, d: &Download, delete_file: bool) -> Result<()> {
-        let Some(rt) = self.torrent_rt() else {
-            return Ok(());
-        };
         let id = d.id;
         let Some(info) = db(&self.inner.store, move |s| s.get_torrent(id)).await? else {
             return Ok(());
         };
-        lock(&rt.ids).remove(&info.info_hash);
         let delete = delete_file || d.state != DownloadState::Completed;
-        match rt.engine.remove(&info.info_hash, delete).await {
-            Ok(()) | Err(riptide_torrent::Error::NotFound(_)) => Ok(()),
-            Err(e) => Err(e.into()),
+        self.drop_torrent(&info.info_hash, delete).await
+    }
+
+    /// Takes a torrent out of the torrent engine for good. Without a running engine the stored
+    /// state is edited directly: leaving the entry would bring the torrent back at the next
+    /// start, downloading and uploading with no row in the list.
+    async fn drop_torrent(&self, hash: &str, delete_files: bool) -> Result<()> {
+        loop {
+            if let Some(rt) = self.torrent_rt() {
+                lock(&rt.ids).remove(hash);
+                return match rt.engine.remove(hash, delete_files).await {
+                    Ok(()) | Err(riptide_torrent::Error::NotFound(_)) => Ok(()),
+                    Err(e) => Err(e.into()),
+                };
+            }
+            let h = hash.to_string();
+            let done = self
+                .with_torrents_off(move |dir| {
+                    match riptide_torrent::offline::remove(&dir, &h, delete_files) {
+                        Err(riptide_torrent::Error::NotFound(_)) => Ok(()),
+                        other => other,
+                    }
+                })
+                .await?;
+            if done.is_some() {
+                return Ok(());
+            }
+            // the engine started between the two looks: go through it
         }
     }
 
@@ -753,8 +912,41 @@ impl Engine {
                     self.apply_snapshot(rt, snap, true).await;
                 }
             }
+            TorrentEvent::FilesCompleted { id, indices } => {
+                self.mark_torrent_files(rt, &id, &indices).await;
+            }
             TorrentEvent::Added { .. } | TorrentEvent::Removed { .. } => {}
         }
+    }
+
+    /// Mark-of-the-Web on files that just finished, while the rest of the torrent still runs: a
+    /// file written under its final name must not be openable without SmartScreen until the
+    /// whole torrent is done.
+    async fn mark_torrent_files(&self, rt: &Arc<TorrentRuntime>, hash: &str, indices: &[usize]) {
+        if !self.settings().mark_of_the_web {
+            return;
+        }
+        let Some(id) = rt.id_of(hash) else { return };
+        let (Ok(Some(d)), Ok(Some(info))) = (
+            self.get(id).await,
+            db(&self.inner.store, move |s| s.get_torrent(id)).await,
+        ) else {
+            return;
+        };
+        let paths: Vec<PathBuf> = info
+            .files
+            .iter()
+            .filter(|f| indices.contains(&(f.index as usize)))
+            .map(|f| d.dir.join(&f.path))
+            .collect();
+        let _ = tokio::task::spawn_blocking(move || {
+            for p in paths {
+                if p.is_file() {
+                    crate::motw::mark_from_internet(&p, None, None);
+                }
+            }
+        })
+        .await;
     }
 
     /// Brings the row, the mirror and the UI in line with a snapshot.

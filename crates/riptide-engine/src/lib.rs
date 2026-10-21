@@ -1583,7 +1583,10 @@ impl Engine {
             if d.kind == DownloadKind::Torrent
                 && matches!(d.state, DownloadState::Probing | DownloadState::Downloading)
             {
-                self.torrent_pause(d.id).await?;
+                // one torrent that cannot be paused must not leave the HTTP transfers running
+                if let Err(e) = self.torrent_pause(d.id).await {
+                    tracing::warn!(id = d.id.0, error = %e, "pause all: a torrent was not paused");
+                }
             }
         }
         // then stop every running transfer together (including any that started meanwhile)

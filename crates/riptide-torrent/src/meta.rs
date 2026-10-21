@@ -371,15 +371,31 @@ pub fn inspect_torrent(bytes: &[u8], exists: &dyn Fn(&Path) -> bool) -> Result<T
     )
 }
 
-/// Reads a `.torrent` file from disk (size-capped) and vets it.
-pub fn inspect_torrent_file(path: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<TorrentPreview> {
+/// Reads a `.torrent` file from disk, refusing anything over the size cap.
+pub fn read_torrent_file(path: &Path) -> Result<Vec<u8>> {
     let len = std::fs::metadata(path)?.len();
     if len > MAX_TORRENT_FILE_BYTES as u64 {
         return Err(Error::InvalidTorrent(format!(
             "file is larger than {MAX_TORRENT_FILE_BYTES} bytes"
         )));
     }
-    inspect_torrent(&std::fs::read(path)?, exists)
+    Ok(std::fs::read(path)?)
+}
+
+/// Reads a `.torrent` file from disk (size-capped) and vets it.
+pub fn inspect_torrent_file(path: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<TorrentPreview> {
+    inspect_torrent(&read_torrent_file(path)?, exists)
+}
+
+/// The info-hash of `.torrent` data, `None` when it does not parse. Used to tell a torrent's own
+/// files from other torrents' before the full vetting.
+pub fn info_hash_of_bytes(bytes: &[u8]) -> Option<String> {
+    if bytes.len() > MAX_TORRENT_FILE_BYTES || check_bencode_shape(bytes).is_err() {
+        return None;
+    }
+    torrent_from_bytes(bytes)
+        .ok()
+        .map(|t| t.info_hash.as_string())
 }
 
 #[cfg(test)]

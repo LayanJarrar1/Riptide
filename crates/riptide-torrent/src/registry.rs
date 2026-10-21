@@ -63,6 +63,38 @@ pub struct Entry {
     /// Peers the user supplied (`ip:port`); tried again after a restart.
     #[serde(default)]
     pub peers: Vec<std::net::SocketAddr>,
+    /// Files (relative to `dir`) that this torrent's storage created itself. `None` only for an
+    /// entry written by a build that did not record it: then every file of the layout counts.
+    /// Removing a torrent deletes only these (and, for an adopted torrent, the files the user
+    /// declared to be its data), never a name that merely sits in the layout of a torrent that
+    /// never opened its files.
+    #[serde(default)]
+    pub created: Option<Vec<PathBuf>>,
+}
+
+impl Entry {
+    /// The files that removing this torrent may delete; see [`Entry::created`].
+    pub fn deletable(&self) -> Vec<PathBuf> {
+        let layout = self.files.clone().unwrap_or_default();
+        match &self.created {
+            None => layout,
+            Some(created) => {
+                let mut out = created.clone();
+                if self.adopt {
+                    out.extend(layout);
+                }
+                out
+            }
+        }
+    }
+}
+
+/// Lower-cased, separator-normalised key for comparing folders and file names the way NTFS does.
+fn path_key(p: &Path) -> String {
+    p.to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_lowercase()
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -127,6 +159,23 @@ impl Registry {
     /// Removes an entry (not yet flushed).
     pub fn remove(&self, hash: &str) -> Option<Entry> {
         self.lock().torrents.remove(hash)
+    }
+
+    /// Whether another torrent (any entry except `except`, in any state) has laid out `rel`
+    /// below `dir`, or has a file where `rel` would need a folder.
+    pub fn claims(&self, dir: &Path, rel: &Path, except: Option<&str>) -> bool {
+        let dir = path_key(dir);
+        let rel = path_key(rel);
+        let rel_dir = format!("{rel}/");
+        self.lock().torrents.iter().any(|(hash, e)| {
+            if Some(hash.as_str()) == except || path_key(&e.dir) != dir {
+                return false;
+            }
+            e.files.iter().flatten().any(|f| {
+                let f = path_key(f);
+                f == rel || f.starts_with(&rel_dir)
+            })
+        })
     }
 
     /// Records the planned file layout.
@@ -197,7 +246,43 @@ mod tests {
             progress_bytes: 0,
             error: None,
             peers: Vec::new(),
+            created: Some(Vec::new()),
         }
+    }
+
+    #[test]
+    fn claims_see_every_layout_case_insensitively_and_skip_the_asker() {
+        let d = tempfile::tempdir().unwrap();
+        let r = Registry::in_memory();
+        let mut e = entry(d.path());
+        e.files = Some(vec![PathBuf::from("Set/Same.bin")]);
+        r.insert("aa", e);
+        let p = Path::new("set/same.BIN");
+        assert!(r.claims(d.path(), p, None));
+        assert!(
+            !r.claims(d.path(), p, Some("aa")),
+            "own layout is not a claim"
+        );
+        assert!(!r.claims(&d.path().join("other"), p, None), "other folder");
+        assert!(
+            r.claims(d.path(), Path::new("set"), None),
+            "a file needs that folder"
+        );
+        assert!(!r.claims(d.path(), Path::new("set/other.bin"), None));
+    }
+
+    #[test]
+    fn deletable_is_what_was_created_plus_adopted_data() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = entry(d.path());
+        e.files = Some(vec![PathBuf::from("a"), PathBuf::from("b")]);
+        e.created = Some(vec![PathBuf::from("a")]);
+        assert_eq!(e.deletable(), vec![PathBuf::from("a")]);
+        e.adopt = true;
+        assert_eq!(e.deletable().len(), 3);
+        e.adopt = false;
+        e.created = None;
+        assert_eq!(e.deletable().len(), 2, "legacy entries keep the old rule");
     }
 
     #[test]

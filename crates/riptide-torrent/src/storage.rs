@@ -121,7 +121,30 @@ pub struct SafeStorage {
     root: PathBuf,
     /// Absolute path of every file, confined to `root`.
     paths: Vec<Option<PathBuf>>,
+    /// The same files, relative to `root` (what the registry records).
+    rels: Vec<Option<PathBuf>>,
+    registry: Arc<Registry>,
+    hash: String,
     slots: Mutex<Vec<Slot>>,
+}
+
+/// Creates `dir` (below `root`) one folder at a time and checks, before each step, that the part
+/// that already exists does not lead out of `root` through a link or junction. A torrent that
+/// aims at `pack/sub/deep/a.bin` with `pack` being a junction therefore creates nothing outside.
+fn create_dirs_confined(root: &Path, dir: &Path) -> anyhow::Result<()> {
+    let rel = dir
+        .strip_prefix(root)
+        .context("folder is outside the download folder")?;
+    let mut cur = root.to_path_buf();
+    for c in rel.components() {
+        cur.push(c);
+        ensure_no_symlink_escape(root, &cur)?;
+        if !cur.exists() {
+            std::fs::create_dir(&cur)?;
+            ensure_no_symlink_escape(root, &cur)?;
+        }
+    }
+    Ok(())
 }
 
 impl SafeStorage {
@@ -143,22 +166,34 @@ impl TorrentStorage for SafeStorage {
         _metadata: &TorrentMetadata,
     ) -> anyhow::Result<()> {
         let mut slots = Vec::with_capacity(self.paths.len());
-        for p in &self.paths {
+        let mut created: Vec<PathBuf> = Vec::new();
+        for (p, rel) in self.paths.iter().zip(&self.rels) {
             match p {
                 None => slots.push(Slot::Padding),
                 Some(path) => {
                     if let Some(parent) = path.parent() {
-                        std::fs::create_dir_all(parent)?;
+                        create_dirs_confined(&self.root, parent)?;
                     }
-                    // after creating folders, make sure no pre-existing link leads out
                     ensure_no_symlink_escape(&self.root, path)?;
-                    let file = OpenOptions::new()
-                        .create(true)
-                        .truncate(false)
-                        .read(true)
-                        .write(true)
-                        .open(path)
-                        .with_context(|| format!("cannot open {}", path.display()))?;
+                    // `create_new` first: only a file this call brings into being is recorded as
+                    // created by the torrent (and so may be deleted with it)
+                    let mut opts = OpenOptions::new();
+                    opts.read(true).write(true);
+                    let file = match opts.clone().create_new(true).open(path) {
+                        Ok(f) => {
+                            if let Some(rel) = rel {
+                                created.push(rel.clone());
+                            }
+                            f
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => opts
+                            .open(path)
+                            .with_context(|| format!("cannot open {}", path.display()))?,
+                        Err(e) => {
+                            return Err(e)
+                                .with_context(|| format!("cannot open {}", path.display()))
+                        }
+                    };
                     ensure_no_symlink_escape(&self.root, path)?;
                     // best effort: a file system without sparse files (FAT, some shares) is fine
                     let _ = sparse::mark(&file);
@@ -170,6 +205,18 @@ impl TorrentStorage for SafeStorage {
             }
         }
         *self.slots.lock().map_err(|_| anyhow!("storage poisoned"))? = slots;
+        if !created.is_empty() {
+            // recorded before the first byte is written, so a crash cannot lose the record
+            self.registry.update(&self.hash, |e| {
+                let list = e.created.get_or_insert_with(Vec::new);
+                for c in created {
+                    if !list.contains(&c) {
+                        list.push(c);
+                    }
+                }
+            });
+            self.registry.flush().map_err(|e| anyhow!("{e}"))?;
+        }
         Ok(())
     }
 
@@ -213,6 +260,14 @@ impl TorrentStorage for SafeStorage {
             .get(file_id)
             .and_then(|p| p.as_ref())
             .context("no such file")?;
+        // only files this torrent created (or was told are its own data) may be deleted
+        let allowed = match (self.rels.get(file_id), self.registry.get(&self.hash)) {
+            (Some(Some(rel)), Some(entry)) => entry.deletable().contains(rel),
+            _ => false,
+        };
+        if !allowed {
+            return Ok(());
+        }
         match std::fs::remove_file(path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -250,6 +305,9 @@ impl TorrentStorage for SafeStorage {
         Ok(Box::new(SafeStorage {
             root: self.root.clone(),
             paths: self.paths.clone(),
+            rels: self.rels.clone(),
+            registry: self.registry.clone(),
+            hash: self.hash.clone(),
             slots: Mutex::new(taken),
         }))
     }
@@ -323,20 +381,27 @@ impl StorageFactory for SafeStorageFactory {
                     .collect();
                 let adopt = entry.adopt;
                 let r = root.clone();
-                let planned = plan_layout(&name, &raw, &move |rel| !adopt && r.join(rel).exists())
-                    .map_err(|e| anyhow!("{e}"))?;
+                let reg = self.registry.clone();
+                let h = hash.clone();
+                let planned = plan_layout(&name, &raw, &move |rel| {
+                    reg.claims(&r, rel, Some(&h)) || (!adopt && name_taken(&r, rel))
+                })
+                .map_err(|e| anyhow!("{e}"))?;
                 self.registry.set_layout(&hash, planned.clone());
                 planned
             }
         };
 
         let mut paths = Vec::with_capacity(layout.len());
+        let mut rels = Vec::with_capacity(layout.len());
         for (rel, fi) in layout.iter().zip(metadata.file_infos.iter()) {
             if fi.attrs.padding {
                 paths.push(None);
+                rels.push(None);
             } else {
                 let abs = confine(&root, rel).map_err(|e| anyhow!("{e}"))?;
                 paths.push(Some(abs));
+                rels.push(Some(rel.clone()));
             }
         }
         if paths.len() != metadata.file_infos.len() {
@@ -346,6 +411,9 @@ impl StorageFactory for SafeStorageFactory {
         Ok(SafeStorage {
             root,
             paths,
+            rels,
+            registry: self.registry.clone(),
+            hash,
             slots: Default::default(),
         })
     }
@@ -355,8 +423,21 @@ impl StorageFactory for SafeStorageFactory {
     }
 }
 
-/// Deletes the files of a planned layout below `root` (and folders left empty), without going
-/// through the library. Paths that fail the confinement checks are skipped.
+/// Whether `rel` below `dir` is taken on disk: the file itself, or a partial download that would
+/// be renamed to it.
+pub fn name_taken(dir: &Path, rel: &Path) -> bool {
+    let p = dir.join(rel);
+    if p.exists() {
+        return true;
+    }
+    let mut part = p.into_os_string();
+    part.push(".rtpart");
+    PathBuf::from(part).exists()
+}
+
+/// Deletes the given files (relative to `root`) and folders left empty, without going through
+/// the library. Pass [`crate::registry::Entry::deletable`]: files the torrent did not create are
+/// never in it. Paths that fail the confinement checks are skipped.
 pub fn remove_laid_out_files(root: &Path, layout: &[PathBuf]) {
     for rel in layout {
         let Ok(abs) = confine(root, rel) else {

@@ -10,14 +10,13 @@
 //! | `torrent_live` | `id` | `TorrentLive` (per-file progress, peers, speeds, ratio) |
 //! | `pick_torrent_file` | – | path of the `.torrent` the user chose in the OS dialog, or `null` |
 //!
-//! The torrent engine starts lazily (the first preview or add) or at launch when the list
-//! already holds torrents, so an app that never touches a torrent opens no listening port and
-//! contacts no tracker or DHT node. Pause, resume, cancel, remove and "start over" (a full
+//! The torrent engine starts lazily (the first preview, add, resume or verify) or at launch when
+//! a torrent is active (downloading, queued, checking, or seeding by the user choice), so an app
+//! with nothing to transfer opens no listening port and contacts no tracker or DHT node. Pause, resume, cancel, remove and "start over" (a full
 //! re-check) are the ordinary download commands.
 
 use riptide_core::{
-    DownloadId, DownloadKind, TorrentAdd, TorrentInfo, TorrentLive, TorrentPreviewInfo,
-    TorrentSourceRequest,
+    DownloadId, TorrentAdd, TorrentInfo, TorrentLive, TorrentPreviewInfo, TorrentSourceRequest,
 };
 use riptide_engine::Engine;
 use tauri::State;
@@ -38,17 +37,12 @@ pub fn source_from_text(text: &str) -> Option<TorrentSourceRequest> {
     None
 }
 
-/// Starts the torrent engine when the list already holds torrents (called once at launch, in the
-/// background). Failing to start is logged, not fatal: the rest of the app keeps working and the
-/// next torrent command tries again.
+/// Starts the torrent engine at launch only when a torrent needs the network right now (see
+/// [`Engine::enable_torrents_if_active`]), in the background. Failing to start is logged, not
+/// fatal: the rest of the app keeps working and the next torrent command tries again.
 pub async fn start_if_needed(engine: &Engine) {
-    match engine.list().await {
-        Ok(all) if all.iter().any(|d| d.kind == DownloadKind::Torrent) => {
-            if let Err(e) = engine.enable_torrents().await {
-                tracing::error!(error = %e, "the torrent engine could not start");
-            }
-        }
-        _ => {}
+    if let Err(e) = engine.enable_torrents_if_active().await {
+        tracing::error!(error = %e, "the torrent engine could not start");
     }
 }
 
