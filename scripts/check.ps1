@@ -170,7 +170,7 @@ if ($SkipWeb) {
 # Repository: Markdown links and the release helper scripts
 # ---------------------------------------------------------------------------
 Invoke-Step 'repo: markdown links' { node scripts/check-links.mjs }
-Invoke-Step 'repo: release script tests' { node --test scripts/set-release-version.test.mjs scripts/gen-release-manifest.test.mjs }
+Invoke-Step 'repo: release script tests' { node --test scripts/set-release-version.test.mjs scripts/gen-release-manifest.test.mjs scripts/check-doc-sync.test.mjs }
 
 # ---------------------------------------------------------------------------
 # Summary

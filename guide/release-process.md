@@ -52,6 +52,26 @@ checksum file and are not listed.
    200. While the repository is private it prints a NOTICE and skips (unauthenticated requests get 404), so it is a
    real check only once the repository is public. Run it by hand then, or let the daily `site` workflow do it.
 
+## Preparing a release in a pull request (documents ahead of release.json)
+
+`release.json` describes what is published, so it cannot name a release that does not exist yet, and nobody edits it
+by hand. The pull request that prepares a release therefore has the version bumped everywhere (README, CHANGELOG,
+Cargo, package.json, `RELEASE_VERSION`, `features.json` entries flipped) while `release.json` still lists the previous
+release. Two explicit switches make that state legal, and only that state:
+
+- `RIPTIDE_RELEASE_AHEAD=1` (or `--release-ahead`) for `node apps/website/build.mjs`: when `RELEASE_VERSION` is newer
+  than the featured release in `release.json`, the site builds for the release that is about to be published (download
+  names and links follow the release contract; there is no size or checksum yet) and the `features.json` entries that
+  name that version are rendered. Without the switch the build keeps failing in CI on a mismatch.
+- `RIPTIDE_RELEASE_AHEAD=1` (or `--allow-unpublished`) for `node scripts/check-doc-sync.mjs`: `release.json` may be older
+  than the version all the documents agree on. The documents must still agree with each other, and `release.json` may
+  never be newer than they are, so the check keeps protecting every other case. Unit tests: `scripts/check-doc-sync.test.mjs`.
+
+The `site` workflow sets the variable for `pull_request` runs only. The run after the merge, the daily run and the
+`release: published` run are strict: after the merge they fail until you have published the release and run
+`node scripts/gen-release-manifest.mjs`, which is the intended reminder. Do not commit a hand-made or fixture
+`release.json`: it is regenerated from the published release (step 5 above).
+
 ## Switching on a verified feature
 
 `apps/website/src/features.json` holds the EN/AR copy for features that are not released yet, each with

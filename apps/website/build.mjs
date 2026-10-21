@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { downloadUrl, featured, installerName, notesUrl, parseVersion, portableName, SUMS_NAME, validateManifest } from '../../scripts/gen-release-manifest.mjs';
+import { compareVersions, downloadUrl, featured, installerName, notesUrl, parseVersion, portableName, SUMS_NAME, validateManifest } from '../../scripts/gen-release-manifest.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, 'src');
@@ -36,30 +36,42 @@ const MANIFEST_PATH = join(here, 'release.json');
 const FEATURES_PATH = join(SRC, 'features.json');
 const CHANNEL_NAME = { alpha: { en: 'Alpha', ar: 'ألفا' }, beta: { en: 'Beta', ar: 'بيتا' }, stable: { en: 'Stable', ar: 'مستقر' } };
 
+/** A release entry made from a version alone (names and URLs follow the release contract; no size or checksum). */
+function releaseFromVersion(version) {
+  const channel = parseVersion(version)?.pre ?? 'stable';
+  const tag = `v${version}`;
+  return {
+    tag, version, channel, prerelease: channel !== 'stable', publishedAt: '',
+    notesUrl: notesUrl(tag),
+    installer: { name: installerName(version), url: downloadUrl(tag, installerName(version)) },
+    portable: { name: portableName(version), url: downloadUrl(tag, portableName(version)) },
+    sums: { name: SUMS_NAME, url: downloadUrl(tag, SUMS_NAME) },
+  };
+}
+
+// Release preparation: RELEASE_VERSION (and the features.json entries) may be AHEAD of release.json while the release
+// is not published yet. That is allowed only when asked for explicitly, with RIPTIDE_RELEASE_AHEAD=1 or --release-ahead
+// (the pull request job in .github/workflows/site.yml sets it). Every other run, including the one after the merge and
+// the daily one, builds against the real manifest and fails until the release exists (see guide/release-process.md).
+const RELEASE_AHEAD = process.env.RIPTIDE_RELEASE_AHEAD === '1' || process.argv.includes('--release-ahead');
+
 function loadRelease() {
   if (!existsSync(MANIFEST_PATH)) {
-    const channel = parseVersion(RELEASE_VERSION)?.pre ?? 'stable';
-    const tag = `v${RELEASE_VERSION}`;
     console.warn('release.json not found: falling back to RELEASE_VERSION (run node scripts/gen-release-manifest.mjs)');
-    return {
-      manifest: null,
-      release: {
-        tag, version: RELEASE_VERSION, channel, prerelease: channel !== 'stable', publishedAt: '',
-        notesUrl: notesUrl(tag),
-        installer: { name: installerName(RELEASE_VERSION), url: downloadUrl(tag, installerName(RELEASE_VERSION)) },
-        portable: { name: portableName(RELEASE_VERSION), url: downloadUrl(tag, portableName(RELEASE_VERSION)) },
-        sums: { name: SUMS_NAME, url: downloadUrl(tag, SUMS_NAME) },
-      },
-    };
+    return { manifest: null, release: releaseFromVersion(RELEASE_VERSION), unpublished: false };
   }
   const manifest = validateManifest(JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')));
   const release = featured(manifest);
   if (release.version !== RELEASE_VERSION) {
-    const msg = `release.json features ${release.version} but RELEASE_VERSION is ${RELEASE_VERSION} (run node scripts/set-release-version.mjs ${release.version})`;
+    if (RELEASE_AHEAD && compareVersions(RELEASE_VERSION, release.version) > 0) {
+      console.warn(`release preview: RELEASE_VERSION ${RELEASE_VERSION} is ahead of release.json (${release.version}); links point at the release that is about to be published`);
+      return { manifest, release: releaseFromVersion(RELEASE_VERSION), unpublished: true };
+    }
+    const msg = `release.json features ${release.version} but RELEASE_VERSION is ${RELEASE_VERSION} (run node scripts/set-release-version.mjs ${release.version}, or set RIPTIDE_RELEASE_AHEAD=1 while preparing a release that is not published yet)`;
     if (process.env.CI) throw new Error(msg);
     console.warn(`warning: ${msg}`);
   }
-  return { manifest, release };
+  return { manifest, release, unpublished: false };
 }
 
 /** "Alpha 4", "Beta 2", "Stable" in the given language. */
@@ -69,10 +81,11 @@ function channelLabel(release, lang) {
 }
 
 /** Feature flags: only entries that are verified AND released in the featured release are rendered. */
-function loadFeatures(manifest, release, lang) {
+function loadFeatures(manifest, release, lang, unpublished) {
   if (!existsSync(FEATURES_PATH)) return [];
   const { features } = JSON.parse(readFileSync(FEATURES_PATH, 'utf8'));
   const known = new Set((manifest?.releases ?? [release]).map((r) => r.version));
+  if (unpublished) known.add(release.version);
   const out = [];
   for (const f of features) {
     if (f.verified !== (f.release !== null)) throw new Error(`features.json: "${f.id}" must have verified:true together with a release, or verified:false with release:null`);
@@ -82,7 +95,7 @@ function loadFeatures(manifest, release, lang) {
   return out;
 }
 
-const { manifest: MANIFEST, release: RELEASE } = loadRelease();
+const { manifest: MANIFEST, release: RELEASE, unpublished: UNPUBLISHED } = loadRelease();
 const INSTALLER_FILE = RELEASE.installer.name;
 const PORTABLE_FILE = RELEASE.portable.name;
 const RELEASE_URL = RELEASE.notesUrl;
@@ -248,7 +261,7 @@ function build() {
       repo: REPO_URL,
       repoSlug: REPO_SLUG,
       version: RELEASE.version,
-      features: loadFeatures(MANIFEST, RELEASE, lang.code),
+      features: loadFeatures(MANIFEST, RELEASE, lang.code, UNPUBLISHED),
       releasesUrl: RELEASES_URL,
       releaseUrl: RELEASE_URL,
       installerUrl: INSTALLER_URL,

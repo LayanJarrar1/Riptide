@@ -54,14 +54,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Script tests
-        run: node --test scripts/gen-release-manifest.test.mjs scripts/set-release-version.test.mjs
+        run: node --test scripts/gen-release-manifest.test.mjs scripts/set-release-version.test.mjs scripts/check-doc-sync.test.mjs
 
       - name: Versions agree (README, CHANGELOG, Cargo, Tauri, manifest)
+        # A pull request that prepares a release (documents on the new version, release.json still on the old one)
+        # passes with RIPTIDE_RELEASE_AHEAD=1; every other trigger is strict and fails until the release is published.
         run: node scripts/check-doc-sync.mjs
+        env:
+          RIPTIDE_RELEASE_AHEAD: ${{ github.event_name == 'pull_request' && '1' || '' }}
 
       - name: Build and verify
         run: node apps/website/build.mjs
         env:
+          RIPTIDE_RELEASE_AHEAD: ${{ github.event_name == 'pull_request' && '1' || '' }}
           SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -77,6 +82,7 @@ jobs:
           python apps/website/e2e/check.py http://127.0.0.1:8391/
         env:
           RIPTIDE_E2E_CHANNEL: ""
+          RIPTIDE_RELEASE_AHEAD: ${{ github.event_name == 'pull_request' && '1' || '' }}
 
       - name: Release links answer 200
         # Skips with a notice while the repository is private (unauthenticated requests get 404).
