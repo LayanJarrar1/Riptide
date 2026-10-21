@@ -142,3 +142,28 @@ country. Showing the licence next to each result lets people check what they may
 in the background and streams (SSE for the eight OpenAI-compatible providers, Anthropic and
 Gemini; `Provider::complete_stream` has a non-streaming default). Retries happen only before the
 first byte; dropping the future closes the HTTP connection, which is how Cancel works.
+
+## D-review-1: Review round of alpha.5 (names, keys, launch arguments)
+
+*Status: accepted.* An independent review of the preview found two data/network defects and a
+handful of hardening gaps. The rules that came out of it:
+
+- **A torrent owns only what it created.** The registry records the files its storage created
+  (`created`); removing or cancelling deletes those (plus data the user declared its own with
+  "use existing files"), never a name that merely appears in its planned layout. File names are
+  planned around every registry layout, queued/running HTTP downloads and `.rtpart` files, and
+  adds are serialised so two torrents cannot plan the same free name.
+- **No torrent without a row.** Remove and cancel edit the stored torrent state when the torrent
+  engine is not running, and the registry is reconciled against the rows before the engine
+  restores anything. The engine starts at launch only for torrents that need the network
+  (downloading, queued, checking, or seeding by choice) and on demand otherwise.
+- **A secret goes only where it was entered for.** An API key is stored with the origin of the
+  endpoint in force at that time; if the effective endpoint changes, the key is treated as
+  missing. No command takes an address from the webview to send a key to.
+- **Launch arguments are data.** The `magnet:` / `.torrent` handler is
+  `"exe" --open-link -- "%1"`; an open launch has exactly one data argument and never runs the
+  installer hooks or honours `--log-level`.
+- **Untrusted addresses are checked.** Web seed addresses (built by the engine from the names in
+  the `.torrent`) and search results are refused when they point at a private, loopback or
+  link-local address, unless the result comes from the user's own private SearXNG.
+- **Bodies are bounded as they arrive**, not after they were buffered.
