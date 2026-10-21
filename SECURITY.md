@@ -17,7 +17,7 @@ prefer otherwise.
 ## Supported versions
 
 Riptide is in alpha. Releases are published on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/releases).
-Only the latest alpha is supported (currently 0.1.0-alpha.4); please reproduce problems against it, or against
+Only the latest alpha is supported (currently 0.1.0-alpha.5); please reproduce problems against it, or against
 `main` if the fix is already there.
 
 ## What Riptide guards against

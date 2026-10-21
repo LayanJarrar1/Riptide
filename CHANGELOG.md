@@ -8,78 +8,86 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
-### Fixed
+## [0.1.0-alpha.5] - 2026-10-21
 
-- Downloads that start together with the same file name no longer share one partial file (the
-  finished file could hold another download's bytes).
-- A server that sends more bytes than its own `Content-Range` announces (jsDelivr) no longer
-  yields a truncated file marked Completed; Riptide falls back to one plain connection.
-- `http://user:password@host/...` links keep the password out of the downloads list; it is stored
-  with the other secrets and removed with them.
-- Pause followed at once by Resume no longer leaves the download paused.
-- Links without a file extension get one for CSV, XML, SVG, WAV, EPUB and Office types.
+BitTorrent, Research with an optional AI assistant, and an integrated title bar with menus. An alpha for
+Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.5).
 
 ### Added
 
-- Research now streams: every source's results appear as soon as that source answers (with
-  per-source status, retry and Cancel), and the AI's query plan and ranking stream in behind them
-  while the list re-sorts in place. Tabs for Papers, Books, Music, Video, Games, Software, Images,
-  Datasets and Web; new open sources (Project Gutenberg, Open Library, LibriVox, Jamendo, Openverse,
-  Blender open movies, OpenGameArt, NASA, open-source games on GitHub, Internet Archive audio and
-  public-domain films); a licence badge on every result; optional web search through Brave or
-  SearXNG with "Find files on this page". No torrent indexes or piracy sources (D-research-1).
-- Several magnet links pasted at once (one per line), dropped on the window, or read from the
-  clipboard (File, Open magnet link from clipboard) open the file choice one after the other.
-- Magnet links and tracker announce addresses are masked in the log.
-- Torrents that list web seeds (HTTP mirrors, BEP 19), such as Internet Archive item torrents, can be
-  downloaded from the web seed as ordinary downloads when few peers are online; the file choice says
-  so and that those downloads are not checked against the torrent piece hashes. `.torrent` files
-  dropped on the window open the file choice.
-
-- An integrated title bar with menus (File, Downloads, Tools, View, Window, Help), keyboard
-  accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls
-  stay at the right. *View* also gets Sidebar (Ctrl+B) and Display density (comfortable or compact).
+- **BitTorrent.** Paste a magnet link in *Add download* (or choose a `.torrent` file, or use *File,
+  Open torrent file...*), see the files with their sizes, tick the ones you want, optionally download
+  them one after another, and start. Several magnet links pasted at once (one per line), dropped on the
+  window, or read from the clipboard (*File, Open magnet link from clipboard*) open the file choice one
+  after the other; `.torrent` files dropped on the window open it too. Torrent rows show peers and the
+  share ratio, the details drawer shows per-file progress, and pause, resume, remove and "Check files
+  again" work. A torrent survives a restart or a killed process (pieces are re-checked on start, never
+  trusted). File names from a torrent go through the same sanitising as HTTP downloads and never leave
+  the chosen folder. Verified on real torrents (Ubuntu 24.04.5, 3.8 GB, and Debian 13.7.0: SHA-256 equal
+  to the official `SHA256SUMS`).
+- **Seeding is off by default.** A finished torrent stops all network activity unless *Settings,
+  Torrents* turns seeding on, with a ratio limit, a time limit and an upload cap.
+- **Web seeds.** Torrents that list web seeds (HTTP mirrors, BEP 19), such as Internet Archive item
+  torrents, can be downloaded from the web seed as ordinary downloads when few peers are online. The
+  file choice says so, and that those downloads are not checked against the torrent piece hashes.
+- **Opt-in handlers.** In *Settings, Integration*: open `magnet:` links and `.torrent` files with
+  Riptide (registered for your user only, removable). The clipboard monitor also offers magnet links.
+- **Research** page (Tools menu and sidebar). Searches open, legal sources for directly downloadable
+  files and adds the ones you tick to your downloads. Tabs for Papers, Books, Music, Video, Games,
+  Software, Images, Datasets and Web. Sources: OpenAlex, Crossref, arXiv, Europe PMC, Internet Archive
+  (including audio and public-domain films), Wikimedia Commons, GitHub releases and open-source games,
+  Data.gov, Project Gutenberg, Open Library, LibriVox, Jamendo, Openverse, Blender open movies,
+  OpenGameArt and NASA. Results stream in: every source's results appear as soon as that source answers,
+  with per-source status, retry and Cancel. Every result has a licence badge. Optional web search
+  through Brave or SearXNG, with "Find files on this page". No torrent indexes and no piracy sources
+  (decision D-research-1).
+- **Optional AI assistant** in *Settings, AI* (off until you set it up). Ten providers (OpenAI,
+  Anthropic, Gemini, DeepSeek, OpenRouter, DeepInfra, Mistral, Groq, Together, Fireworks), your own API
+  key kept only in the Windows Credential Manager (the page shows `••••abcd` and never gets the key
+  back), a model list from the provider plus a free-text model, an optional compatible endpoint, a
+  test button, a daily token and request budget, and a privacy panel (download history for the AI off
+  by default, a live "what will be sent" view, "Forget everything"). With a provider set up, the
+  question is expanded, results are ranked with a one-line reason as they stream in, and every link the
+  model cites is checked against the real results. Without one, Research is a plain keyword search.
+- **"You already downloaded this."** Riptide remembers finished downloads by normalised address, DOI,
+  arXiv id, PubMed id, file name and size and SHA-256, warns in the Add dialog and on Research cards
+  (Open file, Open folder, Download again), notices when the file was deleted, and can optionally skip
+  repeats (*Settings, AI, Download memory*).
+- **Suggested names** in the Add dialog (off by default): only the host, the file name and the size are
+  sent; you accept or dismiss the suggestion.
+- **An integrated title bar with menus** (File, Downloads, Tools, View, Window, Help), keyboard
+  accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls stay
+  at the right. *View* also gets Sidebar (Ctrl+B) and Display density (comfortable or compact).
 - Home, End, Page Up, Page Down, Shift+arrows and Ctrl+A in the downloads list.
-- BitTorrent. Paste a magnet link in *Add download* (or choose a `.torrent` file, or use
-  *File, Open torrent file...*), see the files with their sizes, tick the ones you want, optionally
-  download them one after another, and start. Torrent rows show peers and the share ratio, the
-  details drawer shows per-file progress, pause, resume, remove and "Check files again" work, and a
-  torrent survives a restart or a killed process (pieces are re-checked on start, never trusted).
-  Seeding is off by default: a finished torrent stops all network activity unless *Settings,
-  Torrents* turns it on, with a ratio limit, a time limit and an upload cap. File names from a
-  torrent go through the same sanitising as HTTP downloads and never leave the chosen folder.
-  Opt-in in *Settings, Integration*: open `magnet:` links and `.torrent` files with Riptide
-  (registered for your user only, removable). The database moves to schema version 5; an
-  alpha.4 build cannot open it afterwards.
-- **Settings -> AI** (off until you set it up): ten providers, your own API key kept only in the
-  Windows Credential Manager (the page shows `••••abcd` and never gets the key back), model list
-  from the provider plus a free-text model, optional compatible endpoint, a test button that
-  reports latency and provider-reported tokens, a daily token/request budget, a privacy panel
-  (download history for the AI off by default, a live "what will be sent" view, "Forget
-  everything") and no telemetry.
-- **Research** page (Tools menu and sidebar): searches OpenAlex, Crossref, arXiv, Europe PMC,
-  Internet Archive, Wikimedia Commons, GitHub releases and Data.gov for open, directly
-  downloadable files and adds the ones you tick to your downloads. Without an AI provider it is a
-  keyword search; with one, the question is expanded, results are ranked with a one-line reason
-  and every link the model cites is checked against the real results.
-- "You already downloaded this": Riptide remembers finished downloads by normalised address,
-  DOI, arXiv id, PubMed id, file name and size and SHA-256, warns in the Add dialog and on
-  Research cards (Open file / Open folder / Download again), notices when the file was deleted,
-  and can optionally skip repeats (Settings -> AI -> Download memory).
-- Add dialog: optional "Suggest name and category" (only host, file name and size are sent; you
-  accept or dismiss).
-- New crate `riptide-research`; new database migration 5 (`seen_downloads`, `seen_keys`, after the torrents migration 4). Version 5
-  is not readable by alpha.4: back up `%LOCALAPPDATA%\Riptide\riptide.sqlite` before trying the
-  preview on your real data, or use the portable build.
+- Magnet links and tracker announce addresses are masked in the log.
+- New crates `riptide-torrent` and `riptide-research`; database schema version 5 (torrents, then the
+  download memory).
 
 ### Changed
 
-- The clipboard monitor also offers magnet links.
+- The downloads list stays smooth at tens of thousands of items (measured at 50 000): progress updates
+  touch only the rows on screen, and sorting and filtering reuse the previous work.
 - The English strings are now a lazily loaded chunk like the Arabic ones, which keeps the initial
   bundle under its 500 kB budget as the app grows.
-- The downloads list stays smooth at tens of thousands of items (measured at 50 000): progress
-  updates touch only the rows on screen, and sorting and filtering reuse the previous work.
 
+### Upgrading
+
+- alpha.4 updates in place. The database is upgraded to schema version 5 on first start; **alpha.4
+  cannot open it afterwards**. Back up `%LOCALAPPDATA%\Riptide\riptide.sqlite` (or the `data` folder of
+  the portable build) if you may want to go back.
+
+### Known limits
+
+- This is an alpha. Keep copies of important files. Windows only.
+- Seeding upload and the ratio stop were checked by engine tests but not seen live against a real peer.
+- Brave Search and Jamendo were not called live (they need your own token or client id); their results
+  are built from the documented response shape. Public services are sometimes slow or down, and the
+  Research page says so and offers a retry. Most public SearXNG instances refuse JSON; use your own.
+- Web-seed downloads are not checked against the torrent's piece hashes.
+- The native file pickers and a real drag from Explorer were not driven in testing; the hand-over by
+  second launch and the window's drop event were.
+- The alpha is not code-signed, so SmartScreen may warn on first run. SHA-256 checksums are in
+  `SHA256SUMS.txt`.
 
 ## [0.1.0-alpha.4] - 2026-10-19
 
@@ -112,6 +120,14 @@ An alpha for Windows 10 and 11. See the [release](https://github.com/LayanJarrar
 ### Fixed
 
 - A video download could finish with its progress bar stopped short of 100%.
+- Downloads that start together with the same file name no longer share one partial file (the
+  finished file could hold another download's bytes).
+- A server that sends more bytes than its own `Content-Range` announces (jsDelivr) no longer
+  yields a truncated file marked Completed; Riptide falls back to one plain connection.
+- `http://user:password@host/...` links keep the password out of the downloads list; it is stored
+  with the other secrets and removed with them.
+- Pause followed at once by Resume no longer leaves the download paused.
+- Links without a file extension get one for CSV, XML, SVG, WAV, EPUB and Office types.
 
 ### Known limits
 
