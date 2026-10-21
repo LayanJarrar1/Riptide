@@ -4,7 +4,7 @@
 #![cfg(windows)]
 #![allow(clippy::unwrap_used, missing_docs)]
 
-use riptide_desktop_lib::integration::{platform_registry, run_cli, Registry, REGISTRY_ROOT_ENV};
+use riptide_desktop_lib::integration::{platform_registry, run_cli, REGISTRY_ROOT_ENV};
 use riptide_desktop_lib::protocol::{
     migrate_legacy, register, status, MAGNET_KEY, TORRENT_EXT_KEY,
 };
