@@ -36,7 +36,7 @@ the two Arabic weights it preloads. What keeps it cheap:
 - Screenshots are WebP, with a 720 px and a 1440 px variant chosen through `srcset`.
 - Fonts are subset to Latin (Inter) and to Arabic plus Latin (IBM Plex Sans Arabic), WOFF2,
   `font-display: swap`, and the first-paint weights are preloaded. The unused italic file is gone.
-- Logos, icons and the favicon are SVG. The hero animation is a canvas that draws no images.
+- Logos, icons and the favicon are SVG. The hero animation is inline SVG driven by CSS and draws no images.
 - No third-party request on page load: no CDN fonts, no badge service, no analytics. The build
   fails if a page references an `http(s)` image, script, stylesheet or frame.
 - `css/` and `js/` URLs carry a content hash (`?v=`), so they can be cached for a year.

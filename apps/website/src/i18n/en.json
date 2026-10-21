@@ -4,297 +4,441 @@
   "locale": "en_US",
   "fontClass": "font-latin",
   "meta": {
-    "title": "Riptide: the free, open-source download manager for Windows",
-    "description": "Free, open-source download manager for Windows. Resumes from the exact byte, verified with SHA-256. No accounts, no telemetry, no ads. Arabic and English.",
-    "ogAlt": "Riptide: the download manager that pulls harder"
+    "title": "Riptide: free, open-source download manager for Windows",
+    "description": "A free, open-source download manager for Windows. Parallel connections, exact resume, SHA-256 verified. No ads, no telemetry, no accounts. English and Arabic.",
+    "ogAlt": "Riptide: download faster, every byte verified"
   },
   "nav": {
     "brand": "Riptide",
     "skip": "Skip to content",
     "download": "Download",
-    "why": "Why",
-    "how": "How it works",
-    "shots": "Screenshots",
+    "app": "The app",
+    "speed": "Speed",
+    "integrity": "Integrity",
+    "compare": "Compare",
     "faq": "FAQ",
-    "github": "GitHub",
-    "githubLabel": "Riptide on GitHub",
     "switchLang": "العربية",
     "switchLangLabel": "Switch to Arabic",
-    "theme": "Switch theme",
+    "motion": "Animations",
+    "theme": "Switch between light and dark",
     "menu": "Menu",
-    "closeMenu": "Close menu",
-    "feedback": "Feedback"
+    "source": "GitHub",
+    "githubLabel": "Riptide on GitHub",
+    "motionHintLabel": "Animation setting",
+    "motionHint": "Animations are reduced because your system asks for less motion. Turn them on?",
+    "motionOn": "On",
+    "motionDismiss": "Dismiss"
+  },
+  "release": {
+    "label": "Latest release",
+    "text": "Riptide v{v} is out.",
+    "link": "See what's new →",
+    "dismiss": "Dismiss"
   },
   "hero": {
-    "status": "Alpha preview for Windows 10 / 11",
-    "title": "The download manager that pulls harder.",
-    "lead": "Riptide splits each file across many connections, resumes from the exact byte after a pause, a crash or a power cut, and verifies the result with SHA-256. Free and open source, for Windows.",
-    "ctaDownload": "Download for Windows",
-    "ctaGithub": "View on GitHub",
-    "note": "Free alpha preview, 64-bit, no admin rights needed. It is an early build and it changes often.",
-    "line": "No accounts. No telemetry. No ads.",
-    "visualLabel": "Animated illustration: segment stripes flow like a current and assemble into a completed download bar.",
-    "barLabel": "example.iso",
-    "barDone": "Verified"
+    "status": "{channel} for Windows 10 and 11",
   },
-  "download": {
-    "title": "Download the alpha preview",
-    "badge": "Alpha preview — Windows 10/11, 64-bit, no admin rights needed",
-    "lead": "Pick the installer for a per-user setup that never asks for elevation, or the portable zip to run Riptide from any folder.",
-    "installer": "Download for Windows (installer)",
-    "installerSub": "Per-user installer, no admin prompt",
-    "portable": "Portable (zip)",
-    "portableSub": "Unzip anywhere and run",
-    "allReleases": "All releases",
-    "requirements": "Requirements: Windows 10 / 11, x64. WebView2 (included in Windows).",
-    "note": "Alpha means early: the build changes often and rough edges are expected. Each release lists SHA-256 checksums for both files. If something breaks, tell us below.",
-    "sums": "SHA-256 checksums"
+  "hero": {
+    "status": "Alpha {n} for Windows 10 and 11",
+    "titleA": "Download faster.",
+    "titleB": "Every byte verified.",
+    "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
+    "ctaDownload": "Download the latest version",
+    "ctaGithub": "View source",
+    "chips": [
+      "Open source",
+      "No telemetry",
+      "No admin rights"
+    ],
+    "winTitle": "Riptide",
+    "scroll": "Scroll",
+    "sim": {
+      "tag": "Simulation",
+      "label": "Simulation of a download in progress. An illustration, not a measurement.",
+      "file": "ubuntu-24.04.2-desktop-amd64.iso",
+      "host": "releases.ubuntu.com",
+      "conns": "8 connections",
+      "eta": "left",
+      "done": "Completed",
+      "speed": "Speed",
+      "unit": "MB/s",
+      "verified": "SHA-256 verified",
+      "hash": "7a0550bc…a14a51d0"
+    },
+    "mock": {
+      "label": "A simplified preview of the Riptide desktop app with sample downloads. An illustration, not the real window.",
+      "search": "Search downloads",
+      "add": "Add download",
+      "title": "All downloads",
+      "count": "16",
+      "nav": [
+        {
+          "t": "All downloads",
+          "n": "16"
+        },
+        {
+          "t": "Active",
+          "n": "4"
+        },
+        {
+          "t": "Waiting",
+          "n": "4"
+        },
+        {
+          "t": "Completed",
+          "n": "6"
+        },
+        {
+          "t": "Needs attention",
+          "n": "2"
+        }
+      ],
+      "cat": "Categories",
+      "cats": [
+        {
+          "t": "Archives",
+          "n": "6"
+        },
+        {
+          "t": "Documents",
+          "n": "2"
+        },
+        {
+          "t": "Music",
+          "n": "1"
+        },
+        {
+          "t": "Video",
+          "n": "3"
+        }
+      ],
+      "cols": [
+        "Name",
+        "Size",
+        "Progress",
+        "Speed",
+        "Status"
+      ],
+      "foot": "47.2 MB/s",
+      "foot2": "4 active, 3 waiting",
+      "rows": [
+        {
+          "name": "ubuntu-24.04.2-desktop-amd64.iso",
+          "host": "releases.ubuntu.com",
+          "size": "3.49 / 5.80 GB",
+          "speed": "29.9 MB/s",
+          "pct": 60,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "blender-4.3.2-windows-x64.msi",
+          "host": "download.blender.org",
+          "size": "307 / 330 MB",
+          "speed": "8.25 MB/s",
+          "pct": 93,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "محاضرة-الفيزياء-الحديثة-07.mp4",
+          "host": "cdn.example.org",
+          "size": "7.91 MB / 1.40 GB",
+          "speed": "6.64 MB/s",
+          "pct": 1,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "riptide-sdk-0.1.0-win64.zip",
+          "host": "static.example.com",
+          "size": "212 MB",
+          "speed": "—",
+          "pct": 100,
+          "st": "c",
+          "stl": "Completed"
+        },
+        {
+          "name": "router-ax6000-v2.3.1.bin",
+          "host": "cdn.example.org",
+          "size": "96.0 MB",
+          "speed": "—",
+          "pct": 0,
+          "st": "w",
+          "stl": "Waiting"
+        },
+        {
+          "name": "debian-12.9.0-amd64-netinst.iso",
+          "host": "mirror.example.net",
+          "size": "631 MB",
+          "speed": "—",
+          "pct": 100,
+          "st": "f",
+          "stl": "Checksum mismatch"
+        },
+        {
+          "name": "city-sounds-2025-flac.zip",
+          "host": "mirror.example.net",
+          "size": "2.10 GB",
+          "speed": "—",
+          "pct": 0,
+          "st": "w",
+          "stl": "Waiting"
+        }
+      ]
+    }
   },
-  "extension": {
-    "title": "Browser extension",
-    "lead": "The extension catches downloads in the browser and hands them to the app, so every file gets the same segmented, verified transfer. It also puts a Riptide button on download links.",
-    "chrome": "Chrome Web Store",
-    "edge": "Edge Add-ons",
-    "soon": "Coming soon",
-    "sub": "Until the store listings are live, load the extension from the repository. It works in Chrome, Edge and Firefox.",
-    "github": "Load it from GitHub",
-    "storeOpen": "Open listing"
+  "streams": {
+    "titleA": "Streams in.",
+    "titleB": "One exact file out.",
+    "lead": "Riptide pulls a file down several lanes at once, then rebuilds it byte for byte.",
+    "label": "The Riptide logo is drawn by three streams, which then run down parallel lanes into one file.",
+    "file": "ubuntu-24.04.2.iso",
+    "fileSub": "1 file · SHA-256 verified"
   },
-  "why": {
-    "title": "Why Riptide",
-    "lead": "Most download managers are a decade of features behind a nag screen. Riptide is a new engine built around a handful of rules it cannot skip.",
-    "items": [
+  "app": {
+    "titleA": "A list that",
+    "titleB": "stays fast.",
+    "lead": "Dense, calm, keyboard-friendly. Light and dark, English and Arabic.",
+    "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speeds, time left and status for each file",
+    "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speeds, time left and status for each file",
+    "winLabel": "The Riptide desktop app."
+  },
+  "speed": {
+    "titleA": "Eight connections.",
+    "titleB": "One file.",
+    "lead": "A connection that finishes early takes over half of a slower one's range. Nothing sits idle.",
+    "tag": "Simulation",
+    "conns": "connections",
+    "note": "A simulation, not a benchmark. Real speed depends on your connection and the server.",
+    "label": "Simulation: eight connections fill one file. A connection that finishes early takes over half of a slower one's range."
+  },
+  "integrity": {
+    "titleA": "Pull the plug.",
+    "titleB": "Lose nothing.",
+    "lead": "Progress is saved every second. Only a matching checksum makes a download Completed.",
+    "resume": {
+      "h": "Exact resume",
+      "p": "Riptide continues at the saved byte. If the file changed on the server, it starts over.",
+      "file": "ubuntu-24.04.iso",
+      "run": "Downloading",
+      "cut": "Power lost",
+      "resumed": "Resumed at byte",
+      "done": "Complete",
+      "bytes": "bytes",
+      "label": "Simulation: a power cut stops a download, and it resumes from the same byte."
+    },
+    "verify": {
+      "h": "Verified, then renamed",
+      "p": "The .rtpart file is hashed and compared. Only a match becomes the final file.",
+      "file": "ubuntu-24.04.iso",
+      "ext": ".rtpart",
+      "hash": "7a0550bccce738e90be22f4f686e14e088200863504ddddc97484270a14a51d0",
+      "match": "SHA-256 match",
+      "label": "The partial file is checked with SHA-256, then renamed into place."
+    }
+  },
+  "features": {
+    "title": "Made for daily use.",
+    "details": {
+      "h": "Every connection, live",
+      "p": "Segment map, speed graph and a limit per download.",
+      "alt": "The details drawer: 8 of 8 connections, a per-segment progress map, a speed graph for the last minute and the source link"
+    },
+    "junk": {
+      "h": "None of the junk.",
+      "p": "Free and open source. Nothing phones home.",
+      "words": [
+        "Ads",
+        "Telemetry",
+        "Accounts",
+        "Admin prompts"
+      ]
+    },
+    "add": {
+      "h": "Checked before it starts",
+      "p": "Paste a link. Size, resume support and connections are verified first.",
+      "alt": "The Add download dialog: the link is already checked (3.36 GB, resumable, multiple connections), with file name, category, folder and a connections picker"
+    },
+    "langs": {
+      "h": "Arabic and English, both native.",
+      "p": "Fully mirrored right to left. Switch live.",
+      "wordA": "English",
+      "wordB": "العربية",
+      "altEn": "The downloads list in English",
+      "altAr": "The same list in Arabic, mirrored right to left"
+    },
+    "video": {
+      "h": "Video pages",
+      "p": "YouTube, Vimeo and other sites yt-dlp supports. Pick a quality down to 144p, or audio only as M4A or MP3."
+    },
+    "peruser": {
+      "h": "No admin. Ever.",
+      "p": "Per-user install, plus a portable zip.",
+      "path": "%LOCALAPPDATA%\\Riptide"
+    },
+    "more": [
       {
-        "icon": "split",
-        "title": "Pulls harder",
-        "text": "A file is split into segments and fetched over many connections at once. When one connection finishes early it takes half of the largest segment left, so the link stays full to the last byte."
+        "h": "Queues with schedules",
+        "p": "Several queues, each with its own limit. Run one at night or on chosen days; when it finishes: exit, sleep, hibernate, shut down or run a program."
       },
       {
-        "icon": "exact",
-        "title": "Byte-exact or nothing",
-        "text": "A download is complete only when every segment is on disk, the server still serves the same version of the file, and the checksum you gave matches. Riptide never splices bytes from two versions of a file."
+        "h": "Batch downloads",
+        "code": "file[001-120].zip",
+        "p": "Patterns with a preview of every address, or a pasted list of links. Import and export lists."
       },
       {
-        "icon": "shield-db",
-        "title": "Survives anything",
-        "text": "Progress is committed to a local SQLite database at least once a second. Kill the process or pull the plug and every download resumes from the exact byte. If the server changed the file meanwhile, Riptide starts over instead of handing you a corrupt one."
-      },
-      {
-        "icon": "video",
-        "title": "Video pages too",
-        "tag": "Next alpha",
-        "text": "Paste a YouTube, Vimeo or other video page and Riptide fetches it through bundled yt-dlp, into the same list as every other download. It is in the main branch and ships in the next alpha."
-      },
-      {
-        "icon": "queue",
-        "title": "Queues with schedules",
-        "tag": "Coming soon",
-        "text": "The queue engine and the per-queue scheduler are finished and tested. The screens that control them are still being built, so they are not in any release yet."
-      },
-      {
-        "icon": "rtl",
-        "title": "Arabic and English, for real",
-        "text": "Both languages everywhere, detected automatically and switchable live, with a fully mirrored right-to-left layout. Arabic file names from servers land on disk with the right name."
-      },
-      {
-        "icon": "lock",
-        "title": "Nothing to trust",
-        "text": "Server file names are sanitised, redirects are capped at 20, credentials never leave the site they were captured for, and TLS verification is on. Secrets live in their own table and are wiped when a download ends."
-      },
-      {
-        "icon": "user",
-        "title": "No admin, no accounts, no ads, no telemetry",
-        "text": "A per-user install that never asks for elevation. Your data stays on your machine, and the only network traffic is your downloads."
-      },
-      {
-        "icon": "bolt",
-        "title": "A list that stays fast",
-        "text": "Dense, keyboard-friendly, smooth with a thousand items. Dark or light, and it respects the reduced-motion setting."
+        "h": "Site grabber",
+        "p": "Crawl a page to a chosen depth and tick the files you want. Respects robots.txt."
       }
     ]
   },
   "vs": {
-    "title": "The open-source alternative to IDM",
-    "lead": "Internet Download Manager set the bar for segmented downloads on Windows. Riptide keeps the bar and drops the license, the reminders and the closed source.",
+    "title": "Versus paid managers.",
+    "lead": "Plain facts about Riptide next to what is generally true of paid products.",
     "colFeature": "Feature",
-    "colIdm": "IDM",
     "colRiptide": "Riptide",
+    "colPaid": "Paid managers",
     "rows": [
       {
-        "feature": "Price",
-        "idm": "Paid license per PC",
-        "riptide": "Free, forever"
+        "f": "Price",
+        "r": "Free",
+        "p": "Licence or subscription"
       },
       {
-        "feature": "Source code",
-        "idm": "Closed",
-        "riptide": "Open: GPL-3.0 app, MIT / Apache-2.0 engine"
+        "f": "Source code",
+        "r": "Open: GPL-3.0, MIT, Apache-2.0",
+        "p": "Usually closed"
       },
       {
-        "feature": "Ads and nag screens",
-        "idm": "Trial reminders",
-        "riptide": "None"
+        "f": "Trials and nag screens",
+        "r": "None",
+        "p": "Common in trials"
       },
       {
-        "feature": "Admin rights to install",
-        "idm": "Typical installer",
-        "riptide": "Per-user install, no elevation"
+        "f": "Telemetry and accounts",
+        "r": "None",
+        "p": "Check each vendor"
       },
       {
-        "feature": "Arabic right-to-left interface",
-        "idm": "Translation only",
-        "riptide": "Fully mirrored layout"
+        "f": "Integrity",
+        "r": "SHA-256 and server validators",
+        "p": "Varies by product"
       },
       {
-        "feature": "Multi-connection downloads",
-        "idm": "Yes",
-        "riptide": "Yes, with work stealing between connections"
-      },
-      {
-        "feature": "Resume after a crash",
-        "idm": "Resumes interrupted downloads",
-        "riptide": "Database checkpoints; resumes after a kill or power loss"
-      },
-      {
-        "feature": "Checksum verification",
-        "idm": "Not a documented feature",
-        "riptide": "Built in"
-      },
-      {
-        "feature": "Privacy",
-        "idm": "Not independently auditable",
-        "riptide": "No telemetry, and the code is public"
+        "f": "Arabic interface",
+        "r": "Native, fully mirrored",
+        "p": "Varies by product"
       }
     ],
-    "footnote": "IDM is a trademark of Tonec Inc. Comparison reflects publicly documented behaviour at the time of writing."
-  },
-  "how": {
-    "title": "How a download happens",
-    "lead": "Four moves, repeated for every file. Each one is a rule the engine cannot skip.",
-    "steps": [
-      {
-        "title": "Probe",
-        "text": "Before a single byte is downloaded, Riptide asks the server about the file: its size, its name, whether it accepts ranges, and a validator (ETag or Last-Modified) that pins the exact version.",
-        "a": "Accept-Ranges: bytes",
-        "b": "ETag",
-        "c": "Content-Length"
-      },
-      {
-        "title": "Split",
-        "text": "The file is divided into equal segments, one per connection, and the final size is preallocated on disk so every segment writes straight into its own place.",
-        "a": "8 connections"
-      },
-      {
-        "title": "Steal",
-        "text": "When a connection finishes early it takes half of the largest remaining segment from a slower one. No connection sits idle while there are bytes left.",
-        "a": "done",
-        "b": "split"
-      },
-      {
-        "title": "Checkpoint, verify, rename",
-        "text": "Progress is committed to a local database at least once a second. When the last byte lands, the validator is checked again, the checksum is computed, and the .rtpart file is renamed into place.",
-        "a": "file.iso.rtpart",
-        "b": "file.iso",
-        "c": "SHA-256 matches"
-      }
-    ]
-  },
-  "shots": {
-    "title": "What it looks like",
-    "lead": "Screenshots are from the current build, in the app's light theme. The app itself starts in its dark theme.",
-    "videoCaption": "Riptide in 30 seconds",
-    "open": "Open full size",
-    "close": "Close",
-    "prev": "Previous screenshot",
-    "next": "Next screenshot",
-    "items": [
-      {
-        "src": "shot-list-en",
-        "alt": "The downloads list: segmented progress bars, speed, time left and status for every file",
-        "caption": "The list. Every stripe in a progress bar is one connection. Red stripes are a file that failed its checksum."
-      },
-      {
-        "src": "shot-details-en",
-        "alt": "Details drawer with stat tiles, a segment map, a live speed chart and the source and destination",
-        "caption": "Details. Eight connections, a live segment map, the last minute of speed, the checksum the file must match."
-      },
-      {
-        "src": "shot-add-en",
-        "alt": "Add download dialog: the link is probed as you type, showing size and whether it can resume",
-        "caption": "Add a download. Riptide probes the link while you type: size, file name, category and whether the server allows resuming."
-      },
-      {
-        "src": "shot-details-ar",
-        "alt": "The same details view in Arabic, mirrored right-to-left",
-        "caption": "The same screen in Arabic. The whole layout mirrors, numbers and file names stay readable, and the switch is instant."
-      },
-      {
-        "src": "shot-settings-en",
-        "alt": "Settings page: language, appearance, default folder and a folder per category",
-        "caption": "Settings. Changes apply immediately. No wizard, no restart."
-      }
-    ]
+    "footnote": "We name no product. Check any vendor's own documentation before you decide."
   },
   "oss": {
-    "title": "Open source, nothing to hide",
-    "text": "The desktop app, the command-line client and the IPC crate are licensed GPL-3.0-or-later. The engine crates are dual-licensed MIT or Apache-2.0, so anyone can build on them. There is no telemetry, no account and no advertising: the only network traffic is your downloads.",
-    "public": "Riptide is built in public. Every change lands on GitHub first, and so does every report, rating and release note.",
-    "repo": "Repository",
-    "licenses": "Licenses",
+    "title": "Built in the open.",
+    "lead": "App: GPL-3.0. Engine: MIT or Apache-2.0. Every line is on GitHub.",
+    "star": "Star on GitHub",
+    "releases": "Releases",
     "linkGpl": "GPL-3.0 (app)",
     "linkMit": "MIT (engine)",
     "linkApache": "Apache-2.0 (engine)",
-    "badgeNote": "These are plain links. This page loads nothing from third parties, so there is no badge service to call.",
-    "star": "Star on GitHub",
-    "starSub": "Opens the stargazers page",
-    "licenseBadge": "GPL-3.0 app · MIT / Apache-2.0 engine"
+    "cloneLabel": "Build it yourself"
+  },
+  "feedback": {
+    "title": "Found a rough edge?",
+    "lead": "It's an alpha. Your reports decide what gets fixed first.",
+    "links": [
+      {
+        "label": "Report a bug",
+        "href": "issues/new?template=bug_report.yml"
+      },
+      {
+        "label": "Suggest a feature",
+        "href": "issues/new?template=feature_request.yml"
+      },
+      {
+        "label": "Write a review",
+        "href": "issues/new?template=review.yml"
+      }
+    ],
+    "security": "Security issue? Report it privately."
   },
   "faq": {
     "title": "Questions",
     "items": [
       {
-        "q": "Is it free?",
-        "a": "Yes. Riptide is free and open source, and will stay that way. There is no paid tier, no license key and no trial."
+        "q": "Is it really free?",
+        "a": "Yes. No paid tier, no license key, no trial. The code is open source."
       },
       {
-        "q": "Can I download it now?",
-        "a": "Yes, as an alpha preview for Windows 10 / 11 (64-bit): a per-user installer that needs no admin rights, or a portable zip. It is an early build that changes often, so expect rough edges."
+        "q": "How do I know my download is genuine?",
+        "a": "Every release lists SHA-256 checksums. Run certutil -hashfile with the file name and SHA256, then compare the result with the list."
       },
       {
         "q": "Does it work with my browser?",
-        "a": "There is an extension for Chrome, Edge and Firefox that catches downloads and hands them to the app. Store listings for Chrome and Edge are coming soon; until then you load it from the GitHub repository."
-      },
-      {
-        "q": "Is it Windows only?",
-        "a": "Windows first. The engine itself is portable Rust with no Windows-only code in it, so other platforms can follow, but there is no date for that."
-      },
-      {
-        "q": "How do I follow progress?",
-        "a": "Everything happens in the open on GitHub: commits, issues, releases and the README. Star or watch the repository."
-      },
-      {
-        "q": "Can I contribute?",
-        "a": "Yes. Issues, bug reports and pull requests are welcome on GitHub. Read the README first; it explains how to build from source and which checks every change must pass."
-      },
-      {
-        "q": "How do I report a bug or leave a review?",
-        "a": "Use the Feedback section above. Bug reports, feature requests and reviews each have their own GitHub form, and security problems go through private reporting."
+        "a": "Chrome and Edge: install the extension in three steps from Settings → Integration. A Firefox build is on GitHub."
       },
       {
         "q": "Can it download videos?",
-        "a": "Video pages such as YouTube and Vimeo work through bundled yt-dlp in the main branch and will ship in the next alpha. Queues with schedules come after that: the engine is done, the screens are not."
+        "a": "Yes. Paste a page link and Riptide fetches the video through bundled yt-dlp, with a quality picker. The browser extension adds a \"Download this video\" button."
+      },
+      {
+        "q": "Is it Windows only?",
+        "a": "Windows 10 and 11 for now. The engine is portable, but there is no date for other platforms."
       }
     ]
   },
+  "download": {
+    "eyebrow": "Download",
+    "badge": "{channel}",
+    "badge": "Alpha {n}",
+    "title": "Get the latest Riptide.",
+    "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
+    "installer": "Download the latest version",
+    "installerSub": "Installer · per user, no admin rights",
+    "portable": "Portable zip",
+    "portableSub": "Unzip and run",
+    "sums": "SHA-256 checksums",
+    "allReleases": "All releases",
+    "note": "An early build. Expect rough edges, and tell us about them.",
+    "ext": {
+      "title": "Install the extension in Chrome or Edge",
+      "lead": "Sends downloads from Chrome and Edge to Riptide. Adds \"Download this video\" with a quality picker, download all or selected links and all images, and capture rules.",
+      "github": "Extension source on GitHub",
+      "steps": {
+        "items": [
+          "In Riptide open Settings → Integration and press Open extension folder.",
+          "In the browser open chrome://extensions (edge://extensions in Edge) and turn on Developer mode.",
+          "Press Load unpacked and pick that folder."
+        ]
+      }
+    },
+    "new": {
+      "title": "What's new in",
+      "notes": "Full release notes",
+      "items": [
+        "Video pages from YouTube, Vimeo and more, with a quality picker",
+        "Queues with schedules and finish actions",
+        "Batch downloads and a site grabber",
+        "Browser extension: download this video, all links and images",
+        "Update notifications",
+        "New logo, icons and website"
+      ]
+    },
+    "upd": {
+      "h": "Always up to date",
+      "p": "Riptide checks GitHub Releases at most once a day and shows a notification when a new version exists. One click installs it, and updates are signed. You can turn the check off in Settings. It is the only network call besides your downloads."
+    }
+  },
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
-    "license": "GPL-3.0 app · MIT / Apache-2.0 engine",
-    "made": "Made with care. Alpha preview.",
+    "license": "GPL-3.0 app, MIT / Apache-2.0 engine",
+    "made": "Alpha preview.",
     "github": "GitHub",
     "releases": "Releases",
     "licenseLink": "License",
     "privacy": "Privacy",
-    "feedback": "Feedback"
+    "feedback": "Feedback",
+    "version": "Version"
   },
   "privacy": {
     "meta": {
@@ -326,7 +470,7 @@
         "h": "Network requests Riptide makes",
         "paras": [
           "Riptide connects to the servers of the files you choose to download, and to nothing else on your behalf.",
-          "The only request it makes on its own is an optional check for a new version against GitHub Releases (github.com). It sends nothing about you beyond what any web request carries, such as your IP address, and it can be turned off in Settings. GitHub's own privacy statement applies to that request."
+          "The only request it makes on its own is an optional check for a new version against GitHub Releases (github.com), at most once a day. It sends nothing about you beyond what any web request carries, such as your IP address, and it can be turned off in Settings. GitHub's own privacy statement applies to that request. Update video support, in Settings, fetches the newest yt-dlp only when you press it."
         ]
       },
       {
@@ -373,43 +517,5 @@
     "title": "Page not found",
     "text": "There is nothing at this address.",
     "home": "Back to Riptide"
-  },
-  "feedback": {
-    "title": "Tell us what happened",
-    "lead": "Riptide is in alpha, so your reports decide what gets fixed first. Everything goes through GitHub issues: public, searchable and tracked until it is closed.",
-    "cards": [
-      {
-        "icon": "bug",
-        "title": "Report a problem",
-        "text": "A download failed, a file did not match its checksum, the app crashed. The form asks for your Riptide and Windows versions and the log lines that matter.",
-        "cta": "Open a bug report",
-        "href": "issues/new?template=bug_report.yml"
-      },
-      {
-        "icon": "bulb",
-        "title": "Suggest a feature",
-        "text": "Describe the problem you want solved before the solution you have in mind. We read every request and answer yes, not yet or no, with a reason.",
-        "cta": "Suggest a feature",
-        "href": "issues/new?template=feature_request.yml"
-      },
-      {
-        "icon": "star",
-        "title": "Leave a review",
-        "text": "Rate Riptide from 1 to 5 and tell us what you used it for, what worked and what did not. A low rating with detail helps more than a high one without.",
-        "cta": "Write a review",
-        "href": "issues/new?template=review.yml"
-      },
-      {
-        "icon": "lock",
-        "title": "Report a security issue",
-        "text": "Do not open a public issue. Use GitHub's private reporting, described in SECURITY.md, so a fix can ship before the details are public.",
-        "cta": "Read SECURITY.md",
-        "href": "security/policy"
-      }
-    ],
-    "whyTitle": "Why GitHub, and no form here",
-    "why": "Public reports let other people find the same problem, add detail and see when it is fixed. You need a free GitHub account. This site has no form of its own, no analytics and no tracking scripts, so there is nothing here that could collect your message.",
-    "readReviews": "Read the reviews",
-    "readIssues": "Browse open issues"
   }
 }

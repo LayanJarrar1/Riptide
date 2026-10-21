@@ -5,7 +5,7 @@
 //   node scripts/set-release-version.mjs 0.1.0-alpha.5 --check  exit 1 if anything differs
 //
 // Only these fields are touched:
-//   apps/website/build.mjs  RELEASE_VERSION, RELEASE_TAG, INSTALLER_FILE, PORTABLE_FILE
+//   apps/website/build.mjs  RELEASE_VERSION (the site itself reads apps/website/release.json; see guide/release-process.md)
 //   README.md               installer and portable file names and the /download/v<version>/ links
 // Pass --root <dir> to operate on another checkout (the tests use fixtures).
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
