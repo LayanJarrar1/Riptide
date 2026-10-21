@@ -89,6 +89,10 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
     }
 
     let start = current;
+    prune_old_backups(conn);
+    if start > 0 && latest > start {
+        backup_before_upgrade(conn, start);
+    }
     // Table rebuilds (v4) need foreign keys off, and the pragma cannot change inside a
     // transaction. Off for the whole run, restored (and checked) at the end; no migration relies
     // on enforcement, and the check below reports any dangling reference.
@@ -112,6 +116,93 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
         }
     }
     Ok(current)
+}
+
+/// Keeps a copy of a file database as it was before an upgrade: `<file>.v<N>.bak` for schema
+/// `N`, written once and never overwritten. An older build refuses a newer schema and cannot
+/// open the upgraded file; this copy is what a user who goes back to it can use. A failed backup
+/// is logged and does not stop the upgrade.
+fn backup_before_upgrade(conn: &Connection, version: u32) {
+    let Some(path) = conn.path().filter(|p| !p.is_empty()) else {
+        return; // in memory
+    };
+    let backup = std::path::PathBuf::from(format!("{path}.v{version}.bak"));
+    if backup.exists() {
+        return; // a good older copy is never replaced
+    }
+    match write_backup(conn, &backup) {
+        Ok(()) => tracing::info!(version, "kept a copy of the database before the upgrade"),
+        Err(e) => {
+            tracing::warn!(error = %e, "could not keep a copy of the database before the upgrade");
+        }
+    }
+}
+
+/// Writes the copy to `<backup>.tmp`, strips the secrets (cookies, passwords and headers of
+/// downloads must not outlive the downloads in a file nothing else cleans up), flushes it to disk
+/// and only then renames it into place: a failure (disk full) leaves no partial `.bak`, which would
+/// never be retried.
+fn write_backup(conn: &Connection, backup: &std::path::Path) -> std::result::Result<(), String> {
+    let mut tmp = backup.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = std::path::PathBuf::from(tmp);
+    let _ = std::fs::remove_file(&tmp);
+    let result = (|| -> std::result::Result<(), String> {
+        conn.execute("VACUUM INTO ?1", [tmp.to_string_lossy().as_ref()])
+            .map_err(|e| e.to_string())?;
+        {
+            let copy = Connection::open(&tmp).map_err(|e| e.to_string())?;
+            // a v1 file has the table too; tolerate a database that does not
+            let _ = copy.execute("DELETE FROM secrets", []);
+            copy.execute_batch("VACUUM").map_err(|e| e.to_string())?;
+        }
+        std::fs::File::options()
+            .write(true)
+            .open(&tmp)
+            .and_then(|f| f.sync_all())
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, backup).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Days a pre-upgrade copy is kept; a later start deletes it.
+pub const BACKUP_KEEP_DAYS: u64 = 30;
+
+/// Deletes `<file>.v<N>.bak` copies (and leftover `.tmp` files) older than
+/// [`BACKUP_KEEP_DAYS`].
+fn prune_old_backups(conn: &Connection) {
+    let Some(path) = conn.path().filter(|p| !p.is_empty()) else {
+        return;
+    };
+    let path = std::path::Path::new(path);
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    let prefix = format!("{name}.v");
+    let max_age = std::time::Duration::from_secs(BACKUP_KEEP_DAYS * 24 * 3600);
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let fname = e.file_name().to_string_lossy().into_owned();
+        if !fname.starts_with(&prefix) || !(fname.ends_with(".bak") || fname.ends_with(".bak.tmp"))
+        {
+            continue;
+        }
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > max_age);
+        if old && std::fs::remove_file(e.path()).is_ok() {
+            tracing::info!(file = %fname, "deleted an old pre-upgrade copy of the database");
+        }
+    }
 }
 
 fn apply(

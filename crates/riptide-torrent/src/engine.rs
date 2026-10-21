@@ -20,7 +20,9 @@ use tokio_util::sync::CancellationToken;
 use crate::error::{Error, Result};
 use crate::limits::METADATA_TIMEOUT_SECS;
 use crate::magnet::parse_magnet;
-use crate::meta::{inspect_torrent, preview_from_info, TorrentPreview};
+use crate::meta::{
+    info_hash_of_bytes, inspect_torrent, preview_from_info, read_torrent_file, TorrentPreview,
+};
 use crate::registry::{Entry, Registry};
 use crate::storage::SafeStorageFactory;
 use crate::types::{
@@ -60,6 +62,10 @@ pub struct TorrentEngine {
     monitor: Mutex<Option<JoinHandle<()>>>,
     /// Torrents for which a failure event was already sent.
     failed: Mutex<HashMap<String, String>>,
+    /// Files already reported through [`TorrentEvent::FilesCompleted`], per torrent.
+    done_files: Mutex<HashMap<String, std::collections::HashSet<usize>>>,
+    /// Serialises `add`: two torrents added together must not both plan the same free name.
+    add_lock: tokio::sync::Mutex<()>,
 }
 
 impl TorrentEngine {
@@ -89,6 +95,8 @@ impl TorrentEngine {
             cancel: CancellationToken::new(),
             monitor: Mutex::new(None),
             failed: Mutex::new(HashMap::new()),
+            add_lock: tokio::sync::Mutex::new(()),
+            done_files: Mutex::new(HashMap::new()),
         });
         engine.restore().await;
         let weak = Arc::downgrade(&engine);
@@ -143,10 +151,44 @@ impl TorrentEngine {
     ) -> Result<TorrentPreview> {
         let dir = self.target_dir(opts)?;
         let adopt = opts.adopt_existing;
-        let exists = move |rel: &Path| !adopt && dir.join(rel).exists();
+        // the torrent's own entry (when it is already known) is not a claim against itself
+        let own = match source {
+            TorrentSource::Bytes(b) => info_hash_of_bytes(b),
+            TorrentSource::File(p) => read_torrent_file(p)
+                .ok()
+                .and_then(|b| info_hash_of_bytes(&b)),
+            TorrentSource::Magnet(m) => parse_magnet(m).ok().map(|m| m.info_hash),
+        };
+        let claims = self.registry.claim_set(&dir, own.as_deref());
+        // folder and file name of each reserved path, folder compared as the file system sees it
+        let dir_key = crate::registry::normalise_dir(&dir);
+        let reserved: std::collections::HashSet<String> = opts
+            .reserved
+            .iter()
+            .filter_map(|p| {
+                let name = p.file_name()?.to_string_lossy().to_lowercase();
+                let parent = crate::registry::normalise_dir(p.parent()?);
+                Some(format!("{parent}/{name}"))
+            })
+            .collect();
+        let exists = move |rel: &Path| {
+            if claims.claims(rel) {
+                return true;
+            }
+            let full = format!(
+                "{dir_key}/{}",
+                rel.to_string_lossy().replace('\\', "/").to_lowercase()
+            );
+            if reserved.contains(&full)
+                || reserved.contains(full.strip_suffix(".rtpart").unwrap_or("\0"))
+            {
+                return true;
+            }
+            !adopt && crate::storage::name_taken(&dir, rel)
+        };
         match source {
             TorrentSource::Bytes(b) => inspect_torrent(b, &exists),
-            TorrentSource::File(p) => crate::meta::inspect_torrent_file(p, &exists),
+            TorrentSource::File(p) => inspect_torrent(&read_torrent_file(p)?, &exists),
             TorrentSource::Magnet(m) => {
                 let magnet = parse_magnet(m)?;
                 tracing::info!(target: "riptide_torrent", magnet = %magnet.redacted(), "resolving magnet link");
@@ -189,6 +231,7 @@ impl TorrentEngine {
     /// changes nothing. With [`AddOptions::start_paused`] the torrent is only recorded: it
     /// touches neither the network nor the disk until [`TorrentEngine::resume`].
     pub async fn add(&self, source: TorrentSource, opts: AddOptions) -> Result<String> {
+        let _adding = self.add_lock.lock().await;
         let preview = self.preview(&source, &opts).await?;
         let id = preview.info_hash.clone();
         if self.registry.get(&id).is_some() {
@@ -203,6 +246,19 @@ impl TorrentEngine {
         }
         std::fs::create_dir_all(&dir)?;
 
+        let layout: Vec<PathBuf> = match &opts.layout {
+            Some(l) => {
+                if l.len() != preview.files.len()
+                    || l.iter().any(|p| crate::paths::confine(&dir, p).is_err())
+                {
+                    return Err(Error::InvalidSelection(
+                        "the planned layout does not fit the torrent".into(),
+                    ));
+                }
+                l.clone()
+            }
+            None => preview.files.iter().map(|f| f.path.clone()).collect(),
+        };
         let selected = normalise_selection(&preview, opts.only_files.as_deref())?;
         let selected_bytes = selected
             .as_ref()
@@ -214,7 +270,7 @@ impl TorrentEngine {
             &id,
             Entry {
                 dir: dir.clone(),
-                files: Some(preview.files.iter().map(|f| f.path.clone()).collect()),
+                files: Some(layout),
                 name: preview.name.clone(),
                 total_bytes: preview.total_bytes,
                 selected_bytes,
@@ -229,6 +285,7 @@ impl TorrentEngine {
                 progress_bytes: 0,
                 error: None,
                 peers: opts.peers.iter().copied().take(MAX_STORED_PEERS).collect(),
+                created: Some(Vec::new()),
             },
         );
         self.registry.flush()?;
@@ -245,6 +302,10 @@ impl TorrentEngine {
                 Ok(id)
             }
             Err(e) => {
+                // files this attempt created before it failed go with it
+                if let Some(entry) = self.registry.get(&id) {
+                    crate::storage::remove_laid_out_files(&entry.dir, &entry.deletable());
+                }
                 self.registry.remove(&id);
                 let _ = self.registry.flush();
                 if let Ok(p) = self.torrent_file(&id) {
@@ -344,6 +405,7 @@ impl TorrentEngine {
         });
         self.registry.flush()?;
         lock(&self.failed).remove(id);
+        lock(&self.done_files).remove(id);
         self.ensure_in_session(id).await
     }
 
@@ -426,14 +488,13 @@ impl TorrentEngine {
                 tracing::warn!(target: "riptide_torrent", id, "delete: {e:#}");
             }
         } else if delete_files {
-            if let Some(layout) = &entry.files {
-                crate::storage::remove_laid_out_files(&entry.dir, layout);
-            }
+            crate::storage::remove_laid_out_files(&entry.dir, &entry.deletable());
         }
         self.registry.remove(id);
         self.registry.flush()?;
         let _ = std::fs::remove_file(self.torrent_file(id)?);
         lock(&self.failed).remove(id);
+        lock(&self.done_files).remove(id);
         self.emit(TorrentEvent::Removed { id: id.to_string() });
         Ok(())
     }
@@ -627,6 +688,11 @@ impl TorrentEngine {
                 }
             }
 
+            // files that are complete while the torrent as a whole is not
+            if !entry.completed {
+                self.report_finished_files(&id, &h, &st.file_progress);
+            }
+
             // did the selected data just become complete (every piece hash-verified)?
             let done = !entry.completed && self.selection_done(&h, &entry, &st);
             if done {
@@ -682,6 +748,33 @@ impl TorrentEngine {
             if let Err(e) = self.registry.flush() {
                 tracing::warn!(target: "riptide_torrent", "cannot save torrent state: {e}");
             }
+        }
+    }
+
+    fn report_finished_files(&self, id: &str, h: &Arc<librqbit::ManagedTorrent>, progress: &[u64]) {
+        if progress.is_empty() {
+            return;
+        }
+        let Ok(lens) =
+            h.with_metadata(|m| m.file_infos.iter().map(|f| f.len).collect::<Vec<u64>>())
+        else {
+            return;
+        };
+        if lens.len() != progress.len() {
+            return;
+        }
+        let fresh: Vec<usize> = {
+            let mut all = lock(&self.done_files);
+            let seen = all.entry(id.to_string()).or_default();
+            (0..lens.len())
+                .filter(|i| lens[*i] > 0 && progress[*i] >= lens[*i] && seen.insert(*i))
+                .collect()
+        };
+        if !fresh.is_empty() {
+            self.emit(TorrentEvent::FilesCompleted {
+                id: id.to_string(),
+                indices: fresh,
+            });
         }
     }
 

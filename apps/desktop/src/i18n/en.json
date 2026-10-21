@@ -389,6 +389,7 @@
   "torrent.webSeed": "This torrent also lists web seeds (HTTP mirrors). If few peers are online it can be slow or never start; the files can be downloaded from the web seed instead (a normal download, not checked against the torrent's piece hashes).",
   "torrent.webSeedDownload": "Download from the web seed",
   "torrent.webSeedAdded": "{n} file(s) added as normal downloads from the web seed",
+  "torrent.webSeedRefused": "{n} file(s) were left out: their address is not a public web address.",
   "menu.openMagnet": "Open magnet link from clipboard",
   "torrent.noMagnetOnClipboard": "There is no magnet link on the clipboard.",
   "torrent.multiTitle": "{n} magnet links found",
@@ -757,6 +758,7 @@
   "ai.error.provider_down": "The provider is having trouble. Try again later.",
   "ai.error.budget": "The session token budget is used up.",
   "ai.error.invalid_response": "The provider answered in a way Riptide could not understand.",
+  "ai.error.key_origin": "This key was saved for a different address. Enter it again for this endpoint.",
   "ai.error.config": "Invalid setting: {detail}",
   "ai.error.store": "Could not read or write the secure store: {detail}",
 

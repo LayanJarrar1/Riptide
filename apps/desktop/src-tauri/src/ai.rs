@@ -4,6 +4,11 @@
 //!
 //! * AI is **off** until the user picks a provider, stores a key and names a model. Nothing in
 //!   the app calls a provider before that.
+//! * A key is **bound to the endpoint it was stored for**: the origin of the base URL in force
+//!   when it was saved (the provider's own address, or the override saved in these settings) is
+//!   recorded next to it. If the effective endpoint changes later, the key is not sent there:
+//!   the UI shows no key and the user enters it again for the new endpoint. No command takes a
+//!   URL from the webview to send a key to.
 //! * The key goes to the Windows Credential Manager through `riptide-ai` and nowhere else: it is
 //!   not in `ai-settings.json`, not in the database, not in the usage file, not in any event, and
 //!   never returned to the webview. The UI only ever receives the masked hint (`••••abcd`).
@@ -18,7 +23,7 @@
 //! | `ai_status` | - | [`AiStatus`] |
 //! | `ai_save_settings` | `settings` | [`AiStatus`] |
 //! | `ai_set_key` / `ai_remove_key` | `provider`, `key` / `provider` | [`AiStatus`] |
-//! | `ai_list_models` | `provider`, `baseUrl?` | `[ModelView]` |
+//! | `ai_list_models` | `provider` | `[ModelView]` |
 //! | `ai_test_connection` | - | [`ConnectionView`] |
 //! | `ai_last_request` | - | the last request's messages, or `null` |
 //! | `ai_forget_all` | - | [`AiStatus`] |
@@ -39,6 +44,15 @@ use crate::media::DataDir;
 
 const SETTINGS_FILE: &str = "ai-settings.json";
 const USAGE_FILE: &str = "ai-usage.json";
+/// Which endpoint each stored key was entered for (origins only, no secret).
+const KEY_ORIGINS_FILE: &str = "ai-key-origins.json";
+
+/// `scheme://host:port` of a URL, the part a key is bound to.
+fn origin_of(url: &str) -> Option<String> {
+    let u = url::Url::parse(url.trim()).ok()?;
+    u.host_str()?;
+    Some(u.origin().ascii_serialization())
+}
 
 /// What the user chose in Settings -> AI. Contains no secret.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,7 +135,7 @@ pub struct AiStatus {
 /// from which the key has been removed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AiFail {
-    /// `not_configured`, `daily_limit`, `unauthorized`, `rate_limited`, `model_not_found`,
+    /// `not_configured`, `key_origin`, `daily_limit`, `unauthorized`, `rate_limited`, `model_not_found`,
     /// `bad_request`, `timeout`, `network`, `provider_down`, `budget`, `invalid_response`,
     /// `config`, `store`.
     pub code: &'static str,
@@ -172,6 +186,29 @@ pub struct RequestPreview {
     pub messages: Vec<Message>,
     /// Local time, `HH:MM:SS`.
     pub at: String,
+}
+
+/// See [`AiService::charge_if_dropped`].
+#[must_use = "dropping it charges the request; call done() once the usage is known"]
+pub struct PendingCharge<'a> {
+    ai: &'a AiService,
+    tokens: u64,
+    armed: bool,
+}
+
+impl PendingCharge<'_> {
+    /// The request finished and its real usage is being counted by the caller.
+    pub fn done(mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for PendingCharge<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            self.ai.add_usage(self.tokens);
+        }
+    }
 }
 
 /// The AI service: files in the data dir, the secret store, the last-request memory.
@@ -241,13 +278,101 @@ impl AiService {
         Ok(s)
     }
 
-    /// Stores a key in the secret store; returns the masked hint.
+    /// The base URL requests for `provider` go to: the override saved in the settings (only for
+    /// the selected provider) or the provider's own address.
+    pub fn effective_base_url(&self, provider: ProviderKind) -> String {
+        let s = self.settings();
+        match s.base_url {
+            Some(u) if s.provider == provider => u,
+            _ => provider.default_base_url().to_string(),
+        }
+    }
+
+    fn key_origins(&self) -> std::collections::BTreeMap<String, String> {
+        read_json(&self.dir.join(KEY_ORIGINS_FILE)).unwrap_or_default()
+    }
+
+    fn set_key_origin(&self, provider: ProviderKind, origin: Option<String>) -> Result<(), AiFail> {
+        let mut map = self.key_origins();
+        match origin {
+            Some(o) => map.insert(provider.id().to_string(), o),
+            None => map.remove(provider.id()),
+        };
+        let json = serde_json::to_string_pretty(&map).map_err(|e| AiFail {
+            code: "config",
+            message: e.to_string(),
+        })?;
+        std::fs::create_dir_all(&self.dir)
+            .and_then(|()| write_atomic(&self.dir.join(KEY_ORIGINS_FILE), &json))
+            .map_err(|e| AiFail {
+                code: "store",
+                message: format!("could not save: {e}"),
+            })
+    }
+
+    /// Whether the stored key of `provider` may be sent to where requests would go now. A key
+    /// with no recorded origin counts as stored for the provider's own address.
+    pub fn key_fits_endpoint(&self, provider: ProviderKind) -> bool {
+        let bound = self
+            .key_origins()
+            .get(provider.id())
+            .cloned()
+            .or_else(|| origin_of(provider.default_base_url()));
+        bound.is_some() && bound == origin_of(&self.effective_base_url(provider))
+    }
+
+    fn wrong_endpoint() -> AiFail {
+        AiFail {
+            code: "key_origin",
+            message: "this key was stored for another address; enter it again for this endpoint"
+                .into(),
+        }
+    }
+
+    /// Stores a key in the secret store, bound to the endpoint in force now; returns the masked
+    /// hint.
     pub fn set_key(&self, provider: ProviderKind, raw: String) -> Result<String, AiFail> {
         let key = ApiKey::new(raw).map_err(|e| fail(&e, None))?;
         self.secrets
             .set(provider, &key)
             .map_err(|e| fail(&e, Some(&key)))?;
+        self.set_key_origin(provider, origin_of(&self.effective_base_url(provider)))?;
         Ok(key.masked())
+    }
+
+    /// Lists the models the stored key of `provider` can use. Goes only to the endpoint the key
+    /// was stored for (the saved settings), never to an address passed in by the caller.
+    pub async fn list_models(&self, provider: ProviderKind) -> Result<Vec<ModelView>, AiFail> {
+        let key = self.secrets.get(provider).ok().flatten().ok_or(AiFail {
+            code: "not_configured",
+            message: "store an API key first".into(),
+        })?;
+        if !self.key_fits_endpoint(provider) {
+            return Err(Self::wrong_endpoint());
+        }
+        let s = self.settings();
+        let base = (s.provider == provider).then_some(s.base_url).flatten();
+        if let Some(u) = &base {
+            riptide_ai::validate_base_url(u).map_err(|e| fail(&e, Some(&key)))?;
+        }
+        // list_models does not use the model; the adapter just needs a non-empty name
+        let p = riptide_ai::build_provider(
+            provider,
+            key.clone(),
+            "model-list",
+            base.as_deref(),
+            ProviderOptions::default(),
+        )
+        .map_err(|e| fail(&e, Some(&key)))?;
+        let mut models = p.list_models().await.map_err(|e| fail(&e, Some(&key)))?;
+        models.sort_by_key(|m| m.id.to_lowercase());
+        Ok(models
+            .into_iter()
+            .map(|m| ModelView {
+                id: m.id,
+                name: m.display_name,
+            })
+            .collect())
     }
 
     /// The folder this service keeps its files in (the Research settings live next to them).
@@ -281,11 +406,16 @@ impl AiService {
 
     /// Removes the key of `provider`.
     pub fn remove_key(&self, provider: ProviderKind) -> Result<(), AiFail> {
-        self.secrets.delete(provider).map_err(|e| fail(&e, None))
+        self.secrets.delete(provider).map_err(|e| fail(&e, None))?;
+        self.set_key_origin(provider, None)
     }
 
-    /// `••••abcd` for the stored key of `provider`.
+    /// `••••abcd` for the stored key of `provider`, shown only while the key fits the endpoint:
+    /// a key stored for another address counts as missing (the user enters it again).
     pub fn key_hint(&self, provider: ProviderKind) -> Option<String> {
+        if !self.key_fits_endpoint(provider) {
+            return None;
+        }
         self.secrets
             .get(provider)
             .ok()
@@ -353,6 +483,9 @@ impl AiService {
                 message: "choose a provider, store an API key and pick a model first".into(),
             });
         };
+        if !self.key_fits_endpoint(s.provider) {
+            return Err(Self::wrong_endpoint());
+        }
         let usage = self.usage();
         if s.daily_request_limit.is_some_and(|l| usage.requests >= l) {
             return Err(AiFail {
@@ -410,6 +543,19 @@ impl AiService {
         self.add_usage(tokens);
     }
 
+    /// Guards a request that is about to be sent: if the guard is dropped before
+    /// [`PendingCharge::done`] (the search was cancelled while the answer streamed in), the
+    /// request and the tokens of its prompt (estimated) still count against today's budget, as
+    /// the provider has already billed them.
+    pub fn charge_if_dropped(&self, messages: &[Message]) -> PendingCharge<'_> {
+        let chars: usize = messages.iter().map(|m| m.content.chars().count()).sum();
+        PendingCharge {
+            ai: self,
+            tokens: riptide_ai::Usage::estimate(chars, 0).total_tokens,
+            armed: true,
+        }
+    }
+
     /// The last request's messages.
     pub fn last_request(&self) -> Option<RequestPreview> {
         self.last.lock().unwrap_or_else(|p| p.into_inner()).clone()
@@ -435,7 +581,12 @@ impl AiService {
                 .delete_named(name)
                 .map_err(|e| fail(&e, None))?;
         }
-        for f in [SETTINGS_FILE, USAGE_FILE, crate::research::SETTINGS_FILE] {
+        for f in [
+            SETTINGS_FILE,
+            USAGE_FILE,
+            KEY_ORIGINS_FILE,
+            crate::research::SETTINGS_FILE,
+        ] {
             match std::fs::remove_file(self.dir.join(f)) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -510,41 +661,14 @@ pub fn ai_remove_key(ai: State<'_, AiService>, provider: ProviderKind) -> Result
     Ok(ai.status())
 }
 
-/// Lists the models the stored key can use. `base_url` is the (unsaved) override of the form.
+/// Lists the models the stored key can use. It goes to the endpoint the key was stored for (the
+/// saved settings); the webview cannot name another address.
 #[tauri::command]
 pub async fn ai_list_models(
     ai: State<'_, AiService>,
     provider: ProviderKind,
-    base_url: Option<String>,
 ) -> Result<Vec<ModelView>, AiFail> {
-    let key = ai.secrets.get(provider).ok().flatten().ok_or(AiFail {
-        code: "not_configured",
-        message: "store an API key first".into(),
-    })?;
-    let base = base_url
-        .map(|u| u.trim().to_string())
-        .filter(|u| !u.is_empty());
-    if let Some(u) = &base {
-        riptide_ai::validate_base_url(u).map_err(|e| fail(&e, Some(&key)))?;
-    }
-    // list_models does not use the model; the adapter just needs a non-empty name
-    let p = riptide_ai::build_provider(
-        provider,
-        key.clone(),
-        "model-list",
-        base.as_deref(),
-        ProviderOptions::default(),
-    )
-    .map_err(|e| fail(&e, Some(&key)))?;
-    let mut models = p.list_models().await.map_err(|e| fail(&e, Some(&key)))?;
-    models.sort_by_key(|m| m.id.to_lowercase());
-    Ok(models
-        .into_iter()
-        .map(|m| ModelView {
-            id: m.id,
-            name: m.display_name,
-        })
-        .collect())
+    ai.list_models(provider).await
 }
 
 /// Checks the key (model list) and the chosen model (one tiny completion); reports latency
@@ -628,10 +752,8 @@ pub fn name_inputs(url: &str) -> Option<(String, String)> {
         .filter(|n| !n.is_empty())
         .unwrap_or("download")
         .to_string();
-    let name: String = url::form_urlencoded::parse(name.as_bytes())
-        .next()
-        .map(|(k, _)| k.into_owned())
-        .unwrap_or(name);
+    // a path segment is percent-decoded, not form-decoded: `&`, `=` and `+` belong to the name
+    let name = crate::clipboard::percent_decode(&name);
     Some((host, name))
 }
 
@@ -816,7 +938,6 @@ mod tests {
             .await;
         let d = tempfile::tempdir().unwrap();
         let svc = service(d.path());
-        svc.set_key(ProviderKind::DeepInfra, KEY.into()).unwrap();
         svc.save_settings(AiSettings {
             provider: ProviderKind::DeepInfra,
             model: "m".into(),
@@ -824,6 +945,7 @@ mod tests {
             ..AiSettings::default()
         })
         .unwrap();
+        svc.set_key(ProviderKind::DeepInfra, KEY.into()).unwrap();
         let logs = std::sync::Arc::new(Mutex::new(Vec::<u8>::new()));
         struct W(std::sync::Arc<Mutex<Vec<u8>>>);
         impl std::io::Write for W {
@@ -853,12 +975,94 @@ mod tests {
     }
 
     #[test]
+    fn a_key_is_never_sent_to_an_endpoint_it_was_not_stored_for() {
+        let d = tempfile::tempdir().unwrap();
+        let svc = service(d.path());
+        // stored while the provider's own address is in force
+        svc.set_key(ProviderKind::DeepInfra, KEY.into()).unwrap();
+        svc.save_settings(AiSettings {
+            provider: ProviderKind::DeepInfra,
+            model: "m".into(),
+            ..AiSettings::default()
+        })
+        .unwrap();
+        assert!(svc.configured() && svc.provider().is_ok());
+
+        // the endpoint is switched afterwards (a pasted gateway address, a script in the page)
+        svc.save_settings(AiSettings {
+            provider: ProviderKind::DeepInfra,
+            model: "m".into(),
+            base_url: Some("https://gateway.example.net/v1".into()),
+            ..AiSettings::default()
+        })
+        .unwrap();
+        assert_eq!(svc.provider().err().unwrap().code, "key_origin");
+        assert!(svc.key_hint(ProviderKind::DeepInfra).is_none());
+        assert!(!svc.configured());
+        assert!(!serde_json::to_string(&svc.status())
+            .unwrap()
+            .contains("WXYZ"));
+
+        // entering the key again for the new endpoint binds it there; the old one is refused
+        svc.set_key(ProviderKind::DeepInfra, KEY.into()).unwrap();
+        assert!(svc.provider().is_ok());
+        svc.save_settings(AiSettings {
+            provider: ProviderKind::DeepInfra,
+            model: "m".into(),
+            ..AiSettings::default()
+        })
+        .unwrap();
+        assert_eq!(svc.provider().err().unwrap().code, "key_origin");
+        // the origin file holds addresses only
+        assert!(!all_files_text(d.path()).contains("TESTKEY"));
+    }
+
+    #[tokio::test]
+    async fn listing_models_sends_nothing_to_an_address_the_key_was_not_stored_for() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"data":[]}"#))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let d = tempfile::tempdir().unwrap();
+        let svc = service(d.path());
+        svc.set_key(ProviderKind::DeepInfra, KEY.into()).unwrap();
+        svc.save_settings(AiSettings {
+            provider: ProviderKind::DeepInfra,
+            base_url: Some(server.uri()),
+            ..AiSettings::default()
+        })
+        .unwrap();
+        let err = svc.list_models(ProviderKind::DeepInfra).await.unwrap_err();
+        assert_eq!(err.code, "key_origin");
+        assert!(server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_request_still_counts_against_the_daily_budget() {
+        let d = tempfile::tempdir().unwrap();
+        let svc = service(d.path());
+        let messages = [Message::user("x".repeat(4000))];
+        // finished normally: the caller counts the real usage, the guard adds nothing
+        svc.charge_if_dropped(&messages).done();
+        assert_eq!((svc.usage().requests, svc.usage().tokens), (0, 0));
+        // dropped (the search was cancelled while the answer streamed in)
+        drop(svc.charge_if_dropped(&messages));
+        assert_eq!(svc.usage().requests, 1);
+        assert_eq!(svc.usage().tokens, 1000);
+    }
+
+    #[test]
     fn name_inputs_drop_query_fragment_and_credentials() {
         let (h, n) =
             name_inputs("https://user:pw@cdn.example.org/a/b/My%20File.zip?token=SECRET&x=1#frag")
                 .unwrap();
         assert_eq!(h, "cdn.example.org");
         assert_eq!(n, "My File.zip");
+        // `&`, `=` and `+` are part of a path segment
+        let (_, n) = name_inputs("https://h.example/a/report=final&v2+draft.pdf").unwrap();
+        assert_eq!(n, "report=final&v2+draft.pdf");
         assert_eq!(name_inputs("https://h.example/").unwrap().1, "download");
         assert!(name_inputs("ftp://h/x").is_none());
     }

@@ -50,6 +50,8 @@ Windows 10 or 11, 64-bit. Checksums and older versions are on the [Releases page
 Updating from alpha 4 works in place, but the database moves to a new format that alpha 4 cannot open: back up `%LOCALAPPDATA%\Riptide\riptide.sqlite` first if you may want to go back.
 The alpha is not code-signed yet, so SmartScreen may warn the first time: choose **More info → Run anyway**.
 
+When a new version upgrades your database, Riptide keeps a copy of the old one next to it (`riptide.sqlite.v3.bak`, without any saved cookies or passwords) in case you go back to an older version. It is deleted automatically after 30 days; you can delete it yourself whenever you like.
+
 ## Features
 
 - **Fast:** up to 32 connections per file, and a connection that finishes early takes half of the slowest part left.

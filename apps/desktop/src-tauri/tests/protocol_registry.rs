@@ -43,7 +43,7 @@ fn registering_and_unregistering_through_the_registry_root_knob() {
     );
     assert_eq!(
         read(&root, r"Software\Classes\magnet\shell\open\command", "").as_deref(),
-        Some(r#""C:\Riptide Test\riptide-desktop.exe" "%1""#)
+        Some(r#""C:\Riptide Test\riptide-desktop.exe" --open-link -- "%1""#)
     );
     assert_eq!(
         read(
@@ -52,7 +52,7 @@ fn registering_and_unregistering_through_the_registry_root_knob() {
             ""
         )
         .as_deref(),
-        Some(r#""C:\Riptide Test\riptide-desktop.exe" "%1""#)
+        Some(r#""C:\Riptide Test\riptide-desktop.exe" --open-link -- "%1""#)
     );
     assert_eq!(
         read(

@@ -144,6 +144,10 @@ impl Store {
 
     /// Forgets everything (the "forget" button); returns the number of records removed.
     pub fn seen_clear(&mut self) -> Result<usize> {
+        // identifiers kept for downloads that have not finished (titles, DOIs of research hits)
+        // are part of the memory too
+        self.connection()
+            .execute("DELETE FROM settings WHERE key LIKE 'seen.hint.%'", [])?;
         Ok(self
             .connection()
             .execute("DELETE FROM seen_downloads", [])?)

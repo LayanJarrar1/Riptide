@@ -290,6 +290,97 @@ fn v3_database_migrates_to_v4_keeping_segments_secrets_and_ids() {
 }
 
 #[test]
+fn upgrading_keeps_a_copy_of_the_old_database_for_a_downgrade() {
+    use riptide_store::{migrate, MIGRATIONS};
+
+    let (dir, path) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&path).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO secrets (download_id, cookies, headers, auth_user, auth_pass) \
+             VALUES (1, 'session=SECRETPW', '[]', 'u', 'SECRETPW')",
+            [],
+        )
+        .unwrap();
+    }
+    let backup = dir.path().join("riptide.sqlite.v3.bak");
+    assert!(!backup.exists());
+    drop(Store::open(&path).unwrap());
+    assert!(backup.exists(), "no copy of the v3 database");
+    // the copy is a complete, usable v3 database with every row
+    let old = Connection::open(&backup).unwrap();
+    let version: i64 = old
+        .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+        .unwrap();
+    let rows: i64 = old
+        .query_row("SELECT COUNT(*) FROM downloads", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!((version, rows), (3, 2));
+    // cookies, headers and passwords are not copied: nothing deletes this file with the download
+    let secrets: i64 = old
+        .query_row("SELECT COUNT(*) FROM secrets", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(secrets, 0, "the backup holds secrets");
+    drop(old);
+    assert!(!dir.path().join("riptide.sqlite.v3.bak.tmp").exists());
+    let raw = std::fs::read(&backup).unwrap();
+    assert!(
+        !raw.windows(8).any(|w| w == b"SECRETPW"),
+        "a password is still in the file's pages"
+    );
+    // opening again neither upgrades nor overwrites it
+    let before = std::fs::metadata(&backup).unwrap().len();
+    drop(Store::open(&path).unwrap());
+    assert_eq!(std::fs::metadata(&backup).unwrap().len(), before);
+    // a stale copy is deleted by a later start; a failed attempt leaves nothing behind
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(40 * 24 * 3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&backup)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    drop(Store::open(&path).unwrap());
+    assert!(!backup.exists(), "a 40 day old copy was kept");
+    // a fresh database has nothing to keep
+    let fresh = tempfile::tempdir().unwrap();
+    drop(Store::open(fresh.path().join("new.sqlite")).unwrap());
+    assert!(std::fs::read_dir(fresh.path()).unwrap().all(|e| !e
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .ends_with(".bak")));
+}
+
+#[test]
+fn the_v4_rebuild_keeps_the_autoincrement_high_water_mark() {
+    use riptide_store::{migrate, MIGRATIONS};
+
+    // a v3 database whose highest ids were removed long ago: rows 1 and 2 remain, the counter is 9
+    let (_dir, path) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&path).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+        let changed = conn
+            .execute(
+                "UPDATE sqlite_sequence SET seq = 9 WHERE name = 'downloads'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(changed, 1);
+    }
+    let mut store = Store::open(&path).unwrap();
+    let d = riptide_core::Download::new(DownloadId(0), "https://example.com/a", "a", ".", 1);
+    let id = store.insert_download(&d).unwrap();
+    assert_eq!(
+        id,
+        DownloadId(10),
+        "an id that was used before must not be reused"
+    );
+}
+
+#[test]
 fn v3_and_v4_databases_migrate_to_v5_keeping_their_data() {
     use riptide_core::{DownloadKind, TorrentFileInfo, TorrentInfo};
     use riptide_store::{migrate, MIGRATIONS};

@@ -95,9 +95,7 @@ pub fn remove(state_dir: &Path, id: &str, delete_files: bool) -> Result<()> {
         .remove(id)
         .ok_or_else(|| Error::NotFound(id.to_string()))?;
     if delete_files {
-        if let Some(layout) = &entry.files {
-            remove_laid_out_files(&entry.dir, layout);
-        }
+        remove_laid_out_files(&entry.dir, &entry.deletable());
     }
     reg.flush()?;
     if id.len() == 40 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -109,6 +107,34 @@ pub fn remove(state_dir: &Path, id: &str, delete_files: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Forgets every torrent whose id is not in `keep`, deleting the unfinished data of those (a
+/// finished torrent keeps its files). Returns the ids that were dropped.
+///
+/// The desktop app calls it before it starts the engine, with the torrents that still have a row
+/// in the list: a registry entry without a row is a torrent the user removed or cancelled while
+/// the engine was not running, and must not come back to life.
+pub fn retain(state_dir: &Path, keep: &std::collections::HashSet<String>) -> Result<Vec<String>> {
+    let reg = open(state_dir)?;
+    let mut dropped = Vec::new();
+    for (id, entry) in reg.all() {
+        if keep.contains(&id) {
+            continue;
+        }
+        reg.remove(&id);
+        if !entry.completed {
+            remove_laid_out_files(&entry.dir, &entry.deletable());
+        }
+        if id.len() == 40 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            let _ = std::fs::remove_file(state_dir.join("torrents").join(format!("{id}.torrent")));
+        }
+        dropped.push(id);
+    }
+    if !dropped.is_empty() {
+        reg.flush()?;
+    }
+    Ok(dropped)
 }
 
 /// The folder a state folder keeps stored `.torrent` files in (for diagnostics).

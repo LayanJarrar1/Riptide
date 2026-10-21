@@ -74,6 +74,15 @@ pub fn log_filter<I: IntoIterator<Item = String>>(args: I, env_rust_log: Option<
         .unwrap_or_else(|| riptide_log::LogConfig::DEFAULT_FILTER.to_string())
 }
 
+/// [`log_filter`] for a whole command line (program name first). A launch that opens a link or
+/// file carries data, never flags, so nothing in it can change the log level.
+pub fn launch_log_filter(args: &[String], env_rust_log: Option<String>) -> String {
+    if protocol::is_open_launch(args) {
+        return log_filter(Vec::new(), env_rust_log);
+    }
+    log_filter(args.iter().cloned(), env_rust_log)
+}
+
 /// Resolves the data directory (installed, or portable when `portable.txt` sits next to the
 /// executable), creates it and starts the logger. Returns the guard that must live until the
 /// process exits. Failing to log is not fatal: the app still runs, and the reason is printed
@@ -359,6 +368,7 @@ pub fn run() {
             queues::run_post_action,
             torrent::torrent_preview,
             torrent::add_torrent,
+            torrent::torrent_web_seed_add,
             torrent::list_torrents,
             torrent::torrent_live,
             torrent::pick_torrent_file,
@@ -377,6 +387,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_open_launch_never_changes_the_log_level() {
+        let link = "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=x";
+        for list in [
+            // the registered form, with a link that was split into extra arguments
+            vec!["riptide", "--open-link", "--", link, "--log-level", "trace"],
+            vec!["riptide", "--open-link", "--", link, "--log-level=trace"],
+            // an earlier registration (`"exe" "%1"`)
+            vec!["riptide", link, "--log-level", "trace"],
+        ] {
+            let all: Vec<String> = list.iter().map(|s| (*s).to_string()).collect();
+            assert_eq!(launch_log_filter(&all, None), "info", "{list:?}");
+        }
+        // an ordinary launch still honours the flag
+        let plain: Vec<String> = ["riptide", "--log-level", "debug"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert_eq!(launch_log_filter(&plain, None), "debug");
+    }
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()

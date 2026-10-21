@@ -13,6 +13,36 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 BitTorrent, Research with an optional AI assistant, and an integrated title bar with menus. An alpha for
 Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.5).
 
+### Security and hardening
+
+- Hardening from the independent security review of this release:
+  - Two torrents that name the same file no longer share it, and removing or cancelling a torrent
+    deletes only files it created itself; names are planned around every other torrent, queued
+    downloads and `.rtpart` files.
+  - A torrent removed or cancelled while the torrent engine was not running no longer comes back
+    and downloads with no row in the list.
+  - Pause all pauses HTTP downloads even when the torrent engine is not running.
+  - Files of a torrent get the Mark of the Web as soon as each one completes, not at the end.
+  - The torrent engine (listening port, DHT) starts at launch only when a torrent is downloading
+    or seeding; paused and finished torrents leave no open port.
+  - Answers from AI providers and research sources are cut off at 8 MiB while they arrive.
+  - An API key is sent only to the address it was saved for; changing the endpoint asks for the
+    key again. The model list is always fetched from the saved endpoint.
+  - The `magnet:` handler passes the link as data (`--open-link -- "%1"`); a link that breaks out
+    of its quotes can no longer add flags such as `--unregister-host` or `--log-level`.
+  - Web seed downloads and search results that point at the local network, localhost or a
+    metadata address are refused; web seed addresses use the names written in the `.torrent`.
+  - Smaller: the upgrade keeps the old database as `riptide.sqlite.v3.bak` (written to a temporary
+    file, stripped of the saved cookies, headers and passwords, flushed and only then renamed; a
+    failed attempt leaves nothing behind and a good older copy is never replaced; deleted
+    automatically after 30 days, and safe to delete by hand); ids of removed
+    downloads are not reused after the upgrade; folders are never created through a junction;
+    the server-sent-events parser is linear; research hints are deleted; magnet links are
+    de-duplicated by info-hash; file names with `&`, `=` or `+` keep their extension in name
+    suggestions; no `Referer` on redirects; more Windows device names are defused; a cancelled
+    AI search still counts against the daily budget; unregistering restores another app's
+    `magnet:` handler.
+
 ### Added
 
 - **BitTorrent.** Paste a magnet link in *Add download* (or choose a `.torrent` file, or use *File,
@@ -88,6 +118,22 @@ Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/rel
   second launch and the window's drop event were.
 - The alpha is not code-signed, so SmartScreen may warn on first run. SHA-256 checksums are in
   `SHA256SUMS.txt`.
+- Do not go back to alpha.4 after upgrading: it cannot open schema version 5. The
+  upgrade keeps `riptide.sqlite.v3.bak` next to the database for that case (without saved
+  cookies or passwords; deleted automatically after 30 days).
+- Once the torrent engine has started in a run (by adding or resuming a torrent) it stays up until
+  you quit Riptide, with its listening port on all interfaces (Windows may ask about the firewall;
+  allowing it needs no admin rights, declining only stops incoming peers).
+- The private-network check for web seeds and search results resolves a host name once when you
+  click and again when the download connects; a hostile DNS server could answer differently the
+  second time. Redirects from a public address to a private one are refused as for every download.
+- If a torrent needs a folder named like a file another torrent holds, Riptide refuses it with an
+  error instead of renaming the folder.
+- A search that is cancelled while the model is still answering is charged for its request and
+  prompt only (the reply tokens already streamed are not counted).
+- Marking each finished torrent file as downloaded from the internet relies on engine events; if
+  the app is so busy that events are dropped, the remaining files are marked when the torrent
+  completes.
 
 ## [0.1.0-alpha.4] - 2026-10-19
 

@@ -7,7 +7,8 @@ import { seedDownloads } from '../../data/mock-data';
 import { MOCK_ENGINE_AUTOSTART, MockEngineService } from '../../data/mock-engine.service';
 import { I18nService, registerTable } from '../../i18n/i18n.service';
 import { Download } from '../../model/download';
-import { magnetLabel, magnetLinesOf, TorrentPreview, TorrentSource, TorrentView, webSeedUrl } from '../../model/torrent';
+import { magnetLabel, magnetLinesOf, TorrentPreview, TorrentSource, TorrentView } from '../../model/torrent';
+import { ToastService } from '../../ui/toast.service';
 import { UiState } from '../shell/ui-state.service';
 import { AddDownloadDialogComponent } from './add-download-dialog.component';
 import { DownloadRowComponent } from './download-row.component';
@@ -446,20 +447,6 @@ describe('several magnet links at once', () => {
   });
 });
 
-describe('web seeds', () => {
-  it('builds the address of each file on a folder seed and on a single-file seed', () => {
-    expect(webSeedUrl('https://archive.org/download/', 'item/dir one/f#1.mp4', true)).toBe('https://archive.org/download/item/dir%20one/f%231.mp4');
-    expect(webSeedUrl('https://m.example/files/a.iso', 'a.iso', false)).toBe('https://m.example/files/a.iso');
-    expect(webSeedUrl('https://m.example/files/', 'a.iso', false)).toBe('https://m.example/files/a.iso');
-    // never leaves the seed's folder, never takes credentials or other schemes
-    expect(webSeedUrl('https://m.example/f/', '../../etc/passwd', true)).toBe('https://m.example/f/etc/passwd');
-    expect(webSeedUrl('ftp://m.example/f/', 'a', true)).toBeNull();
-    expect(webSeedUrl('javascript:alert(1)', 'a', true)).toBeNull();
-    expect(webSeedUrl('https://u:p@m.example/f/', 'a', true)).toBeNull();
-    expect(webSeedUrl('not a url', 'a', true)).toBeNull();
-  });
-});
-
 describe('Torrent dialog with a torrent that lists web seeds', () => {
   let fixture: ComponentFixture<TorrentDialogComponent>;
   let engine: MockEngineService;
@@ -489,18 +476,26 @@ describe('Torrent dialog with a torrent that lists web seeds', () => {
     fixture.detectChanges();
   });
 
-  it('offers the web seed and adds the chosen files as ordinary downloads in the same folders', async () => {
+  it('offers the web seed and hands the chosen files to the engine, which builds the addresses', async () => {
     expect(el().textContent).toContain('also lists web seeds');
-    const add = spyOn(engine, 'add').and.resolveTo(1);
+    const add = spyOn(engine, 'addWebSeedFiles').and.resolveTo({ added: [1, 2], refused: 0 });
+    const direct = spyOn(engine, 'add').and.resolveTo(1);
     const btn = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes('Download from the web seed')) as HTMLButtonElement;
     btn.click();
     await flush();
-    expect(add).toHaveBeenCalledTimes(2);
-    const first = add.calls.argsFor(0)[0];
-    expect(first.url).toBe('https://archive.org/download/Item/a%20b.mp4');
-    expect(first.filename).toBe('a b.mp4');
-    expect(first.dir).toMatch(/Item$/);
-    expect(add.calls.argsFor(1)[0].url).toBe('https://archive.org/download/Item/sub/c.txt');
-    expect(add.calls.argsFor(1)[0].dir).toMatch(/Item[\\/]sub$/);
+    expect(add).toHaveBeenCalledTimes(1);
+    const [token, only] = add.calls.argsFor(0) as unknown as [string, readonly number[] | null];
+    expect(token).toBe('t');
+    expect(only === null || only.length === 2).toBeTrue();
+    // the page never builds an address itself: nothing it computes can aim a download anywhere
+    expect(direct).not.toHaveBeenCalled();
+  });
+
+  it('says so when the engine left files out because they point at a private network', async () => {
+    spyOn(engine, 'addWebSeedFiles').and.resolveTo({ added: [3], refused: 1 });
+    const btn = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.includes('Download from the web seed')) as HTMLButtonElement;
+    btn.click();
+    await flush();
+    expect(TestBed.inject(ToastService).toasts().some((t) => t.text.includes('left out'))).toBeTrue();
   });
 });

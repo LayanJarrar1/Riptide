@@ -60,8 +60,39 @@ fn strip_invisible(text: &str) -> String {
 
 /// Device names Windows reserves regardless of extension.
 const RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
+    // the newer Windows versions also treat these as devices
+    "COM0",
+    "LPT0",
+    "COM\u{b9}",
+    "COM\u{b2}",
+    "COM\u{b3}",
+    "LPT\u{b9}",
+    "LPT\u{b2}",
+    "LPT\u{b3}",
+    "CONIN$",
+    "CONOUT$",
 ];
 
 /// Makes `raw` safe to use as a file name inside a chosen folder.
@@ -194,6 +225,27 @@ pub fn unique_path(dir: &Path, name: &str, exists: impl Fn(&Path) -> bool) -> Pa
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn the_less_known_device_names_are_defused_too() {
+        for name in [
+            "COM0",
+            "lpt0.txt",
+            "COM\u{b9}",
+            "com\u{b2}.log",
+            "LPT\u{b3}",
+            "CONIN$",
+            "conout$.txt",
+        ] {
+            let out = sanitize_filename(name);
+            assert!(out.starts_with('_'), "{name:?} -> {out:?}");
+            assert_eq!(sanitize_filename(&out), out, "idempotent");
+        }
+        // ordinary names that merely look similar are untouched
+        for name in ["COM10", "COMM1", "LPT", "CONIN", "console.txt"] {
+            assert_eq!(sanitize_filename(name), name);
+        }
+    }
 
     #[test]
     fn evil_names_become_harmless() {

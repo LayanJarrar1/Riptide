@@ -92,7 +92,7 @@ pub struct SeenMatch {
     pub matched_by: String,
 }
 
-fn hint_key(id: DownloadId) -> String {
+pub(crate) fn hint_key(id: DownloadId) -> String {
     format!("seen.hint.{}", id.0)
 }
 
@@ -160,7 +160,15 @@ impl Engine {
         .and_then(|j| serde_json::from_str(&j).ok())
         .unwrap_or_default();
         let path = d.final_path();
-        let size = std::fs::metadata(&path).ok().map(|m| m.len()).or(d.size);
+        // a stat call, off the async runtime
+        let size = {
+            let p = path.clone();
+            tokio::task::spawn_blocking(move || std::fs::metadata(&p).ok().map(|m| m.len()))
+                .await
+                .ok()
+                .flatten()
+                .or(d.size)
+        };
         let url_keys = |d: &Download, hint: &SeenHint, sha: Option<&str>| {
             let mut keys = dedup::keys(&Identity {
                 url: Some(&d.url),
@@ -209,7 +217,7 @@ impl Engine {
                 let keys = vec![format!("sha256:{h}")];
                 db(&self.inner.store, move |s| {
                     s.seen_add_keys(id.0, Some(&h), &keys)?;
-                    s.set_setting(&hint_k, "")
+                    s.remove_setting(&hint_k)
                 })
                 .await?;
             }

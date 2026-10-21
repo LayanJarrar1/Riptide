@@ -141,7 +141,7 @@ describe('AiSettingsComponent', () => {
     expect(el.textContent).toContain('••••wxyz');
     expect(el.innerHTML).not.toContain(SECRET);
     // the model list was fetched with the stored key (the page never passes it again)
-    expect(calls.find((c) => c.cmd === 'ai_list_models')?.args).toEqual({ provider: 'deepinfra', baseUrl: null });
+    expect(calls.find((c) => c.cmd === 'ai_list_models')?.args).toEqual({ provider: 'deepinfra' });
   });
 
   it('shows the test result with latency and provider-reported tokens, and a clear error', async () => {

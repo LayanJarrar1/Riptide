@@ -50,6 +50,74 @@ async fn wait_hashed(engine: &Engine, url: &str) {
     }
 }
 
+fn hint_rows(dir: &tempfile::TempDir) -> Vec<String> {
+    let store = riptide_store::Store::open(&config(dir).db_path).unwrap();
+    store
+        .settings()
+        .unwrap()
+        .into_iter()
+        .map(|(k, _)| k)
+        .filter(|k| k.starts_with("seen.hint."))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn research_hints_do_not_pile_up_in_the_settings_table() {
+    let server = TestServer::spawn().await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::open(config(&dir)).await.unwrap();
+    let hint = || SeenHint {
+        title: Some("A private research title".into()),
+        doi: Some("10.1234/x".into()),
+        ..SeenHint::default()
+    };
+    // a download that finishes: its hint row is deleted once it is indexed
+    let url = server.url("/ok?size=100000");
+    let done = engine
+        .add_hinted(DownloadRequest::new(url.clone()), hint(), false)
+        .await
+        .unwrap();
+    wait_completed(&engine, done).await;
+    wait_hashed(&engine, &url).await;
+    // one that is removed before it ever finishes
+    let slow = engine
+        .add_hinted(
+            DownloadRequest {
+                start_paused: true,
+                ..DownloadRequest::new(server.url("/slow?bps=1000&size=100000"))
+            },
+            hint(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        hint_rows(&dir).len(),
+        1,
+        "the unfinished download keeps its hint for now"
+    );
+    engine.remove(slow, true).await.unwrap();
+    assert!(hint_rows(&dir).is_empty(), "{:?}", hint_rows(&dir));
+
+    // and "Clear download memory" removes hints that are still waiting
+    let waiting = engine
+        .add_hinted(
+            DownloadRequest {
+                start_paused: true,
+                ..DownloadRequest::new(server.url("/ok?size=1000&seed=9"))
+            },
+            hint(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(hint_rows(&dir).len(), 1);
+    engine.seen_forget().await.unwrap();
+    assert!(hint_rows(&dir).is_empty());
+    let _ = waiting;
+    engine.shutdown().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn duplicate_is_found_across_url_variants_and_by_hash_and_goes_stale_on_delete() {
     let server = TestServer::spawn().await;

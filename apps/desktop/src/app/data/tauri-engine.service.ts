@@ -12,7 +12,7 @@ import type { BatchError } from '../tauri/bridge/BatchError';
 import type { BatchOutcome } from '../tauri/bridge/BatchOutcome';
 import type { UrlList } from '../tauri/bridge/UrlList';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
-import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource, TorrentView } from '../model/torrent';
+import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource, TorrentView, WebSeedResult } from '../model/torrent';
 import type { TorrentInfo } from '../tauri/bridge/TorrentInfo';
 import type { TorrentLive } from '../tauri/bridge/TorrentLive';
 import type { TorrentPreviewInfo } from '../tauri/bridge/TorrentPreviewInfo';
@@ -263,6 +263,12 @@ export class TauriEngineService extends DownloadEngine {
     const id = await this.invoke<number>('add_torrent', { request: m.toBridgeTorrentAdd(request) });
     await this.refreshRecord(id);
     return id;
+  }
+
+  async addWebSeedFiles(token: string, onlyFiles: readonly number[] | null, dir: string | undefined, startPaused: boolean): Promise<WebSeedResult> {
+    const r = await this.invoke<WebSeedResult>('torrent_web_seed_add', { request: { token, onlyFiles, dir: dir ?? null, startPaused } });
+    await Promise.all(r.added.map((id) => this.refreshRecord(id)));
+    return r;
   }
 
   async torrentLive(id: number): Promise<TorrentLiveView> {

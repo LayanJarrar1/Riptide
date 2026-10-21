@@ -5,7 +5,7 @@ import { FormatService } from '../../core/format.service';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
-import { selectedBytes, TorrentPreview, TorrentSource, webSeedUrl } from '../../model/torrent';
+import { selectedBytes, TorrentPreview, TorrentSource } from '../../model/torrent';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
@@ -628,26 +628,17 @@ export class TorrentDialogComponent {
     if (p === null || this.seedBusy()) {
       return;
     }
-    const seed = p.webSeeds[0];
     const chosen = this.selectionArray();
-    const files = p.files.filter((f) => chosen === null || chosen.includes(f.index));
     const base = this.dir().trim();
-    const sep = base.includes('\\') ? '\\' : '/';
     this.seedBusy.set(true);
-    let added = 0;
     try {
-      for (const f of files) {
-        const url = webSeedUrl(seed, f.path, p.files.length > 1);
-        if (url === null) {
-          continue;
-        }
-        const parts = f.path.split('/').filter((x) => x.length > 0);
-        const name = parts.pop() ?? p.name;
-        const dir = base.length > 0 ? [base, ...parts].join(sep) : undefined;
-        await this.engine.add({ url, filename: name, dir, allowDuplicate: true });
-        added++;
-      }
+      // the engine builds the addresses from the torrent's own names and refuses private networks
+      const result = await this.engine.addWebSeedFiles(p.token, chosen, base.length > 0 ? base : undefined, false);
+      const added = result.added.length;
       this.toasts.show(added > 0 ? 'success' : 'danger', this.i18n.t('torrent.webSeedAdded').replace('{n}', String(added)));
+      if (result.refused > 0) {
+        this.toasts.show('danger', this.i18n.t('torrent.webSeedRefused').replace('{n}', String(result.refused)));
+      }
       if (added > 0) {
         this.closed.emit();
       }

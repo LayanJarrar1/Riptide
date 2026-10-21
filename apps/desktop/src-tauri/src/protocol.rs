@@ -16,10 +16,15 @@
 //! `RIPTIDE_REGISTRY_ROOT` test knob) as the browser integration, so the logic is tested against
 //! memory and, on Windows, against a throw-away key.
 //!
-//! What arrives on the command line is treated as untrusted text: a link must be a `magnet:?`
-//! URI of at most 8 KiB, a file must end in `.torrent` and exist; anything else is ignored. The
-//! link or path only ever opens the torrent dialog (the user still chooses the files); nothing is
-//! executed, and the engine re-checks the torrent itself.
+//! What arrives on the command line is treated as untrusted text. The registered command is
+//! `"exe" --open-link -- "%1"`: after the marker and the `--` there is exactly **one** argument,
+//! and it is data, never a flag. A launcher that does not escape a `"` inside the link could split
+//! it into several arguments (`... " --unregister-host`); such a command line has more than one
+//! data argument and is refused as a whole, and an open launch never runs the installer hooks
+//! (`--register-host`, `--unregister-host`) or honours `--log-level`. A link must be a `magnet:?`
+//! URI of at most 8 KiB without quotes or control characters, a file must end in `.torrent` and
+//! exist; anything else is ignored. The link or path only ever opens the torrent dialog (the user
+//! still chooses the files); nothing is executed, and the engine re-checks the torrent itself.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -34,6 +39,8 @@ use crate::integration::{platform_registry, Registry};
 pub const MAGNET_KEY: &str = r"Software\Classes\magnet";
 /// Registry key of the `.torrent` extension.
 pub const TORRENT_EXT_KEY: &str = r"Software\Classes\.torrent";
+/// Where Riptide keeps the `magnet:` command another app had, to give it back on unregister.
+pub const PREVIOUS_COMMAND_VALUE: &str = "Riptide.PreviousCommand";
 /// ProgID Riptide registers for `.torrent` files.
 pub const TORRENT_PROG_ID: &str = "Riptide.Torrent";
 /// Tauri event carrying a [`TorrentSourceRequest`] to open (a second launch handed over a link).
@@ -41,6 +48,11 @@ pub const OPEN_EVENT: &str = "riptide://open-torrent";
 
 /// Longest magnet link accepted from the command line.
 const MAX_MAGNET_LEN: usize = 8 * 1024;
+/// Longest `.torrent` path accepted from the command line (the Windows limit is 32 767).
+const MAX_PATH_LEN: usize = 32 * 1024;
+/// First argument of a launch that opens a link or file; everything after the following `--` is
+/// data.
+pub const OPEN_MARKER: &str = "--open-link";
 
 fn prog_id_key() -> String {
     format!(r"Software\Classes\{TORRENT_PROG_ID}")
@@ -50,9 +62,15 @@ fn command_key(root: &str) -> String {
     format!(r"{root}\shell\open\command")
 }
 
-/// The command Windows runs: the executable and the link or file as one quoted argument.
+/// The command Windows runs: the executable, the marker, `--` and the link or file as one quoted
+/// argument.
 fn command_line(exe: &Path) -> String {
-    format!("\"{}\" \"%1\"", exe.display())
+    format!("\"{}\" {OPEN_MARKER} -- \"%1\"", exe.display())
+}
+
+/// A command that starts one of Riptide's own executables (any install).
+fn is_riptide_command(cmd: &str) -> bool {
+    cmd.to_ascii_lowercase().contains("riptide")
 }
 
 fn same_command(found: &str, expected: &str) -> bool {
@@ -111,6 +129,17 @@ pub fn register(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolStatu
     let cmd = command_line(exe);
     let icon = format!("\"{}\",0", exe.display());
 
+    // another app's `magnet:` handler is remembered (once), so unregistering can give it back
+    if let Some(previous) = registry.default_value(&command_key(MAGNET_KEY)) {
+        let has_backup = registry
+            .named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE)
+            .is_some();
+        if !has_backup && !previous.trim().is_empty() && !is_riptide_command(&previous) {
+            registry
+                .set_named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE, &previous)
+                .map_err(|e| io("cannot write the magnet key", &e))?;
+        }
+    }
     registry
         .set_default_value(MAGNET_KEY, "URL:Magnet Protocol")
         .map_err(|e| io("cannot write the magnet key", &e))?;
@@ -163,9 +192,20 @@ pub fn unregister(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolSta
     let current = status(exe, registry);
 
     if current.magnet {
+        let previous = registry
+            .named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE)
+            .filter(|c| !c.trim().is_empty() && !same_command(c, &command_line(exe)));
         registry
             .delete_key(MAGNET_KEY)
             .map_err(|e| io("cannot remove the magnet key", &e))?;
+        // the handler that was there before Riptide is put back
+        if let Some(previous) = previous {
+            registry
+                .set_default_value(MAGNET_KEY, "URL:Magnet Protocol")
+                .and_then(|()| registry.set_named_value(MAGNET_KEY, "URL Protocol", ""))
+                .and_then(|()| registry.set_default_value(&command_key(MAGNET_KEY), &previous))
+                .map_err(|e| io("cannot restore the previous magnet handler", &e))?;
+        }
     }
     if current.torrent {
         registry
@@ -190,27 +230,68 @@ pub fn unregister(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolSta
     Ok(status(exe, registry))
 }
 
-/// The torrent a command line asks to open: the first argument that is a `magnet:?` link (at most
-/// 8 KiB) or an existing file whose name ends in `.torrent`. Flags (`--...`) and everything else
-/// are ignored.
-pub fn open_target(args: &[String]) -> Option<TorrentSourceRequest> {
-    args.iter().skip(1).find_map(|a| {
-        let a = a.trim();
-        if a.starts_with("--") || a.is_empty() {
-            return None;
-        }
-        if a.len() <= MAX_MAGNET_LEN
-            && a.get(..8)
-                .is_some_and(|p| p.eq_ignore_ascii_case("magnet:?"))
-        {
-            return Some(TorrentSourceRequest::Magnet { uri: a.to_string() });
-        }
-        let path = PathBuf::from(a);
-        let is_torrent = path
+fn looks_like_target(a: &str) -> bool {
+    a.get(..8)
+        .is_some_and(|p| p.eq_ignore_ascii_case("magnet:?"))
+        || Path::new(a)
             .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("torrent"));
-        (is_torrent && path.is_file()).then_some(TorrentSourceRequest::File { path })
-    })
+            .is_some_and(|e| e.eq_ignore_ascii_case("torrent"))
+}
+
+/// Whether this command line (program name first) asks to open a link or file, as opposed to
+/// being an ordinary launch or an installer hook. Such a launch carries no flags at all: the
+/// caller must not honour `--register-host`, `--unregister-host` or `--log-level` in it.
+pub fn is_open_launch(args: &[String]) -> bool {
+    match args.get(1) {
+        // an earlier registration passes the link bare; anything that merely starts like a
+        // magnet link (`magnet:x`) or ends like a torrent counts as an open launch, so that it
+        // never runs a hook, and `open_target` then refuses what is not exactly well formed
+        Some(a) => {
+            a == OPEN_MARKER
+                || (!a.starts_with("--")
+                    && (a
+                        .get(..7)
+                        .is_some_and(|p| p.eq_ignore_ascii_case("magnet:"))
+                        || looks_like_target(a)))
+        }
+        None => false,
+    }
+}
+
+/// The one argument that carries the link or file of an open launch; `None` when the command
+/// line is not a well-formed open launch (extra arguments mean a link that was split).
+fn open_data(args: &[String]) -> Option<&str> {
+    match args.get(1).map(String::as_str)? {
+        OPEN_MARKER => (args.len() == 4 && args[2] == "--").then(|| args[3].as_str()),
+        // a handler registered by an earlier preview: `"exe" "%1"`, nothing else
+        a if !a.starts_with("--") && looks_like_target(a) => (args.len() == 2).then_some(a),
+        _ => None,
+    }
+}
+
+/// The torrent a command line asks to open: a `magnet:?` link (at most 8 KiB) or an existing
+/// file whose name ends in `.torrent`, passed as the single data argument of an open launch (see
+/// the module docs). Flags, extra arguments, quotes and control characters make the whole command
+/// line invalid.
+pub fn open_target(args: &[String]) -> Option<TorrentSourceRequest> {
+    let a = open_data(args)?.trim();
+    if a.is_empty() || a.starts_with("--") || a.chars().any(|c| c == '"' || c.is_control()) {
+        return None;
+    }
+    if a.get(..8)
+        .is_some_and(|p| p.eq_ignore_ascii_case("magnet:?"))
+    {
+        return (a.len() <= MAX_MAGNET_LEN)
+            .then(|| TorrentSourceRequest::Magnet { uri: a.to_string() });
+    }
+    if a.len() > MAX_PATH_LEN {
+        return None;
+    }
+    let path = PathBuf::from(a);
+    let is_torrent = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("torrent"));
+    (is_torrent && path.is_file()).then_some(TorrentSourceRequest::File { path })
 }
 
 /// A torrent that came with the first launch, waiting for the webview to ask for it.
@@ -352,7 +433,7 @@ mod tests {
         assert_eq!(
             r.default_value(r"Software\Classes\magnet\shell\open\command")
                 .as_deref(),
-            Some(r#""C:\Apps\Riptide\riptide-desktop.exe" "%1""#)
+            Some(r#""C:\Apps\Riptide\riptide-desktop.exe" --open-link -- "%1""#)
         );
         assert_eq!(
             r.named_value(MAGNET_KEY, "URL Protocol").as_deref(),
@@ -414,6 +495,38 @@ mod tests {
     }
 
     #[test]
+    fn another_apps_magnet_handler_is_given_back_when_ours_is_removed() {
+        let mut r = Memory::default();
+        let theirs = r#""C:\Program Files\qBittorrent\qbittorrent.exe" "%1""#;
+        r.set_default_value(MAGNET_KEY, "URL:Magnet Protocol")
+            .unwrap();
+        r.set_default_value(&command_key(MAGNET_KEY), theirs)
+            .unwrap();
+
+        register(&exe(), &mut r).unwrap();
+        assert!(status(&exe(), &r).magnet);
+        // registering again keeps the original backup, not our own command
+        register(&exe(), &mut r).unwrap();
+        assert_eq!(
+            r.named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE).as_deref(),
+            Some(theirs)
+        );
+
+        let s = unregister(&exe(), &mut r).unwrap();
+        assert!(!s.magnet);
+        assert_eq!(
+            r.default_value(&command_key(MAGNET_KEY)).as_deref(),
+            Some(theirs),
+            "the other app lost its handler"
+        );
+        assert_eq!(
+            r.named_value(MAGNET_KEY, "URL Protocol").as_deref(),
+            Some("")
+        );
+        assert!(r.named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE).is_none());
+    }
+
+    #[test]
     fn unregistering_removes_ours_and_leaves_another_install_alone() {
         let mut r = Memory::default();
         register(&exe(), &mut r).unwrap();
@@ -463,9 +576,152 @@ mod tests {
             open_target(&args(&["riptide-desktop.exe", &link])),
             Some(TorrentSourceRequest::Magnet { uri: link.clone() })
         );
+        // the registered form
+        assert_eq!(
+            open_target(&args(&["riptide-desktop.exe", OPEN_MARKER, "--", &link])),
+            Some(TorrentSourceRequest::Magnet { uri: link.clone() })
+        );
+        // a flag next to the link is not accepted any more
         assert_eq!(
             open_target(&args(&["riptide-desktop.exe", "--minimized", &link])),
-            Some(TorrentSourceRequest::Magnet { uri: link })
+            None
+        );
+    }
+
+    /// Splits a command line the way the Microsoft C runtime does (what `CommandLineToArgvW` and
+    /// Rust's `std::env::args` implement): double quotes group, `\"` is a literal quote,
+    /// backslashes only count before a quote.
+    fn split_msvc(cmd: &str) -> Vec<String> {
+        let chars: Vec<char> = cmd.chars().collect();
+        let (mut out, mut cur, mut in_q, mut has) = (Vec::new(), String::new(), false, false);
+        let mut i = 0;
+        while i < chars.len() {
+            match chars[i] {
+                '\\' => {
+                    let mut n = 0;
+                    while chars.get(i) == Some(&'\\') {
+                        n += 1;
+                        i += 1;
+                    }
+                    has = true;
+                    if chars.get(i) == Some(&'"') {
+                        cur.extend(std::iter::repeat_n('\\', n / 2));
+                        if n % 2 == 1 {
+                            cur.push('"');
+                            i += 1;
+                        }
+                    } else {
+                        cur.extend(std::iter::repeat_n('\\', n));
+                    }
+                    continue;
+                }
+                '"' => {
+                    in_q = !in_q;
+                    has = true;
+                }
+                c if c.is_whitespace() && !in_q => {
+                    if has {
+                        out.push(std::mem::take(&mut cur));
+                        has = false;
+                    }
+                }
+                c => {
+                    cur.push(c);
+                    has = true;
+                }
+            }
+            i += 1;
+        }
+        if has {
+            out.push(cur);
+        }
+        out
+    }
+
+    #[test]
+    fn a_link_that_breaks_out_of_its_quotes_cannot_become_flags() {
+        let hash = "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c";
+        // what a launcher that does not escape quotes would substitute for %1
+        let hostile =
+            format!("magnet:?xt=urn:btih:{hash}&dn=x\" --unregister-host --log-level \"trace");
+        let template = command_line(&exe());
+        let cmd = template.replace("%1", &hostile);
+        let argv = split_msvc(&cmd);
+        // the control: the quote really does split the link into flags
+        assert!(argv.iter().any(|a| a == "--unregister-host"), "{argv:?}");
+        assert!(is_open_launch(&argv));
+        assert_eq!(open_target(&argv), None, "a split link must be refused");
+
+        // the same holds for an earlier registration (`"exe" "%1"`)
+        let legacy = format!("\"{}\" \"{hostile}\"", exe().display());
+        let argv = split_msvc(&legacy);
+        assert!(argv.iter().any(|a| a == "--unregister-host"), "{argv:?}");
+        assert!(is_open_launch(&argv));
+        assert_eq!(open_target(&argv), None);
+
+        // and one well-formed link goes through the registered command unchanged
+        let good = format!("magnet:?xt=urn:btih:{hash}&dn=a%20b");
+        let argv = split_msvc(&template.replace("%1", &good));
+        assert_eq!(
+            open_target(&argv),
+            Some(TorrentSourceRequest::Magnet { uri: good })
+        );
+    }
+
+    #[test]
+    fn an_old_style_launch_with_a_loose_magnet_prefix_is_still_not_a_hook() {
+        let hostile = args(&[
+            "x.exe",
+            "magnet:x",
+            "--unregister-host",
+            "--log-level",
+            "trace",
+        ]);
+        assert!(is_open_launch(&hostile));
+        assert_eq!(open_target(&hostile), None);
+        let one = args(&["x.exe", "magnet:x"]);
+        assert!(is_open_launch(&one));
+        assert_eq!(open_target(&one), None, "not magnet:? exactly");
+        let quoted = args(&[
+            "x.exe",
+            "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c\"",
+        ]);
+        assert_eq!(open_target(&quoted), None);
+    }
+
+    #[test]
+    fn quotes_control_characters_and_missing_separators_are_refused() {
+        let hash = "dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c";
+        for bad in [
+            format!("magnet:?xt=urn:btih:{hash}&dn=a\"b"),
+            format!("magnet:?xt=urn:btih:{hash}&dn=a\nb"),
+            format!("magnet:?xt=urn:btih:{hash}&dn=a\0b"),
+            format!("magnet:?xt=urn:btih:{hash}&dn=a\rb"),
+        ] {
+            assert_eq!(
+                open_target(&args(&["x.exe", OPEN_MARKER, "--", &bad])),
+                None,
+                "{bad:?}"
+            );
+        }
+        let link = format!("magnet:?xt=urn:btih:{hash}");
+        // the marker without the `--`, a flag after it, or no data at all
+        assert_eq!(open_target(&args(&["x.exe", OPEN_MARKER, &link])), None);
+        assert_eq!(
+            open_target(&args(&["x.exe", OPEN_MARKER, "--x", &link])),
+            None
+        );
+        assert_eq!(open_target(&args(&["x.exe", OPEN_MARKER, "--"])), None);
+        // a link that starts with dashes is data, but not a link
+        assert_eq!(
+            open_target(&args(&["x.exe", OPEN_MARKER, "--", "--unregister-host"])),
+            None
+        );
+        // an oversized link
+        let huge = format!("magnet:?xt=urn:btih:{}", "a".repeat(MAX_MAGNET_LEN));
+        assert_eq!(
+            open_target(&args(&["x.exe", OPEN_MARKER, "--", &huge])),
+            None
         );
     }
 
@@ -476,7 +732,7 @@ mod tests {
         std::fs::write(&file, b"d4:infod4:name1:xee").unwrap();
         let path = file.to_string_lossy().into_owned();
         assert_eq!(
-            open_target(&args(&["x.exe", &path])),
+            open_target(&args(&["x.exe", OPEN_MARKER, "--", &path])),
             Some(TorrentSourceRequest::File { path: file })
         );
         let missing = dir.path().join("gone.torrent");

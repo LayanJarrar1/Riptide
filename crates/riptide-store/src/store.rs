@@ -524,6 +524,13 @@ impl Store {
         Ok(())
     }
 
+    /// Deletes a setting (no error when it is not there).
+    pub fn remove_setting(&mut self, key: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key = ?1", [key])?;
+        Ok(())
+    }
+
     /// Every setting, sorted by key.
     pub fn settings(&self) -> Result<Vec<(String, String)>> {
         let mut stmt = self

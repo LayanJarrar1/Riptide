@@ -371,20 +371,168 @@ pub fn inspect_torrent(bytes: &[u8], exists: &dyn Fn(&Path) -> bool) -> Result<T
     )
 }
 
-/// Reads a `.torrent` file from disk (size-capped) and vets it.
-pub fn inspect_torrent_file(path: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<TorrentPreview> {
+/// The name and the file paths exactly as the `.torrent` spells them (one list of components per
+/// file, empty for a BEP 47 padding file). The planned layout of [`TorrentPreview`] is for the
+/// disk; a web seed serves the files under the torrent's own names.
+pub fn original_layout(bytes: &[u8]) -> Result<(String, Vec<Vec<String>>)> {
+    inspect_torrent(bytes, &|_| false)?; // vets the data again
+    let parsed = torrent_from_bytes(bytes)
+        .map_err(|e| Error::InvalidTorrent(format!("cannot parse: {e}")))?;
+    let info = parsed
+        .info
+        .data
+        .clone()
+        .validate()
+        .map_err(|e| Error::InvalidTorrent(e.to_string()))?;
+    let name = info
+        .name()
+        .map(|n| n.into_owned())
+        .unwrap_or_else(|| "torrent".to_string());
+    let files = info
+        .iter_file_details()
+        .map(|fd| {
+            if fd.attrs().padding {
+                Vec::new()
+            } else {
+                fd.filename
+                    .iter_components()
+                    .map(|c| c.into_owned())
+                    .collect()
+            }
+        })
+        .collect();
+    Ok((name, files))
+}
+
+/// The address of one file on a web seed (BEP 19). A multi-file torrent is served under
+/// `<seed>/<name>/<path...>`; a single-file torrent at the seed itself, or at `<seed>/<name>`
+/// when the seed is a folder (ends with `/`). Every part is percent-encoded; empty, `.` and `..`
+/// parts are dropped, so the address never leaves the seed's folder. `None` for a seed that is
+/// not an `http(s)` address or carries credentials.
+pub fn web_seed_url(
+    seed: &str,
+    name: &str,
+    components: &[String],
+    multi_file: bool,
+) -> Option<String> {
+    let mut url = url::Url::parse(seed.trim()).ok()?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return None;
+    }
+    url.set_fragment(None);
+    let folder = url.path().ends_with('/');
+    if !multi_file && !folder {
+        return Some(url.to_string());
+    }
+    let parts: Vec<&str> = if multi_file {
+        std::iter::once(name)
+            .chain(components.iter().map(String::as_str))
+            .collect()
+    } else {
+        vec![name]
+    };
+    {
+        let mut segs = url.path_segments_mut().ok()?;
+        segs.pop_if_empty();
+        for p in parts {
+            if p.is_empty() || p == "." || p == ".." {
+                continue;
+            }
+            segs.push(p);
+        }
+    }
+    Some(url.to_string())
+}
+
+/// Reads a `.torrent` file from disk, refusing anything over the size cap.
+pub fn read_torrent_file(path: &Path) -> Result<Vec<u8>> {
     let len = std::fs::metadata(path)?.len();
     if len > MAX_TORRENT_FILE_BYTES as u64 {
         return Err(Error::InvalidTorrent(format!(
             "file is larger than {MAX_TORRENT_FILE_BYTES} bytes"
         )));
     }
-    inspect_torrent(&std::fs::read(path)?, exists)
+    Ok(std::fs::read(path)?)
+}
+
+/// Reads a `.torrent` file from disk (size-capped) and vets it.
+pub fn inspect_torrent_file(path: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<TorrentPreview> {
+    inspect_torrent(&read_torrent_file(path)?, exists)
+}
+
+/// The info-hash of `.torrent` data, `None` when it does not parse. Used to tell a torrent's own
+/// files from other torrents' before the full vetting.
+pub fn info_hash_of_bytes(bytes: &[u8]) -> Option<String> {
+    if bytes.len() > MAX_TORRENT_FILE_BYTES || check_bencode_shape(bytes).is_err() {
+        return None;
+    }
+    torrent_from_bytes(bytes)
+        .ok()
+        .map(|t| t.info_hash.as_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn web_seed_urls_use_the_names_of_the_torrent_and_stay_in_the_seed_folder() {
+        let c = |p: &[&str]| p.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            web_seed_url(
+                "https://m.example/dl/",
+                "Item",
+                &c(&["dir one", "f#1.mp4"]),
+                true
+            )
+            .as_deref(),
+            Some("https://m.example/dl/Item/dir%20one/f%231.mp4")
+        );
+        // the original names, not the sanitised ones: CON, a trailing dot, a duplicate
+        assert_eq!(
+            web_seed_url(
+                "https://m.example/dl/",
+                "set.",
+                &c(&["CON", "a (1).txt"]),
+                true
+            )
+            .as_deref(),
+            Some("https://m.example/dl/set./CON/a%20(1).txt")
+        );
+        assert_eq!(
+            web_seed_url("https://m.example/f/a.iso", "a.iso", &[], false).as_deref(),
+            Some("https://m.example/f/a.iso")
+        );
+        assert_eq!(
+            web_seed_url("https://m.example/f/", "a.iso", &[], false).as_deref(),
+            Some("https://m.example/f/a.iso")
+        );
+        // never leaves the folder, never takes credentials or other schemes
+        assert_eq!(
+            web_seed_url(
+                "https://m.example/f/",
+                "x",
+                &c(&["..", "..", "etc", "passwd"]),
+                true
+            )
+            .as_deref(),
+            Some("https://m.example/f/x/etc/passwd")
+        );
+        assert_eq!(
+            web_seed_url("ftp://m.example/f/", "a", &c(&["b"]), true),
+            None
+        );
+        assert_eq!(web_seed_url("javascript:alert(1)", "a", &[], true), None);
+        assert_eq!(
+            web_seed_url("https://u:p@m.example/f/", "a", &[], true),
+            None
+        );
+        assert_eq!(web_seed_url("not a url", "a", &[], true), None);
+    }
 
     #[test]
     fn bencode_shape_accepts_and_rejects() {

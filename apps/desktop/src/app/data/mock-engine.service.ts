@@ -17,7 +17,7 @@ import {
   MediaProbe,
 } from '../model/download';
 import { isMagnetLink, magnetHash, selectedBytes } from '../model/torrent';
-import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource } from '../model/torrent';
+import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource, WebSeedResult } from '../model/torrent';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
@@ -249,6 +249,10 @@ export class MockEngineService extends DownloadEngine {
       webSeeds: [],
       existing,
     });
+  }
+
+  addWebSeedFiles(): Promise<WebSeedResult> {
+    return Promise.resolve({ added: [], refused: 0 });
   }
 
   addTorrent(request: TorrentAddRequest): Promise<number> {

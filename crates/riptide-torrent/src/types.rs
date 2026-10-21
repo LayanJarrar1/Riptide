@@ -106,6 +106,14 @@ pub struct AddOptions {
     /// The folder already holds (part of) this torrent's data: verify and reuse it instead of
     /// choosing fresh names.
     pub adopt_existing: bool,
+    /// Absolute paths other downloads (HTTP transfers, their `.rtpart` files) have claimed. The
+    /// planner picks other names for any file that would land on one of them, exactly as it does
+    /// for a file that already exists on disk.
+    pub reserved: Vec<PathBuf>,
+    /// A layout planned earlier (relative path of every file, torrent order, padding files
+    /// included): used as it is instead of planning again, so what the caller already recorded
+    /// and what is written cannot differ.
+    pub layout: Option<Vec<PathBuf>>,
 }
 
 /// Coarse state of a torrent.
@@ -209,6 +217,15 @@ pub enum TorrentEvent {
     Resumed {
         /// Info-hash.
         id: String,
+    },
+    /// Files whose every piece has just been verified, while the torrent as a whole is still
+    /// running. Lets a caller treat a finished file as usable (for example mark it as downloaded
+    /// from the internet) without waiting for the rest of the torrent.
+    FilesCompleted {
+        /// Info-hash.
+        id: String,
+        /// Indices from [`crate::TorrentPreview::files`].
+        indices: Vec<usize>,
     },
     /// Seeding stopped because the ratio or time limit was reached.
     SeedingStopped {

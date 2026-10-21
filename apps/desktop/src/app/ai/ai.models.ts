@@ -113,5 +113,5 @@ export interface AddRequest {
 
 export interface AddResponse {
   readonly added: readonly number[];
-  readonly skipped: readonly { readonly id: string; readonly reason: 'unknown' | 'page' | 'already_downloaded' | 'failed' }[];
+  readonly skipped: readonly { readonly id: string; readonly reason: 'unknown' | 'page' | 'already_downloaded' | 'private_address' | 'failed' }[];
 }
