@@ -515,6 +515,12 @@ pub fn register_for_installer(
 /// (without the program name) holds neither: the app starts normally. `Some(code)` is the
 /// process exit code; nothing is printed (the release build has no console).
 pub fn run_cli(args: &[String]) -> Option<i32> {
+    // a launch that opens a link or file carries data: whatever the link held, it is not a hook
+    let mut full = vec![String::new()];
+    full.extend_from_slice(args);
+    if crate::protocol::is_open_launch(&full) {
+        return None;
+    }
     let register = args.iter().any(|a| a == "--register-host");
     let unregister = args.iter().any(|a| a == "--unregister-host");
     if register == unregister {
