@@ -5,7 +5,7 @@
   "fontClass": "font-latin",
   "meta": {
     "title": "Riptide: free, open-source download manager for Windows",
-    "description": "A free, open-source download manager for Windows. Parallel connections, exact resume, SHA-256 verified. No ads, no telemetry, no accounts. English and Arabic.",
+    "description": "A free, open-source download manager for Windows. Parallel connections, exact resume, SHA-256 verified, BitTorrent. No ads, no telemetry, no accounts. English and Arabic.",
     "ogAlt": "Riptide: download faster, every byte verified"
   },
   "nav": {
@@ -37,9 +37,6 @@
   },
   "hero": {
     "status": "{channel} for Windows 10 and 11",
-  },
-  "hero": {
-    "status": "Alpha {n} for Windows 10 and 11",
     "titleA": "Download faster.",
     "titleB": "Every byte verified.",
     "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
@@ -291,7 +288,31 @@
         "h": "Site grabber",
         "p": "Crawl a page to a chosen depth and tick the files you want. Respects robots.txt."
       }
-    ]
+    ],
+    "new": {
+      "title": "New in {channel}",
+      "research": {
+        "h": "Research, from open sources.",
+        "p": "Search papers, books, music, video, games, software, images and datasets. Results arrive as each source answers, and every one shows its licence.",
+        "alt": "The Research page in the light theme: result cards with a source badge, a licence badge, a match score and one line saying why each result matches"
+      },
+      "torrent": {
+        "h": "Torrents, with a choice.",
+        "p": "Paste a magnet link or open a .torrent file, then pick the files before anything downloads. Seeding stays off unless you turn it on.",
+        "alt": "The Add torrent dialog: three files with their sizes, two ticked, a folder and a Download button"
+      },
+      "menus": {
+        "h": "Menus in the title bar.",
+        "p": "File, Downloads, Tools, View, Window and Help. They work from the keyboard.",
+        "alt": "The title bar with the File menu open: Add download, Batch download, Site grabber, Import link list and Open torrent file"
+      },
+      "privacy": {
+        "h": "AI only if you ask.",
+        "p": "Bring your own key. It stays in Windows Credential Manager, and your download history is shared only if you switch that on.",
+        "alt": "The AI privacy settings: sharing the download history and suggesting names are both switched off"
+      },
+      "policy": "Research searches open and public sources. It does not search piracy sites or torrent indexes. Only download what you have the right to download."
+    }
   },
   "vs": {
     "title": "Versus paid managers.",
@@ -384,13 +405,20 @@
       {
         "q": "Is it Windows only?",
         "a": "Windows 10 and 11 for now. The engine is portable, but there is no date for other platforms."
+      },
+      {
+        "q": "Can it download torrents?",
+        "a": "Yes. Paste a magnet link or open a .torrent file, choose the files, and it downloads like any other item. Seeding is off unless you turn it on."
+      },
+      {
+        "q": "Do I need an AI account?",
+        "a": "No. Research works as a plain search without one. If you add your own key, the AI ranks results and says why. Your key stays in Windows Credential Manager, and your download history is not shared unless you switch that on."
       }
     ]
   },
   "download": {
     "eyebrow": "Download",
     "badge": "{channel}",
-    "badge": "Alpha {n}",
     "title": "Get the latest Riptide.",
     "lead": "Free. Windows 10 and 11, 64-bit. No admin prompt.",
     "installer": "Download the latest version",
@@ -416,12 +444,8 @@
       "title": "What's new in",
       "notes": "Full release notes",
       "items": [
-        "Video pages from YouTube, Vimeo and more, with a quality picker",
-        "Queues with schedules and finish actions",
-        "Batch downloads and a site grabber",
-        "Browser extension: download this video, all links and images",
-        "Update notifications",
-        "New logo, icons and website"
+        "A downloads list that stays smooth with tens of thousands of items",
+        "A reminder when you have already downloaded a file"
       ]
     },
     "upd": {
@@ -446,7 +470,7 @@
       "description": "Riptide and its browser extension collect nothing: no telemetry, no accounts, no analytics. What stays on your computer and the few network requests Riptide makes."
     },
     "title": "Privacy policy",
-    "updated": "Last updated: 19 October 2026. Applies to the Riptide desktop app, the Riptide CLI, the Riptide browser extension for Chrome, Edge and Firefox, and this website.",
+    "updated": "Last updated: 21 October 2026. Applies to the Riptide desktop app, the Riptide CLI, the Riptide browser extension for Chrome, Edge and Firefox, and this website.",
     "lede": "Short version: Riptide collects nothing. There is no telemetry, no analytics, no account and no advertising. Your downloads, settings and history stay on your computer, and nobody, including the people who make Riptide, receives any of it.",
     "sections": [
       {
@@ -461,7 +485,7 @@
         "id": "local",
         "h": "What stays on your computer",
         "paras": [
-          "The download list, its progress and your settings are kept in a local database in your user profile (%LOCALAPPDATA%\\Riptide on Windows). Log files are written to the same folder; the addresses in them have their query strings removed and cookies, passwords and authorization headers are never written to them.",
+          "The download list, its progress, your settings and a list of what you finished downloading (used to warn you about repeats) are kept in a local database in your user profile (%LOCALAPPDATA%\\Riptide on Windows). Log files are written to the same folder; the addresses in them have their query strings removed and cookies, passwords and authorization headers are never written to them.",
           "You can delete any of this at any time by removing downloads from the list or by deleting the folder."
         ]
       },
@@ -469,8 +493,11 @@
         "id": "network",
         "h": "Network requests Riptide makes",
         "paras": [
-          "Riptide connects to the servers of the files you choose to download, and to nothing else on your behalf.",
-          "The only request it makes on its own is an optional check for a new version against GitHub Releases (github.com), at most once a day. It sends nothing about you beyond what any web request carries, such as your IP address, and it can be turned off in Settings. GitHub's own privacy statement applies to that request. Update video support, in Settings, fetches the newest yt-dlp only when you press it."
+          "Riptide connects to the servers of the files you choose to download and, only when you use the features described below, to the services those features need.",
+          "The only request it makes on its own is an optional check for a new version against GitHub Releases (github.com), at most once a day. It sends nothing about you beyond what any web request carries, such as your IP address, and it can be turned off in Settings. GitHub's own privacy statement applies to that request. Update video support, in Settings, fetches the newest yt-dlp only when you press it.",
+          "Torrents. When you add a magnet link or a .torrent file, Riptide connects to the peers, trackers and DHT nodes of that torrent, which can see your IP address, as with any torrent client. Seeding is off by default.",
+          "Research. When you search, your words go to the open sources you left switched on (for example OpenAlex, arXiv, Wikimedia Commons and GitHub), and to Brave Search or a SearXNG instance only if you set one up.",
+          "AI, optional and off until you set it up. The search text, the list of results and, only if you turn that on, the titles of up to 25 recent downloads go to the provider you chose, using your own API key. The key is kept in Windows Credential Manager and is never written to Riptide's settings, database or logs. There is no Riptide server in between."
         ]
       },
       {

@@ -576,8 +576,12 @@ html.calm.js-ready #streams .pin { --mx: 0; --my: 0; }
 .path { display: block; font-size: clamp(1rem, .6rem + 1.5vw, 1.7rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; overflow-wrap: anywhere; color: #d9f8fa; }
 .path::after { content: ""; display: inline-block; width: .5ch; height: 1em; margin-inline-start: 4px; vertical-align: -.12em; background: var(--cyan); animation: caret 1.1s steps(1) infinite; }
 @keyframes caret { 50% { opacity: 0; } }
+.bp-research { grid-column: span 7; }
+.bp-torrent { grid-column: span 5; }
+.bp-menus { grid-column: span 5; }
+.bp-privacy { grid-column: span 7; }
 @media (max-width: 1023px) {
-  .bp-details, .bp-junk, .bp-add, .bp-langs, .bp-video, .bp-user { grid-column: 1 / -1; }
+  .bp-details, .bp-junk, .bp-add, .bp-langs, .bp-video, .bp-user, .bp-research, .bp-torrent, .bp-menus, .bp-privacy { grid-column: 1 / -1; }
   .bp-details { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); }
 }
 @media (max-width: 640px) {
@@ -689,6 +693,12 @@ html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset
 
 /* Alpha 4: the primary button shows the version; the "more" row under the feature panels; what's new / always up to date; the Chrome install steps. */
 .btn .ver, .dl-t .ver { font-family: var(--mono); font-size: .75rem; font-weight: 500; opacity: .8; }
+.new-block { margin-top: clamp(28px, 4vw, 56px); }
+.new-title { margin-bottom: clamp(12px, 1.6vw, 20px); }
+.bp-new { align-content: space-between; }
+.bp-new .bp-shot { align-self: end; }
+.bp-new .bp-shot img { display: block; }
+.policy { margin-top: clamp(14px, 1.8vw, 22px); max-width: 62ch; color: var(--fg2); font-size: .9375rem; }
 .more { display: grid; gap: clamp(12px, 1.6vw, 20px); margin-top: clamp(12px, 1.6vw, 20px); }
 @media (min-width: 800px) { .more { grid-template-columns: repeat(3, 1fr); } }
 .more li { display: grid; gap: 8px; align-content: start; padding: clamp(16px, 2vw, 24px); border-radius: 20px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); }

@@ -379,6 +379,28 @@
           {{#each features.more}}<li class="rv" style="--i:{{@index}}"><h3 class="h3">{{h}}</h3>{{#if code}}<code dir="ltr">{{code}}</code>{{/if}}<p>{{p}}</p></li>
           {{/each}}
         </ul>
+        <div class="new-block" id="new">
+          <h3 class="h3 new-title rv">{{features.new.title}}</h3>
+          <div class="bento new">
+          <article class="bp bp-new bp-research rv" style="--i:0">
+            <div class="bp-copy"><h3 class="h3">{{features.new.research.h}}</h3><p>{{features.new.research.p}}</p></div>
+            <div class="bp-shot"><img src="{{root}}assets/screenshots/new-research-{{lang}}.webp" alt="{{features.new.research.alt}}" width="880" height="565" loading="lazy" decoding="async"></div>
+          </article>
+          <article class="bp bp-new bp-torrent rv" style="--i:1">
+            <div class="bp-copy"><h3 class="h3">{{features.new.torrent.h}}</h3><p>{{features.new.torrent.p}}</p></div>
+            <div class="bp-shot"><img src="{{root}}assets/screenshots/new-torrent-{{lang}}.webp" alt="{{features.new.torrent.alt}}" width="720" height="613" loading="lazy" decoding="async"></div>
+          </article>
+          <article class="bp bp-new bp-menus rv" style="--i:0">
+            <div class="bp-copy"><h3 class="h3">{{features.new.menus.h}}</h3><p>{{features.new.menus.p}}</p></div>
+            <div class="bp-shot"><img src="{{root}}assets/screenshots/new-menus-{{lang}}.webp" alt="{{features.new.menus.alt}}" width="560" height="330" loading="lazy" decoding="async"></div>
+          </article>
+          <article class="bp bp-new bp-privacy rv" style="--i:1">
+            <div class="bp-copy"><h3 class="h3">{{features.new.privacy.h}}</h3><p>{{features.new.privacy.p}}</p></div>
+            <div class="bp-shot"><img src="{{root}}assets/screenshots/new-privacy-{{lang}}.webp" alt="{{features.new.privacy.alt}}" width="710" height="360" loading="lazy" decoding="async"></div>
+          </article>
+          </div>
+          <p class="policy rv">{{features.new.policy}}</p>
+        </div>
       </div>
     </section>
 
@@ -479,8 +501,8 @@
           <div class="whats-new">
             <h3 class="h3">{{download.new.title}} <bdi dir="ltr">{{version}}</bdi></h3>
             <ul>
-              {{#each download.new.items}}<li>{{.}}</li>
-              {{/each}}{{#each features}}<li><b>{{title}}.</b> {{text}}</li>
+              {{#each features}}<li><b>{{title}}.</b> {{text}}</li>
+              {{/each}}{{#each download.new.items}}<li>{{.}}</li>
               {{/each}}
             </ul>
             <a class="text-link" href="{{releaseUrl}}" rel="noopener">{{download.new.notes}}</a>

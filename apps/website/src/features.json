@@ -1,33 +1,42 @@
 {
-  "_how_to_switch_on": "When the owner has verified a feature in a published release: set \"verified\": true and \"release\": \"<version>\" (no leading v, must exist in release.json) on its entry, check the copy below against the real behaviour, then run node apps/website/build.mjs. Both fields move together or the build fails. The entry then appears in the \"What's new\" list of that release on the site, in English and Arabic.",
-  "_rule": "Nothing here is rendered while verified is false. Do not mention these features in README, site or release notes before then.",
+  "_how_to_switch_on": "Entries are rendered in the \"What's new\" list of the featured release once they carry \"verified\": true and \"release\": \"<version>\" (no leading v, and the version must exist in release.json, or be the version a release-preview build is ahead with). Both fields move together or the build fails. Copy is English and Arabic and must match what the release really does.",
+  "_rule": "Nothing here is rendered while verified is false. Do not mention an unverified feature in README, site or release notes.",
   "features": [
     {
       "id": "torrent",
       "title_en": "BitTorrent",
       "title_ar": "تورنت",
-      "text_en": "Magnet links and .torrent files download in the same list as everything else.",
-      "text_ar": "روابط المغناطيس وملفات .torrent تُنزَّل في القائمة نفسها مع بقية التنزيلات.",
-      "verified": false,
-      "release": null
+      "text_en": "Magnet links and .torrent files, with a file choice before anything starts.",
+      "text_ar": "روابط ماغنت وملفات .torrent، مع اختيار الملفات قبل أن يبدأ أي شيء.",
+      "verified": true,
+      "release": "0.1.0-alpha.5"
     },
     {
       "id": "ai-research",
-      "title_en": "Smart Downloads",
-      "title_ar": "التنزيل الذكي",
-      "text_en": "Describe what you are looking for and pick from the files Riptide finds. Nothing downloads until you choose it.",
-      "text_ar": "صف ما تبحث عنه واختر من الملفات التي يجدها Riptide. لا يبدأ أي تنزيل قبل أن تختاره.",
-      "verified": false,
-      "release": null
+      "title_en": "Research",
+      "title_ar": "البحث",
+      "text_en": "Search open sources by category. Results stream in, each with a licence badge.",
+      "text_ar": "ابحث في مصادر مفتوحة حسب الفئة. تصل النتائج تباعًا وعلى كل نتيجة شارة ترخيص.",
+      "verified": true,
+      "release": "0.1.0-alpha.5"
+    },
+    {
+      "id": "ai-optional",
+      "title_en": "Optional AI",
+      "title_ar": "ذكاء اصطناعي اختياري",
+      "text_en": "Bring your own key to rank results and see why. Off until you set it up.",
+      "text_ar": "استخدم مفتاحك الخاص ليرتّب النتائج ويشرح السبب. متوقف حتى تُعدّه.",
+      "verified": true,
+      "release": "0.1.0-alpha.5"
     },
     {
       "id": "title-bar",
-      "title_en": "Integrated title bar",
-      "title_ar": "شريط العنوان المدمج",
-      "text_en": "The window controls and the app header share one bar, in light and dark.",
-      "text_ar": "أزرار النافذة وترويسة التطبيق في شريط واحد، في الوضعين الفاتح والداكن.",
-      "verified": false,
-      "release": null
+      "title_en": "Title bar menus",
+      "title_ar": "قوائم شريط العنوان",
+      "text_en": "File, Downloads, Tools, View, Window and Help, from the keyboard too.",
+      "text_ar": "ملف، التنزيلات، أدوات، عرض، نافذة، مساعدة، وتعمل بلوحة المفاتيح أيضًا.",
+      "verified": true,
+      "release": "0.1.0-alpha.5"
     }
   ]
 }

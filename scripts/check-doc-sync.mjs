@@ -12,9 +12,15 @@
 //   apps/website/build.mjs     RELEASE_VERSION
 // During a release candidate (Cargo bumped, release not published yet) this is expected to fail: it guards
 // the moment after publishing, see guide/release-process.md.
+//
+// --allow-unpublished (or RIPTIDE_RELEASE_AHEAD=1) is for the pull request that prepares a release: release.json
+// may then be OLDER than the version everything else agrees on. Everything else must still match each other, and
+// release.json may never be newer than the documents. The run after the merge does not pass the flag, so it fails
+// until the release is published and release.json has been regenerated.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { compareVersions } from './gen-release-manifest.mjs';
 
 const V = '\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?';
 
@@ -64,11 +70,23 @@ export function collectVersions(root) {
   return rows;
 }
 
-/** @returns {string[]} problems; empty when everything agrees */
-export function findProblems(rows) {
+/**
+ * @param {{name: string, versions: string[]}[]} rows the first row is release.json
+ * @param {{allowUnpublished?: boolean}} [options] accept release.json being older than the documents (release preparation)
+ * @returns {string[]} problems; empty when everything agrees
+ */
+export function findProblems(rows, { allowUnpublished = false } = {}) {
   const problems = [];
-  const reference = rows[0]?.versions[0];
+  let reference = rows[0]?.versions[0];
   if (!reference) return ['release.json has no featured release'];
+  if (allowUnpublished) {
+    const docs = rows.slice(1);
+    const agreed = [...new Set(docs.flatMap((r) => r.versions))];
+    if (agreed.length === 1 && docs.every((r) => r.versions.length === 1) && compareVersions(agreed[0], reference) > 0) {
+      reference = agreed[0];
+      rows = [{ name: rows[0].name, versions: [agreed[0]] }, ...docs];
+    }
+  }
   for (const row of rows) {
     if (row.versions.length === 0) problems.push(`${row.name}: no version found`);
     else if (row.versions.length > 1) problems.push(`${row.name}: mixed versions ${row.versions.join(', ')}`);
@@ -78,11 +96,15 @@ export function findProblems(rows) {
 }
 
 function main(argv) {
+  const allowUnpublished = argv.includes('--allow-unpublished') || process.env.RIPTIDE_RELEASE_AHEAD === '1';
   const at = argv.indexOf('--root');
   const root = at >= 0 ? resolve(argv[at + 1]) : resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const rows = collectVersions(root);
   for (const r of rows) console.log(`${r.versions.join(', ') || '-'}\t${r.name}`);
-  const problems = findProblems(rows);
+  const problems = findProblems(rows, { allowUnpublished });
+  if (allowUnpublished && rows[0].versions[0] !== rows[1]?.versions[0] && problems.length === 0) {
+    console.log(`note: release.json (${rows[0].versions[0]}) is behind the documents; fine while the release is unpublished, regenerate it after publishing`);
+  }
   if (problems.length) {
     console.error(`doc sync: ${problems.length} problem(s)`);
     for (const p of problems) console.error(`  - ${p}`);
