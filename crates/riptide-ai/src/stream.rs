@@ -31,6 +31,9 @@ pub struct SseParser {
     event: Option<String>,
     data: Vec<String>,
     data_bytes: usize,
+    /// Bytes at the start of `buf` already known to hold no line terminator: the next `push`
+    /// continues after them instead of rescanning the pending line from its first byte.
+    scanned: usize,
 }
 
 impl SseParser {
@@ -44,7 +47,7 @@ impl SseParser {
         self.buf.extend_from_slice(chunk);
         let mut out = Vec::new();
         let mut start = 0;
-        let mut i = 0;
+        let mut i = self.scanned;
         while i < self.buf.len() {
             let b = self.buf[i];
             let (line_end, next) = match b {
@@ -69,6 +72,7 @@ impl SseParser {
             i = next;
         }
         self.buf.drain(..start);
+        self.scanned = i - start;
         if self.buf.len() > MAX_EVENT_BYTES {
             return Err(AiError::InvalidResponse("stream line too long".into()));
         }
@@ -79,6 +83,7 @@ impl SseParser {
     pub fn finish(&mut self) -> Vec<SseEvent> {
         let mut out = Vec::new();
         if !self.buf.is_empty() {
+            self.scanned = 0;
             let line = String::from_utf8_lossy(&std::mem::take(&mut self.buf)).into_owned();
             let _ = self.line(line.trim_end_matches(['\r', '\n']), &mut out);
         }
@@ -357,6 +362,38 @@ pub(crate) fn gemini_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_line_arriving_byte_by_byte_is_scanned_once() {
+        // rescanning the pending line on every push made this quadratic (minutes at 1 MiB)
+        let mut p = SseParser::new();
+        let started = std::time::Instant::now();
+        let mut line = b"data: ".to_vec();
+        line.extend(std::iter::repeat_n(b'x', 100 * 1024));
+        line.extend_from_slice(b"\n\n");
+        let mut events = Vec::new();
+        for b in &line {
+            events.extend(p.push(std::slice::from_ref(b)).unwrap());
+        }
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].data.len(), 100 * 1024);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_carriage_return_split_from_its_line_feed_still_ends_one_line() {
+        let mut p = SseParser::new();
+        let mut all = Vec::new();
+        for c in [&b"data: a\r"[..], b"\n\r", b"\n"] {
+            all.extend(p.push(c).unwrap());
+        }
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].data, "a");
+    }
 
     fn collect(chunks: &[&[u8]]) -> Vec<SseEvent> {
         let mut p = SseParser::new();

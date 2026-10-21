@@ -165,11 +165,8 @@ impl Http {
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.trim().parse::<u64>().ok())
             .map(Duration::from_secs);
-        let bytes = resp.bytes().await.map_err(net_err)?;
-        if bytes.len() > MAX_BODY {
-            return Err(ResearchError::Parse("answer too large".into()));
-        }
         if status.is_success() {
+            let bytes = read_capped(resp).await?;
             return Ok(String::from_utf8_lossy(&bytes).into_owned());
         }
         Err(match status {
@@ -180,6 +177,23 @@ impl Http {
             s => ResearchError::Http { status: s.as_u16() },
         })
     }
+}
+
+/// Reads a body, stopping as soon as it passes [`MAX_BODY`] (by its declared length or by the
+/// bytes received): nothing beyond the cap is buffered, and the connection is dropped.
+async fn read_capped(mut resp: reqwest::Response) -> Result<Vec<u8>> {
+    let too_large = || ResearchError::Parse("answer too large".into());
+    if resp.content_length().is_some_and(|n| n > MAX_BODY as u64) {
+        return Err(too_large());
+    }
+    let mut body: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(net_err)? {
+        if body.len() + chunk.len() > MAX_BODY {
+            return Err(too_large());
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 fn net_err(e: reqwest::Error) -> ResearchError {

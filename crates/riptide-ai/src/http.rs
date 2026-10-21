@@ -432,22 +432,36 @@ impl HttpCore {
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.trim().parse::<u64>().ok())
             .map(Duration::from_secs);
-        let bytes = resp.bytes().await.map_err(|e| self.net_err(&e))?;
+        let bytes = self.read_capped(resp).await?;
         tracing::debug!(
             op = label,
             status = status.as_u16(),
             bytes = bytes.len(),
             "response"
         );
-        if bytes.len() > MAX_BODY {
-            return Err(AiError::InvalidResponse("response too large".into()));
-        }
         if status.is_success() {
             return serde_json::from_slice(&bytes)
                 .map_err(|_| AiError::InvalidResponse("body is not valid JSON".into()));
         }
         let message = self.error_message(&bytes);
         Err(map_status(status, retry_after, message, &bytes))
+    }
+
+    /// Reads the body, giving up as soon as it is clear it will pass [`MAX_BODY`]: from the
+    /// declared length, or from the bytes received so far. Nothing past the cap is buffered.
+    async fn read_capped(&self, mut resp: reqwest::Response) -> Result<Vec<u8>> {
+        let too_large = || AiError::InvalidResponse("response too large".into());
+        if resp.content_length().is_some_and(|n| n > MAX_BODY as u64) {
+            return Err(too_large());
+        }
+        let mut body: Vec<u8> = Vec::new();
+        while let Some(chunk) = resp.chunk().await.map_err(|e| self.net_err(&e))? {
+            if body.len() + chunk.len() > MAX_BODY {
+                return Err(too_large());
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
     }
 
     fn net_err(&self, e: &reqwest::Error) -> AiError {
