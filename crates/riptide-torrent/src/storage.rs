@@ -16,7 +16,7 @@ use librqbit::storage::{StorageFactory, StorageFactoryExt, TorrentStorage};
 use librqbit::{ManagedTorrentShared, TorrentMetadata};
 
 use crate::paths::{confine, ensure_no_symlink_escape, plan_layout, RawFile};
-use crate::registry::Registry;
+use crate::registry::{Entry, Registry};
 
 /// Marks a file as sparse (NTFS), so bytes written far into a file that is never completed do not
 /// reserve the whole length on disk.
@@ -439,6 +439,68 @@ impl StorageFactory for SafeStorageFactory {
     fn clone_box(&self) -> librqbit::storage::BoxStorageFactory {
         self.clone().boxed()
     }
+}
+
+/// The files of `entry` that are only placeholders: not selected, created by this torrent, and
+/// holding at most the bytes of the boundary pieces they share with their neighbours (two pieces)
+/// and not complete, as of the last time progress was recorded. A file with more verified data than
+/// that, or a complete one (the user narrowed the selection after downloading it), is never listed; neither is a file the torrent
+/// did not create, or anything when the progress is not known.
+pub fn placeholders(entry: &Entry) -> Vec<PathBuf> {
+    let (Some(files), Some(created), Some(progress), Some(piece), Some(lens)) = (
+        entry.files.as_ref(),
+        entry.created.as_ref(),
+        entry.file_progress.as_ref(),
+        entry.piece_length,
+        entry.file_lens.as_ref(),
+    ) else {
+        return Vec::new();
+    };
+    let Some(selected) = entry.selected.as_ref() else {
+        return Vec::new(); // everything is wanted
+    };
+    if progress.len() != files.len() || lens.len() != files.len() {
+        return Vec::new();
+    }
+    files
+        .iter()
+        .enumerate()
+        .filter(|(i, rel)| {
+            !selected.contains(i)
+                && created.contains(rel)
+                && progress[*i] < lens[*i] // a complete file is real data
+                && progress[*i] <= 2 * u64::from(piece)
+        })
+        .map(|(_, rel)| rel.clone())
+        .collect()
+}
+
+/// Deletes [`placeholders`] (and folders left empty); returns the ones that are gone. Only call
+/// it while no library session holds the files open.
+pub fn remove_placeholders(entry: &Entry) -> Vec<PathBuf> {
+    let mut gone = Vec::new();
+    for rel in placeholders(entry) {
+        let Ok(abs) = confine(&entry.dir, &rel) else {
+            continue;
+        };
+        if ensure_no_symlink_escape(&entry.dir, &abs).is_err() {
+            continue;
+        }
+        match std::fs::remove_file(&abs) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => continue,
+        }
+        let mut dir = abs.parent();
+        while let Some(d) = dir {
+            if d == entry.dir || !d.starts_with(&entry.dir) || std::fs::remove_dir(d).is_err() {
+                break;
+            }
+            dir = d.parent();
+        }
+        gone.push(rel);
+    }
+    gone
 }
 
 /// Whether `rel` below `dir` is taken on disk: the file itself, or a partial download that would

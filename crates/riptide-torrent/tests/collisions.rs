@@ -147,6 +147,9 @@ fn entry(dir: &Path, files: &[&str], created: Option<Vec<PathBuf>>) -> Entry {
         error: None,
         peers: Vec::new(),
         created,
+        piece_length: None,
+        file_lens: None,
+        file_progress: None,
     }
 }
 

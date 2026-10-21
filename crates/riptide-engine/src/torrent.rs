@@ -29,7 +29,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -123,10 +123,26 @@ pub struct WebSeedAdded {
 }
 
 /// A preview waiting for the user's choice.
-struct Pending {
+pub(crate) struct Pending {
     token: String,
     preview: TorrentPreview,
     made: Instant,
+}
+
+/// A last look at the torrent engine's settings, kept so a restart applies it again.
+pub(crate) type Tweak = Arc<dyn Fn(&mut TorrentSettings) + Send + Sync>;
+
+/// How long nothing needs the torrent engine before it is stopped: the listening port, the DHT
+/// node and every peer connection are closed, as the privacy promise says a finished torrent does.
+pub(crate) const DEFAULT_IDLE_GRACE: Duration = Duration::from_secs(5);
+
+/// Keeps the torrent engine from being stopped while a command is using it.
+pub(crate) struct BusyGuard(Arc<TorrentRuntime>);
+
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        self.0.busy.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 /// The running torrent engine plus the bookkeeping that ties it to download rows.
@@ -134,10 +150,10 @@ pub(crate) struct TorrentRuntime {
     pub(crate) engine: Arc<TorrentEngine>,
     /// info-hash -> download row.
     ids: Mutex<HashMap<String, DownloadId>>,
-    previews: Mutex<VecDeque<Pending>>,
+    /// Commands currently using the torrent engine; it is not stopped while any does.
+    busy: std::sync::atomic::AtomicUsize,
     /// Serialises adding, so two torrents added together cannot both plan the same free name.
     adding: tokio::sync::Mutex<()>,
-    next_token: AtomicU64,
     /// Serialises state walking, so a command and the event bridge never interleave.
     sync: tokio::sync::Mutex<()>,
     /// Last write of the `torrents` mirror per row.
@@ -146,6 +162,8 @@ pub(crate) struct TorrentRuntime {
     /// from zero at every start.
     base_uploaded: Mutex<HashMap<String, u64>>,
     bridge: Mutex<Option<JoinHandle<()>>>,
+    /// Stops the engine when nothing needs it.
+    idle: Mutex<Option<JoinHandle<()>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -260,12 +278,35 @@ impl Engine {
             .and_then(|t| t.as_ref().map(Arc::clone))
     }
 
-    fn require_torrents(&self) -> Result<Arc<TorrentRuntime>> {
-        self.torrent_rt().ok_or_else(|| {
-            Error::Core(riptide_core::Error::Invalid(
-                "torrents are not enabled in this engine".into(),
-            ))
-        })
+    /// The torrent engine, started if it is not running, held (not stopped for being idle) until
+    /// the guard is dropped.
+    async fn acquire_torrents(&self) -> Result<(Arc<TorrentRuntime>, BusyGuard)> {
+        loop {
+            {
+                let _l = self.inner.torrents_starting.lock().await;
+                if let Some(rt) = self.torrent_rt() {
+                    rt.busy.fetch_add(1, Ordering::SeqCst);
+                    return Ok((Arc::clone(&rt), BusyGuard(rt)));
+                }
+            }
+            self.start_torrents(None).await?;
+        }
+    }
+
+    /// Like [`Engine::acquire_torrents`] but never starts the engine: `None` when it is off.
+    async fn try_acquire_torrents(&self) -> Option<(Arc<TorrentRuntime>, BusyGuard)> {
+        let _l = self.inner.torrents_starting.lock().await;
+        let rt = self.torrent_rt()?;
+        rt.busy.fetch_add(1, Ordering::SeqCst);
+        Some((Arc::clone(&rt), BusyGuard(rt)))
+    }
+
+    /// How long nothing needs the torrent engine before it stops (5 seconds by default).
+    pub fn set_torrent_idle_grace(&self, grace: Duration) {
+        self.inner.torrent_idle_grace_ms.store(
+            u64::try_from(grace.as_millis()).unwrap_or(u64::MAX),
+            Ordering::SeqCst,
+        );
     }
 
     /// Names other downloads (not torrents: the torrent engine knows its own) have claimed in
@@ -316,7 +357,7 @@ impl Engine {
     /// Like [`Engine::enable_torrents_if_active`] with a last look at the torrent engine settings.
     pub async fn enable_torrents_if_active_with(
         &self,
-        tweak: impl FnOnce(&mut TorrentSettings),
+        tweak: impl Fn(&mut TorrentSettings) + Send + Sync + 'static,
     ) -> Result<bool> {
         if self.torrents_enabled() {
             return Ok(true);
@@ -351,19 +392,31 @@ impl Engine {
     /// Starts the BitTorrent engine (state under `<data dir>/torrents`), resumes the torrents of
     /// the previous run and begins mirroring their progress into the list. Safe to call twice.
     pub async fn enable_torrents(&self) -> Result<()> {
-        self.enable_torrents_with(|_| {}).await
+        self.start_torrents(None).await
     }
 
     /// Like [`Engine::enable_torrents`] with a last look at the torrent engine's settings (tests
     /// turn DHT, trackers and LAN discovery off and listen on loopback).
     pub async fn enable_torrents_with(
         &self,
-        tweak: impl FnOnce(&mut TorrentSettings),
+        tweak: impl Fn(&mut TorrentSettings) + Send + Sync + 'static,
     ) -> Result<()> {
+        self.start_torrents(Some(Arc::new(tweak))).await
+    }
+
+    async fn start_torrents(&self, tweak: Option<Tweak>) -> Result<()> {
         let _starting = self.inner.torrents_starting.lock().await;
         if self.torrents_enabled() {
             return Ok(());
         }
+        // a restart (after the engine stopped for being idle) applies the same last look again
+        let tweak = {
+            let mut slot = lock(&self.inner.torrent_tweak);
+            if tweak.is_some() {
+                *slot = tweak;
+            }
+            slot.clone()
+        };
         let settings = self.settings();
         let mut ts = TorrentSettings::new(
             self.inner.data_dir.join("torrents"),
@@ -374,7 +427,9 @@ impl Engine {
         ts.upload_limit_bps = o.upload_bps();
         ts.dht = o.dht;
         ts.listen_port = o.listen_port;
-        tweak(&mut ts);
+        if let Some(t) = &tweak {
+            t(&mut ts);
+        }
 
         // A registry entry whose row is gone (removed or cancelled while this engine was off) is
         // a ghost: it must not be restored, or it would download and upload with no row to show
@@ -412,9 +467,8 @@ impl Engine {
                     .map(|t| (t.info_hash.clone(), t.download_id))
                     .collect(),
             ),
-            previews: Mutex::new(VecDeque::new()),
+            busy: std::sync::atomic::AtomicUsize::new(0),
             adding: tokio::sync::Mutex::new(()),
-            next_token: AtomicU64::new(1),
             sync: tokio::sync::Mutex::new(()),
             persisted: Mutex::new(HashMap::new()),
             base_uploaded: Mutex::new(
@@ -423,6 +477,7 @@ impl Engine {
                     .collect(),
             ),
             bridge: Mutex::new(None),
+            idle: Mutex::new(None),
         });
         if let Ok(mut slot) = self.inner.torrents.write() {
             *slot = Some(Arc::clone(&rt));
@@ -469,8 +524,78 @@ impl Engine {
             }
         });
         *lock(&rt.bridge) = Some(handle);
+        let idle_engine = self.clone();
+        let idle_rt = Arc::clone(&rt);
+        *lock(&rt.idle) = Some(tokio::spawn(async move {
+            idle_engine.watch_idle(idle_rt).await;
+        }));
         tracing::info!(torrents = rows.len(), "torrent engine started");
         Ok(())
+    }
+
+    /// Whether any torrent needs the network now: checking, downloading, or seeding.
+    fn torrents_need_network(rt: &TorrentRuntime) -> bool {
+        rt.busy.load(Ordering::SeqCst) > 0
+            || rt.engine.list().iter().any(|s| {
+                matches!(
+                    s.state,
+                    TorrentState::Checking | TorrentState::Downloading | TorrentState::Seeding
+                )
+            })
+    }
+
+    /// Stops the torrent engine once nothing has needed it for the grace period.
+    async fn watch_idle(&self, rt: Arc<TorrentRuntime>) {
+        let mut idle_since: Option<Instant> = None;
+        loop {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            let current = self.torrent_rt();
+            if !current.as_ref().is_some_and(|c| Arc::ptr_eq(c, &rt)) {
+                return; // stopped or replaced by someone else
+            }
+            if Self::torrents_need_network(&rt) {
+                idle_since = None;
+                continue;
+            }
+            let grace =
+                Duration::from_millis(self.inner.torrent_idle_grace_ms.load(Ordering::SeqCst));
+            let since = *idle_since.get_or_insert_with(Instant::now);
+            if since.elapsed() >= grace {
+                if self.stop_if_idle(&rt).await {
+                    return;
+                }
+                idle_since = None;
+            }
+        }
+    }
+
+    /// Stops the engine if it is still the running one, still idle and unused; true when stopped.
+    /// Everything that starts, uses or stops it takes the same lock, so a command that arrives
+    /// now either finds it running (and keeps it) or starts it again afterwards.
+    async fn stop_if_idle(&self, rt: &Arc<TorrentRuntime>) -> bool {
+        let _l = self.inner.torrents_starting.lock().await;
+        let is_current = self.torrent_rt().is_some_and(|c| Arc::ptr_eq(&c, rt));
+        if !is_current
+            || Self::torrents_need_network(rt)
+            || self.inner.shutting_down.load(Ordering::SeqCst)
+        {
+            return false;
+        }
+        // the rows and the lifetime upload total are written before the session goes away
+        lock(&rt.persisted).clear();
+        for snap in rt.engine.list() {
+            self.apply_snapshot(rt, snap, true).await;
+        }
+        if let Ok(mut slot) = self.inner.torrents.write() {
+            *slot = None;
+        }
+        let bridge = lock(&rt.bridge).take();
+        rt.engine.shutdown().await;
+        if let Some(h) = bridge {
+            h.abort();
+        }
+        tracing::info!("torrent engine stopped: nothing needs the network");
+        true
     }
 
     /// The settings the torrent engine runs with right now (`None` until torrents are enabled).
@@ -491,8 +616,12 @@ impl Engine {
 
     /// Stops the torrent engine (called by [`Engine::shutdown`]).
     pub(crate) async fn shutdown_torrents(&self) {
+        let _l = self.inner.torrents_starting.lock().await;
         let rt = self.inner.torrents.write().ok().and_then(|mut t| t.take());
         if let Some(rt) = rt {
+            if let Some(h) = lock(&rt.idle).take() {
+                h.abort();
+            }
             let handle = lock(&rt.bridge).take();
             rt.engine.shutdown().await;
             if let Some(h) = handle {
@@ -509,7 +638,7 @@ impl Engine {
         source: TorrentSourceRequest,
         dir: Option<PathBuf>,
     ) -> Result<TorrentPreviewInfo> {
-        let rt = self.require_torrents()?;
+        let (rt, _busy) = self.acquire_torrents().await?;
         let dir = dir.unwrap_or_else(|| PathBuf::from(self.settings().default_dir));
         let opts = AddOptions {
             dir: Some(dir.clone()),
@@ -567,7 +696,7 @@ impl Engine {
         let token = format!(
             "{}-{}",
             preview.info_hash,
-            rt.next_token.fetch_add(1, Ordering::SeqCst)
+            self.inner.torrent_next_token.fetch_add(1, Ordering::SeqCst)
         );
         let info = TorrentPreviewInfo {
             token: token.clone(),
@@ -579,7 +708,7 @@ impl Engine {
             existing,
             web_seeds: preview.web_seeds.clone(),
         };
-        let mut pend = lock(&rt.previews);
+        let mut pend = lock(&self.inner.torrent_previews);
         pend.retain(|p| p.made.elapsed() < PREVIEW_TTL);
         pend.push_back(Pending {
             token,
@@ -596,10 +725,10 @@ impl Engine {
     /// The row is listed at once (state `Probing`, or `Paused` for `start_paused`); the torrent
     /// engine then checks anything already in the folder and downloads the rest.
     pub async fn add_torrent(&self, add: TorrentAdd) -> Result<DownloadId> {
-        let rt = self.require_torrents()?;
+        let (rt, _busy) = self.acquire_torrents().await?;
         let _adding = rt.adding.lock().await;
         let preview = {
-            let mut pend = lock(&rt.previews);
+            let mut pend = lock(&self.inner.torrent_previews);
             let at = pend
                 .iter()
                 .position(|p| p.token == add.token && p.made.elapsed() < PREVIEW_TTL);
@@ -730,9 +859,8 @@ impl Engine {
         dir: Option<PathBuf>,
         start_paused: bool,
     ) -> Result<WebSeedAdded> {
-        let rt = self.require_torrents()?;
         let preview = {
-            let pend = lock(&rt.previews);
+            let pend = lock(&self.inner.torrent_previews);
             pend.iter()
                 .find(|p| p.token == token && p.made.elapsed() < PREVIEW_TTL)
                 .map(|p| p.preview.clone())
@@ -845,8 +973,7 @@ impl Engine {
     /// A torrent that no longer verifies goes back to `Downloading` and repairs itself from
     /// peers; it is `Completed` again only after every selected piece verified.
     pub async fn verify_torrent(&self, id: DownloadId) -> Result<()> {
-        self.enable_torrents().await?;
-        let rt = self.require_torrents()?;
+        let (rt, _busy) = self.acquire_torrents().await?;
         let hash = self.torrent_hash(id).await?;
         rt.engine.verify(&hash).await?;
         if let Ok(snap) = rt.engine.snapshot(&hash) {
@@ -864,7 +991,7 @@ impl Engine {
 
     pub(crate) async fn torrent_pause(&self, id: DownloadId) -> Result<()> {
         let hash = self.torrent_hash(id).await?;
-        let Some(rt) = self.torrent_rt() else {
+        let Some((rt, _busy)) = self.try_acquire_torrents().await else {
             // no engine running: record the pause in the stored state, so the next engine keeps
             // the torrent stopped, and show it in the list
             let h = hash.clone();
@@ -905,8 +1032,7 @@ impl Engine {
 
     pub(crate) async fn torrent_resume(&self, id: DownloadId) -> Result<()> {
         // the engine is started on demand: a launch with nothing to download leaves it off
-        self.enable_torrents().await?;
-        let rt = self.require_torrents()?;
+        let (rt, _busy) = self.acquire_torrents().await?;
         let hash = self.torrent_hash(id).await?;
         rt.engine.resume(&hash).await?;
         if let Some(d) = self.get(id).await? {
@@ -957,7 +1083,7 @@ impl Engine {
     /// start, downloading and uploading with no row in the list.
     async fn drop_torrent(&self, hash: &str, delete_files: bool) -> Result<()> {
         loop {
-            if let Some(rt) = self.torrent_rt() {
+            if let Some((rt, _busy)) = self.try_acquire_torrents().await {
                 lock(&rt.ids).remove(hash);
                 return match rt.engine.remove(hash, delete_files).await {
                     Ok(()) | Err(riptide_torrent::Error::NotFound(_)) => Ok(()),

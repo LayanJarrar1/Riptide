@@ -27,8 +27,15 @@ Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/rel
     and downloads with no row in the list.
   - Pause all pauses HTTP downloads even when the torrent engine is not running.
   - Files of a torrent get the Mark of the Web as soon as each one completes, not at the end.
-  - The torrent engine (listening port, DHT) starts at launch only when a torrent is downloading
-    or seeding; paused and finished torrents leave no open port.
+  - The torrent engine (listening port, DHT, uTP and peer connections) starts only when a torrent
+    is downloading, checking or seeding, and is shut down completely five seconds after the last
+    one stops (a finished torrent with seeding off, a paused one, a seeding limit reached); it
+    starts again when you add, resume or re-check a torrent. Nothing stays open after a finished
+    download.
+  - Files you did not select no longer stay behind as full-size empty files: the bytes of a piece
+    shared with a selected file are dropped when the engine stops, and the file is created again
+    if you select it later. Files with real data, files you added yourself and files of other
+    torrents are never touched.
   - Answers from AI providers and research sources are cut off at 8 MiB while they arrive.
   - An API key is sent only to the address it was saved for; changing the endpoint asks for the
     key again. The model list is always fetched from the saved endpoint.
@@ -125,9 +132,9 @@ Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/rel
 - Do not go back to alpha.4 after upgrading: it cannot open schema version 5. The
   upgrade keeps `riptide.sqlite.v3.bak` next to the database for that case (without saved
   cookies or passwords; deleted automatically after 30 days).
-- Once the torrent engine has started in a run (by adding or resuming a torrent) it stays up until
-  you quit Riptide, with its listening port on all interfaces (Windows may ask about the firewall;
-  allowing it needs no admin rights, declining only stops incoming peers).
+- While a torrent is downloading or seeding, its listening port is open on all interfaces (Windows
+  may ask about the firewall; allowing it needs no admin rights, declining only stops incoming
+  peers). It closes five seconds after the last torrent stops.
 - The private-network check for web seeds and search results resolves a host name once when you
   click and again when the download connects; a hostile DNS server could answer differently the
   second time. Redirects from a public address to a private one are refused as for every download.

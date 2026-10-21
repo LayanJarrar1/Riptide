@@ -422,7 +422,7 @@
   "torrent.sequentialOn": "Files are downloaded one after another.",
   "torrent.hint": "Pieces are checked as they arrive; a damaged piece is fetched again.",
   "torrent.fileExists": "already in the folder",
-  "torrent.skipped": "not selected",
+  "torrent.skipped": "not downloaded",
   "torrent.peersOf": "{n} of {seen} peers",
   "torrent.peersLabel": "Peers",
   "torrent.ratio": "Ratio {ratio}",
