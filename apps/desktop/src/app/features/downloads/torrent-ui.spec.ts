@@ -243,7 +243,7 @@ describe('TorrentFileListComponent', () => {
     fixture.detectChanges();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('50%');
-    expect(text).toContain('not selected');
+    expect(text).toContain('not downloaded');
   });
 
   it('shows only the file name in the read-only list and the full path as its tooltip', () => {
