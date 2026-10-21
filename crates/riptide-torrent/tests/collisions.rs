@@ -275,3 +275,97 @@ async fn no_folder_is_created_through_a_link_before_the_escape_is_detected() {
     );
     eng.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_plan_handed_to_add_is_used_as_it_is() {
+    let (_files, torrent) = one("movie.mkv", 16 * 1024 * 2, 5);
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("out");
+    let state = tmp.path().join("state");
+    let eng = TorrentEngine::start(loopback_settings(&state, &dir))
+        .await
+        .unwrap();
+    let id = eng
+        .add(
+            TorrentSource::Bytes(torrent),
+            AddOptions {
+                dir: Some(dir.clone()),
+                start_paused: true,
+                layout: Some(vec![PathBuf::from("planned earlier.bin")]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    eng.shutdown().await;
+    let reg = Registry::open(state.join(offline::REGISTRY_FILE)).unwrap();
+    assert_eq!(
+        reg.get(&id).unwrap().files.unwrap(),
+        vec![PathBuf::from("planned earlier.bin")],
+        "add planned again"
+    );
+    // a plan that does not fit is refused, and so is one that leaves the folder
+    let (_f2, t2) = one("other.bin", 16 * 1024, 6);
+    let eng = TorrentEngine::start(loopback_settings(&tmp.path().join("state2"), &dir))
+        .await
+        .unwrap();
+    for bad in [vec![], vec![PathBuf::from("../escape.bin")]] {
+        let r = eng
+            .add(
+                TorrentSource::Bytes(t2.clone()),
+                AddOptions {
+                    dir: Some(dir.clone()),
+                    start_paused: true,
+                    layout: Some(bad),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(r.is_err());
+    }
+    eng.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn files_created_before_a_failed_start_do_not_stay_behind() {
+    let files = vec![
+        TFile {
+            path: vec!["a.bin".into()],
+            data: bytes(1, 40_000),
+        },
+        TFile {
+            path: vec!["sub".into(), "b.bin".into()],
+            data: bytes(2, 40_000),
+        },
+    ];
+    let torrent = build_torrent("pack", &files, PIECE);
+    let tmp = tempfile::tempdir().unwrap();
+    let chosen = tmp.path().join("chosen");
+    let outside = tmp.path().join("outside");
+    std::fs::create_dir_all(chosen.join("pack")).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    // the second file's folder leads out of the download folder
+    if !make_dir_link(&chosen.join("pack").join("sub"), &outside) {
+        eprintln!("cannot create a directory link here; skipping");
+        return;
+    }
+    let eng = TorrentEngine::start(loopback_settings(&tmp.path().join("state"), &chosen))
+        .await
+        .unwrap();
+    let r = eng
+        .add(
+            TorrentSource::Bytes(torrent),
+            AddOptions {
+                dir: Some(chosen.clone()),
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(r.is_err(), "{r:?}");
+    assert!(
+        !chosen.join("pack").join("a.bin").exists(),
+        "the first file was left behind by the failed add"
+    );
+    assert!(std::fs::read_dir(&outside).unwrap().next().is_none());
+    eng.shutdown().await;
+}

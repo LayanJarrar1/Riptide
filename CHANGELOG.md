@@ -27,7 +27,10 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
     of its quotes can no longer add flags such as `--unregister-host` or `--log-level`.
   - Web seed downloads and search results that point at the local network, localhost or a
     metadata address are refused; web seed addresses use the names written in the `.torrent`.
-  - Smaller: the upgrade keeps the old database as `riptide.sqlite.v3.bak`; ids of removed
+  - Smaller: the upgrade keeps the old database as `riptide.sqlite.v3.bak` (written to a temporary
+    file, stripped of the saved cookies, headers and passwords, flushed and only then renamed; a
+    failed attempt leaves nothing behind and a good older copy is never replaced; deleted
+    automatically after 30 days, and safe to delete by hand); ids of removed
     downloads are not reused after the upgrade; folders are never created through a junction;
     the server-sent-events parser is linear; research hints are deleted; magnet links are
     de-duplicated by info-hash; file names with `&`, `=` or `+` keep their extension in name
@@ -108,7 +111,8 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 ### Known limits
 
 - Do not go back to alpha.4 after trying this preview: it cannot open schema version 5. The
-  upgrade keeps `riptide.sqlite.v3.bak` next to the database for that case.
+  upgrade keeps `riptide.sqlite.v3.bak` next to the database for that case (without saved
+  cookies or passwords; deleted automatically after 30 days).
 - Once the torrent engine has started in a run (by adding or resuming a torrent) it stays up until
   you quit Riptide, with its listening port on all interfaces (Windows may ask about the firewall;
   allowing it needs no admin rights, declining only stops incoming peers).

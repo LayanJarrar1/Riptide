@@ -89,12 +89,51 @@ impl Entry {
     }
 }
 
-/// Lower-cased, separator-normalised key for comparing folders and file names the way NTFS does.
+/// Lower-cased, separator-normalised key of a relative path.
 fn path_key(p: &Path) -> String {
     p.to_string_lossy()
         .replace('\\', "/")
         .trim_end_matches('/')
         .to_lowercase()
+}
+
+/// A folder as the file system sees it, as a comparison key: links and junctions resolved, short
+/// (8.3) names expanded, case folded. A folder that does not exist yet is resolved through its
+/// deepest existing ancestor. Two spellings of one folder give one key.
+pub fn normalise_dir(p: &Path) -> String {
+    let mut existing = p.to_path_buf();
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    while !existing.exists() {
+        match (
+            existing.file_name().map(|n| n.to_owned()),
+            existing.parent(),
+        ) {
+            (Some(name), Some(parent)) => {
+                rest.push(name);
+                existing = parent.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    let mut full = std::fs::canonicalize(&existing).unwrap_or(existing);
+    full.extend(rest.iter().rev());
+    let key = path_key(&full);
+    key.strip_prefix("//?/").map(str::to_string).unwrap_or(key)
+}
+
+/// What the other torrents have laid out in one folder; see [`Registry::claim_set`].
+#[derive(Debug, Default, Clone)]
+pub struct ClaimSet {
+    files: std::collections::HashSet<String>,
+    folders: std::collections::HashSet<String>,
+}
+
+impl ClaimSet {
+    /// Whether `rel` is a file another torrent has laid out, or a folder one of them has files in.
+    pub fn claims(&self, rel: &Path) -> bool {
+        let k = path_key(rel);
+        self.files.contains(&k) || self.folders.contains(&k)
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -161,21 +200,40 @@ impl Registry {
         self.lock().torrents.remove(hash)
     }
 
-    /// Whether another torrent (any entry except `except`, in any state) has laid out `rel`
-    /// below `dir`, or has a file where `rel` would need a folder.
-    pub fn claims(&self, dir: &Path, rel: &Path, except: Option<&str>) -> bool {
-        let dir = path_key(dir);
-        let rel = path_key(rel);
-        let rel_dir = format!("{rel}/");
-        self.lock().torrents.iter().any(|(hash, e)| {
-            if Some(hash.as_str()) == except || path_key(&e.dir) != dir {
-                return false;
+    /// The files every other torrent (any entry except `except`, in any state) has laid out in
+    /// `dir`, compared by the folder itself and not by how its path is spelled. Build it once per
+    /// planning run, not per file.
+    pub fn claim_set(&self, dir: &Path, except: Option<&str>) -> ClaimSet {
+        let want = normalise_dir(dir);
+        let mut set = ClaimSet::default();
+        for (hash, e) in self.lock().torrents.iter() {
+            if Some(hash.as_str()) == except || normalise_dir(&e.dir) != want {
+                continue;
             }
-            e.files.iter().flatten().any(|f| {
-                let f = path_key(f);
-                f == rel || f.starts_with(&rel_dir)
-            })
-        })
+            for f in e.files.iter().flatten() {
+                let k = path_key(f);
+                let mut folder = String::new();
+                for part in k
+                    .split('/')
+                    .collect::<Vec<_>>()
+                    .split_last()
+                    .map_or(&[][..], |(_, d)| d)
+                {
+                    if !folder.is_empty() {
+                        folder.push('/');
+                    }
+                    folder.push_str(part);
+                    set.folders.insert(folder.clone());
+                }
+                set.files.insert(k);
+            }
+        }
+        set
+    }
+
+    /// Whether another torrent has laid out `rel` below `dir` (or has files in it as a folder).
+    pub fn claims(&self, dir: &Path, rel: &Path, except: Option<&str>) -> bool {
+        self.claim_set(dir, except).claims(rel)
     }
 
     /// Records the planned file layout.
@@ -269,6 +327,23 @@ mod tests {
             "a file needs that folder"
         );
         assert!(!r.claims(d.path(), Path::new("set/other.bin"), None));
+    }
+
+    #[test]
+    fn the_same_folder_spelled_differently_is_the_same_folder() {
+        let d = tempfile::tempdir().unwrap();
+        let out = d.path().join("Out");
+        std::fs::create_dir_all(out.join("sub")).unwrap();
+        let r = Registry::in_memory();
+        let mut e = entry(&out);
+        e.files = Some(vec![PathBuf::from("a.bin")]);
+        r.insert("aa", e);
+        let p = Path::new("a.bin");
+        assert!(r.claims(&out, p, None));
+        // another spelling: different case, a `..` detour, a trailing separator
+        assert!(r.claims(&d.path().join("OUT").join("sub").join(".."), p, None));
+        assert!(r.claims(&d.path().join("out").join(""), p, None));
+        assert!(!r.claims(&out.join("sub"), p, None), "a different folder");
     }
 
     #[test]

@@ -297,6 +297,12 @@ fn upgrading_keeps_a_copy_of_the_old_database_for_a_downgrade() {
     {
         let mut conn = Connection::open(&path).unwrap();
         migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO secrets (download_id, cookies, headers, auth_user, auth_pass) \
+             VALUES (1, 'session=SECRETPW', '[]', 'u', 'SECRETPW')",
+            [],
+        )
+        .unwrap();
     }
     let backup = dir.path().join("riptide.sqlite.v3.bak");
     assert!(!backup.exists());
@@ -311,11 +317,32 @@ fn upgrading_keeps_a_copy_of_the_old_database_for_a_downgrade() {
         .query_row("SELECT COUNT(*) FROM downloads", [], |r| r.get(0))
         .unwrap();
     assert_eq!((version, rows), (3, 2));
+    // cookies, headers and passwords are not copied: nothing deletes this file with the download
+    let secrets: i64 = old
+        .query_row("SELECT COUNT(*) FROM secrets", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(secrets, 0, "the backup holds secrets");
     drop(old);
+    assert!(!dir.path().join("riptide.sqlite.v3.bak.tmp").exists());
+    let raw = std::fs::read(&backup).unwrap();
+    assert!(
+        !raw.windows(8).any(|w| w == b"SECRETPW"),
+        "a password is still in the file's pages"
+    );
     // opening again neither upgrades nor overwrites it
     let before = std::fs::metadata(&backup).unwrap().len();
     drop(Store::open(&path).unwrap());
     assert_eq!(std::fs::metadata(&backup).unwrap().len(), before);
+    // a stale copy is deleted by a later start; a failed attempt leaves nothing behind
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(40 * 24 * 3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&backup)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    drop(Store::open(&path).unwrap());
+    assert!(!backup.exists(), "a 40 day old copy was kept");
     // a fresh database has nothing to keep
     let fresh = tempfile::tempdir().unwrap();
     drop(Store::open(fresh.path().join("new.sqlite")).unwrap());

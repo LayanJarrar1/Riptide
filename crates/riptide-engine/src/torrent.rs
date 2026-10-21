@@ -631,6 +631,11 @@ impl Engine {
         // the layout for the chosen folder (collisions are resolved against it)
         let source = TorrentSource::Bytes(preview.torrent_bytes.clone());
         let planned = rt.engine.preview(&source, &opts).await?;
+        // this one plan is what the row records and what the torrent engine writes
+        let opts = AddOptions {
+            layout: Some(planned.files.iter().map(|f| f.path.clone()).collect()),
+            ..opts
+        };
         let files = files_of(&planned);
         let selected: Option<Vec<u32>> = add.only_files.clone().map(|mut v| {
             v.sort_unstable();

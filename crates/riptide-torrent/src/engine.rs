@@ -159,24 +159,28 @@ impl TorrentEngine {
                 .and_then(|b| info_hash_of_bytes(&b)),
             TorrentSource::Magnet(m) => parse_magnet(m).ok().map(|m| m.info_hash),
         };
-        let registry = self.registry.clone();
-        let reserved: Vec<String> = opts
+        let claims = self.registry.claim_set(&dir, own.as_deref());
+        // folder and file name of each reserved path, folder compared as the file system sees it
+        let dir_key = crate::registry::normalise_dir(&dir);
+        let reserved: std::collections::HashSet<String> = opts
             .reserved
             .iter()
-            .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
+            .filter_map(|p| {
+                let name = p.file_name()?.to_string_lossy().to_lowercase();
+                let parent = crate::registry::normalise_dir(p.parent()?);
+                Some(format!("{parent}/{name}"))
+            })
             .collect();
         let exists = move |rel: &Path| {
-            if registry.claims(&dir, rel, own.as_deref()) {
+            if claims.claims(rel) {
                 return true;
             }
-            let full = dir
-                .join(rel)
-                .to_string_lossy()
-                .replace('\\', "/")
-                .to_lowercase();
-            if reserved
-                .iter()
-                .any(|r| *r == full || *r == format!("{full}.rtpart"))
+            let full = format!(
+                "{dir_key}/{}",
+                rel.to_string_lossy().replace('\\', "/").to_lowercase()
+            );
+            if reserved.contains(&full)
+                || reserved.contains(full.strip_suffix(".rtpart").unwrap_or("\0"))
             {
                 return true;
             }
@@ -242,6 +246,19 @@ impl TorrentEngine {
         }
         std::fs::create_dir_all(&dir)?;
 
+        let layout: Vec<PathBuf> = match &opts.layout {
+            Some(l) => {
+                if l.len() != preview.files.len()
+                    || l.iter().any(|p| crate::paths::confine(&dir, p).is_err())
+                {
+                    return Err(Error::InvalidSelection(
+                        "the planned layout does not fit the torrent".into(),
+                    ));
+                }
+                l.clone()
+            }
+            None => preview.files.iter().map(|f| f.path.clone()).collect(),
+        };
         let selected = normalise_selection(&preview, opts.only_files.as_deref())?;
         let selected_bytes = selected
             .as_ref()
@@ -253,7 +270,7 @@ impl TorrentEngine {
             &id,
             Entry {
                 dir: dir.clone(),
-                files: Some(preview.files.iter().map(|f| f.path.clone()).collect()),
+                files: Some(layout),
                 name: preview.name.clone(),
                 total_bytes: preview.total_bytes,
                 selected_bytes,
@@ -285,6 +302,10 @@ impl TorrentEngine {
                 Ok(id)
             }
             Err(e) => {
+                // files this attempt created before it failed go with it
+                if let Some(entry) = self.registry.get(&id) {
+                    crate::storage::remove_laid_out_files(&entry.dir, &entry.deletable());
+                }
                 self.registry.remove(&id);
                 let _ = self.registry.flush();
                 if let Ok(p) = self.torrent_file(&id) {

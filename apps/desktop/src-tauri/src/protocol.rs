@@ -243,7 +243,17 @@ fn looks_like_target(a: &str) -> bool {
 /// caller must not honour `--register-host`, `--unregister-host` or `--log-level` in it.
 pub fn is_open_launch(args: &[String]) -> bool {
     match args.get(1) {
-        Some(a) => a == OPEN_MARKER || (!a.starts_with("--") && looks_like_target(a)),
+        // an earlier registration passes the link bare; anything that merely starts like a
+        // magnet link (`magnet:x`) or ends like a torrent counts as an open launch, so that it
+        // never runs a hook, and `open_target` then refuses what is not exactly well formed
+        Some(a) => {
+            a == OPEN_MARKER
+                || (!a.starts_with("--")
+                    && (a
+                        .get(..7)
+                        .is_some_and(|p| p.eq_ignore_ascii_case("magnet:"))
+                        || looks_like_target(a)))
+        }
         None => false,
     }
 }
@@ -656,6 +666,27 @@ mod tests {
             open_target(&argv),
             Some(TorrentSourceRequest::Magnet { uri: good })
         );
+    }
+
+    #[test]
+    fn an_old_style_launch_with_a_loose_magnet_prefix_is_still_not_a_hook() {
+        let hostile = args(&[
+            "x.exe",
+            "magnet:x",
+            "--unregister-host",
+            "--log-level",
+            "trace",
+        ]);
+        assert!(is_open_launch(&hostile));
+        assert_eq!(open_target(&hostile), None);
+        let one = args(&["x.exe", "magnet:x"]);
+        assert!(is_open_launch(&one));
+        assert_eq!(open_target(&one), None, "not magnet:? exactly");
+        let quoted = args(&[
+            "x.exe",
+            "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c\"",
+        ]);
+        assert_eq!(open_target(&quoted), None);
     }
 
     #[test]

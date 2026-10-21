@@ -110,6 +110,10 @@ pub struct AddOptions {
     /// planner picks other names for any file that would land on one of them, exactly as it does
     /// for a file that already exists on disk.
     pub reserved: Vec<PathBuf>,
+    /// A layout planned earlier (relative path of every file, torrent order, padding files
+    /// included): used as it is instead of planning again, so what the caller already recorded
+    /// and what is written cannot differ.
+    pub layout: Option<Vec<PathBuf>>,
 }
 
 /// Coarse state of a torrent.

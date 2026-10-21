@@ -159,14 +159,10 @@ impl SafeStorage {
     }
 }
 
-impl TorrentStorage for SafeStorage {
-    fn init(
-        &mut self,
-        _shared: &ManagedTorrentShared,
-        _metadata: &TorrentMetadata,
-    ) -> anyhow::Result<()> {
-        let mut slots = Vec::with_capacity(self.paths.len());
-        let mut created: Vec<PathBuf> = Vec::new();
+impl SafeStorage {
+    /// Opens (creating what is missing) every file; `created` collects the ones this call
+    /// brought into being, also when it fails partway.
+    fn open_all(&self, slots: &mut Vec<Slot>, created: &mut Vec<PathBuf>) -> anyhow::Result<()> {
         for (p, rel) in self.paths.iter().zip(&self.rels) {
             match p {
                 None => slots.push(Slot::Padding),
@@ -204,19 +200,42 @@ impl TorrentStorage for SafeStorage {
                 }
             }
         }
-        *self.slots.lock().map_err(|_| anyhow!("storage poisoned"))? = slots;
-        if !created.is_empty() {
-            // recorded before the first byte is written, so a crash cannot lose the record
-            self.registry.update(&self.hash, |e| {
-                let list = e.created.get_or_insert_with(Vec::new);
-                for c in created {
-                    if !list.contains(&c) {
-                        list.push(c);
-                    }
-                }
-            });
-            self.registry.flush().map_err(|e| anyhow!("{e}"))?;
+        Ok(())
+    }
+
+    /// Records files this torrent created (flushed at once, before any byte is written, so a
+    /// crash cannot lose the record).
+    fn record_created(&self, created: Vec<PathBuf>) -> anyhow::Result<()> {
+        if created.is_empty() {
+            return Ok(());
         }
+        self.registry.update(&self.hash, |e| {
+            let list = e.created.get_or_insert_with(Vec::new);
+            for c in created {
+                if !list.contains(&c) {
+                    list.push(c);
+                }
+            }
+        });
+        self.registry.flush().map_err(|e| anyhow!("{e}"))
+    }
+}
+
+impl TorrentStorage for SafeStorage {
+    fn init(
+        &mut self,
+        _shared: &ManagedTorrentShared,
+        _metadata: &TorrentMetadata,
+    ) -> anyhow::Result<()> {
+        let mut slots = Vec::with_capacity(self.paths.len());
+        let mut created: Vec<PathBuf> = Vec::new();
+        let opened = self.open_all(&mut slots, &mut created);
+        // what was created before a failure is recorded too, so removing the torrent (or the
+        // rollback of a failed add) deletes exactly that
+        let recorded = self.record_created(created);
+        opened?;
+        recorded?;
+        *self.slots.lock().map_err(|_| anyhow!("storage poisoned"))? = slots;
         Ok(())
     }
 
@@ -381,10 +400,9 @@ impl StorageFactory for SafeStorageFactory {
                     .collect();
                 let adopt = entry.adopt;
                 let r = root.clone();
-                let reg = self.registry.clone();
-                let h = hash.clone();
+                let claims = self.registry.claim_set(&r, Some(&hash));
                 let planned = plan_layout(&name, &raw, &move |rel| {
-                    reg.claims(&r, rel, Some(&h)) || (!adopt && name_taken(&r, rel))
+                    claims.claims(rel) || (!adopt && name_taken(&r, rel))
                 })
                 .map_err(|e| anyhow!("{e}"))?;
                 self.registry.set_layout(&hash, planned.clone());

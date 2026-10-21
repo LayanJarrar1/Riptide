@@ -24,6 +24,7 @@ fn a_split_link_cannot_run_the_unregister_hook() {
         args(&["--open-link", "--", link, "--register-host"]),
         // an earlier registration
         args(&[link, "--unregister-host"]),
+        args(&["magnet:x", "--unregister-host"]),
     ] {
         assert_eq!(run_cli(&hostile), None, "{hostile:?}");
     }
