@@ -39,6 +39,8 @@ use crate::integration::{platform_registry, Registry};
 pub const MAGNET_KEY: &str = r"Software\Classes\magnet";
 /// Registry key of the `.torrent` extension.
 pub const TORRENT_EXT_KEY: &str = r"Software\Classes\.torrent";
+/// Where Riptide keeps the `magnet:` command another app had, to give it back on unregister.
+pub const PREVIOUS_COMMAND_VALUE: &str = "Riptide.PreviousCommand";
 /// ProgID Riptide registers for `.torrent` files.
 pub const TORRENT_PROG_ID: &str = "Riptide.Torrent";
 /// Tauri event carrying a [`TorrentSourceRequest`] to open (a second launch handed over a link).
@@ -64,6 +66,11 @@ fn command_key(root: &str) -> String {
 /// argument.
 fn command_line(exe: &Path) -> String {
     format!("\"{}\" {OPEN_MARKER} -- \"%1\"", exe.display())
+}
+
+/// A command that starts one of Riptide's own executables (any install).
+fn is_riptide_command(cmd: &str) -> bool {
+    cmd.to_ascii_lowercase().contains("riptide")
 }
 
 fn same_command(found: &str, expected: &str) -> bool {
@@ -122,6 +129,17 @@ pub fn register(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolStatu
     let cmd = command_line(exe);
     let icon = format!("\"{}\",0", exe.display());
 
+    // another app's `magnet:` handler is remembered (once), so unregistering can give it back
+    if let Some(previous) = registry.default_value(&command_key(MAGNET_KEY)) {
+        let has_backup = registry
+            .named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE)
+            .is_some();
+        if !has_backup && !previous.trim().is_empty() && !is_riptide_command(&previous) {
+            registry
+                .set_named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE, &previous)
+                .map_err(|e| io("cannot write the magnet key", &e))?;
+        }
+    }
     registry
         .set_default_value(MAGNET_KEY, "URL:Magnet Protocol")
         .map_err(|e| io("cannot write the magnet key", &e))?;
@@ -174,9 +192,20 @@ pub fn unregister(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolSta
     let current = status(exe, registry);
 
     if current.magnet {
+        let previous = registry
+            .named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE)
+            .filter(|c| !c.trim().is_empty() && !same_command(c, &command_line(exe)));
         registry
             .delete_key(MAGNET_KEY)
             .map_err(|e| io("cannot remove the magnet key", &e))?;
+        // the handler that was there before Riptide is put back
+        if let Some(previous) = previous {
+            registry
+                .set_default_value(MAGNET_KEY, "URL:Magnet Protocol")
+                .and_then(|()| registry.set_named_value(MAGNET_KEY, "URL Protocol", ""))
+                .and_then(|()| registry.set_default_value(&command_key(MAGNET_KEY), &previous))
+                .map_err(|e| io("cannot restore the previous magnet handler", &e))?;
+        }
     }
     if current.torrent {
         registry
@@ -453,6 +482,38 @@ mod tests {
                 TORRENT_PROG_ID
             )
             .is_none());
+    }
+
+    #[test]
+    fn another_apps_magnet_handler_is_given_back_when_ours_is_removed() {
+        let mut r = Memory::default();
+        let theirs = r#""C:\Program Files\qBittorrent\qbittorrent.exe" "%1""#;
+        r.set_default_value(MAGNET_KEY, "URL:Magnet Protocol")
+            .unwrap();
+        r.set_default_value(&command_key(MAGNET_KEY), theirs)
+            .unwrap();
+
+        register(&exe(), &mut r).unwrap();
+        assert!(status(&exe(), &r).magnet);
+        // registering again keeps the original backup, not our own command
+        register(&exe(), &mut r).unwrap();
+        assert_eq!(
+            r.named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE).as_deref(),
+            Some(theirs)
+        );
+
+        let s = unregister(&exe(), &mut r).unwrap();
+        assert!(!s.magnet);
+        assert_eq!(
+            r.default_value(&command_key(MAGNET_KEY)).as_deref(),
+            Some(theirs),
+            "the other app lost its handler"
+        );
+        assert_eq!(
+            r.named_value(MAGNET_KEY, "URL Protocol").as_deref(),
+            Some("")
+        );
+        assert!(r.named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE).is_none());
     }
 
     #[test]

@@ -631,12 +631,13 @@ async fn run_search(app: AppHandle, run: Arc<Run>, use_ai: bool, lang: String) {
     let round1 = run_round(&run, cache, &run.adapters, std::slice::from_ref(&topic));
     let planning = async {
         let (p, s) = provider.as_ref()?;
-        ai.note_request(
-            "research-plan",
-            s,
-            &assist::plan_messages(&topic, history.as_deref(), run.category),
-        );
-        match assist::plan_queries(p.as_ref(), &topic, history.as_deref(), run.category).await {
+        let plan_messages = assist::plan_messages(&topic, history.as_deref(), run.category);
+        ai.note_request("research-plan", s, &plan_messages);
+        let charge = ai.charge_if_dropped(&plan_messages);
+        let planned =
+            assist::plan_queries(p.as_ref(), &topic, history.as_deref(), run.category).await;
+        charge.done();
+        match planned {
             Ok(plan) => {
                 let extra: Vec<String> = plan
                     .queries
@@ -672,11 +673,9 @@ async fn run_search(app: AppHandle, run: Arc<Run>, use_ai: bool, lang: String) {
         let list = rank_input(&Run::lock(&run.hits), MAX_RANK_INPUT);
         if list.len() >= 2 {
             run.send(Ev::Phase { phase: "ranking" });
-            ai.note_request(
-                "research-rank",
-                s,
-                &assist::rank_messages(&topic, &list, history.as_deref(), &lang),
-            );
+            let rank_messages = assist::rank_messages(&topic, &list, history.as_deref(), &lang);
+            ai.note_request("research-rank", s, &rank_messages);
+            let charge = ai.charge_if_dropped(&rank_messages);
             let tx = run.tx.clone();
             let mut sink = move |r: Ranked| {
                 let _ = tx.send(Ev::Rank { items: vec![r] });
@@ -690,6 +689,7 @@ async fn run_search(app: AppHandle, run: Arc<Run>, use_ai: bool, lang: String) {
                 &mut sink,
             )
             .await;
+            charge.done();
             outcome.tokens += done.usage.total_tokens;
             outcome.dropped = done.dropped;
             ai.note_usage(done.usage.total_tokens);

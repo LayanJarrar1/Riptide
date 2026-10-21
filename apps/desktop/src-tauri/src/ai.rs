@@ -188,6 +188,29 @@ pub struct RequestPreview {
     pub at: String,
 }
 
+/// See [`AiService::charge_if_dropped`].
+#[must_use = "dropping it charges the request; call done() once the usage is known"]
+pub struct PendingCharge<'a> {
+    ai: &'a AiService,
+    tokens: u64,
+    armed: bool,
+}
+
+impl PendingCharge<'_> {
+    /// The request finished and its real usage is being counted by the caller.
+    pub fn done(mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for PendingCharge<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            self.ai.add_usage(self.tokens);
+        }
+    }
+}
+
 /// The AI service: files in the data dir, the secret store, the last-request memory.
 pub struct AiService {
     dir: PathBuf,
@@ -518,6 +541,19 @@ impl AiService {
     /// Counts a finished request against the daily budget.
     pub fn note_usage(&self, tokens: u64) {
         self.add_usage(tokens);
+    }
+
+    /// Guards a request that is about to be sent: if the guard is dropped before
+    /// [`PendingCharge::done`] (the search was cancelled while the answer streamed in), the
+    /// request and the tokens of its prompt (estimated) still count against today's budget, as
+    /// the provider has already billed them.
+    pub fn charge_if_dropped(&self, messages: &[Message]) -> PendingCharge<'_> {
+        let chars: usize = messages.iter().map(|m| m.content.chars().count()).sum();
+        PendingCharge {
+            ai: self,
+            tokens: riptide_ai::Usage::estimate(chars, 0).total_tokens,
+            armed: true,
+        }
     }
 
     /// The last request's messages.
@@ -1001,6 +1037,20 @@ mod tests {
         let err = svc.list_models(ProviderKind::DeepInfra).await.unwrap_err();
         assert_eq!(err.code, "key_origin");
         assert!(server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_request_still_counts_against_the_daily_budget() {
+        let d = tempfile::tempdir().unwrap();
+        let svc = service(d.path());
+        let messages = [Message::user("x".repeat(4000))];
+        // finished normally: the caller counts the real usage, the guard adds nothing
+        svc.charge_if_dropped(&messages).done();
+        assert_eq!((svc.usage().requests, svc.usage().tokens), (0, 0));
+        // dropped (the search was cancelled while the answer streamed in)
+        drop(svc.charge_if_dropped(&messages));
+        assert_eq!(svc.usage().requests, 1);
+        assert_eq!(svc.usage().tokens, 1000);
     }
 
     #[test]

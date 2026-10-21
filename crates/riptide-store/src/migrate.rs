@@ -89,6 +89,9 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
     }
 
     let start = current;
+    if start > 0 && latest > start {
+        backup_before_upgrade(conn, start);
+    }
     // Table rebuilds (v4) need foreign keys off, and the pragma cannot change inside a
     // transaction. Off for the whole run, restored (and checked) at the end; no migration relies
     // on enforcement, and the check below reports any dangling reference.
@@ -112,6 +115,26 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
         }
     }
     Ok(current)
+}
+
+/// Keeps a copy of a file database as it was before an upgrade: `<file>.v<N>.bak` for schema
+/// `N`, written once and never overwritten. An older build refuses a newer schema and cannot
+/// open the upgraded file; this copy is what a user who goes back to it can use. A failed backup
+/// is logged and does not stop the upgrade.
+fn backup_before_upgrade(conn: &Connection, version: u32) {
+    let Some(path) = conn.path().filter(|p| !p.is_empty()) else {
+        return; // in memory
+    };
+    let backup = format!("{path}.v{version}.bak");
+    if std::path::Path::new(&backup).exists() {
+        return;
+    }
+    match conn.execute("VACUUM INTO ?1", [&backup]) {
+        Ok(_) => tracing::info!(version, "kept a copy of the database before the upgrade"),
+        Err(e) => {
+            tracing::warn!(error = %e, "could not keep a copy of the database before the upgrade");
+        }
+    }
 }
 
 fn apply(

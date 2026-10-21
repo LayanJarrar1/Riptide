@@ -290,6 +290,43 @@ fn v3_database_migrates_to_v4_keeping_segments_secrets_and_ids() {
 }
 
 #[test]
+fn upgrading_keeps_a_copy_of_the_old_database_for_a_downgrade() {
+    use riptide_store::{migrate, MIGRATIONS};
+
+    let (dir, path) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&path).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+    }
+    let backup = dir.path().join("riptide.sqlite.v3.bak");
+    assert!(!backup.exists());
+    drop(Store::open(&path).unwrap());
+    assert!(backup.exists(), "no copy of the v3 database");
+    // the copy is a complete, usable v3 database with every row
+    let old = Connection::open(&backup).unwrap();
+    let version: i64 = old
+        .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+        .unwrap();
+    let rows: i64 = old
+        .query_row("SELECT COUNT(*) FROM downloads", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!((version, rows), (3, 2));
+    drop(old);
+    // opening again neither upgrades nor overwrites it
+    let before = std::fs::metadata(&backup).unwrap().len();
+    drop(Store::open(&path).unwrap());
+    assert_eq!(std::fs::metadata(&backup).unwrap().len(), before);
+    // a fresh database has nothing to keep
+    let fresh = tempfile::tempdir().unwrap();
+    drop(Store::open(fresh.path().join("new.sqlite")).unwrap());
+    assert!(std::fs::read_dir(fresh.path()).unwrap().all(|e| !e
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .ends_with(".bak")));
+}
+
+#[test]
 fn the_v4_rebuild_keeps_the_autoincrement_high_water_mark() {
     use riptide_store::{migrate, MIGRATIONS};
 
