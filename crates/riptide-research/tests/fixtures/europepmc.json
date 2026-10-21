@@ -1,0 +1,273 @@
+{
+ "version": "6.9",
+ "hitCount": 870056,
+ "nextCursorMark": "AoIIQI7rrCg1MjI4ODA0OA==",
+ "nextPageUrl": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=%28bittorrent+OR+peer-to-peer%29+AND+OPEN_ACCESS%3Ay+AND+HAS_PDF%3Ay&cursorMark=AoIIQI7rrCg1MjI4ODA0OA%3D%3D&resultType=core&pageSize=3&format=json",
+ "request": {
+  "queryString": "(bittorrent OR peer-to-peer) AND OPEN_ACCESS:y AND HAS_PDF:y",
+  "resultType": "core",
+  "cursorMark": "*",
+  "pageSize": 3,
+  "sort": "",
+  "synonym": false
+ },
+ "resultList": {
+  "result": [
+   {
+    "id": "41686858",
+    "source": "MED",
+    "pmid": "41686858",
+    "pmcid": "PMC12904567",
+    "doi": "10.1371/journal.pcbi.1013806",
+    "title": "Towards FAIR and federated data ecosystems for interdisciplinary research.",
+    "authorString": "Beyvers S, Schlegel J, Brehm L, Hansen M, Goesmann A, F\u00c3\u00b6rster F.",
+    "authorIdList": {
+     "authorId": [
+      {
+       "type": "ORCID",
+       "value": "0000-0002-9747-7096"
+      },
+      {
+       "type": "ORCID",
+       "value": "0000-0003-4166-5423"
+      },
+      {
+       "type": "ORCID",
+       "value": "0009-0001-3265-8654"
+      }
+     ]
+    },
+    "dataLinksTagsList": {
+     "dataLinkstag": [
+      "altmetrics",
+      "supporting_data"
+     ]
+    },
+    "pubYear": "2026",
+    "pageInfo": "e1013806",
+    "abstractText": "Scientific data management is at a critical juncture, driven by exponential data growth, increasing cross-domain dependencies, and a severe reproducibility crisis in modern research. Traditional centralized data management approaches are not only struggling with data volume but also fail to address the fragmentation of research results across domains. This hinders scientific reproducibility and cross-domain collaboration and increases concerns about data sovereignty and governance. This article ",
+    "affiliation": "Bioinformatics and Systems Biology, Justus Liebig University Giessen, Giessen, Germany.",
+    "publicationStatus": "epublish",
+    "language": "eng",
+    "pubModel": "Electronic-eCollection",
+    "fullTextUrlList": {
+     "fullTextUrl": [
+      {
+       "availability": "Subscription required",
+       "availabilityCode": "S",
+       "documentStyle": "doi",
+       "site": "DOI",
+       "url": "https://doi.org/10.1371/journal.pcbi.1013806"
+      },
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "html",
+       "site": "Europe_PMC",
+       "url": "https://europepmc.org/articles/PMC12904567"
+      },
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "pdf",
+       "site": "Europe_PMC",
+       "url": "https://europepmc.org/articles/PMC12904567?pdf=render"
+      }
+     ]
+    },
+    "isOpenAccess": "Y",
+    "inEPMC": "Y",
+    "inPMC": "Y",
+    "citedByCount": 3,
+    "hasReferences": "Y",
+    "hasDbCrossReferences": "N",
+    "hasPDF": "Y",
+    "hasBook": "N",
+    "hasSuppl": "N",
+    "hasLabsLinks": "Y",
+    "hasData": "Y",
+    "license": "cc by",
+    "authMan": "N",
+    "epmcAuthMan": "N",
+    "nihAuthMan": "N",
+    "hasTMAccessionNumbers": "Y",
+    "dateOfCompletion": "2026-07-07",
+    "dateOfCreation": "2026-02-13",
+    "dateOfRevision": "2026-07-07",
+    "electronicPublicationDate": "2026-02-13",
+    "firstPublicationDate": "2026-02-13",
+    "firstIndexDate": "2026-02-14",
+    "fullTextReceivedDate": "2026-02-14",
+    "hasEvaluations": "N"
+   },
+   {
+    "id": "42806702",
+    "source": "MED",
+    "pmid": "42806702",
+    "pmcid": "PMC13620443",
+    "doi": "10.1111/jora.70265",
+    "title": "The costs of peer ethnic discrimination: Longitudinal associations with negative ethnic identity affect and identity coherence among ethnic minority adolescents.",
+    "authorString": "Karata\u00c5\u0178 S, Vietze J, Ceccon C, Moscardino U.",
+    "authorIdList": {
+     "authorId": [
+      {
+       "type": "ORCID",
+       "value": "0000-0001-6677-7689"
+      },
+      {
+       "type": "ORCID",
+       "value": "0000-0002-0722-4010"
+      },
+      {
+       "type": "ORCID",
+       "value": "0000-0002-2744-1987"
+      },
+      {
+       "type": "ORCID",
+       "value": "0000-0002-8091-2127"
+      }
+     ]
+    },
+    "pubYear": "2026",
+    "pageInfo": "e70265",
+    "abstractText": "The present study examined longitudinal associations between perceived peer ethnic discrimination, negative ethnic identity affect, and global identity coherence among ethnic minority adolescents in Italy (n\u00e2\u20ac\u2030=\u00e2\u20ac\u2030280; M<sub>age</sub>\u00e2\u20ac\u2030=\u00e2\u20ac\u203014.29; 59.28% female; 76.42% second-generation). Results indicated negative bidirectional associations between negative ethnic identity affect and global identity coherence. While the associations between peer discrimination and negative ethnic identity affec",
+    "affiliation": "Department of Education and Pedagogy, Educational Psychology - Socialisation and Culture Research Group, Martin Luther University Halle-Wittenberg, Halle (Saale), Germany.",
+    "publicationStatus": "ppublish",
+    "language": "eng",
+    "pubModel": "Print",
+    "fullTextUrlList": {
+     "fullTextUrl": [
+      {
+       "availability": "Subscription required",
+       "availabilityCode": "S",
+       "documentStyle": "doi",
+       "site": "DOI",
+       "url": "https://doi.org/10.1111/jora.70265"
+      },
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "html",
+       "site": "Europe_PMC",
+       "url": "https://europepmc.org/articles/PMC13620443"
+      },
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "pdf",
+       "site": "Europe_PMC",
+       "url": "https://europepmc.org/articles/PMC13620443?pdf=render"
+      }
+     ]
+    },
+    "isOpenAccess": "Y",
+    "inEPMC": "Y",
+    "inPMC": "Y",
+    "citedByCount": 0,
+    "hasReferences": "Y",
+    "hasDbCrossReferences": "N",
+    "hasPDF": "Y",
+    "hasBook": "N",
+    "hasSuppl": "Y",
+    "hasLabsLinks": "N",
+    "hasData": "Y",
+    "license": "cc by",
+    "authMan": "N",
+    "epmcAuthMan": "N",
+    "nihAuthMan": "N",
+    "hasTMAccessionNumbers": "N",
+    "dateOfCompletion": "2026-09-29",
+    "dateOfCreation": "2026-09-29",
+    "dateOfRevision": "2026-10-01",
+    "firstPublicationDate": "2026-12-01",
+    "firstIndexDate": "2026-09-29",
+    "fullTextReceivedDate": "2026-09-30",
+    "hasEvaluations": "N"
+   },
+   {
+    "id": "39837911",
+    "source": "MED",
+    "pmid": "39837911",
+    "pmcid": "PMC11751493",
+    "doi": "10.1038/s41598-025-85484-3",
+    "title": "Optimal integration of photovoltaic sources and capacitor banks considering irradiance, temperature, and load changes in electric distribution system.",
+    "authorString": "Fettah K, Salhi A, Guia T, Saidi AS, Betka A, Teguar M, Alharbi H, Ghoneim SSM, Agajie TF, Ghaly RNR.",
+    "authorIdList": {
+     "authorId": [
+      {
+       "type": "ORCID",
+       "value": "0000-0001-6985-8652"
+      }
+     ]
+    },
+    "dataLinksTagsList": {
+     "dataLinkstag": [
+      "supporting_data"
+     ]
+    },
+    "pubYear": "2025",
+    "pageInfo": "2670",
+    "abstractText": "This paper introduces the Efficient Metaheuristic BitTorrent (EM-BT) algorithm, aimed at optimizing the placement and sizing of photovoltaic renewable energy sources (PVRES) and capacitor banks (CBs) in electric distribution networks. The main goal is to minimize energy losses and enhance voltage stability over 24\u00c2\u00a0h, taking into account varying load profiles, solar irradiance, and temperature effects. The algorithm is rigorously tested on standard distribution networks, including the IEEE 33, I",
+    "affiliation": "Electrical Engineering Department, Laboratory (LNTDL), Hamma Lakhdar University of El Oued, 39000, El Oued, Algeria. khaled-fettah@univ-eloued.dz.",
+    "publicationStatus": "epublish",
+    "language": "eng",
+    "pubModel": "Electronic",
+    "fullTextUrlList": {
+     "fullTextUrl": [
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "pdf",
+       "site": "Unpaywall",
+       "url": "https://www.nature.com/articles/s41598-025-85484-3.pdf"
+      },
+      {
+       "availability": "Subscription required",
+       "availabilityCode": "S",
+       "documentStyle": "doi",
+       "site": "DOI",
+       "url": "https://doi.org/10.1038/s41598-025-85484-3"
+      },
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "html",
+       "site": "Europe_PMC",
+       "url": "https://europepmc.org/articles/PMC11751493"
+      },
+      {
+       "availability": "Open access",
+       "availabilityCode": "OA",
+       "documentStyle": "pdf",
+       "site": "Europe_PMC",
+       "url": "https://europepmc.org/articles/PMC11751493?pdf=render"
+      }
+     ]
+    },
+    "isOpenAccess": "Y",
+    "inEPMC": "Y",
+    "inPMC": "Y",
+    "citedByCount": 6,
+    "hasReferences": "Y",
+    "hasDbCrossReferences": "N",
+    "hasPDF": "Y",
+    "hasBook": "N",
+    "hasSuppl": "Y",
+    "hasLabsLinks": "Y",
+    "hasData": "Y",
+    "license": "cc by-nc-nd",
+    "authMan": "N",
+    "epmcAuthMan": "N",
+    "nihAuthMan": "N",
+    "hasTMAccessionNumbers": "Y",
+    "dateOfCreation": "2025-01-21",
+    "dateOfRevision": "2025-01-29",
+    "electronicPublicationDate": "2025-01-21",
+    "firstPublicationDate": "2025-01-21",
+    "firstIndexDate": "2025-01-22",
+    "fullTextReceivedDate": "2025-11-29",
+    "hasEvaluations": "N"
+   }
+  ]
+ }
+}

@@ -54,6 +54,20 @@ ng e2e
 
 Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
 
+## List performance harness
+
+`e2e/list_perf.py` (Python, Playwright) serves the production build and measures the downloads list
+against the mock engine seeded with 10 to 50 000 downloads (`?mockCount=N`, optionally
+`&mockActive=K&mockTickMs=T`): DOM rows, heap, time to the first row, scroll frame times, main-thread
+time with 100 active downloads updating at 10 Hz, and sort / filter latency. Results are saved to
+`e2e/list_perf.md`.
+
+```bash
+npm run build
+python e2e/list_perf.py --runs 3
+python e2e/titlebar_shots.py OUT_DIR   # title bar screenshots (EN / AR, light / dark, menus open)
+```
+
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.

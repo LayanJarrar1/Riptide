@@ -12,6 +12,10 @@ import type { BatchError } from '../tauri/bridge/BatchError';
 import type { BatchOutcome } from '../tauri/bridge/BatchOutcome';
 import type { UrlList } from '../tauri/bridge/UrlList';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
+import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource, TorrentView, WebSeedResult } from '../model/torrent';
+import type { TorrentInfo } from '../tauri/bridge/TorrentInfo';
+import type { TorrentLive } from '../tauri/bridge/TorrentLive';
+import type { TorrentPreviewInfo } from '../tauri/bridge/TorrentPreviewInfo';
 import { emptyHistory, toBridgeRequest, toUiDownload, toUiMedia, toUiProbe, toUiSize } from './bridge-mapping';
 import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
@@ -27,6 +31,7 @@ const DEFAULT_MAX_ACTIVE = 4;
 
 type ProgressEvent = Extract<EngineEvent, { type: 'progress' }>;
 type SegmentProgressEvent = Extract<EngineEvent, { type: 'segment_progress' }>;
+type TorrentStatsEvent = Extract<EngineEvent, { type: 'torrent_stats' }>;
 
 /**
  * The real engine, driven over Tauri IPC. The list is loaded once (`list_downloads` plus
@@ -56,6 +61,8 @@ export class TauriEngineService extends DownloadEngine {
   private readonly listen = inject(TAURI_LISTEN);
 
   private readonly list = signal<readonly Download[]>([]);
+  /** Download id to position in `list` (a hint, see `position`). */
+  private index = new Map<number, number>();
   /** Events received before the initial list arrived; `null` once live. */
   private pending: EngineEvent[] | null = [];
   /** Last time a speed sample was appended, per download. */
@@ -91,7 +98,23 @@ export class TauriEngineService extends DownloadEngine {
   }
 
   get(id: number): Download | undefined {
-    return this.list().find((d) => d.id === id);
+    const i = this.position(id);
+    return i < 0 ? undefined : this.list()[i];
+  }
+
+  /**
+   * Where a download sits in the list. Every progress event looks its download up and replaces it,
+   * so with tens of thousands of downloads a linear search per event would be the engine's main
+   * cost; the index is a hint that is checked on use and rebuilt when it is stale or unknown.
+   */
+  private position(id: number): number {
+    const all = this.list();
+    let i = this.index.get(id);
+    if (i === undefined || all[i]?.id !== id) {
+      this.index = new Map(all.map((d, k) => [d.id, k]));
+      i = this.index.get(id);
+    }
+    return i ?? -1;
   }
 
   async probe(url: string): Promise<ProbeResult> {
@@ -108,7 +131,10 @@ export class TauriEngineService extends DownloadEngine {
    * dialog's preview is not forwarded.
    */
   async add(request: DownloadRequest): Promise<number> {
-    const id = await this.invoke<number>('add_download', { request: toBridgeRequest(request) });
+    const id = await this.invoke<number>('add_download', {
+      request: toBridgeRequest(request),
+      ...(request.allowDuplicate === true ? { allowDuplicates: true } : {}),
+    });
     await this.refreshRecord(id);
     return id;
   }
@@ -226,6 +252,34 @@ export class TauriEngineService extends DownloadEngine {
     }
   }
 
+  async torrentPreview(source: TorrentSource, dir?: string): Promise<TorrentPreview> {
+    const m = await import('./torrent-mapping');
+    return m.toUiPreview(await this.invoke<TorrentPreviewInfo>('torrent_preview', { source: m.toBridgeSource(source), dir: dir ?? null }));
+  }
+
+  /** `add_torrent`, then the new record at once (the `added` event may race ahead of the subscription). */
+  async addTorrent(request: TorrentAddRequest): Promise<number> {
+    const m = await import('./torrent-mapping');
+    const id = await this.invoke<number>('add_torrent', { request: m.toBridgeTorrentAdd(request) });
+    await this.refreshRecord(id);
+    return id;
+  }
+
+  async addWebSeedFiles(token: string, onlyFiles: readonly number[] | null, dir: string | undefined, startPaused: boolean): Promise<WebSeedResult> {
+    const r = await this.invoke<WebSeedResult>('torrent_web_seed_add', { request: { token, onlyFiles, dir: dir ?? null, startPaused } });
+    await Promise.all(r.added.map((id) => this.refreshRecord(id)));
+    return r;
+  }
+
+  async torrentLive(id: number): Promise<TorrentLiveView> {
+    const m = await import('./torrent-mapping');
+    return m.toUiTorrentLive(await this.invoke<TorrentLive>('torrent_live', { id }));
+  }
+
+  async pickTorrentFile(): Promise<string | null> {
+    return this.invoke<string | null>('pick_torrent_file');
+  }
+
   /**
    * Not an engine command yet. The downloads page does not call this: for an expired link it
    * opens the add dialog pre-filled with the URL instead.
@@ -242,7 +296,8 @@ export class TauriEngineService extends DownloadEngine {
     }
     try {
       const [records] = await Promise.all([this.invoke<BridgeDownload[]>('list_downloads'), this.loadSettings()]);
-      const downloads = await Promise.all(records.map(async (r) => toUiDownload(r, await this.segmentsOf(r.id))));
+      const torrents = await this.torrentViews(records.some((r) => r.kind === 'torrent'));
+      const downloads = await Promise.all(records.map(async (r) => toUiDownload(r, await this.segmentsOf(r.id), undefined, torrents.get(r.id))));
       this.list.set(downloads);
     } catch (error: unknown) {
       console.warn('[engine] list_downloads failed', error);
@@ -284,6 +339,9 @@ export class TauriEngineService extends DownloadEngine {
         break;
       case 'segment_progress':
         this.onSegmentProgress(e);
+        break;
+      case 'torrent_stats':
+        this.onTorrentStats(e);
         break;
       case 'removed':
         this.drop(e.id);
@@ -329,8 +387,8 @@ export class TauriEngineService extends DownloadEngine {
     this.update(e.id, (d) => {
       // before the engine has planned segments the only progress we have is the byte count
       const placeholder = d.segments.length === 1 && d.segments[0].end === 0 && d.segments[0].start === 0;
-      // a media download (yt-dlp) never has segments: its byte count is the whole story
-      const synthetic = placeholder || d.kind === 'media';
+      // a media download (yt-dlp) or a torrent never has segments: its byte count is the whole story
+      const synthetic = placeholder || d.kind === 'media' || d.kind === 'torrent';
       const segments: readonly Segment[] =
         synthetic && e.downloaded > 0
           ? [{ index: 0, start: 0, end: Math.max(total ?? 0, e.downloaded), written: e.downloaded, state: 'active' }]
@@ -343,6 +401,40 @@ export class TauriEngineService extends DownloadEngine {
         speedHistory: sample ? [...d.speedHistory.slice(1), speed] : d.speedHistory,
       };
     });
+  }
+
+  /** Peers, upload speed and ratio of a torrent, as the engine reports them. */
+  private onTorrentStats(e: TorrentStatsEvent): void {
+    this.update(e.id, (d) =>
+      d.torrent === undefined
+        ? d
+        : {
+            ...d,
+            torrent: {
+              ...d.torrent,
+              peers: e.peers,
+              peersSeen: e.peers_seen,
+              upBps: toUiSize(e.up_bps) ?? 0,
+              uploaded: toUiSize(e.uploaded) ?? d.torrent.uploaded,
+              ratio: e.ratio_milli / 1000,
+              seeding: e.seeding,
+            },
+          },
+    );
+  }
+
+  /** The stored torrent facts (`list_torrents`); none when the list has no torrent or the call fails. */
+  private async torrentViews(any: boolean): Promise<Map<number, TorrentView>> {
+    if (!any) {
+      return new Map();
+    }
+    try {
+      const [infos, m] = await Promise.all([this.invoke<TorrentInfo[]>('list_torrents'), import('./torrent-mapping')]);
+      return new Map(infos.map((t) => [t.download_id, m.toUiTorrent(t)]));
+    } catch (error: unknown) {
+      console.warn('[engine] list_torrents failed', error);
+      return new Map();
+    }
   }
 
   private onSegmentProgress(e: SegmentProgressEvent): void {
@@ -375,6 +467,7 @@ export class TauriEngineService extends DownloadEngine {
         this.invoke<BridgeDownload | null>('get_download', { id }),
         this.segmentsOf(id),
       ]);
+      const info = record?.kind === 'torrent' ? await this.torrentViewOf(id, this.get(id)?.torrent) : undefined;
       if (this.refreshSeq.get(id) !== seq) {
         return;
       }
@@ -382,9 +475,19 @@ export class TauriEngineService extends DownloadEngine {
         this.drop(id);
         return;
       }
-      this.upsert(toUiDownload(record, segments, this.get(id)));
+      this.upsert(toUiDownload(record, segments, this.get(id), info));
     } catch (error: unknown) {
       console.warn('[engine] get_download failed', error);
+    }
+  }
+
+  private async torrentViewOf(id: number, previous: TorrentView | undefined): Promise<TorrentView | undefined> {
+    try {
+      const [live, m] = await Promise.all([this.invoke<TorrentLive>('torrent_live', { id }), import('./torrent-mapping')]);
+      return m.toUiTorrent(live.info, previous);
+    } catch (error: unknown) {
+      console.warn('[engine] torrent_live failed', error);
+      return undefined;
     }
   }
 
@@ -398,17 +501,38 @@ export class TauriEngineService extends DownloadEngine {
   }
 
   private upsert(d: Download): void {
-    this.list.update((all) => (all.some((x) => x.id === d.id) ? all.map((x) => (x.id === d.id ? d : x)) : [...all, d]));
+    const i = this.position(d.id);
+    if (i < 0) {
+      this.index.set(d.id, this.list().length);
+      this.list.update((all) => [...all, d]);
+    } else {
+      this.replaceAt(i, d);
+    }
   }
 
   private update(id: number, fn: (d: Download) => Download): void {
-    this.list.update((all) => all.map((d) => (d.id === id ? fn(d) : d)));
+    const i = this.position(id);
+    if (i >= 0) {
+      this.replaceAt(i, fn(this.list()[i]));
+    }
+  }
+
+  /** A new list with one download swapped; every other download keeps its object (the UI relies on that). */
+  private replaceAt(i: number, d: Download): void {
+    this.list.update((all) => {
+      const next = all.slice();
+      next[i] = d;
+      return next;
+    });
   }
 
   private drop(id: number): void {
     this.lastSample.delete(id);
     this.refreshSeq.delete(id);
-    this.list.update((all) => (all.some((d) => d.id === id) ? all.filter((d) => d.id !== id) : all));
+    if (this.position(id) >= 0) {
+      this.list.update((all) => all.filter((d) => d.id !== id));
+      this.index.clear();
+    }
   }
 }
 

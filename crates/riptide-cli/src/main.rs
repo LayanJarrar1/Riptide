@@ -4,10 +4,12 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 #![forbid(unsafe_code)]
 
+mod ai;
 mod batch;
 mod fetch;
 mod grab;
 mod i18n;
+mod torrent;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -40,8 +42,30 @@ struct Cli {
     command: Command,
 }
 
+/// `riptide ai ...`
+#[derive(Debug, Subcommand)]
+enum AiCommand {
+    /// Test the connection to an AI provider.
+    Test {
+        /// Provider id.
+        #[arg(long, value_name = "KIND")]
+        provider: String,
+        /// Model id to look for.
+        #[arg(long, value_name = "ID")]
+        model: Option<String>,
+        /// Alternative base URL.
+        #[arg(long, value_name = "URL")]
+        base_url: Option<String>,
+    },
+}
+
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// AI tools.
+    Ai {
+        #[command(subcommand)]
+        command: AiCommand,
+    },
     /// Download a URL with the standalone engine.
     Fetch {
         /// URL.
@@ -179,6 +203,9 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// BitTorrent (not released yet).
+    #[command(hide = true, subcommand)]
+    Torrent(torrent::TorrentCmd),
     /// Ping the running app.
     Ping,
     /// Show resolved paths.
@@ -249,6 +276,15 @@ fn localized_command(lang: Lang) -> clap::Command {
                 .mut_arg("connections", |a| a.help(about("arg.bench_connections")))
                 .mut_arg("json", |a| a.help(about("arg.json")))
         })
+        .mut_subcommand("ai", |s| {
+            s.about(about("cmd.ai")).mut_subcommand("test", |s| {
+                s.about(about("cmd.ai_test"))
+                    .mut_arg("provider", |a| a.help(about("arg.ai_provider")))
+                    .mut_arg("model", |a| a.help(about("arg.ai_model")))
+                    .mut_arg("base_url", |a| a.help(about("arg.ai_base_url")))
+            })
+        })
+        .mut_subcommand("torrent", |s| s.about(about("cmd.torrent")))
         .mut_subcommand("ping", |s| s.about(about("cmd.ping")))
         .mut_subcommand("paths", |s| s.about(about("cmd.paths")));
     cmd
@@ -346,6 +382,16 @@ fn main() -> anyhow::Result<()> {
                 riptide_ipc::default_endpoint()?
             );
             Ok(())
+        }
+        Command::Ai { command } => {
+            let rt = tokio::runtime::Runtime::new()?;
+            match command {
+                AiCommand::Test {
+                    provider,
+                    model,
+                    base_url,
+                } => rt.block_on(ai::test(lang, &provider, model, base_url)),
+            }
         }
         Command::Ping => {
             let rt = tokio::runtime::Runtime::new()?;
@@ -486,6 +532,10 @@ fn main() -> anyhow::Result<()> {
             };
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(grab::grab(opts, lang))
+        }
+        Command::Torrent(cmd) => {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(torrent::run(cmd, &paths.data_dir, lang))
         }
         Command::Bench {
             url,

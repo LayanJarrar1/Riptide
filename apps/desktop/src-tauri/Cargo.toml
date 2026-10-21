@@ -13,6 +13,11 @@ publish.workspace = true
 name = "riptide_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Test-only: lets a test harness attach to the WebView2 (remote debugging port taken from
+# RIPTIDE_CDP_PORT). Never part of a release build.
+cdp = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -40,6 +45,9 @@ riptide-log = { workspace = true }
 riptide-net = { workspace = true }
 riptide-media = { workspace = true }
 riptide-crawl = { workspace = true }
+riptide-ai = { workspace = true }
+riptide-research = { workspace = true }
+chrono = { workspace = true }
 tokio-util = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
@@ -52,6 +60,11 @@ notify-rust = "4.18"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+riptide-torrent = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+wiremock = "0.6"
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

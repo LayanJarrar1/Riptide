@@ -1,0 +1,63 @@
+{
+ "_note": "NOT recorded: Jamendo needs a client id and none was available on 2026-10-20. Built from the documented response of GET /v3.0/tracks/ (https://developer.jamendo.com/v3.0/tracks).",
+ "headers": {
+  "status": "success",
+  "code": 0,
+  "error_message": "",
+  "warnings": "",
+  "results_count": 3,
+  "next": ""
+ },
+ "results": [
+  {
+   "id": "1532771",
+   "name": "Rain & Piano",
+   "duration": 187,
+   "artist_id": "364517",
+   "artist_name": "Calm Composer",
+   "artist_idstr": "calm-composer",
+   "album_name": "Quiet Hours",
+   "album_id": "412345",
+   "license_ccurl": "http://creativecommons.org/licenses/by-nc-sa/3.0/",
+   "position": 2,
+   "releasedate": "2019-03-14",
+   "album_image": "https://usercontent.jamendo.com?type=album&id=412345&width=300",
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=1532771&format=mp31&from=app-devsite",
+   "audiodownload": "https://prod-1.storage.jamendo.com/download/track/1532771/mp32/",
+   "prourl": "",
+   "shorturl": "https://jamen.do/t/1532771",
+   "shareurl": "https://www.jamendo.com/track/1532771",
+   "waveform": "{}",
+   "image": "https://usercontent.jamendo.com?type=album&id=412345&width=300",
+   "audiodownload_allowed": true
+  },
+  {
+   "id": "1532772",
+   "name": "Locked / Track: No *Download*?",
+   "duration": 201,
+   "artist_id": "364518",
+   "artist_name": "Other Artist",
+   "album_name": "",
+   "license_ccurl": "http://creativecommons.org/licenses/by/3.0/",
+   "releasedate": "2020-01-01",
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=1532772&format=mp31&from=app-devsite",
+   "audiodownload": "https://prod-1.storage.jamendo.com/download/track/1532772/mp32/",
+   "shareurl": "https://www.jamendo.com/track/1532772",
+   "audiodownload_allowed": false
+  },
+  {
+   "id": "1532773",
+   "name": "Open / Sky: \"Live\"",
+   "duration": 99,
+   "artist_id": "364519",
+   "artist_name": "Third Artist",
+   "album_name": "Singles",
+   "license_ccurl": "http://creativecommons.org/licenses/by/3.0/",
+   "releasedate": "2021-11-30",
+   "audio": "https://prod-1.storage.jamendo.com/?trackid=1532773&format=mp31&from=app-devsite",
+   "audiodownload": "https://prod-1.storage.jamendo.com/download/track/1532773/mp32/",
+   "shareurl": "https://www.jamendo.com/track/1532773",
+   "audiodownload_allowed": true
+  }
+ ]
+}

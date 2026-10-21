@@ -1,0 +1,119 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/3K2TDqN91s3ShalHGQAYpPTjEFo</id>
+  <title>arXiv Query: search_query=all:bittorrent OR all:piece OR all:selection&amp;id_list=&amp;start=0&amp;max_results=4</title>
+  <updated>2026-10-20T11:06:20Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:bittorrent+OR+(all:piece+OR+all:selection)&amp;start=0&amp;max_results=4&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>4</opensearch:itemsPerPage>
+  <opensearch:totalResults>183476</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1705.00548v1</id>
+    <title>Understanding the evolution of multimedia content in the Internet through BitTorrent glasses</title>
+    <updated>2017-05-01T14:45:00Z</updated>
+    <link href="https://arxiv.org/abs/1705.00548v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1705.00548v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Today's Internet traffic is mostly dominated by multimedia content and the prediction is that this trend will intensify in the future. Therefore, main Internet players, such as ISPs, content delivery platforms (e.g. Youtube, Bitorrent, Netflix, etc) or CDN operators, need to understand the evolution of multimedia content availability and popularity in order to adapt their infrastructures and resources to satisfy clients requirements while they minimize their costs. This paper presents a thorough analysis on the evolution of multimedia content available in BitTorrent. Specifically, we analyze the evolution of four relevant metrics across different content categories: content availability, content popularity, content size and user's feedback. To this end we leverage a large-scale dataset formed by 4 snapshots collected from the most popular BitTorrent portal, namely The Pirate Bay, between Nov. 2009 and Feb. 2012. Overall our dataset is formed by more than 160k content that attracted more than 185M of download sessions.</summary>
+    <category term="cs.NI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.MM" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2017-05-01T14:45:00Z</published>
+    <arxiv:comment>Farahbakhsh, Reza, et al. "Understanding the evolution of multimedia content in the internet through bittorrent glasses." IEEE Network 27.6 (2013): 80-88</arxiv:comment>
+    <arxiv:primary_category term="cs.NI"/>
+    <arxiv:journal_ref>IEEE Network 27.6 (2013): 80-88</arxiv:journal_ref>
+    <author>
+      <name>Reza Farahbakhsh</name>
+    </author>
+    <author>
+      <name>Angel Cuevas</name>
+    </author>
+    <author>
+      <name>Ruben Cuevas</name>
+    </author>
+    <author>
+      <name>Roberto Gonzalez</name>
+    </author>
+    <author>
+      <name>Noel Crespi</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1402.2187v1</id>
+    <title>Analyzing Peer Selection Policies for BitTorrent Multimedia On-Demand Streaming Systems in Internet</title>
+    <updated>2014-02-10T15:36:41Z</updated>
+    <link href="https://arxiv.org/abs/1402.2187v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1402.2187v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The adaptation of the BitTorrent protocol to multimedia on-demand streaming systems essentially lies on the modification of its two core algorithms, namely the piece and the peer selection policies, respectively. Much more attention has though been given to the piece selection policy. Within this context, this article proposes three novel peer selection policies for the design of BitTorrent-like protocols targeted at that type of systems: Select Balanced Neighbour Policy (SBNP), Select Regular Neighbour Policy (SRNP), and Select Optimistic Neighbour Policy (SONP). These proposals are validated through a competitive analysis based on simulations which encompass a variety of multimedia scenarios, defined in function of important characterization parameters such as content type, content size, and client interactivity profile. Service time, number of clients served and efficiency retrieving coefficient are the performance metrics assessed in the analysis. The final results mainly show that the novel proposals constitute scalable solutions that may be considered for real project designs. Lastly, future work is included in the conclusion of this paper.</summary>
+    <category term="cs.NI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.MM" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2014-02-10T15:36:41Z</published>
+    <arxiv:comment>19 PAGES</arxiv:comment>
+    <arxiv:primary_category term="cs.NI"/>
+    <arxiv:journal_ref>International Journal of Computer Networks &amp; Communications (IJCNC) Vol.6, No.1, January 2014</arxiv:journal_ref>
+    <author>
+      <name>Carlo Kleber Da Silva Rodrigues</name>
+    </author>
+    <arxiv:doi>10.5121/ijcnc.2014.6114</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.5121/ijcnc.2014.6114" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1512.03796v1</id>
+    <title>Improving BitTorrent's Peer Selection For Multimedia Content On-Demand Delivery</title>
+    <updated>2015-12-11T20:37:05Z</updated>
+    <link href="https://arxiv.org/abs/1512.03796v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1512.03796v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The great efficiency achieved by the BitTorrent protocol for the distribution of large amounts of data inspired its adoption to provide multimedia content on-demand delivery over the Internet. As it is not designed for this purpose, some adjustments have been proposed in order to meet the related QoS requirements like low startup delay and smooth playback continuity. Accordingly, this paper introduces a BitTorrent-like proposal named as Quota-Based Peer Selection (QBPS). This proposal is mainly based on the adaptation of the original peer-selection policy of the BitTorrent protocol. Its validation is achieved by means of simulations and competitive analysis. The final results show that QBPS outperforms other recent proposals of the literature. For instance, it achieves a throughput optimization of up to 48.0% in low-provision capacity scenarios where users are very interactive.</summary>
+    <category term="cs.NI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2015-12-11T20:37:05Z</published>
+    <arxiv:comment>International Journal of Computer Networks &amp; Communications(IJCNC) Vol.7, No.6, November 2015</arxiv:comment>
+    <arxiv:primary_category term="cs.NI"/>
+    <author>
+      <name>Ananda Gorck Streit</name>
+    </author>
+    <author>
+      <name>Carlo Kleber da Silva Rodrigues</name>
+    </author>
+    <arxiv:doi>10.5121/ijcnc.2015.7608</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.5121/ijcnc.2015.7608" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1004.1267v1</id>
+    <title>De-anonymizing BitTorrent Users on Tor</title>
+    <updated>2010-04-08T07:23:04Z</updated>
+    <link href="https://arxiv.org/abs/1004.1267v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1004.1267v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Some BitTorrent users are running BitTorrent on top of Tor to preserve their privacy. In this extended abstract, we discuss three different attacks to reveal the IP address of BitTorrent users on top of Tor. In addition, we exploit the multiplexing of streams from different applications into the same circuit to link non-BitTorrent applications to revealed IP addresses.</summary>
+    <category term="cs.NI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CR" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2010-04-08T07:23:04Z</published>
+    <arxiv:comment>Poster accepted at the 7th USENIX Symposium on Network Design and Implementation (NSDI '10), San Jose, CA : United States (2010)</arxiv:comment>
+    <arxiv:primary_category term="cs.NI"/>
+    <author>
+      <name>Stevens Le Blond</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Pere Manils</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Abdelberi Chaabane</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Mohamed Ali Kaafar</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Arnaud Legout</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Claude Castellucia</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Walid Dabbous</name>
+      <arxiv:affiliation>INRIA Sophia Antipolis / INRIA Rhône-Alpes</arxiv:affiliation>
+    </author>
+  </entry>
+</feed>

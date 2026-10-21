@@ -1,0 +1,37 @@
+[package]
+name = "riptide-torrent"
+description = "Riptide download manager — BitTorrent (magnet / .torrent) on top of librqbit, with hardened file naming"
+license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+riptide-core = { workspace = true }
+librqbit = { version = "=9.0.1", default-features = false, features = ["rust-tls"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+serde_json = { workspace = true }
+unicode-normalization = { workspace = true }
+tokio-util = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+# FSCTL_SET_SPARSE for the files we create (see `storage::sparse`)
+windows-sys = { workspace = true }
+
+[dev-dependencies]
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+proptest = { workspace = true }
+windows-sys = { workspace = true }
+
+[lints]
+workspace = true

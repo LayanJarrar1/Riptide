@@ -25,10 +25,26 @@ export interface Settings {
   readonly markDownloads: boolean;
   /** Follow redirects from a public site to a private network address (engine-side, off by default). */
   readonly allowPrivateRedirects: boolean;
+  /** Keep uploading after a torrent finishes (engine-side, off by default). */
+  readonly torrentSeeding: boolean;
+  /** Stop seeding at this ratio in percent (100 = 1.0); 0 = no ratio limit. */
+  readonly torrentRatioPercent: number;
+  /** Stop seeding after this many minutes; 0 = no time limit. */
+  readonly torrentMinutes: number;
+  /** Upload cap for torrents in bytes per second, `null` = unlimited. */
+  readonly torrentUploadBps: number | null;
+  /** Find torrent peers through the DHT (applies after a restart). */
+  readonly torrentDht: boolean;
+  /** Port for incoming torrent peers, 0 = automatic (applies after a restart). */
+  readonly torrentPort: number;
   readonly proxyMode: 'system' | 'none' | 'manual';
   readonly proxyUrl: string;
   readonly checkUpdates: boolean;
   readonly channel: 'stable' | 'beta';
+  /** Row height of the downloads list. */
+  readonly density: 'comfortable' | 'compact';
+  /** The sidebar can be hidden from the View menu. */
+  readonly sidebarVisible: boolean;
 }
 
 /** `localStorage` key. */
@@ -55,11 +71,19 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyOnComplete: true,
   markDownloads: true,
   allowPrivateRedirects: false,
+  torrentSeeding: false,
+  torrentRatioPercent: 100,
+  torrentMinutes: 1440,
+  torrentUploadBps: null,
+  torrentDht: true,
+  torrentPort: 0,
   proxyMode: 'system',
   proxyUrl: '',
   checkUpdates: true,
   // alpha: all releases are pre-releases; switch back to stable at the first stable release
   channel: 'beta',
+  density: 'comfortable',
+  sidebarVisible: true,
 };
 
 /**
@@ -180,6 +204,12 @@ export class SettingsService {
         speedLimitBps: engine.global_speed_limit ?? null,
         markDownloads: engine.mark_of_the_web ?? true,
         allowPrivateRedirects: engine.allow_private_redirects ?? false,
+        torrentSeeding: engine.torrent?.seeding ?? false,
+        torrentRatioPercent: engine.torrent?.seed_ratio_percent ?? 100,
+        torrentMinutes: engine.torrent?.seed_minutes ?? 1440,
+        torrentUploadBps: engine.torrent?.upload_limit ?? null,
+        torrentDht: engine.torrent?.dht ?? true,
+        torrentPort: engine.torrent?.listen_port ?? 0,
         proxyMode: engine.proxy.mode,
         proxyUrl: engine.proxy.url,
       }));
@@ -216,7 +246,16 @@ export class SettingsService {
     // a manual proxy without an address is not applied (the engine would refuse it)
     const proxy: EngineSettings['proxy'] =
       current.proxyMode === 'manual' && current.proxyUrl.trim() === '' ? known.proxy : { mode: current.proxyMode, url: current.proxyUrl.trim() };
+    const torrent: EngineSettings['torrent'] = {
+      seeding: current.torrentSeeding,
+      seed_ratio_percent: Math.max(0, Math.round(current.torrentRatioPercent)),
+      seed_minutes: Math.max(0, Math.round(current.torrentMinutes)),
+      upload_limit: current.torrentUploadBps !== null && current.torrentUploadBps > 0 ? current.torrentUploadBps : null,
+      dht: current.torrentDht,
+      listen_port: Math.min(65535, Math.max(0, Math.round(current.torrentPort))),
+    };
     if (
+      JSON.stringify(known.torrent ?? null) === JSON.stringify(torrent) &&
       known.default_dir === defaultDir &&
       known.connections === connections &&
       known.per_host === perHost &&
@@ -240,6 +279,7 @@ export class SettingsService {
       proxy,
       mark_of_the_web: current.markDownloads,
       allow_private_redirects: current.allowPrivateRedirects,
+      torrent,
     };
     try {
       await this.invoke<void>('set_engine_settings', { settings });

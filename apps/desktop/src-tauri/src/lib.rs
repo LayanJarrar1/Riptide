@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use riptide_engine::{Engine, EngineConfig};
 use tauri::{Emitter, Manager};
 
+pub mod ai;
 pub mod clipboard;
 pub mod commands;
 pub mod crawl;
@@ -25,8 +26,11 @@ pub mod ipc_server;
 pub mod media;
 pub mod notify;
 pub mod power;
+pub mod protocol;
 pub mod queues;
+pub mod research;
 pub mod shell;
+pub mod torrent;
 pub mod tray;
 pub mod updater;
 pub mod webview;
@@ -68,6 +72,15 @@ pub fn log_filter<I: IntoIterator<Item = String>>(args: I, env_rust_log: Option<
     env_rust_log
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| riptide_log::LogConfig::DEFAULT_FILTER.to_string())
+}
+
+/// [`log_filter`] for a whole command line (program name first). A launch that opens a link or
+/// file carries data, never flags, so nothing in it can change the log level.
+pub fn launch_log_filter(args: &[String], env_rust_log: Option<String>) -> String {
+    if protocol::is_open_launch(args) {
+        return log_filter(Vec::new(), env_rust_log);
+    }
+    log_filter(args.iter().cloned(), env_rust_log)
 }
 
 /// Resolves the data directory (installed, or portable when `portable.txt` sits next to the
@@ -134,7 +147,9 @@ pub fn run() {
     tauri::Builder::default()
         // first: a second launch hands over to the running instance and exits before it opens
         // the database (its crash recovery would otherwise re-queue the live transfers)
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // a magnet link or .torrent file launched while Riptide runs opens its file choice
+            protocol::handle_second_launch(app, &args);
             show_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
@@ -149,6 +164,7 @@ pub fn run() {
             Some(vec![shell::MINIMIZED_ARG]),
         ))
         .manage(shell::Shell::default())
+        .manage(protocol::PendingOpen::default())
         .manage(std::sync::Arc::new(crawl::Crawls::default()))
         .setup(move |app| {
             // the window first: portable mode gives it a profile folder next to the app
@@ -165,7 +181,21 @@ pub fn run() {
                 None => tracing::warn!("video support not installed (no yt-dlp)"),
             }
             engine.set_media_tools(tools);
+            // AI (off until configured), research and the download index
+            app.manage(ai::service_for(&media::DataDir(data_dir.clone())));
+            app.manage(research::ResearchState::default());
             app.manage(media::DataDir(data_dir));
+
+            // launched by a magnet link or a .torrent file: the webview asks for it once it is up
+            if let Some(target) = protocol::open_target(&std::env::args().collect::<Vec<_>>()) {
+                app.state::<protocol::PendingOpen>().set(target);
+            }
+
+            // torrents already in the list continue; with none, no port is opened (privacy)
+            let torrent_engine = engine.clone();
+            tauri::async_runtime::spawn(async move {
+                torrent::start_if_needed(&torrent_engine).await;
+            });
 
             // tray, notifications, clipboard monitor; started by Windows → stay in the tray
             if let Err(e) = tray::install(app.handle(), engine.clone()) {
@@ -270,6 +300,29 @@ pub fn run() {
             crawl::cancel_crawl,
             crawl::discard_crawl,
             crawl::add_crawl_files,
+            ai::ai_status,
+            ai::ai_save_settings,
+            ai::ai_set_key,
+            ai::ai_remove_key,
+            ai::ai_list_models,
+            ai::ai_test_connection,
+            ai::ai_last_request,
+            ai::ai_forget_all,
+            ai::ai_suggest_name,
+            clipboard::clipboard_magnets,
+            research::research_start,
+            research::research_cancel,
+            research::research_retry_source,
+            research::research_settings,
+            research::research_save_settings,
+            research::research_set_secret,
+            research::research_remove_secret,
+            research::research_preview,
+            research::research_add,
+            research::seen_check,
+            research::seen_settings,
+            research::seen_set_skip,
+            research::seen_forget,
             commands::pick_text_file,
             commands::save_text_file,
             commands::pause_download,
@@ -313,6 +366,16 @@ pub fn run() {
             queues::reorder_queues,
             queues::validate_post_action,
             queues::run_post_action,
+            torrent::torrent_preview,
+            torrent::add_torrent,
+            torrent::torrent_web_seed_add,
+            torrent::list_torrents,
+            torrent::torrent_live,
+            torrent::pick_torrent_file,
+            protocol::protocol_status,
+            protocol::register_protocols,
+            protocol::unregister_protocols,
+            protocol::take_pending_open,
             shell::set_shell_prefs,
             shell::autostart_enabled,
             shell::set_autostart,
@@ -324,6 +387,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_open_launch_never_changes_the_log_level() {
+        let link = "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=x";
+        for list in [
+            // the registered form, with a link that was split into extra arguments
+            vec!["riptide", "--open-link", "--", link, "--log-level", "trace"],
+            vec!["riptide", "--open-link", "--", link, "--log-level=trace"],
+            // an earlier registration (`"exe" "%1"`)
+            vec!["riptide", link, "--log-level", "trace"],
+        ] {
+            let all: Vec<String> = list.iter().map(|s| (*s).to_string()).collect();
+            assert_eq!(launch_log_filter(&all, None), "info", "{list:?}");
+        }
+        // an ordinary launch still honours the flag
+        let plain: Vec<String> = ["riptide", "--log-level", "debug"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert_eq!(launch_log_filter(&plain, None), "debug");
+    }
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()

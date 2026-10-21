@@ -1,6 +1,7 @@
 import { Signal, signal } from '@angular/core';
 
 import { BatchOptions, BatchResult, Download, DownloadRequest, MediaProbe, ProbeResult } from '../model/download';
+import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource, WebSeedResult } from '../model/torrent';
 import { BatchExpansion, UrlListResult } from './batch-pattern';
 
 /**
@@ -113,4 +114,27 @@ export abstract class DownloadEngine {
 
   /** Gives an expired download a fresh address. */
   abstract refresh(id: number, url: string): Promise<void>;
+
+  /**
+   * What a magnet link or `.torrent` file contains: the files with their sizes, so the user can
+   * choose before anything is added. A magnet link has to find peers first (up to two minutes).
+   * Rejects for a malformed link or a torrent that breaks the safety limits.
+   */
+  abstract torrentPreview(source: TorrentSource, dir?: string): Promise<TorrentPreview>;
+
+  /** Adds the previewed torrent with the user's file choice; resolves with the download id. */
+  abstract addTorrent(request: TorrentAddRequest): Promise<number>;
+
+  /**
+   * Downloads the chosen files of a previewed torrent from its first web seed as ordinary
+   * downloads. The engine builds each address from the names in the `.torrent` and refuses any
+   * that targets a private network; it rejects when every file was refused.
+   */
+  abstract addWebSeedFiles(token: string, onlyFiles: readonly number[] | null, dir: string | undefined, startPaused: boolean): Promise<WebSeedResult>;
+
+  /** Per-file progress, peers, speeds and ratio of one torrent (the details drawer polls this). */
+  abstract torrentLive(id: number): Promise<TorrentLiveView>;
+
+  /** Native file dialog for a `.torrent`; the chosen path, `null` on cancel or in a plain browser. */
+  abstract pickTorrentFile(): Promise<string | null>;
 }

@@ -24,8 +24,13 @@ import { TickerDirective } from './core/ticker.directive';
 import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
 import { AddDownloadDialogComponent } from './features/downloads/add-download-dialog.component';
+import { DropHandlerService } from './core/drop-handler.service';
+import { TorrentLaunchService } from './core/torrent-launch.service';
+import { TorrentDialogComponent } from './features/downloads/torrent-dialog.component';
 import { CompletionToastService } from './features/downloads/completion-toast.service';
 import { DesktopShellService } from './features/shell/desktop-shell.service';
+import { SettingsService } from './features/settings/settings.service';
+import { TitleBarComponent } from './features/shell/title-bar.component';
 import { CATEGORY_ICONS } from './features/downloads/download-row.component';
 import { PostActionDialogComponent } from './features/queues/post-action-dialog.component';
 import { PostActionCountdown } from './features/queues/post-action-countdown.service';
@@ -67,6 +72,7 @@ const BOOT_MS = 900;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     AddDownloadDialogComponent,
+    TorrentDialogComponent,
     NgComponentOutlet,
     ButtonComponent,
     IconComponent,
@@ -79,6 +85,7 @@ const BOOT_MS = 900;
     QueuesNavComponent,
     SparklineComponent,
     TickerDirective,
+    TitleBarComponent,
     ToastsComponent,
     TranslatePipe,
   ],
@@ -92,6 +99,7 @@ export class AppComponent implements OnInit {
   protected readonly tauri = inject(TauriService);
   protected readonly store = inject(DownloadsStore);
   protected readonly ui = inject(UiState);
+  protected readonly settings = inject(SettingsService);
   protected readonly format = inject(FormatService);
   private readonly router = inject(Router);
   protected readonly updates = inject(UpdateService);
@@ -121,7 +129,7 @@ export class AppComponent implements OnInit {
   });
 
   /** Whether the list page is showing (sidebar highlights follow the view only then). */
-  protected readonly onDownloads = computed(() => !this.url().startsWith('/settings'));
+  protected readonly onDownloads = computed(() => !this.url().startsWith('/settings') && !this.url().startsWith('/research'));
 
   protected readonly statusText = computed(() => {
     const t = this.store.totals();
@@ -141,6 +149,9 @@ export class AppComponent implements OnInit {
     inject(DesktopShellService);
     // listens for finished queues; the dialog shows its countdown
     inject(PostActionCountdown);
+    // a magnet link or .torrent file the system handed to Riptide opens the file choice
+    inject(TorrentLaunchService);
+    inject(DropHandlerService);
 
     this.router.events
       .pipe(
@@ -161,6 +172,11 @@ export class AppComponent implements OnInit {
       if (this.ui.grabberOpen() && untracked(this.grabberDialog) === null) {
         void import('./features/grabber/site-grabber-dialog.component').then((m) => this.grabberDialog.set(m.SiteGrabberDialogComponent));
       }
+    });
+
+    // display density: the stylesheet turns it into the row height
+    effect(() => {
+      document.documentElement.dataset['density'] = this.settings.settings().density;
     });
 
     effect(() => {
@@ -237,6 +253,9 @@ export class AppComponent implements OnInit {
     } else if (event.key === 'f' || event.key === 'F') {
       event.preventDefault();
       void this.router.navigateByUrl('/').then(() => this.ui.focusSearch());
+    } else if (event.key === 'b' || event.key === 'B') {
+      event.preventDefault();
+      this.settings.patch({ sidebarVisible: !this.settings.settings().sidebarVisible });
     } else if (event.key === ',') {
       event.preventDefault();
       void this.router.navigateByUrl('/settings');

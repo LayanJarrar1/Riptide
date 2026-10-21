@@ -6,6 +6,7 @@ import { TickerDirective } from '../../core/ticker.directive';
 import { I18nService } from '../../i18n/i18n.service';
 import { DownloadRow } from '../../data/downloads.store';
 import { canPause, canResume, CategoryKey, failureFix } from '../../model/download';
+import { formatRatio } from '../../model/torrent';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent, IconName } from '../../ui/icon.component';
 import { ProgressFlowComponent } from '../../ui/progress-flow.component';
@@ -61,7 +62,6 @@ export function hostOf(url: string): string {
     '[class.is-staggered]': 'staggerIndex() !== null',
     '[class.is-leaving]': 'leaving()',
     '[style.--i]': 'staggerIndex()',
-    '[tabindex]': 'selected() ? 0 : -1',
     '(click)': 'rowClick.emit($event)',
     '(dblclick)': 'rowDblClick.emit()',
     '(contextmenu)': 'onContext($event)',
@@ -74,6 +74,9 @@ export function hostOf(url: string): string {
       <span class="name-block">
         <span class="name-line">
           <span class="name" dir="auto" [attr.title]="row().d.filename">{{ row().d.filename }}</span>
+          @if (row().d.kind === 'torrent') {
+            <span class="media-badge" role="img" [attr.title]="i18n.t('torrent.badge')" [attr.aria-label]="i18n.t('torrent.badge')"><app-icon name="magnet" [size]="10" /></span>
+          }
           @if (row().d.kind === 'media') {
             <span class="media-badge" role="img" [attr.title]="i18n.t('details.video')" [attr.aria-label]="i18n.t('details.video')"><app-icon name="play" [size]="10" /></span>
           }
@@ -89,6 +92,8 @@ export function hostOf(url: string): string {
               </button>
             }
           </span>
+        } @else if (torrentLine(); as line) {
+          <span class="host torrent-line" dir="auto" [attr.title]="line">{{ line }}</span>
         } @else {
           <span class="host" dir="ltr">{{ host() }}</span>
         }
@@ -108,7 +113,7 @@ export function hostOf(url: string): string {
       <span class="pct num">{{ row().progress | pct }}</span>
     </div>
 
-    <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat"></span>
+    <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat" [tickerStream]="true"></span>
 
     <div class="cell c-eta num" role="gridcell">{{ row().eta | duration }}</div>
 
@@ -490,7 +495,24 @@ export class DownloadRowComponent {
   readonly rowContext = output<MouseEvent>();
   readonly action = output<RowAction>();
 
-  protected readonly icon = computed(() => CATEGORY_ICONS[this.row().d.category]);
+  protected readonly icon = computed<IconName>(() => (this.row().d.kind === 'torrent' ? 'magnet' : CATEGORY_ICONS[this.row().d.category]));
+  /** The second line of a torrent row: peers (or seeding) and the share ratio; `null` for other rows. */
+  protected readonly torrentLine = computed(() => {
+    const d = this.row().d;
+    const t = d.torrent;
+    if (d.kind !== 'torrent' || t === undefined) {
+      return null;
+    }
+    // the ratio only shows once something was uploaded: the line is short and a 0.00 says nothing
+    const ratio = t.ratio > 0 ? ` · ${this.i18n.t('torrent.ratio').replace('{ratio}', formatRatio(t.ratio))}` : '';
+    if (t.seeding) {
+      return `${this.i18n.t('torrent.seeding')}${ratio}`;
+    }
+    if (d.state === 'downloading' || d.state === 'probing') {
+      return `${this.i18n.t('torrent.peersOf').replace('{n}', '' + t.peers).replace('{seen}', '' + t.peersSeen)}${ratio}`;
+    }
+    return `${this.i18n.t('torrent.badge')}${ratio}`;
+  });
   protected readonly host = computed(() => hostOf(this.row().d.url));
   protected readonly showDownloaded = computed(() => {
     const s = this.row().d.state;

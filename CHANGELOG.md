@@ -10,6 +10,33 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ### Fixed
 
+- Review round of the preview (independent security review of alpha.5):
+  - Two torrents that name the same file no longer share it, and removing or cancelling a torrent
+    deletes only files it created itself; names are planned around every other torrent, queued
+    downloads and `.rtpart` files.
+  - A torrent removed or cancelled while the torrent engine was not running no longer comes back
+    and downloads with no row in the list.
+  - Pause all pauses HTTP downloads even when the torrent engine is not running.
+  - Files of a torrent get the Mark of the Web as soon as each one completes, not at the end.
+  - The torrent engine (listening port, DHT) starts at launch only when a torrent is downloading
+    or seeding; paused and finished torrents leave no open port.
+  - Answers from AI providers and research sources are cut off at 8 MiB while they arrive.
+  - An API key is sent only to the address it was saved for; changing the endpoint asks for the
+    key again. The model list is always fetched from the saved endpoint.
+  - The `magnet:` handler passes the link as data (`--open-link -- "%1"`); a link that breaks out
+    of its quotes can no longer add flags such as `--unregister-host` or `--log-level`.
+  - Web seed downloads and search results that point at the local network, localhost or a
+    metadata address are refused; web seed addresses use the names written in the `.torrent`.
+  - Smaller: the upgrade keeps the old database as `riptide.sqlite.v3.bak` (written to a temporary
+    file, stripped of the saved cookies, headers and passwords, flushed and only then renamed; a
+    failed attempt leaves nothing behind and a good older copy is never replaced; deleted
+    automatically after 30 days, and safe to delete by hand); ids of removed
+    downloads are not reused after the upgrade; folders are never created through a junction;
+    the server-sent-events parser is linear; research hints are deleted; magnet links are
+    de-duplicated by info-hash; file names with `&`, `=` or `+` keep their extension in name
+    suggestions; no `Referer` on redirects; more Windows device names are defused; a cancelled
+    AI search still counts against the daily budget; unregistering restores another app's
+    `magnet:` handler.
 - Downloads that start together with the same file name no longer share one partial file (the
   finished file could hold another download's bytes).
 - A server that sends more bytes than its own `Content-Range` announces (jsDelivr) no longer
@@ -18,6 +45,88 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
   with the other secrets and removed with them.
 - Pause followed at once by Resume no longer leaves the download paused.
 - Links without a file extension get one for CSV, XML, SVG, WAV, EPUB and Office types.
+
+### Added
+
+- Research now streams: every source's results appear as soon as that source answers (with
+  per-source status, retry and Cancel), and the AI's query plan and ranking stream in behind them
+  while the list re-sorts in place. Tabs for Papers, Books, Music, Video, Games, Software, Images,
+  Datasets and Web; new open sources (Project Gutenberg, Open Library, LibriVox, Jamendo, Openverse,
+  Blender open movies, OpenGameArt, NASA, open-source games on GitHub, Internet Archive audio and
+  public-domain films); a licence badge on every result; optional web search through Brave or
+  SearXNG with "Find files on this page". No torrent indexes or piracy sources (D-research-1).
+- Several magnet links pasted at once (one per line), dropped on the window, or read from the
+  clipboard (File, Open magnet link from clipboard) open the file choice one after the other.
+- Magnet links and tracker announce addresses are masked in the log.
+- Torrents that list web seeds (HTTP mirrors, BEP 19), such as Internet Archive item torrents, can be
+  downloaded from the web seed as ordinary downloads when few peers are online; the file choice says
+  so and that those downloads are not checked against the torrent piece hashes. `.torrent` files
+  dropped on the window open the file choice.
+
+- An integrated title bar with menus (File, Downloads, Tools, View, Window, Help), keyboard
+  accessible (Alt or F10 to enter, arrows, mnemonics) and mirrored in Arabic; the window controls
+  stay at the right. *View* also gets Sidebar (Ctrl+B) and Display density (comfortable or compact).
+- Home, End, Page Up, Page Down, Shift+arrows and Ctrl+A in the downloads list.
+- BitTorrent. Paste a magnet link in *Add download* (or choose a `.torrent` file, or use
+  *File, Open torrent file...*), see the files with their sizes, tick the ones you want, optionally
+  download them one after another, and start. Torrent rows show peers and the share ratio, the
+  details drawer shows per-file progress, pause, resume, remove and "Check files again" work, and a
+  torrent survives a restart or a killed process (pieces are re-checked on start, never trusted).
+  Seeding is off by default: a finished torrent stops all network activity unless *Settings,
+  Torrents* turns it on, with a ratio limit, a time limit and an upload cap. File names from a
+  torrent go through the same sanitising as HTTP downloads and never leave the chosen folder.
+  Opt-in in *Settings, Integration*: open `magnet:` links and `.torrent` files with Riptide
+  (registered for your user only, removable). The database moves to schema version 5; an
+  alpha.4 build cannot open it afterwards.
+- **Settings -> AI** (off until you set it up): ten providers, your own API key kept only in the
+  Windows Credential Manager (the page shows `••••abcd` and never gets the key back), model list
+  from the provider plus a free-text model, optional compatible endpoint, a test button that
+  reports latency and provider-reported tokens, a daily token/request budget, a privacy panel
+  (download history for the AI off by default, a live "what will be sent" view, "Forget
+  everything") and no telemetry.
+- **Research** page (Tools menu and sidebar): searches OpenAlex, Crossref, arXiv, Europe PMC,
+  Internet Archive, Wikimedia Commons, GitHub releases and Data.gov for open, directly
+  downloadable files and adds the ones you tick to your downloads. Without an AI provider it is a
+  keyword search; with one, the question is expanded, results are ranked with a one-line reason
+  and every link the model cites is checked against the real results.
+- "You already downloaded this": Riptide remembers finished downloads by normalised address,
+  DOI, arXiv id, PubMed id, file name and size and SHA-256, warns in the Add dialog and on
+  Research cards (Open file / Open folder / Download again), notices when the file was deleted,
+  and can optionally skip repeats (Settings -> AI -> Download memory).
+- Add dialog: optional "Suggest name and category" (only host, file name and size are sent; you
+  accept or dismiss).
+- New crate `riptide-research`; new database migration 5 (`seen_downloads`, `seen_keys`, after the torrents migration 4). Version 5
+  is not readable by alpha.4: back up `%LOCALAPPDATA%\Riptide\riptide.sqlite` before trying the
+  preview on your real data, or use the portable build.
+
+### Changed
+
+- The clipboard monitor also offers magnet links.
+- The English strings are now a lazily loaded chunk like the Arabic ones, which keeps the initial
+  bundle under its 500 kB budget as the app grows.
+- The downloads list stays smooth at tens of thousands of items (measured at 50 000): progress
+  updates touch only the rows on screen, and sorting and filtering reuse the previous work.
+
+
+### Known limits
+
+- Do not go back to alpha.4 after trying this preview: it cannot open schema version 5. The
+  upgrade keeps `riptide.sqlite.v3.bak` next to the database for that case (without saved
+  cookies or passwords; deleted automatically after 30 days).
+- Once the torrent engine has started in a run (by adding or resuming a torrent) it stays up until
+  you quit Riptide, with its listening port on all interfaces (Windows may ask about the firewall;
+  allowing it needs no admin rights, declining only stops incoming peers).
+- The private-network check for web seeds and search results resolves a host name once when you
+  click and again when the download connects; a hostile DNS server could answer differently the
+  second time. Redirects from a public address to a private one are refused as for every download.
+- Web seed downloads are ordinary downloads and are not checked against the torrent piece hashes.
+- If a torrent needs a folder named like a file another torrent holds, Riptide refuses it with an
+  error instead of renaming the folder.
+- A search that is cancelled while the model is still answering is charged for its request and
+  prompt only (the reply tokens already streamed are not counted).
+- Marking each finished torrent file as downloaded from the internet relies on engine events; if
+  the app is so busy that events are dropped, the remaining files are marked when the torrent
+  completes.
 
 ## [0.1.0-alpha.4] - 2026-10-19
 

@@ -37,10 +37,20 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "queue_schedule_and_order",
         sql: include_str!("sql/v3.sql"),
     },
+    Migration {
+        version: 4,
+        name: "torrents",
+        sql: include_str!("sql/v4.sql"),
+    },
+    Migration {
+        version: 5,
+        name: "seen_index",
+        sql: include_str!("sql/v5.sql"),
+    },
 ];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 5;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -79,11 +89,133 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
     }
 
     let start = current;
+    prune_old_backups(conn);
+    if start > 0 && latest > start {
+        backup_before_upgrade(conn, start);
+    }
+    // Table rebuilds (v4) need foreign keys off, and the pragma cannot change inside a
+    // transaction. Off for the whole run, restored (and checked) at the end; no migration relies
+    // on enforcement, and the check below reports any dangling reference.
+    let fk_was_on: bool = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
+    if fk_was_on && latest > start {
+        conn.pragma_update(None, "foreign_keys", "OFF")?;
+    }
+    let outcome = apply(conn, migrations, start, &mut current);
+    if fk_was_on {
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+    }
+    outcome?;
+    if latest > start {
+        let dangling: i64 =
+            conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })?;
+        if dangling > 0 {
+            // the data is intact and usable; refusing to start would only lock the user out
+            tracing::error!(dangling, "dangling foreign keys after migrating");
+        }
+    }
+    Ok(current)
+}
+
+/// Keeps a copy of a file database as it was before an upgrade: `<file>.v<N>.bak` for schema
+/// `N`, written once and never overwritten. An older build refuses a newer schema and cannot
+/// open the upgraded file; this copy is what a user who goes back to it can use. A failed backup
+/// is logged and does not stop the upgrade.
+fn backup_before_upgrade(conn: &Connection, version: u32) {
+    let Some(path) = conn.path().filter(|p| !p.is_empty()) else {
+        return; // in memory
+    };
+    let backup = std::path::PathBuf::from(format!("{path}.v{version}.bak"));
+    if backup.exists() {
+        return; // a good older copy is never replaced
+    }
+    match write_backup(conn, &backup) {
+        Ok(()) => tracing::info!(version, "kept a copy of the database before the upgrade"),
+        Err(e) => {
+            tracing::warn!(error = %e, "could not keep a copy of the database before the upgrade");
+        }
+    }
+}
+
+/// Writes the copy to `<backup>.tmp`, strips the secrets (cookies, passwords and headers of
+/// downloads must not outlive the downloads in a file nothing else cleans up), flushes it to disk
+/// and only then renames it into place: a failure (disk full) leaves no partial `.bak`, which would
+/// never be retried.
+fn write_backup(conn: &Connection, backup: &std::path::Path) -> std::result::Result<(), String> {
+    let mut tmp = backup.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = std::path::PathBuf::from(tmp);
+    let _ = std::fs::remove_file(&tmp);
+    let result = (|| -> std::result::Result<(), String> {
+        conn.execute("VACUUM INTO ?1", [tmp.to_string_lossy().as_ref()])
+            .map_err(|e| e.to_string())?;
+        {
+            let copy = Connection::open(&tmp).map_err(|e| e.to_string())?;
+            // a v1 file has the table too; tolerate a database that does not
+            let _ = copy.execute("DELETE FROM secrets", []);
+            copy.execute_batch("VACUUM").map_err(|e| e.to_string())?;
+        }
+        std::fs::File::options()
+            .write(true)
+            .open(&tmp)
+            .and_then(|f| f.sync_all())
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, backup).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// Days a pre-upgrade copy is kept; a later start deletes it.
+pub const BACKUP_KEEP_DAYS: u64 = 30;
+
+/// Deletes `<file>.v<N>.bak` copies (and leftover `.tmp` files) older than
+/// [`BACKUP_KEEP_DAYS`].
+fn prune_old_backups(conn: &Connection) {
+    let Some(path) = conn.path().filter(|p| !p.is_empty()) else {
+        return;
+    };
+    let path = std::path::Path::new(path);
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    let prefix = format!("{name}.v");
+    let max_age = std::time::Duration::from_secs(BACKUP_KEEP_DAYS * 24 * 3600);
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let fname = e.file_name().to_string_lossy().into_owned();
+        if !fname.starts_with(&prefix) || !(fname.ends_with(".bak") || fname.ends_with(".bak.tmp"))
+        {
+            continue;
+        }
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > max_age);
+        if old && std::fs::remove_file(e.path()).is_ok() {
+            tracing::info!(file = %fname, "deleted an old pre-upgrade copy of the database");
+        }
+    }
+}
+
+fn apply(
+    conn: &mut Connection,
+    migrations: &[Migration],
+    start: u32,
+    current: &mut u32,
+) -> Result<()> {
     for m in migrations.iter().filter(|m| m.version > start) {
-        if m.version != current + 1 {
+        if m.version != *current + 1 {
             return Err(Error::Corrupt(format!(
-                "migration {} ({}) follows version {current}; versions must be consecutive",
-                m.version, m.name
+                "migration {} ({}) follows version {}; versions must be consecutive",
+                m.version, m.name, *current
             )));
         }
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -102,9 +234,9 @@ pub fn run_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> 
             name = m.name,
             "applied schema migration"
         );
-        current = m.version;
+        *current = m.version;
     }
-    Ok(current)
+    Ok(())
 }
 
 /// Milliseconds since the Unix epoch; `0` if the clock is before 1970.
@@ -157,27 +289,24 @@ mod tests {
     #[test]
     fn failed_migration_rolls_back_entirely() {
         let mut conn = Connection::open_in_memory().unwrap();
-        run(&mut conn).unwrap();
+        // a database at the last released schema (v3); the broken script plays the next one
+        run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
 
-        let broken = [
-            MIGRATIONS[0],
-            MIGRATIONS[1],
-            MIGRATIONS[2],
-            Migration {
-                version: 4,
-                name: "broken",
-                // the third statement fails: nothing from the first two may survive
-                sql: "CREATE TABLE will_vanish_a (x);
-                      CREATE TABLE will_vanish_b (y);
-                      INSERT INTO no_such_table VALUES (1);",
-            },
-        ];
+        let mut broken = MIGRATIONS[..3].to_vec();
+        broken.push(Migration {
+            version: 4,
+            name: "broken",
+            // the third statement fails: nothing from the first two may survive
+            sql: "CREATE TABLE will_vanish_a (x);
+                  CREATE TABLE will_vanish_b (y);
+                  INSERT INTO no_such_table VALUES (1);",
+        });
         let err = run_with(&mut conn, &broken).unwrap_err();
         assert!(matches!(err, Error::Migration { version: 4, .. }), "{err}");
 
         assert_eq!(
             current_version(&conn).unwrap(),
-            SCHEMA_VERSION,
+            3,
             "version must not advance"
         );
         assert!(!table_exists(&conn, "will_vanish_a"));

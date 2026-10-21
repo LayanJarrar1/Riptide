@@ -16,6 +16,8 @@ development build. Get the alpha preview (installer or portable zip) from
 - [Removing downloads](#removing-downloads)
 - [Details](#details)
 - [Video, batches and the site grabber](#video-batches-and-the-site-grabber)
+- [Research: open and public sources](#research-open-and-public-sources)
+- [Magnet links](#magnet-links)
 - [Queues and schedules](#queues-and-schedules)
 - [Browser extension](#browser-extension)
 - [Updates](#updates)
@@ -29,7 +31,11 @@ development build. Get the alpha preview (installer or portable zip) from
 
 ## The window
 
-Three areas:
+Four areas, under a **title bar** that holds the menus (File, Downloads, Tools, View, Window,
+Help) and the window buttons (minimize, maximize or restore, close). The window buttons stay at the
+right edge in Arabic too. *View* switches theme, language, display density (comfortable or compact)
+and shows or hides the sidebar. Press `Alt` or `F10` to reach the menus from the keyboard; the
+arrow keys move, `Esc` leaves, and `Alt` plus the underlined letter opens a menu.
 
 - **Sidebar** (start side): views (All, Active, Waiting, Completed, Needs attention), categories
   (Archives, Documents, Music, Video, Programs, Images, Other) and queues, each with a live count.
@@ -121,6 +127,22 @@ The drawer's own buttons pause, cancel or remove the download. `Esc` closes it.
 - **Site grabber.** Crawl a page to a depth you choose, then tick the files you want. It respects
   `robots.txt`.
 
+## Research: open and public sources
+
+*Research* (sidebar, or **Tools → Research**) searches open and public sources and lists files with a direct download link. Pick a tab: **All, Papers, Books, Music, Video, Games, Software, Images, Datasets, Web**.
+
+- **Results appear as each source answers.** Every source has a chip (searching, how many results, timed out or failed with a retry button). You can keep using the page, filter by a source by clicking its chip, and press **Cancel** at any time.
+- **With an AI provider** (Settings → AI) the question is expanded into extra searches, and then the results are ranked, one line of "why it matches" per result, arriving one by one while the list re-sorts in place. Without one, your own words are sent to the sources as they are.
+- **Licence badge.** Each result shows *public domain*, a Creative Commons licence, *open source* with the licence name, or *licence unknown* when the source does not say. The badge repeats what the source reports; it is not legal advice.
+- **Sources.** Papers: OpenAlex, Crossref, arXiv, Europe PMC. Books: Project Gutenberg, Open Library (fully open scans), LibriVox audiobooks, Internet Archive. Music: Internet Archive audio, Jamendo (needs your free client id, Settings → Research sources), Openverse, Wikimedia Commons, OpenGameArt. Video: Internet Archive public-domain films, Wikimedia Commons, NASA, Blender open movies. Games: open-source games on GitHub (OSI licence required), OpenGameArt. Software: GitHub releases. Images: Openverse, Wikimedia Commons, NASA. Datasets: Data.gov.
+- **Web.** Choose a backend in Settings → Research sources: the Brave Search API (your own token, kept in the Windows Credential Manager) or a SearXNG instance, or leave it off. Web results are pages, not files: **Find files on this page** opens the site grabber on that page (robots.txt respected) so you can tick what to download.
+- **What is not here, on purpose.** Riptide does not search torrent indexes, piracy or "abandonware" sites, paywall-bypass or Sci-Hub-like sources, or anything whose purpose is copyrighted content without a licence. Only download what you have the right to download. See decision D-research-1.
+- Everything a source returns is treated as untrusted text: it is shown as plain text, only http and https links are used, and the AI can only rank what the sources returned.
+
+## Magnet links
+
+Paste a magnet link in **Add download** (or drop it on the window, copy it with the clipboard monitor on, or use **File → Open magnet link from clipboard**) and Riptide shows the files so you can choose. Paste several links, one per line, to get a list: choose the files of each in turn, or **Add all (every file)**. Tracker addresses are never shown in lists or written to the log (private trackers keep a passkey there).
+
 ## Queues and schedules
 
 Make as many queues as you like, each with its own limit on simultaneous downloads. A queue can run
@@ -164,8 +186,14 @@ build; the interface marks them as such where it matters.
 |---|---|
 | `Ctrl+N` | Add download |
 | `Ctrl+F` | Search |
+| `Ctrl+Shift+N` | Batch download |
 | `Ctrl+,` | Settings |
-| `↑` / `↓` | Move the selection |
+| `Ctrl+B` | Show or hide the sidebar |
+| `Alt` or `F10` | Go to the menu bar |
+| `↑` / `↓` | Move the selection (with `Shift`, extend it) |
+| `Home` / `End` | First or last download |
+| `Page Up` / `Page Down` | Move a page at a time |
+| `Ctrl+A` | Select every download in the list |
 | `Enter` | Open details |
 | `Space` | Pause or resume the selected download |
 | `Delete` | Remove the selected downloads |

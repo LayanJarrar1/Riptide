@@ -24,8 +24,8 @@ export class CompletionToastService {
   private readonly tauriAvailable = inject(TAURI_AVAILABLE);
   private readonly invoke = inject(TAURI_INVOKE);
 
-  /** State per id as of the last look; `null` until the engine has delivered its list. */
-  private known: Map<number, DownloadState> | null = null;
+  /** The list as of the last look; `null` until the engine has delivered its list. */
+  private previous: readonly Download[] | null = null;
 
   constructor() {
     effect(() => {
@@ -35,22 +35,47 @@ export class CompletionToastService {
     });
   }
 
+  /**
+   * Announces what completed since the last look. The engine replaces only the downloads that
+   * changed, so with an unchanged shape one pointer compare per download finds them (a map of
+   * every state on every tick would be the single most expensive thing the app does with 50 000
+   * downloads); a list that was added to, removed from or reordered is compared by id.
+   */
   private look(list: readonly Download[], loaded: boolean): void {
     if (!loaded) {
       return;
     }
-    if (this.known === null) {
-      this.known = new Map(list.map((d) => [d.id, d.state]));
+    const previous = this.previous;
+    this.previous = list;
+    if (previous === null || previous === list) {
       return;
     }
-    const next = new Map<number, DownloadState>();
-    for (const d of list) {
-      if (d.state === 'completed' && this.known.get(d.id) !== 'completed') {
-        this.announce(d);
+    const completed: Download[] = [];
+    let aligned = previous.length === list.length;
+    for (let i = 0; aligned && i < list.length; i++) {
+      const d = list[i];
+      const p = previous[i];
+      if (d === p) {
+        continue;
       }
-      next.set(d.id, d.state);
+      if (d.id !== p.id) {
+        aligned = false;
+      } else if (d.state === 'completed' && p.state !== 'completed') {
+        completed.push(d);
+      }
     }
-    this.known = next;
+    if (!aligned) {
+      completed.length = 0;
+      const before = new Map<number, DownloadState>(previous.map((d) => [d.id, d.state]));
+      for (const d of list) {
+        if (d.state === 'completed' && before.get(d.id) !== 'completed') {
+          completed.push(d);
+        }
+      }
+    }
+    for (const d of completed) {
+      this.announce(d);
+    }
   }
 
   private announce(d: Download): void {

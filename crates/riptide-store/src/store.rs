@@ -48,7 +48,7 @@ pub struct SegmentProgress {
 /// The database handle. Not `Sync`; one per thread.
 #[derive(Debug)]
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 /// `(cookies, headers_json, auth_user, auth_pass)` as read from the `secrets` table.
@@ -521,6 +521,13 @@ impl Store {
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             [key, value],
         )?;
+        Ok(())
+    }
+
+    /// Deletes a setting (no error when it is not there).
+    pub fn remove_setting(&mut self, key: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key = ?1", [key])?;
         Ok(())
     }
 

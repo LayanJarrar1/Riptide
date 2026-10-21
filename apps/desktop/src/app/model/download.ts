@@ -1,3 +1,5 @@
+import type { TorrentView } from './torrent';
+
 /**
  * UI-side model of a download. Mirrors `riptide_core::Download` / `Segment` (camelCase here,
  * snake_case on the wire); the IPC mapping lives in data/bridge-mapping.ts. Until the engine is wired the
@@ -124,12 +126,14 @@ export interface Download {
   readonly speedLimitBps?: number | null;
   /** Expected digest, if the user gave one. */
   readonly checksum: { readonly algo: 'md5' | 'sha1' | 'sha256'; readonly hex: string } | null;
-  /** `media` = a video page fetched by yt-dlp (no segments); absent or `http` = a plain file. */
+  /** `media` = a video page fetched by yt-dlp (no segments); `torrent` = BitTorrent; absent or `http` = a plain file. */
   readonly kind?: DownloadKind;
+  /** The torrent's files, peers and ratio (only for `kind: 'torrent'`). */
+  readonly torrent?: TorrentView;
 }
 
 /** Which engine moves the bytes. */
-export type DownloadKind = 'http' | 'media';
+export type DownloadKind = 'http' | 'media' | 'torrent';
 
 /** One entry of a video page's quality menu. Mirrors `riptide_core::MediaChoice`. */
 export interface MediaChoice {
@@ -249,6 +253,8 @@ export interface DownloadRequest {
   /** `media` for a video page; `mediaFormat` is then a [`MediaChoice`] key. */
   readonly kind?: DownloadKind;
   readonly mediaFormat?: string;
+  /** Add even if the "skip duplicates" option is on and this was downloaded before. */
+  readonly allowDuplicate?: boolean;
 }
 
 /** Options shared by every item of a batch. Mirrors `riptide_core::BatchOptions`. */

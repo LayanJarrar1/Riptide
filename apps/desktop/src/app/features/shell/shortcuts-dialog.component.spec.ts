@@ -54,7 +54,7 @@ describe('ShortcutsDialogComponent', () => {
     expect(labels).toContain('Add a download');
     expect(labels).toContain('Pause or resume');
     expect(labels).toContain('Move the selected download in its queue');
-    expect(labels.length).toBe(14);
+    expect(labels.length).toBe(19);
     const add = Array.from(el().querySelectorAll('.row')).find((r) => r.querySelector('.label')?.textContent?.trim() === 'Add a download');
     expect(Array.from(add?.querySelectorAll('kbd') ?? []).map((k) => k.textContent)).toEqual(['Ctrl', 'N']);
     const help = Array.from(el().querySelectorAll('.row')).find((r) => r.querySelector('.label')?.textContent?.trim() === 'Show this list');

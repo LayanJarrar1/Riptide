@@ -21,6 +21,7 @@ import type { DownloadState } from '../tauri/bridge/DownloadState';
 import type { MediaInfo } from '../tauri/bridge/MediaInfo';
 import type { ProbeInfo } from '../tauri/bridge/ProbeInfo';
 import type { Segment } from '../tauri/bridge/Segment';
+import type { TorrentView } from '../model/torrent';
 
 /** Samples kept per speed history (one per second). */
 export const HISTORY_LENGTH = 60;
@@ -134,9 +135,15 @@ function toUiSegments(segments: readonly Segment[], state: UiDownloadState, size
  * `previous` (the record on the wire has no speed); `speedBps` too, but only while the download
  * is still `downloading` — any other state means it is not moving.
  */
-export function toUiDownload(d: Download, segments: readonly Segment[], previous?: UiDownload): UiDownload {
+export function toUiDownload(d: Download, segments: readonly Segment[], previous?: UiDownload, torrent?: TorrentView): UiDownload {
   const state = toUiState(d.state);
   const size = toUiSize(d.size);
+  const torrentView = d.kind === 'torrent' ? (torrent ?? previous?.torrent) : undefined;
+  // a torrent has no segments either: its verified byte count (kept in the torrents table) is the progress
+  const torrentSegments: readonly UiSegment[] | null =
+    d.kind === 'torrent' && segments.length === 0
+      ? [{ index: 0, start: 0, end: size ?? 0, written: state === 'completed' ? (size ?? 0) : Math.min(torrentView?.downloaded ?? previous?.segments[0]?.written ?? 0, size ?? Number.MAX_SAFE_INTEGER), state: state === 'completed' ? 'done' : 'active' }]
+      : null;
   // a media download has no segments; keep the progress the events built while it is unfinished
   const keepMediaProgress =
     d.kind === 'media' && segments.length === 0 && state !== 'completed' && previous !== undefined && previous.segments.some((s) => s.written > 0);
@@ -155,7 +162,8 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     priority: d.priority,
     connections: d.connections,
     speedLimitBps: toUiSize(d.speed_limit),
-    segments: keepMediaProgress && previous !== undefined ? previous.segments : toUiSegments(segments, state, size),
+    segments: torrentSegments ?? (keepMediaProgress && previous !== undefined ? previous.segments : toUiSegments(segments, state, size)),
+    ...(torrentView === undefined ? {} : { torrent: torrentView }),
     speedBps: state === 'downloading' ? (previous?.speedBps ?? 0) : 0,
     speedHistory: previous?.speedHistory ?? emptyHistory(),
     addedAt: toMillis(d.added_at) ?? previous?.addedAt ?? 0,

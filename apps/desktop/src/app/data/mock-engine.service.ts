@@ -16,15 +16,38 @@ import {
   MediaChoice,
   MediaProbe,
 } from '../model/download';
+import { isMagnetLink, magnetHash, selectedBytes } from '../model/torrent';
+import type { TorrentAddRequest, TorrentLiveView, TorrentPreview, TorrentSource, WebSeedResult } from '../model/torrent';
 import type { BatchExpansion, UrlListResult } from './batch-pattern';
 import { withMovedToQueue, withQueueOrder } from '../model/queue-order';
 import { DownloadEngine } from './download-engine';
-import { GB, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
+import { GB, generateDownloads, KB, MB, mulberry32, planSegments, seedDownloads } from './mock-data';
 
 /** Whether the simulated engine advances on its own (tests turn it off). */
 export const MOCK_ENGINE_AUTOSTART = new InjectionToken<boolean>('riptide.mockEngine.autostart', {
   providedIn: 'root',
   factory: () => true,
+});
+
+/**
+ * Size of the generated list for the list-performance harness: `?mockCount=N` (and
+ * `&mockActive=K` for how many of them download, `&mockTickMs=T` for the update period) on the page URL. `0` = the normal demo data.
+ * Only the simulated engine reads it, and that engine is never created inside the Tauri
+ * webview (see `provideDownloadEngine`), so the desktop build cannot be steered by a URL.
+ */
+export const MOCK_LIST_SIZE = new InjectionToken<{ readonly count: number; readonly active: number; readonly tickMs: number }>('riptide.mockEngine.listSize', {
+  providedIn: 'root',
+  factory: () => {
+    try {
+      const q = new URLSearchParams(globalThis.location?.search ?? '');
+      const count = Math.min(100_000, Math.max(0, Number.parseInt(q.get('mockCount') ?? '0', 10) || 0));
+      const active = Math.min(count, Math.max(0, Number.parseInt(q.get('mockActive') ?? '4', 10) || 0));
+      const tickMs = Math.min(1000, Math.max(20, Number.parseInt(q.get('mockTickMs') ?? '0', 10) || TICK_MS));
+      return { count, active, tickMs };
+    } catch {
+      return { count: 0, active: 0, tickMs: TICK_MS };
+    }
+  },
 });
 
 /** How often the simulation advances. */
@@ -52,7 +75,10 @@ const MIN_SPLIT = 2 * MB;
 @Injectable({ providedIn: 'root' })
 export class MockEngineService extends DownloadEngine {
   private readonly rng = mulberry32(42);
-  private readonly list = signal<readonly Download[]>(seedDownloads(Date.now()));
+  private readonly size = inject(MOCK_LIST_SIZE);
+  private readonly list = signal<readonly Download[]>(
+    this.size.count > 0 ? generateDownloads(this.size.count, this.size.active, Date.now()) : seedDownloads(Date.now()),
+  );
   private nextId = this.list().length + 1;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastSample = Date.now();
@@ -70,7 +96,7 @@ export class MockEngineService extends DownloadEngine {
   readonly totalSpeedHistory = signal<readonly number[]>(new Array<number>(60).fill(0));
 
   /** Queue slots in the simulation. */
-  readonly maxActive = signal(MAX_ACTIVE);
+  readonly maxActive = signal(Math.max(MAX_ACTIVE, this.size.active));
 
   constructor() {
     super();
@@ -82,7 +108,7 @@ export class MockEngineService extends DownloadEngine {
   /** Starts the simulation timer (idempotent). */
   start(): void {
     if (this.timer === null) {
-      this.timer = setInterval(() => this.tick(TICK_MS), TICK_MS);
+      this.timer = setInterval(() => this.tick(this.size.tickMs), this.size.tickMs);
     }
   }
 
@@ -199,6 +225,117 @@ export class MockEngineService extends DownloadEngine {
     };
     this.list.update((all) => [...all, d]);
     return Promise.resolve(id);
+  }
+
+  /** A believable torrent for any magnet link (plain browser and Karma only; the app uses the real engine). */
+  torrentPreview(source: TorrentSource): Promise<TorrentPreview> {
+    if (source.kind === 'magnet' && !isMagnetLink(source.uri)) {
+      return Promise.reject(new Error('invalid magnet link'));
+    }
+    const hash = (source.kind === 'magnet' ? magnetHash(source.uri) : null) ?? '0123456789abcdef0123456789abcdef01234567';
+    const files = [
+      { index: 0, path: 'Big Buck Bunny/Big Buck Bunny.mp4', len: 276_134_947, exists: false },
+      { index: 1, path: 'Big Buck Bunny/Big Buck Bunny.en.srt', len: 140, exists: false },
+      { index: 2, path: 'Big Buck Bunny/poster.jpg', len: 310_380, exists: false },
+    ];
+    const existing = this.list().find((d) => d.torrent?.infoHash === hash)?.id ?? null;
+    return Promise.resolve({
+      token: `${hash}-${this.nextId}`,
+      infoHash: hash,
+      name: 'Big Buck Bunny',
+      files,
+      totalBytes: files.reduce((n, f) => n + f.len, 0),
+      isPrivate: false,
+      webSeeds: [],
+      existing,
+    });
+  }
+
+  addWebSeedFiles(): Promise<WebSeedResult> {
+    return Promise.resolve({ added: [], refused: 0 });
+  }
+
+  addTorrent(request: TorrentAddRequest): Promise<number> {
+    const id = this.nextId++;
+    const hash = request.token.split('-')[0] ?? '';
+    const all = [
+      { index: 0, path: 'Big Buck Bunny/Big Buck Bunny.mp4', len: 276_134_947 },
+      { index: 1, path: 'Big Buck Bunny/Big Buck Bunny.en.srt', len: 140 },
+      { index: 2, path: 'Big Buck Bunny/poster.jpg', len: 310_380 },
+    ];
+    const size = selectedBytes(all, request.onlyFiles);
+    const d: Download = {
+      id,
+      url: `magnet:?xt=urn:btih:${hash}`,
+      filename: 'Big Buck Bunny',
+      dir: request.dir ?? 'D:\\Downloads',
+      size,
+      supportsRanges: false,
+      state: request.startPaused ? 'paused' : 'queued',
+      category: 'other',
+      queueId: 1,
+      priority: 'normal',
+      connections: 1,
+      segments: [{ index: 0, start: 0, end: size, written: 0, state: 'pending' }],
+      speedBps: 0,
+      speedHistory: new Array<number>(60).fill(0),
+      addedAt: Date.now(),
+      startedAt: null,
+      completedAt: null,
+      failure: null,
+      checksum: null,
+      kind: 'torrent',
+      torrent: {
+        infoHash: hash,
+        files: all,
+        selected: request.onlyFiles,
+        sequential: request.sequential,
+        downloaded: 0,
+        seeding: false,
+        peers: 0,
+        peersSeen: 0,
+        upBps: 0,
+        uploaded: 0,
+        ratio: 0,
+      },
+    };
+    this.list.update((l) => [...l, d]);
+    return Promise.resolve(id);
+  }
+
+  torrentLive(id: number): Promise<TorrentLiveView> {
+    const d = this.get(id);
+    const t = d?.torrent;
+    if (d === undefined || t === undefined) {
+      return Promise.reject(new Error('not a torrent'));
+    }
+    const done = d.segments.reduce((n, s) => n + s.written, 0);
+    // the simulation fills the chosen files in order
+    let left = done;
+    const chosen = t.selected === null ? null : new Set(t.selected);
+    const fileProgress = t.files.map((f) => {
+      if (chosen !== null && !chosen.has(f.index)) {
+        return 0;
+      }
+      const part = Math.min(left, f.len);
+      left -= part;
+      return part;
+    });
+    return Promise.resolve({
+      files: t.files,
+      fileProgress,
+      selected: t.selected,
+      peers: d.state === 'downloading' ? 12 : 0,
+      peersSeen: d.state === 'downloading' ? 31 : 0,
+      downBps: d.speedBps,
+      upBps: 0,
+      ratio: t.ratio,
+      uploaded: t.uploaded,
+    });
+  }
+
+  pickTorrentFile(): Promise<string | null> {
+    return Promise.resolve(null);
   }
 
   /** The TypeScript port of the Rust expander (see `batch-pattern.ts`). */

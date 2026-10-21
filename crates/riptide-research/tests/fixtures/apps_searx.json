@@ -1,0 +1,94 @@
+{
+ "query": "riptide download manager",
+ "results": [
+  {
+   "url": "https://munapp.pages.dev/",
+   "title": "Mun Studio — Our Apps",
+   "content": "A download manager for the Mac. Riptide splits each file across up to 16 connections, resumes to the exact byte after a crash or power cut, and keeps a queue you can reorder and schedule.",
+   "engine": "yandex",
+   "engines": [
+    "yandex"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://allegro.cz/produkt/dead-island-riptide-xbox-360-krabicova-verze-d007ac4b-ecf5-42b8-be92-2efc687ed841",
+   "title": "Dead Island Riptide Xbox 360 krabicová verze, (5907577278243…",
+   "content": "Nakupujte levně Dead Island Riptide Xbox 360 krabicová verze (Číslo výrobce - 5907577278243) na Allegro za 489.00CZK • Doprava zdarma s Allegro Smart! • Nejvíce nabídek na jednom místě • Radost z nakupování 100% zabezpečení každé…",
+   "engine": "seznam",
+   "engines": [
+    "seznam"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://www.internetdownloadmanager.com/",
+   "title": "Internet Download Manager is a powerful download accelerator",
+   "content": "Internet Download Manager (IDM) is a tool to increase download speeds by up to 10 times, resume or schedule downloads and download streaming videos.",
+   "engine": "yandex",
+   "engines": [
+    "seznam",
+    "yandex"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://www.freedownloadmanager.org/",
+   "title": "Free Download Manager - download everything from the internet",
+   "content": "Free Download Manager accelerates all types of downloads (files, video, torrents). It's a smart and fast internet download manager for Windows and macOS.",
+   "engine": "yandex",
+   "engines": [
+    "yandex"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://www.knihydobrovsky.cz/kniha/the-riptide-803662706",
+   "title": "The Riptide - Gareth Rubin | Knihy Dobrovský",
+   "content": "Hledáte knihu The Riptide od Gareth Rubin? Rychlá doprava a více než 40 knihkupectví po celé ČR Skvělý výběr knih, deskových her a dárků.",
+   "engine": "seznam",
+   "engines": [
+    "seznam"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://www.youtube.com/watch?v=b2Dy06gIl48",
+   "title": "FIXED Popup issue Internet Download Manager has not... - YouTube",
+   "content": "How to Fix Internet Download Manager has not been registered for 30 daysa2z54K • 2y agoLivePlaylist ()Mix (50+).",
+   "engine": "yandex",
+   "engines": [
+    "yandex"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://www.tsbohemia.cz/asrock-b550-pg-riptide_d481286",
+   "title": "ASRock B550 PG Riptide | Tsbohemia.CZ",
+   "content": "Základní deska, AMD B550, AM4, 4x DDR4 DIMM (max. 128GB), 2x M.2, USB typ C, HDMI, ATX",
+   "engine": "seznam",
+   "engines": [
+    "seznam"
+   ],
+   "category": "general",
+   "publishedDate": null
+  },
+  {
+   "url": "https://github.com/ropensci/binman",
+   "title": "GitHub - ropensci/binman: A Binary Download Manager · GitHub",
+   "content": "Saved searches Use saved searches to filter your results more quickly You signed in with another tab or window. Reload to refresh your session.You signed…",
+   "engine": "mwmbl",
+   "engines": [
+    "mwmbl"
+   ],
+   "category": "general",
+   "publishedDate": null
+  }
+ ]
+}

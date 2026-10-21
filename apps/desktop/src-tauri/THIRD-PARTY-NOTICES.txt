@@ -21,4 +21,16 @@ FFmpeg (ffmpeg.exe)
   Use:      invoked by yt-dlp to merge separate video and audio streams into one MP4/MKV and to
             extract audio. Riptide never calls it for anything else.
 
+BitTorrent (linked into riptide-desktop.exe)
+  Home:     https://github.com/ikatson/rqbit (librqbit 9.0.1 and its librqbit-* sub-crates)
+  License:  Apache-2.0. Apache-2.0 code may be included in a GPLv3 work, which is how the
+            desktop app is distributed (see docs/decisions.md, D-torrent-1).
+  Crypto:   the TLS stack under it uses aws-lc-rs / aws-lc-sys (BoringSSL-derived C code under
+            ISC and OpenSSL-style licenses) and ring; their notices ship with the crates and are
+            listed by `cargo metadata`.
+  Other:    about 340 further Rust crates, all under MIT, Apache-2.0, ISC, BSD, Zlib, Unicode-3.0
+            or CDLA-Permissive-2.0 (or a dual license offering one of those); option-ext is
+            MPL-2.0. Riptide replaces librqbit's file storage with its own, so file names from a
+            torrent are sanitised by Riptide's code, not by the library.
+
 Riptide itself is dual-licensed under MIT or Apache-2.0 (see LICENSE-MIT and LICENSE-APACHE).

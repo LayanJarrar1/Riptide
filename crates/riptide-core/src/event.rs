@@ -61,6 +61,26 @@ pub enum Event {
         /// Active connections right now.
         connections: u32,
     },
+    /// Extra live numbers of a torrent (peers, upload, seeding), sent next to its
+    /// [`Event::Progress`] at the same coalesced rate.
+    TorrentStats {
+        /// Download.
+        id: DownloadId,
+        /// Peers connected right now.
+        peers: u32,
+        /// Peers seen so far (connected or not).
+        peers_seen: u32,
+        /// Upload speed in bytes per second.
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        up_bps: u64,
+        /// Bytes uploaded over the torrent's whole life (survives restarts).
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        uploaded: u64,
+        /// Uploaded divided by the selected size, times 1000 (`1500` = ratio 1.5).
+        ratio_milli: u32,
+        /// Complete and still uploading by the user's choice.
+        seeding: bool,
+    },
     /// Per-segment progress (only consumed by the details window).
     SegmentProgress {
         /// Download.
@@ -144,6 +164,7 @@ impl Event {
             | Event::Probed { id, .. }
             | Event::StateChanged { id, .. }
             | Event::Progress { id, .. }
+            | Event::TorrentStats { id, .. }
             | Event::SegmentProgress { id, .. }
             | Event::Completed { id, .. }
             | Event::Failed { id, .. }
@@ -160,7 +181,10 @@ impl Event {
 
     /// `true` for the high-frequency variants that the engine coalesces.
     pub const fn is_progress(&self) -> bool {
-        matches!(self, Event::Progress { .. } | Event::SegmentProgress { .. })
+        matches!(
+            self,
+            Event::Progress { .. } | Event::TorrentStats { .. } | Event::SegmentProgress { .. }
+        )
     }
 }
 

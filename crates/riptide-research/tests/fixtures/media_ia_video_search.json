@@ -1,0 +1,57 @@
+{
+ "responseHeader": {
+  "status": 0,
+  "QTime": 104,
+  "params": {
+   "query": "(text:night OR text:night OR text__reviews:night) AND mediatype:movies AND (licenseurl:*creativecommons.org* OR collection:(prelinger OR silent_films OR feature_films)) AND -access-restricted-item:true",
+   "qin": "(night) AND mediatype:movies AND (licenseurl:(*creativecommons.org*) OR collection:(prelinger OR silent_films OR feature_films)) AND -access-restricted-item:true",
+   "fields": "identifier,title,creator,year",
+   "wt": "json",
+   "sort": "downloads desc",
+   "rows": 6,
+   "start": 0
+  }
+ },
+ "response": {
+  "numFound": 18048,
+  "start": 0,
+  "docs": [
+   {
+    "creator": "Unknown",
+    "identifier": "FromtheG1954",
+    "title": "From the Ground Up",
+    "year": 1954
+   },
+   {
+    "creator": "Encyclopaedia Britannica Films",
+    "identifier": "Sleepfor1950",
+    "title": "Sleep for Health",
+    "year": 1950
+   },
+   {
+    "creator": "Holmes (Burton) Films, Inc.",
+    "identifier": "Automoti1940",
+    "title": "Automotive Service",
+    "year": 1940
+   },
+   {
+    "creator": "Norman D. Wells",
+    "identifier": "VoyagetothePlanetofPrehistoricWomen",
+    "title": "Voyage to the Planet of Prehistoric Women",
+    "year": 1967
+   },
+   {
+    "creator": "William Castle",
+    "identifier": "house_on_haunted_hill_ipod",
+    "title": "House on Haunted Hill",
+    "year": 1959
+   },
+   {
+    "creator": "Alexander Korda",
+    "identifier": "JungleBook",
+    "title": "Jungle Book",
+    "year": 1942
+   }
+  ]
+ }
+}

@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 
 import { I18nService } from '../../i18n/i18n.service';
 import { TAURI_AVAILABLE, TAURI_INVOKE, TAURI_LISTEN } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
+import { UiState } from './ui-state.service';
 
 /** Tauri event sent by the close handler when downloads are active and `confirmOnExit` is on. */
 export const CONFIRM_EXIT_EVENT = 'riptide://confirm-exit';
@@ -41,8 +42,17 @@ export class ExitConfirmDialogComponent {
   /** Active downloads when the close was requested; `null` keeps the dialog closed. */
   readonly count = signal<number | null>(null);
   protected readonly quitting = signal(false);
+  private readonly ui = inject(UiState);
 
   constructor() {
+    // File > Exit with downloads running asks the same question the close button does
+    effect(() => {
+      const n = this.ui.exitRequest();
+      if (n !== null) {
+        this.count.set(n);
+        untracked(() => this.ui.exitRequest.set(null));
+      }
+    });
     if (!inject(TAURI_AVAILABLE)) {
       return;
     }

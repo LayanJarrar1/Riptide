@@ -14,8 +14,10 @@ function easeOut(t: number): number {
  *
  *     <span class="num" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat"></span>
  *
- * Only elements inside the browser viewport tween (an `IntersectionObserver` watches the
- * host); hidden ones snap, so a long virtual list never schedules a frame per row. Frames are
+ * With `tickerStream` set, a value that changes again before the last change's tween could have
+ * finished (a speed refreshed several times a second) is written at once: a tween that is always
+ * restarting costs a frame of layout per row and shows nothing. Only elements inside the
+ * browser viewport tween (an `IntersectionObserver` watches the host); hidden ones snap, so a long virtual list never schedules a frame per row. Frames are
  * cancelled on destroy and never scheduled under `prefers-reduced-motion`. The formatter is
  * called inside an effect, so one that follows the language signal re-renders on a switch.
  */
@@ -32,6 +34,9 @@ export class TickerDirective {
   /** Formats a (possibly fractional, mid-tween) value for display. */
   readonly tickerFormat = input.required<(value: number) => string>();
 
+  /** The value arrives as a stream of updates: tween only when it has been quiet for `tickerDuration`. */
+  readonly tickerStream = input<boolean>(false);
+
   /** Tween length in milliseconds. */
   readonly tickerDuration = input<number>(DUR.d3);
 
@@ -39,6 +44,8 @@ export class TickerDirective {
   private displayed: number | null = null;
   private frame: number | null = null;
   private visible = true;
+  /** `performance.now()` of the last change of the target. */
+  private changedAt = Number.NEGATIVE_INFINITY;
   private observer: IntersectionObserver | null = null;
 
   constructor() {
@@ -73,7 +80,12 @@ export class TickerDirective {
   private retarget(target: number, text: string, format: (value: number) => string): void {
     const from = this.displayed;
     const duration = this.tickerDuration();
-    if (from === null || from === target || !this.visible || this.motion.reduced() || duration <= 0) {
+    const now = performance.now();
+    const sinceChange = now - this.changedAt;
+    if (from !== target) {
+      this.changedAt = now;
+    }
+    if (from === null || from === target || !this.visible || this.motion.reduced() || duration <= 0 || (this.tickerStream() && sinceChange < duration)) {
       this.cancel();
       this.displayed = target;
       this.host.textContent = text;

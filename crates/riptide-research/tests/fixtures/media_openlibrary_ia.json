@@ -1,0 +1,51 @@
+{
+ "created": 1792516948,
+ "dir": "/18/items/alicesadventurescarroll",
+ "files": [
+  {
+   "name": "alicesadventurescarroll.pdf",
+   "source": "derivative",
+   "format": "Text PDF",
+   "size": "9960969"
+  },
+  {
+   "name": "alicesadventurescarroll_djvu.txt",
+   "source": "derivative",
+   "format": "DjVuTXT",
+   "size": "196106"
+  },
+  {
+   "name": "alicesadventurescarroll_files.xml",
+   "source": "original",
+   "format": "Metadata"
+  },
+  {
+   "name": "alicesadventurescarroll_meta.sqlite",
+   "source": "original",
+   "format": "Metadata",
+   "size": "6144"
+  },
+  {
+   "name": "alicesadventurescarroll_meta.xml",
+   "source": "original",
+   "format": "Metadata",
+   "size": "2664"
+  }
+ ],
+ "metadata": {
+  "title": "Alice's adventures in wonderland",
+  "creator": [
+   "Carroll, Lewis, 1832-1898",
+   "Tenniel, John, Sir, 1820-1914"
+  ],
+  "date": "1890",
+  "mediatype": "texts",
+  "collection": [
+   "juvenilehistoricalcollection",
+   "unclibraries",
+   "americana"
+  ],
+  "identifier": "alicesadventurescarroll",
+  "description": "190 p. : 19 cm"
+ }
+}

@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('SettingsService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, torrent: { seeding: false, seed_ratio_percent: 100, seed_minutes: 1440, upload_limit: null, dht: true, listen_port: 0 } };
   let calls: Call[];
 
   function configure(tauri: boolean): SettingsService {
@@ -90,7 +90,7 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect(writes[0].args).toEqual({
-      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false },
+      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, torrent: { seeding: false, seed_ratio_percent: 100, seed_minutes: 1440, upload_limit: null, dht: true, listen_port: 0 } },
     });
     // a UI-only change does not reach the engine
     service.patch({ closeToTray: false });
@@ -122,5 +122,35 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect((writes[0].args?.['settings'] as EngineSettings).mark_of_the_web).toBe(false);
+  });
+  it('torrent settings: seeding is off by default, load from the engine and reach it when changed', async () => {
+    expect(DEFAULT_SETTINGS.torrentSeeding).toBe(false);
+    expect(DEFAULT_SETTINGS.torrentUploadBps).toBeNull();
+    const service = configure(true);
+    await service.engineLoaded;
+    TestBed.tick();
+    expect(service.settings().torrentSeeding).toBe(false);
+    expect(service.settings().torrentRatioPercent).toBe(100);
+    service.patch({ torrentSeeding: true, torrentRatioPercent: 250, torrentMinutes: 90, torrentUploadBps: 51_200, torrentDht: false, torrentPort: 51413 });
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
+    expect(writes.length).toBe(1);
+    expect((writes[0].args?.['settings'] as EngineSettings).torrent).toEqual({
+      seeding: true,
+      seed_ratio_percent: 250,
+      seed_minutes: 90,
+      upload_limit: 51_200,
+      dht: false,
+      listen_port: 51413,
+    });
+    // an impossible port is clamped, a zero cap means unlimited
+    service.patch({ torrentPort: 99_999, torrentUploadBps: 0 });
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const last = calls.filter((c) => c.cmd === 'set_engine_settings').pop()?.args?.['settings'] as EngineSettings;
+    expect([last.torrent.listen_port, last.torrent.upload_limit]).toEqual([65535, null]);
   });
 });

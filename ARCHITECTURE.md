@@ -40,9 +40,11 @@ contains download logic.
 | `riptide-engine` | The runtime: scheduler, queues (a limit, a schedule and a finish action per queue, host caps learned from `429` / `503`), batch adds in one transaction, video downloads, crash recovery, event broadcast, settings, `crawl`. The API the app and CLI use. | core, net, store, media, crawl |
 | `riptide-media` | Video pages (YouTube, Vimeo and others) through the bundled yt-dlp sidecar: probe into a quality menu, download with progress, pause and resume, cookies in a private temporary file. Refuses live streams and DRM. | core |
 | `riptide-crawl` | The site grabber: crawl to depth N, scope, `robots.txt`, per-host politeness, filters, caps; lists files, downloads nothing. | core, net |
+| `riptide-research` | Open-access search adapters (OpenAlex, Crossref, arXiv, Europe PMC, Internet Archive, Wikimedia Commons, GitHub releases, Data.gov) with rate limits, retries, typed errors and fixtures, plus the optional AI layer (query planning, ranking, name suggestion) whose answers are validated against the adapter results. No Tauri, no UI. | – |
+| `riptide-ai` | Bring-your-own-key AI provider layer (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, DeepInfra, Mistral, Groq, Together, Fireworks): typed errors, retry with backoff, token budget, keys in the Windows Credential Manager. **No network happens unless the user configures a provider and a feature calls it.** Used by Settings -> AI and the Research page of the desktop app. | – |
 | `riptide-ipc` | Length-prefixed JSON over a per-user named pipe (Windows) or Unix socket; message schema. | – |
 | `riptide-log` | `tracing` setup, daily rotating files, redaction layer, installed vs portable paths. | – |
-| `riptide-cli` | `riptide fetch`, `batch`, `grab`, `bench`, `ping`, `paths`. Bilingual help. | engine, crawl, net, log |
+| `riptide-cli` | `riptide fetch`, `batch`, `grab`, `bench`, `ping`, `paths`, `ai test`. Bilingual help. | engine, crawl, net, log, ai |
 | `riptide-host` | Native Messaging host `app.riptide.host` (`riptide-host.exe`): checks the calling extension id, accepts only `ping`/`probe`/`probe_media`/`add`/`refresh`/`list`, forwards them to the app's pipe, starts the app on `ping`. | ipc, log |
 | `riptide-testserver` | An `axum` server with deterministic bytes and every failure mode the tests need. Dev only. | – |
 | `apps/desktop/src-tauri` | Tauri shell: hosts the engine, exposes commands, forwards events, serves the IPC pipe, registers the browser host under `HKCU`. | engine, ipc, host, log |
@@ -192,6 +194,26 @@ Language (`ar`/`en`, auto-detected, switchable live, `html[dir]` mirrored) and t
 (system/dark/light) are UI preferences and live in `localStorage`; everything the engine needs
 lives in the engine's settings and is synced through `get_engine_settings` /
 `set_engine_settings`.
+
+Window chrome: the main window has `decorations: false` and `shadow: true`, and the web view
+draws its own title bar (`TitleBarComponent`: app mark, a menu bar, a drag region, minimize /
+maximize or restore / close). Resizing the undecorated window is Tauri's own (a hit-test handler
+in `tauri-runtime-wry`), and `shadow: true` keeps the drop shadow and, on Windows 11, the rounded
+corners. The bar's `data-tauri-drag-region` surfaces drag the window and a double click on one
+toggles maximize (both built into Tauri). The window controls stay at the **physical right** in
+Arabic too: that is where Windows puts them whatever the app language, so the menus mirror and
+sit next to them while the free drag space moves to the far side. Known limit: the Windows 11
+snap-layouts flyout appears only over the native maximize button, so it does not show over ours;
+Win+Z, Win+arrows and dragging to a screen edge snap as usual. The capability file grants exactly
+`minimize`, `maximize`, `unmaximize`, `close` and `start-dragging` for the window, and
+`opener:allow-open-url` for the two fixed Help addresses (documentation site, repository).
+
+The downloads list is virtualised by hand (`downloads-page.component.ts`): only the rows in the
+scroll window plus six rows of overscan exist in the DOM, tracked by download id. The store keeps
+rows, sort order and counts incrementally between engine ticks (unchanged downloads keep their
+row object; the previous sort order is the next sort's starting point), selection and the
+keyboard cursor are sets of ids, and `e2e/list_perf.py` measures it at 10 to 50 000 rows
+(`e2e/list_perf.md`).
 
 ## Logging
 

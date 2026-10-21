@@ -1,0 +1,55 @@
+{
+ "responseHeader": {
+  "status": 0,
+  "QTime": 73,
+  "params": {
+   "query": "(text:jazz OR text:jazz OR text__reviews:jazz) AND mediatype:audio AND (licenseurl:*creativecommons.org* OR collection:(netlabels OR etree)) AND -access-restricted-item:true",
+   "qin": "(jazz) AND mediatype:audio AND (licenseurl:(*creativecommons.org*) OR collection:(netlabels OR etree)) AND -access-restricted-item:true",
+   "fields": "identifier,title,creator,year",
+   "wt": "json",
+   "sort": "downloads desc",
+   "rows": 6,
+   "start": 0
+  }
+ },
+ "response": {
+  "numFound": 70751,
+  "start": 0,
+  "docs": [
+   {
+    "creator": "Old Time Radio Researchers Group",
+    "identifier": "OTRR_Dragnet_Singles",
+    "title": "Dragnet - Single Episodes",
+    "year": 2015
+   },
+   {
+    "creator": "Old Time Radio Researchers Group",
+    "identifier": "OTRR_Theater_Five_Singles",
+    "title": "Theater Five - Single Episodes",
+    "year": 2007
+   },
+   {
+    "creator": "ProleteR",
+    "identifier": "DWK123",
+    "title": "Curses From Past Times (LP)",
+    "year": 2012
+   },
+   {
+    "identifier": "MIXG032",
+    "title": "[MIXG032] Various Artists - Retrovision",
+    "year": 2013
+   },
+   {
+    "creator": "Varios Autores",
+    "identifier": "JazzSelection",
+    "title": "Jazz Selection"
+   },
+   {
+    "creator": "F. Scott Fitzgerald",
+    "identifier": "greatgatsby_2101_librivox",
+    "title": "The Great Gatsby",
+    "year": 2021
+   }
+  ]
+ }
+}

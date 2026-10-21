@@ -1,5 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 
+import { SeenMatch } from '../../ai/ai.models';
+import { AiService } from '../../ai/ai.service';
+import { SeenNoticeComponent } from '../../ai/seen-notice.component';
 import { DiskSpaceService } from '../../core/disk-space.service';
 import { FORMAT_PIPES } from '../../core/format.pipes';
 import { FormatService } from '../../core/format.service';
@@ -8,12 +11,14 @@ import { DownloadsStore } from '../../data/downloads.store';
 import { I18nService } from '../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey, Download, DownloadRequest, isHttpUrl, isMediaUrl, MediaChoice, MediaProbe, ProbeResult } from '../../model/download';
 import { parseMediaError } from '../../model/media-error';
+import { isMagnetLink, magnetLabel, magnetLinesOf } from '../../model/torrent';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
 import { SettingsService } from '../settings/settings.service';
+import { UiState } from '../shell/ui-state.service';
 import { CATEGORY_ICONS } from './download-row.component';
 import { DuplicateChoice, DuplicateDialogComponent } from './duplicate-dialog.component';
 
@@ -29,7 +34,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 @Component({
   selector: 'app-add-download-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, DialogComponent, DuplicateDialogComponent, IconComponent],
+  imports: [...FORMAT_PIPES, ButtonComponent, DialogComponent, DuplicateDialogComponent, IconComponent, SeenNoticeComponent],
   template: `
     <app-dialog [open]="open()" [title]="i18n.t('add.title')" [wide]="true" (closed)="close()">
       <form class="form" (submit)="submit($event)">
@@ -47,7 +52,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
               [placeholder]="i18n.t('add.urlPlaceholder')"
               [value]="url()"
               (input)="onUrl($event)"
-              (paste)="onPaste()"
+              (paste)="onPaste($event)"
 
             />
             @if (probe() === 'probing') {
@@ -58,6 +63,11 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             <span class="help is-error">{{ i18n.t('add.urlInvalid') }}</span>
           } @else if (probe() === 'probing') {
             <span class="help">{{ i18n.t('add.probing') }}</span>
+          } @else if (isMagnet()) {
+            <span class="help preview">
+              <app-icon name="magnet" [size]="14" class="ok" />
+              {{ i18n.t('torrent.detected') }}
+            </span>
           } @else if (lowSpace()) {
             <span class="help is-warning">
               <app-icon name="alert" [size]="14" />
@@ -93,6 +103,48 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             <span class="help">{{ i18n.t('add.urlHint') }}</span>
           }
         </label>
+
+        @if (magnets().length > 1) {
+          <div class="magnets" role="group" [attr.aria-label]="i18n.t('torrent.multiTitle').replace('{n}', '' + magnets().length)">
+            <p class="magnets-title"><app-icon name="magnet" [size]="16" class="ok" /> {{ i18n.t('torrent.multiTitle').replace('{n}', '' + magnets().length) }}</p>
+            <ul class="magnets-list">
+              @for (m of magnets(); track m) {
+                <li dir="auto"><code class="num">{{ label(m) }}</code></li>
+              }
+            </ul>
+            <p class="help">{{ i18n.t('torrent.multiHint') }}</p>
+            <div class="magnets-actions">
+              <button appButton variant="secondary" size="sm" icon="download" type="button" [busy]="bulk() !== null" [disabled]="bulk() !== null" (click)="addAllDefault()">
+                {{ bulk() === null ? i18n.t('torrent.addAllDefault') : i18n.t('torrent.addAllProgress').replace('{done}', '' + bulk()!.done).replace('{total}', '' + bulk()!.total) }}
+              </button>
+              <button appButton variant="ghost" size="sm" type="button" [disabled]="bulk() !== null" (click)="clearMagnets()">{{ i18n.t('torrent.multiClear') }}</button>
+            </div>
+          </div>
+        }
+
+        @if (seen(); as s) {
+          <app-seen-notice [match]="s" [offerAgain]="!s.stale" [againChosen]="again()" (again)="again.set(!again())" />
+        }
+
+        @if (suggestAvailable()) {
+          <div class="suggest">
+            @if (suggestion(); as sg) {
+              <div class="suggest-card" role="status">
+                <app-icon name="sparkles" [size]="16" class="suggest-icon" />
+                <div class="suggest-body">
+                  <span class="suggest-line" dir="auto">{{ suggestionText(sg) }}</span>
+                  <span class="suggest-note">{{ i18n.t('add.suggestPrivacy') }}</span>
+                </div>
+                <button appButton size="sm" variant="primary" type="button" (click)="applySuggestion()">{{ i18n.t('add.suggestApply') }}</button>
+                <button appButton size="sm" variant="ghost" type="button" (click)="suggestion.set(null)">{{ i18n.t('add.suggestReject') }}</button>
+              </div>
+            } @else {
+              <button appButton size="sm" variant="secondary" icon="sparkles" type="button" [busy]="suggesting()" [disabled]="suggesting()" (click)="suggest()">
+                {{ i18n.t(suggesting() ? 'add.suggestBusy' : 'add.suggest') }}
+              </button>
+            }
+          </div>
+        }
 
         @if (media(); as m) {
           <section class="media" aria-live="polite">
@@ -133,6 +185,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           </section>
         }
 
+        @if (!isMagnet() && magnets().length < 2) {
         <div class="row">
           <label class="field grow">
             <span class="label">{{ i18n.t('add.filename') }}</span>
@@ -211,12 +264,14 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
             </label>
           </div>
         </details>
+        }
       </form>
 
       <ng-container dialogActions>
+        <button appButton variant="ghost" icon="magnet" type="button" class="torrent-file" (click)="chooseTorrentFile()">{{ i18n.t('torrent.choose') }}</button>
         <button appButton variant="ghost" type="button" (click)="close()">{{ i18n.t('action.cancel') }}</button>
-        <button appButton variant="primary" icon="download" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
-          {{ i18n.t(submitting() ? 'add.submitting' : startPaused() ? 'add.submitLater' : 'add.submit') }}
+        <button appButton variant="primary" [icon]="isMagnet() || magnets().length > 1 ? 'magnet' : 'download'" type="button" [busy]="submitting()" [disabled]="!canSubmit()" (click)="submit()">
+          {{ i18n.t(submitting() ? 'add.submitting' : isMagnet() || magnets().length > 1 ? 'torrent.chooseFiles' : startPaused() ? 'add.submitLater' : 'add.submit') }}
         </button>
       </ng-container>
     </app-dialog>
@@ -238,6 +293,44 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
     .grow {
       flex: 1;
+    }
+
+    /* the torrent file picker sits at the start of the footer, away from Cancel / Download */
+    .torrent-file {
+      margin-inline-end: auto;
+    }
+
+    .suggest-card {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--color-accent);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      font-size: var(--text-sm);
+    }
+
+    .suggest-icon {
+      color: var(--color-accent);
+      flex-shrink: 0;
+    }
+
+    .suggest-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-inline-size: 0;
+    }
+
+    .suggest-line {
+      font-weight: var(--weight-medium);
+      overflow-wrap: anywhere;
+    }
+
+    .suggest-note {
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
     }
 
     .category {
@@ -359,6 +452,39 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
     .mono {
       font-family: var(--font-mono);
+    }
+
+    .magnets {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border: 1px solid var(--color-accent);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+    }
+
+    .magnets-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-weight: var(--weight-semibold);
+      font-size: var(--text-sm);
+    }
+
+    .magnets-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-block-size: 120px;
+      overflow: auto;
+      font-size: var(--text-xs);
+      color: var(--color-text-secondary);
+    }
+
+    .magnets-actions {
+      display: flex;
+      gap: var(--space-2);
     }
 
     .help {
@@ -616,6 +742,8 @@ export class AddDownloadDialogComponent {
   private readonly settingsService = inject(SettingsService);
   private readonly disk = inject(DiskSpaceService);
   private readonly store = inject(DownloadsStore);
+  private readonly ui = inject(UiState);
+  private readonly aiService = inject(AiService);
   protected readonly format = inject(FormatService);
 
   readonly open = input.required<boolean>();
@@ -647,6 +775,19 @@ export class AddDownloadDialogComponent {
   /** A record the engine says this request would duplicate; the prompt shows while set. */
   protected readonly duplicate = signal<Download | null>(null);
 
+  /** The download memory knows this link (or its DOI, file name and size, contents). */
+  protected readonly seen = signal<SeenMatch | null>(null);
+  /** The user chose "Download again" for a repeat. */
+  protected readonly again = signal(false);
+  /** A name and category the AI proposed; applied only when the user accepts. */
+  protected readonly suggestion = signal<{ filename: string; category: string | null } | null>(null);
+  protected readonly suggesting = signal(false);
+  /** "Suggest name and category" is switched on in Settings → AI and the AI is configured. */
+  protected readonly suggestAvailable = computed(() => {
+    const st = this.aiService.status();
+    return st !== null && st.configured && st.settings.suggestNames && this.result() !== null && this.media() === null;
+  });
+
   /** The video page's title, uploader and quality menu; `null` for a plain link. */
   protected readonly media = signal<MediaProbe | null>(null);
   /** The picked quality's key (a [`MediaChoice`] key). */
@@ -676,12 +817,21 @@ export class AddDownloadDialogComponent {
     const free = this.freeBytes();
     return size !== null && free !== null && size > free;
   });
-  protected readonly canSubmit = computed(() => isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError() && !this.submitting());
+  /** A pasted `magnet:` link: the torrent dialog takes over for the file choice. */
+  protected readonly isMagnet = computed(() => isMagnetLink(this.url()));
+  /** Several magnet links pasted at once (one per line); the file choice then opens for each in turn. */
+  protected readonly magnets = signal<readonly string[]>([]);
+  /** "Add all with default selection" in progress. */
+  protected readonly bulk = signal<{ readonly done: number; readonly total: number } | null>(null);
+  protected readonly canSubmit = computed(() => (this.magnets().length > 1 && this.bulk() === null) || (this.isMagnet() || (isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError())) && !this.submitting());
 
   constructor() {
     effect(() => {
       if (this.open()) {
         this.reset();
+        if (this.aiService.available) {
+          void this.aiService.refresh();
+        }
         const initial = this.initialUrl();
         if (initial !== null) {
           this.setUrl(initial);
@@ -705,11 +855,67 @@ export class AddDownloadDialogComponent {
   }
 
   protected onUrl(event: Event): void {
+    this.magnets.set([]);
     this.setUrl(this.value(event));
   }
 
-  protected onPaste(): void {
-    // the input event fires right after and carries the pasted text; nothing else to do
+  protected label(link: string): string {
+    return magnetLabel(link);
+  }
+
+  protected clearMagnets(): void {
+    this.magnets.set([]);
+  }
+
+  /** Every magnet link, each with all its files, without the file-choice step; a summary says what happened. */
+  protected async addAllDefault(): Promise<void> {
+    const links = this.magnets();
+    if (links.length < 2 || this.bulk() !== null) {
+      return;
+    }
+    let done = 0;
+    let added = 0;
+    let existing = 0;
+    let failed = 0;
+    this.bulk.set({ done, total: links.length });
+    const queue = [...links];
+    const worker = async (): Promise<void> => {
+      for (let uri = queue.shift(); uri !== undefined; uri = queue.shift()) {
+        try {
+          const preview = await this.engine.torrentPreview({ kind: 'magnet', uri });
+          if (preview.existing !== null) {
+            existing++;
+          } else {
+            await this.engine.addTorrent({ token: preview.token, onlyFiles: null, sequential: false, startPaused: this.startPaused() });
+            added++;
+          }
+        } catch {
+          failed++;
+        }
+        done++;
+        this.bulk.set({ done, total: links.length });
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    this.bulk.set(null);
+    const text = this.i18n
+      .t('torrent.addAllSummary')
+      .replace('{added}', String(added))
+      .replace('{existing}', String(existing))
+      .replace('{failed}', String(failed));
+    this.toasts.show(failed > 0 && added === 0 ? 'danger' : 'success', text);
+    this.magnets.set([]);
+    this.closed.emit();
+  }
+
+  protected onPaste(event: ClipboardEvent): void {
+    // a single-line field would glue several lines together: several magnet links get their own list
+    const links = magnetLinesOf(event.clipboardData?.getData('text') ?? '');
+    if (links.length > 1) {
+      event.preventDefault();
+      this.setUrl('');
+      this.magnets.set(links);
+    }
   }
 
   protected onFilename(event: Event): void {
@@ -766,9 +972,34 @@ export class AddDownloadDialogComponent {
     this.closed.emit();
   }
 
+  /** "Choose .torrent file": the native dialog, then the file-choice dialog takes over. */
+  protected chooseTorrentFile(): void {
+    this.engine
+      .pickTorrentFile()
+      .then((path) => {
+        if (path !== null) {
+          this.ui.openTorrent({ kind: 'file', path });
+          this.closed.emit();
+        } else if (!this.tauriAvailable) {
+          this.toasts.show('info', this.i18n.t('torrent.desktopOnly'));
+        }
+      })
+      .catch((error: unknown) => this.toasts.show('danger', this.i18n.t('toast.engineError').replace('{error}', String(error))));
+  }
+
   protected async submit(event?: Event): Promise<void> {
     event?.preventDefault();
     if (!this.canSubmit()) {
+      return;
+    }
+    if (this.magnets().length > 1) {
+      this.ui.openTorrents(this.magnets());
+      this.closed.emit();
+      return;
+    }
+    if (this.isMagnet()) {
+      this.ui.openTorrent({ kind: 'magnet', uri: this.url().trim() });
+      this.closed.emit();
       return;
     }
     const hex = this.checksum().trim().toLowerCase();
@@ -784,6 +1015,7 @@ export class AddDownloadDialogComponent {
       checksum: !isMedia && hex.length > 0 ? { algo, hex } : undefined,
       kind: isMedia ? 'media' : undefined,
       mediaFormat: isMedia ? this.choiceKey() : undefined,
+      allowDuplicate: this.again() ? true : undefined,
     };
     this.submitting.set(true);
     try {
@@ -830,7 +1062,69 @@ export class AddDownloadDialogComponent {
     }
   }
 
+  /** `Suggested: name · Category`. */
+  protected suggestionText(s: { filename: string; category: string | null }): string {
+    const line = this.i18n.t('add.suggestResult').replace('{name}', s.filename);
+    return s.category === null ? line : `${line} · ${this.i18n.t(`category.${s.category}`)}`;
+  }
+
+  /** Asks the model for a cleaner name; only the host, file name and size leave the app. */
+  protected async suggest(): Promise<void> {
+    const r = this.result();
+    if (r === null || this.suggesting()) {
+      return;
+    }
+    this.suggesting.set(true);
+    try {
+      const s = await this.aiService.suggestName(this.url().trim(), r.size);
+      const current = this.filename().trim() || r.filename;
+      if (s.filename === current && s.category === null) {
+        this.toasts.show('info', this.i18n.t('add.suggestSame'));
+      } else {
+        this.suggestion.set(s);
+      }
+    } catch (error: unknown) {
+      this.toasts.show('danger', this.aiService.errorText(error));
+    } finally {
+      this.suggesting.set(false);
+    }
+  }
+
+  /** The user accepted the suggestion: the name and (if valid) the category become the form's. */
+  protected applySuggestion(): void {
+    const s = this.suggestion();
+    if (s === null) {
+      return;
+    }
+    this.filename.set(s.filename);
+    this.filenameEdited = true;
+    const cat = s.category;
+    if (cat !== null && (CATEGORY_KEYS as readonly string[]).includes(cat)) {
+      this.category.set(cat as CategoryKey);
+      this.dir.set(this.settingsService.dirFor(cat as CategoryKey));
+    }
+    this.suggestion.set(null);
+  }
+
+  /** Looks the link up in the download memory (address, DOI/arXiv id inside it, name and size). */
+  private async checkSeen(url: string, token: number, filename: string | undefined, size: number | null): Promise<void> {
+    if (!this.aiService.available) {
+      return;
+    }
+    try {
+      const [match] = await this.aiService.seenCheck([{ url, filename: size !== null ? filename : undefined, size: size ?? undefined }]);
+      if (token === this.probeToken) {
+        this.seen.set(match ?? null);
+      }
+    } catch {
+      /* no memory, no notice */
+    }
+  }
+
   private setUrl(raw: string): void {
+    this.seen.set(null);
+    this.again.set(false);
+    this.suggestion.set(null);
     this.url.set(raw);
     if (this.probeTimer !== null) {
       clearTimeout(this.probeTimer);
@@ -840,6 +1134,11 @@ export class AddDownloadDialogComponent {
     const token = ++this.probeToken;
     this.clearMedia();
     if (trimmed.length === 0) {
+      this.probe.set('idle');
+      this.result.set(null);
+      return;
+    }
+    if (isMagnetLink(trimmed)) {
       this.probe.set('idle');
       this.result.set(null);
       return;
@@ -875,6 +1174,7 @@ export class AddDownloadDialogComponent {
     }
     this.result.set(plain);
     this.probe.set('ok');
+    void this.checkSeen(url, token, plain?.filename, plain?.size ?? null);
     if (outcome !== null && 'probe' in outcome) {
       this.showMedia(outcome.probe);
       return;
@@ -940,6 +1240,8 @@ export class AddDownloadDialogComponent {
   }
 
   private reset(): void {
+    this.magnets.set([]);
+    this.bulk.set(null);
     this.probeToken++;
     this.clearMedia();
     this.url.set('');
@@ -956,6 +1258,9 @@ export class AddDownloadDialogComponent {
     this.headers.set('');
     this.submitting.set(false);
     this.duplicate.set(null);
+    this.seen.set(null);
+    this.again.set(false);
+    this.suggestion.set(null);
     this.pending = null;
   }
 }

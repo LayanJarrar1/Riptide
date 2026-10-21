@@ -1,0 +1,147 @@
+{
+ "results": [
+  {
+   "identifier": "https://data.cityofnewyork.us/api/views/c99a-c5ux",
+   "title": "NYC Climate Budgeting Report: Climate Alignment Assessment and Capital Climate Investments",
+   "description": "This dataset rates all projects in the capital budget with their climate alignment and categorizes investments that are related to climate. Amounts are in thousands. This dataset will be updated once a year during the Executive Budget.\u00a0\n\nThis data can be used to create visualizations similar to the charts featured in the Climate Investments section of the latest New York City Climate Budgeting \"Cl",
+   "publisher": "data.cityofnewyork.us",
+   "slug": "nyc-climate-budgeting-report-climate-alignment-assessment-and-capital-climate-investments",
+   "dcat": {
+    "distribution": [
+     {
+      "@type": "dcat:Distribution",
+      "describedBy": "https://data.cityofnewyork.us/api/views/c99a-c5ux/columns.json",
+      "describedByType": "application/json",
+      "downloadURL": "https://data.cityofnewyork.us/api/v3/views/c99a-c5ux/query.json?accessType=DOWNLOAD",
+      "mediaType": "application/json"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "describedBy": "https://data.cityofnewyork.us/api/views/c99a-c5ux/columns.xml",
+      "describedByType": "application/xml",
+      "downloadURL": "https://data.cityofnewyork.us/api/v3/views/c99a-c5ux/query.xml?accessType=DOWNLOAD",
+      "mediaType": "application/xml"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "downloadURL": "https://data.cityofnewyork.us/api/v3/views/c99a-c5ux/export.csv?accessType=DOWNLOAD",
+      "mediaType": "text/csv"
+     }
+    ],
+    "modified": "2026-08-11"
+   },
+   "last_harvested_date": "2026-09-10T18:31:45.676808",
+   "has_download": true
+  },
+  {
+   "identifier": "https://data.noaa.gov/waf/NOAA/NESDIS/ncei/aim/iso/xml/C00672.xml",
+   "title": "State of the Climate - Global Analysis",
+   "description": "The State of the Climate is a collection of periodic summaries recapping climate-related occurrences on both a global and national scale. The State of the Climate Monthly Overview - Global Analysis report summarizes global observations of surface and upper-air temperature and precipitation data and places the data into historical perspective. The Global Analysis report provides monthly, seasonal, ",
+   "publisher": "DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce",
+   "slug": "state-of-the-climate-global-analysis",
+   "dcat": {
+    "distribution": [
+     {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://www.ncei.noaa.gov/metadata/geoportal/rest/metadata/item/gov.noaa.ncdc:C00672/html",
+      "describedByType": "application/octet-stream",
+      "description": "Landing page for the dataset.",
+      "mediaType": "text/html",
+      "title": "NCEI Dataset Landing Page"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://www.ncdc.noaa.gov/sotc/global",
+      "describedByType": "application/octet-stream",
+      "description": "Select reports by date.",
+      "mediaType": "text/html",
+      "title": "State of the Climate - Global Analysis web page."
+     },
+     {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://earthdata.nasa.gov/about/gcmd/global-change-master-directory-gcmd-keywords",
+      "describedByType": "application/octet-stream",
+      "description": "The information provided on this page seeks to define how the GCMD Keywords are structured, used and accessed. It also provides information on how users can participate in the further development of the keywords.",
+      "mediaType": "text/html",
+      "title": "Global Change Master Directory (GCMD) Keywords"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://www.ncdc.noaa.gov/climate-monitoring/index.php",
+      "describedByType": "application/octet-stream",
+      "description": "The Climate Monitoring mission is to monitor and assess the state of the Earth's climate in near real-time, providing decision-makers at all levels of the public and private sectors with data and information on climate trends and variability including perspectives on how the climate of today compares to the past. The web page provides access to available reports and products.",
+      "mediaType": "text/html",
+      "title": "NCEI/NCEI Climate Monitoring"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "accessURL": "https://www.ncei.noaa.gov",
+      "describedByType": "application/octet-stream",
+      "description": "NCEI home page with information, data access and contact information.",
+      "mediaType": "text/html",
+      "title": "NOAA National Centers for Environmental Information (NCEI)"
+     }
+    ],
+    "modified": "1998-01-01T00:00:00.000+00:00",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/"
+   },
+   "last_harvested_date": "2026-08-03T06:32:41.982678",
+   "has_download": false
+  },
+  {
+   "identifier": "ecf1075d-62da-425a-a785-d2c26aaba670",
+   "title": "2070 Extreme Climate Change Scenarios for Water Supply Planning",
+   "description": "DWR\u2019s 2070 extreme climate change scenarios enable exploration of the vulnerability of and opportunities for water supply at the potential bounds of future climate change conditions. These scenarios were originally developed as part of the public benefit uncertainty analysis for the California Water Commission\u2019s Water Storage Investment Program (WSIP) (dataset available here: https://data.cnra.ca.",
+   "publisher": "California Department of Water Resources",
+   "slug": "2070-extreme-climate-change-scenarios-for-water-supply-planning",
+   "dcat": {
+    "distribution": [
+     {
+      "@type": "dcat:Distribution",
+      "description": "CalSim\u2010II model simulations of storage, flows, and diversions for the major tributaries of the Central Valley for water years 1922 through 2003.",
+      "downloadURL": "https://data.cnra.ca.gov/dataset/3154bfc4-4cd5-4c06-b1e1-65643d07f4e7/resource/75ad545a-7da4-4921-a0e8-637fde43dd3c/download/calsimii-2070dew_update.zip",
+      "format": "ZIP",
+      "mediaType": "application/zip",
+      "title": "2070 DEW - CalSim-II Model Simulations"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "description": "CalSim\u2010II model simulations of storage, flows, and diversions for the major tributaries of the Central Valley for water years 1922 through 2003.",
+      "downloadURL": "https://data.cnra.ca.gov/dataset/3154bfc4-4cd5-4c06-b1e1-65643d07f4e7/resource/e95dc4a0-2fc6-4800-891b-2e1f1bebe356/download/calsimii-2070wmw_update.zip",
+      "format": "ZIP",
+      "mediaType": "application/zip",
+      "title": "2070 WMW - CalSim-II Model Simulations"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "description": "This document describes the background and nature of updates made to the 2070 Extreme Scenarios dataset.",
+      "downloadURL": "https://data.cnra.ca.gov/dataset/3154bfc4-4cd5-4c06-b1e1-65643d07f4e7/resource/f2e1c61a-4946-4863-825f-e6d516b433ed/download/update-to-the-2070-extreme-climate-change-scenarios-dataset.pdf",
+      "format": "PDF",
+      "mediaType": "application/pdf",
+      "title": "Update to the 2070 Extreme Climate Change Scenarios Dataset"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "description": "Year 2070 future condition with projected climate and sea level conditions for a thirty\u2010year period centered at 2070 (climate period 2056\u20102085) based on GCM CNRM-CM5 and emission scenario RCP 4.5.\r\n\r\nTemperature and precipitation are developed from the downscaled model using quantile delta mapping.",
+      "downloadURL": "https://data.cnra.ca.gov/dataset/3154bfc4-4cd5-4c06-b1e1-65643d07f4e7/resource/b8a86a27-d7d3-4b5c-a76d-909f8424772c/download/wmw2070.zip",
+      "format": "ZIP",
+      "mediaType": "application/zip",
+      "title": "2070 WMW - Climate and VIC Results - Daily"
+     },
+     {
+      "@type": "dcat:Distribution",
+      "description": "Year 2070 future condition with projected climate and sea level conditions for a thirty\u2010year period centered at 2070 (climate period 2056\u20102085) based on GCM HadGEM2\u2010ES and emission scenario RCP 8.5.\r\n\r\nTemperature and precipitation are developed from the downscaled model using quantile delta mapping.",
+      "downloadURL": "https://data.cnra.ca.gov/dataset/3154bfc4-4cd5-4c06-b1e1-65643d07f4e7/resource/1ab250a7-368c-42b9-b713-a3de3996e48f/download/dew2070.zip",
+      "format": "ZIP",
+      "mediaType": "application/zip",
+      "title": "2070 DEW - Climate and VIC Results - Daily"
+     }
+    ],
+    "modified": "2020-10-12T18:12:41.071044",
+    "license": "http://www.opendefinition.org/licenses/odc-by"
+   },
+   "last_harvested_date": "2026-09-10T18:19:18.174876",
+   "has_download": true
+  }
+ ]
+}

@@ -98,7 +98,13 @@ interface Piece {
       inline-size: 100%;
       background: var(--flow-fill);
       transform-origin: var(--origin, left center);
-      /* progress only ever grows; the transition smooths the 250 ms engine ticks */
+      transition: background-color var(--dur-2) var(--ease-standard);
+    }
+
+    /* Progress only ever grows; in the drawer a transition smooths the engine ticks. In the list
+       it would restart every 100 ms on every active piece of every visible row (a style
+       recalculation each) to smooth a 6 px bar, so the rows step instead. */
+    :host(.is-large) .fill {
       transition: transform 260ms linear, background-color var(--dur-2) var(--ease-standard);
     }
 
@@ -124,7 +130,9 @@ interface Piece {
     }
 
     /* The current: a faint highlight drifting slowly along each active piece — the one ambient
-       motion in a row, and the only sign besides the hue that this stripe is receiving bytes. */
+       motion in a row, and the only sign besides the hue that this stripe is receiving bytes.
+       It moves by transform (compositor only): animating background-position repainted every
+       active piece on every frame, which dominated the cost of a busy list. */
     :host(.s-active) .p-active .fill::after {
       content: '';
       position: absolute;
@@ -137,7 +145,7 @@ interface Piece {
         rgb(255 255 255 / 6%) 65%,
         transparent 100%
       );
-      background-size: 200% 100%;
+      transform: translateX(calc(var(--dir-sign) * -100%));
       animation: current var(--dur-ambient) linear infinite;
     }
 
@@ -148,11 +156,11 @@ interface Piece {
 
     @keyframes current {
       from {
-        background-position: calc(var(--dir-sign) * 200%) 0;
+        transform: translateX(calc(var(--dir-sign) * -100%));
       }
 
       to {
-        background-position: calc(var(--dir-sign) * -200%) 0;
+        transform: translateX(calc(var(--dir-sign) * 100%));
       }
     }
 

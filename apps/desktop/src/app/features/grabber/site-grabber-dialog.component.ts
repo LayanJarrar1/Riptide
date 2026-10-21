@@ -853,6 +853,16 @@ export class SiteGrabberDialogComponent {
           this.session.reset();
           this.urlTouched.set(false);
           this.scrollTop.set(0);
+          // "Find files on this page" from Research: that one page, listed at once
+          const preset = this.ui.grabberPreset();
+          if (preset !== null) {
+            this.ui.grabberPreset.set(null);
+            this.session.url.set(preset);
+            this.session.depth.set(0);
+            this.session.scope.set('same-host');
+            this.urlTouched.set(true);
+            void this.session.start();
+          }
         });
       }
     });
