@@ -530,8 +530,18 @@ struct Inner {
     /// The BitTorrent engine and its bridge to the download rows; `None` until
     /// [`Engine::enable_torrents`].
     torrents: RwLock<Option<Arc<torrent::TorrentRuntime>>>,
-    /// Held while the torrent engine starts, so two callers never start two sessions.
+    /// Held while the torrent engine starts or stops (also when it stops because nothing needs
+    /// it), so two callers never start two sessions and nobody starts one halfway through a stop.
     torrents_starting: tokio::sync::Mutex<()>,
+    /// Previews waiting for the user's choice. They outlive the torrent engine: it may stop while
+    /// the dialog is open.
+    torrent_previews: Mutex<std::collections::VecDeque<torrent::Pending>>,
+    torrent_next_token: std::sync::atomic::AtomicU64,
+    /// The last last-look at the torrent settings (tests turn DHT and trackers off); reapplied
+    /// whenever the engine is started again.
+    torrent_tweak: Mutex<Option<torrent::Tweak>>,
+    /// How long nothing needs the torrent engine before it is stopped (milliseconds).
+    torrent_idle_grace_ms: std::sync::atomic::AtomicU64,
     /// Folder next to the database file; the torrent engine keeps its state below it.
     data_dir: PathBuf,
     /// Serialises the choice of an on-disk file name, so two downloads that start at the same
@@ -913,6 +923,12 @@ impl Engine {
             media: RwLock::new(None),
             torrents: RwLock::new(None),
             torrents_starting: tokio::sync::Mutex::new(()),
+            torrent_previews: Mutex::new(std::collections::VecDeque::new()),
+            torrent_next_token: std::sync::atomic::AtomicU64::new(1),
+            torrent_tweak: Mutex::new(None),
+            torrent_idle_grace_ms: std::sync::atomic::AtomicU64::new(
+                torrent::DEFAULT_IDLE_GRACE.as_millis() as u64,
+            ),
             data_dir: config
                 .db_path
                 .parent()
