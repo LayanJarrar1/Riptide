@@ -17,7 +17,9 @@ development build. Get the alpha preview (installer or portable zip) from
 - [Details](#details)
 - [Video, batches and the site grabber](#video-batches-and-the-site-grabber)
 - [Research: open and public sources](#research-open-and-public-sources)
-- [Magnet links](#magnet-links)
+- [BitTorrent and magnet links](#bittorrent-and-magnet-links)
+- [AI assistant and your privacy](#ai-assistant-and-your-privacy)
+- [Already downloaded](#already-downloaded)
 - [Queues and schedules](#queues-and-schedules)
 - [Browser extension](#browser-extension)
 - [Updates](#updates)
@@ -139,9 +141,43 @@ The drawer's own buttons pause, cancel or remove the download. `Esc` closes it.
 - **What is not here, on purpose.** Riptide does not search torrent indexes, piracy or "abandonware" sites, paywall-bypass or Sci-Hub-like sources, or anything whose purpose is copyrighted content without a licence. Only download what you have the right to download. See decision D-research-1.
 - Everything a source returns is treated as untrusted text: it is shown as plain text, only http and https links are used, and the AI can only rank what the sources returned.
 
-## Magnet links
+## BitTorrent and magnet links
 
-Paste a magnet link in **Add download** (or drop it on the window, copy it with the clipboard monitor on, or use **File → Open magnet link from clipboard**) and Riptide shows the files so you can choose. Paste several links, one per line, to get a list: choose the files of each in turn, or **Add all (every file)**. Tracker addresses are never shown in lists or written to the log (private trackers keep a passkey there).
+**Add a torrent.** Paste a magnet link in **Add download**, choose a `.torrent` file (**Choose .torrent file...** in the dialog, or **File → Open torrent file...**), or drop a `.torrent` file or a magnet link on the window. You can also copy a magnet link with the clipboard monitor on, or use **File → Open magnet link from clipboard**.
+
+**Choose files before anything starts.** A magnet link does not contain the file list, so Riptide asks other peers for it (this can take up to two minutes). You then see every file with its size: tick the ones you want, pick the folder, and optionally turn on **Download one file after another** (first file first, handy when you want to open them while the rest arrives). Press **Download**. A torrent that is already in your list says so and offers **Show it**.
+
+**Several at once.** Paste several magnet links, one per line, and choose the files of each in turn, or press **Add all (every file)**.
+
+**While it downloads.** The row shows the peers (for example "20 of 574 peers") and, once there is something to share, the ratio. The details drawer lists every file with its own progress bar; a file you did not select says *not selected* and is never written. **Pause** and **Resume** work like any other download. If Riptide is closed or the process is killed, the torrent comes back on the next start and its pieces are checked again, never trusted. **Check files again** (row menu) re-verifies everything on disk, keeps the intact pieces and fetches the rest.
+
+**Seeding is off by default.** When a torrent finishes, Riptide stops all network activity for it. To keep sharing, open **Settings → Torrents** and turn on *Keep sharing after a download finishes*; you can stop at a share ratio, stop after some minutes, and set an upload limit (which also applies while downloading). The same page has DHT (peers without a tracker; private torrents never use it) and the port for incoming peers; both apply after a restart.
+
+**Web seeds.** Some torrents, such as Internet Archive items, list ordinary HTTP mirrors. If few peers are online, the file choice offers **Download from the web seed**: the files you ticked become normal downloads. Those downloads are not checked against the torrent's piece hashes, and the dialog says so.
+
+**Open magnet links and .torrent files with Riptide.** This is opt-in: **Settings → Integration** registers the `magnet:` links and the `.torrent` file type for your Windows user only (no administrator rights), and the same page removes them again.
+
+**Safety.** File names inside a torrent go through the same checks as any download (no folders outside the one you chose, no reserved Windows names). Tracker addresses are never shown in lists or written to the log, because private trackers keep a passkey there.
+
+Only download what you have the right to download.
+
+## AI assistant and your privacy
+
+The AI assistant is optional and **off until you set it up** in **Settings → AI**. Riptide has no accounts and no telemetry; it never sends anything to an AI provider unless you set one up and use a feature that needs it.
+
+- **Provider.** OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, DeepInfra, Mistral, Groq, Together or Fireworks. You pay the provider directly; Riptide takes no cut. Pick a model from the provider's list or type any model name, and optionally set a compatible endpoint (https, or http for localhost).
+- **Your key.** Paste your own API key and press **Save key**. It is stored only in Windows Credential Manager. The page shows it masked (for example `••••abcd`) and cannot read it back; it is never written to Riptide's settings, database, logs or events. **Remove key** deletes it.
+- **Test.** The test button reports how long the provider took and how many tokens it says it used.
+- **Daily budget.** A limit on tokens and requests per day. Riptide stops calling the provider once either limit is reached; empty means no limit.
+- **What the AI does.** In Research it widens your question into extra searches and ranks the results with one line of "why it matches". Every link the model mentions is checked against the real results, so it cannot invent a download. In the **Add dialog**, *Suggest name and category* (off by default) sends only the link's host, the file name without its query string and the size, and nothing is applied until you accept it.
+- **Your download history stays yours.** *Let the AI see my download history to avoid duplicates* is off by default. When on, only the titles of up to 25 recent downloads (never folders or paths) are added to Research requests.
+- **See exactly what is sent.** **What will be sent** shows the messages of the most recent AI request. They are kept in memory only and disappear when Riptide closes. **Forget everything** (asks you to click twice) deletes every saved API key, today's usage, the last request and the AI settings.
+
+Without an AI provider, Research is a plain keyword search over the sources.
+
+## Already downloaded
+
+Riptide remembers what you finished downloading (the address, DOI, arXiv id, PubMed id, file name and size, and SHA-256) and warns you before you fetch it again: in the Add dialog and on Research cards, with **Open file**, **Open folder** and **Download again**. It notices when the file is no longer on disk and then lets you download it again without a warning. It stays on your computer. *Skip downloads I already have* (**Settings → AI → Download memory**, off by default) refuses repeats unless you choose Download again; **Clear download memory** erases the list.
 
 ## Queues and schedules
 
@@ -174,7 +210,10 @@ Open with the sidebar's **Settings** or `Ctrl+,`. Changes apply immediately.
   limit.
 - **Behaviour**: notify when a download finishes, ask before closing while downloads are active,
   keep running in the tray, start with Windows, clipboard watching.
-- **Integration**: browser extension and proxy settings.
+- **Integration**: browser extension, proxy settings, and the opt-in `magnet:` and `.torrent` handlers.
+- **Torrents**: seeding (off by default), the share ratio and time limits, the upload limit, DHT and the incoming port.
+- **AI**: provider, key, model, daily budget, privacy switches and Download memory (see above).
+- **Research sources**: which sources to use, the Jamendo client id, and the web search backend (Brave or SearXNG).
 - **About**: update channel, check for updates, reset settings.
 
 Some switches describe behaviour that is still being wired to the engine in this development
@@ -211,7 +250,8 @@ a direction. The dark theme is the default; **Light** and **System** are in Sett
 |---|---|
 | Downloads | the folder you chose (default: your Downloads folder) |
 | Partial files | `<name>.rtpart` next to the final file until it completes |
-| Database (the list and progress) | `%LOCALAPPDATA%\Riptide\riptide.sqlite` |
+| Database (the list, progress, torrents and download memory) | `%LOCALAPPDATA%\Riptide\riptide.sqlite` |
+| API keys for AI and web search | Windows Credential Manager, never in a Riptide file |
 | Logs | `%LOCALAPPDATA%\Riptide\logs` (daily files; no cookies, credentials or query strings) |
 
 Riptide needs no administrator rights for anything and writes nothing outside these places.
@@ -251,5 +291,9 @@ Run the same `fetch` again to resume an interrupted download.
   checksum you were given; if it is right, the server sent a corrupted file.
 - **Too many connections**: some servers answer `429` when you open too many connections. Lower
   **Connections per server** in Settings.
+- **A torrent shows 0 peers and does not start**: nobody online has the pieces, or the magnet link is wrong. Wait a little, check the link, or, if the file choice offers it, use **Download from the web seed**.
+- **A torrent says it is not valid or not safe to use**: the `.torrent` file is damaged or not a torrent. Get it again from the source.
+- **Research lists nothing from a source**: the chip says whether it timed out or failed; press its retry button. Public services are sometimes slow or down.
+- **Going back to alpha 4**: alpha 5 upgrades the database to a new format that alpha 4 cannot open. Restore a copy of `riptide.sqlite` made before updating.
 - **Still stuck**: look at today's file in `%LOCALAPPDATA%\Riptide\logs` and open a bug report
   with the relevant lines.
