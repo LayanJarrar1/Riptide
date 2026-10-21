@@ -290,6 +290,33 @@ fn v3_database_migrates_to_v4_keeping_segments_secrets_and_ids() {
 }
 
 #[test]
+fn the_v4_rebuild_keeps_the_autoincrement_high_water_mark() {
+    use riptide_store::{migrate, MIGRATIONS};
+
+    // a v3 database whose highest ids were removed long ago: rows 1 and 2 remain, the counter is 9
+    let (_dir, path) = fixture_db(V1_FIXTURE);
+    {
+        let mut conn = Connection::open(&path).unwrap();
+        migrate::run_with(&mut conn, &MIGRATIONS[..3]).unwrap();
+        let changed = conn
+            .execute(
+                "UPDATE sqlite_sequence SET seq = 9 WHERE name = 'downloads'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(changed, 1);
+    }
+    let mut store = Store::open(&path).unwrap();
+    let d = riptide_core::Download::new(DownloadId(0), "https://example.com/a", "a", ".", 1);
+    let id = store.insert_download(&d).unwrap();
+    assert_eq!(
+        id,
+        DownloadId(10),
+        "an id that was used before must not be reused"
+    );
+}
+
+#[test]
 fn v3_and_v4_databases_migrate_to_v5_keeping_their_data() {
     use riptide_core::{DownloadKind, TorrentFileInfo, TorrentInfo};
     use riptide_store::{migrate, MIGRATIONS};

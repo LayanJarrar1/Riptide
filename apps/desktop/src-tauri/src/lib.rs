@@ -368,6 +368,7 @@ pub fn run() {
             queues::run_post_action,
             torrent::torrent_preview,
             torrent::add_torrent,
+            torrent::torrent_web_seed_add,
             torrent::list_torrents,
             torrent::torrent_live,
             torrent::pick_torrent_file,

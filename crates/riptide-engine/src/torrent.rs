@@ -113,6 +113,15 @@ impl TorrentOptions {
     }
 }
 
+/// What [`Engine::torrent_web_seed_add`] did.
+#[derive(Debug, Clone, Default)]
+pub struct WebSeedAdded {
+    /// The new downloads.
+    pub added: Vec<DownloadId>,
+    /// Files not added: an address that is not http(s), or one that targets a private network.
+    pub refused: usize,
+}
+
 /// A preview waiting for the user's choice.
 struct Pending {
     token: String,
@@ -701,6 +710,72 @@ impl Engine {
             self.apply_snapshot(&rt, snap, true).await;
         }
         Ok(id)
+    }
+
+    /// Downloads the chosen files of a previewed torrent from its first web seed (BEP 19) as
+    /// ordinary downloads, into the same folder layout. The addresses are built from the names
+    /// the `.torrent` spells, percent-encoded; each is checked against the private-network rule
+    /// first (a torrent file is untrusted content and must not aim a click at the LAN or at
+    /// localhost), and redirects are held to the usual rule. The files are not checked against the
+    /// torrent's piece hashes.
+    pub async fn torrent_web_seed_add(
+        &self,
+        token: &str,
+        only_files: Option<Vec<u32>>,
+        dir: Option<PathBuf>,
+        start_paused: bool,
+    ) -> Result<WebSeedAdded> {
+        let rt = self.require_torrents()?;
+        let preview = {
+            let pend = lock(&rt.previews);
+            pend.iter()
+                .find(|p| p.token == token && p.made.elapsed() < PREVIEW_TTL)
+                .map(|p| p.preview.clone())
+        }
+        .ok_or_else(|| {
+            Error::Core(riptide_core::Error::Invalid(
+                "the torrent preview has expired; open the torrent again".into(),
+            ))
+        })?;
+        let Some(seed) = preview.web_seeds.first() else {
+            return Err(Error::Core(riptide_core::Error::Invalid(
+                "this torrent lists no web seed".into(),
+            )));
+        };
+        let (name, originals) = riptide_torrent::meta::original_layout(&preview.torrent_bytes)?;
+        let multi = preview.files.len() > 1;
+        let dir = dir.unwrap_or_else(|| PathBuf::from(self.settings().default_dir));
+        let mut out = WebSeedAdded::default();
+        for (i, f) in preview.files.iter().enumerate() {
+            let chosen = only_files
+                .as_ref()
+                .is_none_or(|o| o.contains(&u32::try_from(f.index).unwrap_or(u32::MAX)));
+            if f.padding || !chosen {
+                continue;
+            }
+            let comps = originals.get(i).map(Vec::as_slice).unwrap_or_default();
+            let Some(url) = riptide_torrent::meta::web_seed_url(seed, &name, comps, multi) else {
+                out.refused += 1;
+                continue;
+            };
+            if self.is_private_target(&url).await {
+                out.refused += 1;
+                continue;
+            }
+            let file_name = f.path.file_name().map(|n| n.to_string_lossy().into_owned());
+            let folder = f.path.parent().map(|p| dir.join(p)).unwrap_or(dir.clone());
+            let request = riptide_core::DownloadRequest {
+                filename: file_name,
+                dir: Some(folder),
+                start_paused,
+                ..riptide_core::DownloadRequest::new(url)
+            };
+            out.added.push(self.add_checked(request, true).await?);
+        }
+        if out.added.is_empty() && out.refused > 0 {
+            return Err(Error::Net(riptide_net::Error::PrivateAddress));
+        }
+        Ok(out)
     }
 
     /// Every torrent's stored facts.

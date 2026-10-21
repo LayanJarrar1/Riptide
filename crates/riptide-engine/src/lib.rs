@@ -1253,6 +1253,27 @@ impl Engine {
             .with_allow_private_redirects(self.settings().allow_private_redirects)
     }
 
+    /// Whether `url` targets a private, loopback, link-local or otherwise special address (an IP
+    /// literal, `localhost`, or a name that resolves to one). Downloads the user types are never
+    /// checked; addresses that untrusted content supplies (a torrent's web seed, a search result)
+    /// are, with this.
+    pub async fn is_private_target(&self, url: &str) -> bool {
+        match riptide_net::parse_http_url(url) {
+            Ok(u) => riptide_net::NetGuard::blocking().is_private_host(&u).await,
+            Err(_) => false,
+        }
+    }
+
+    /// `Err` ([`riptide_net::Error::PrivateAddress`]) when [`Engine::is_private_target`]. Redirects
+    /// of the download that follows are held to the usual rule (public to private is refused).
+    pub async fn refuse_private_target(&self, url: &str) -> Result<()> {
+        let parsed = riptide_net::parse_http_url(url)?;
+        riptide_net::NetGuard::blocking()
+            .deny_private(&parsed)
+            .await?;
+        Ok(())
+    }
+
     fn client(&self) -> reqwest::Client {
         self.inner
             .client
@@ -1330,6 +1351,7 @@ impl Engine {
             for flag in ALL_FLAGS {
                 s.set_setting(&flag_key(id, flag), "")?;
             }
+            s.remove_setting(&seen::hint_key(id))?;
             Ok(())
         })
         .await?;

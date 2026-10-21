@@ -71,6 +71,11 @@ pub fn downloadable_link(text: &str) -> Option<ClipboardLink> {
 /// A `magnet:` link that names a BitTorrent info-hash (hex or base32); its name is the `dn`
 /// (display name) parameter, else the hash.
 fn magnet_link(text: &str) -> Option<ClipboardLink> {
+    magnet_parts(text).map(|(link, _)| link)
+}
+
+/// [`magnet_link`] plus the info-hash it names, lower-cased (what identifies the torrent).
+fn magnet_parts(text: &str) -> Option<(ClipboardLink, String)> {
     let (scheme, rest) = text.split_at_checked(8)?;
     if !scheme.eq_ignore_ascii_case("magnet:?") {
         return None;
@@ -103,16 +108,20 @@ fn magnet_link(text: &str) -> Option<ClipboardLink> {
             _ => {}
         }
     }
-    let hash = hash?;
-    Some(ClipboardLink {
-        url: text.to_string(),
-        name: name.filter(|n| !n.trim().is_empty()).unwrap_or(hash),
-    })
+    let hash: String = hash?;
+    let key = hash.to_ascii_lowercase();
+    Some((
+        ClipboardLink {
+            url: text.to_string(),
+            name: name.filter(|n| !n.trim().is_empty()).unwrap_or(hash),
+        },
+        key,
+    ))
 }
 
 /// `%XX` decoding of a path segment (invalid escapes stay as they are, bytes are read as UTF-8
 /// lossily).
-fn percent_decode(s: &str) -> String {
+pub(crate) fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -179,10 +188,10 @@ pub fn magnet_lines(text: &str) -> Vec<String> {
         if line.len() > MAX_URL_LEN || line.chars().any(char::is_whitespace) {
             continue;
         }
-        let Some(link) = magnet_link(line) else {
+        let Some((link, key)) = magnet_parts(line) else {
             continue;
         };
-        let key = link.name.to_ascii_lowercase();
+        // one entry per torrent: two different torrents may well share a display name
         if out.len() < MAX_MAGNETS && seen.insert(key) {
             out.push(link.url);
         }
@@ -301,6 +310,17 @@ magnet:?xt=urn:sha1:abc
         assert_eq!(magnet_lines(&text), [a.to_string(), b.to_string()]);
         assert!(magnet_lines("no links here").is_empty());
         assert!(magnet_lines("").is_empty());
+    }
+
+    #[test]
+    fn two_torrents_with_the_same_display_name_are_both_offered() {
+        let a = "magnet:?xt=urn:btih:428c72ff4aac627830cfacdc8622be0e908c3b65&dn=Ubuntu";
+        let b = "magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Ubuntu";
+        let again = "magnet:?xt=urn:btih:428C72FF4AAC627830CFACDC8622BE0E908C3B65&dn=Other";
+        assert_eq!(
+            magnet_lines(&format!("{a}\n{b}\n{again}")),
+            [a.to_string(), b.to_string()]
+        );
     }
 
     #[test]

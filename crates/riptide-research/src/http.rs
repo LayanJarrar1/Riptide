@@ -75,6 +75,8 @@ impl Http {
         let client = Client::builder()
             .user_agent(USER_AGENT)
             .redirect(policy)
+            // a redirect must not carry the previous address (a client id in its query) along
+            .referer(false)
             .connect_timeout(Duration::from_secs(10))
             .build()
             .unwrap_or_else(|_| Client::new());

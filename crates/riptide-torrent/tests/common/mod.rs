@@ -106,6 +106,17 @@ pub fn piece_hashes(files: &[TFile], piece_len: usize) -> Vec<u8> {
 /// Builds the bytes of a `.torrent`. One file with a one-component path becomes a single-file
 /// torrent; anything else is multi-file with `name` as folder.
 pub fn build_torrent(name: &str, files: &[TFile], piece_len: u32) -> Vec<u8> {
+    build_torrent_with(name, files, piece_len, Vec::new())
+}
+
+/// Like [`build_torrent`] with extra top-level keys (`url-list`, ...). Do not use the result with
+/// [`info_hash_of`]: it assumes `info` is the last key.
+pub fn build_torrent_with(
+    name: &str,
+    files: &[TFile],
+    piece_len: u32,
+    extra: Vec<(&str, B)>,
+) -> Vec<u8> {
     let pieces = piece_hashes(files, piece_len as usize);
     let mut info = vec![
         ("name", B::s(name)),
@@ -130,7 +141,9 @@ pub fn build_torrent(name: &str, files: &[TFile], piece_len: u32) -> Vec<u8> {
             ),
         ));
     }
-    B::dict(vec![("info", B::dict(info))]).encode()
+    let mut top = vec![("info", B::dict(info))];
+    top.extend(extra);
+    B::dict(top).encode()
 }
 
 pub fn info_hash_of(torrent: &[u8]) -> String {

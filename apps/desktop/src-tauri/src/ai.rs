@@ -716,10 +716,8 @@ pub fn name_inputs(url: &str) -> Option<(String, String)> {
         .filter(|n| !n.is_empty())
         .unwrap_or("download")
         .to_string();
-    let name: String = url::form_urlencoded::parse(name.as_bytes())
-        .next()
-        .map(|(k, _)| k.into_owned())
-        .unwrap_or(name);
+    // a path segment is percent-decoded, not form-decoded: `&`, `=` and `+` belong to the name
+    let name = crate::clipboard::percent_decode(&name);
     Some((host, name))
 }
 
@@ -1012,6 +1010,9 @@ mod tests {
                 .unwrap();
         assert_eq!(h, "cdn.example.org");
         assert_eq!(n, "My File.zip");
+        // `&`, `=` and `+` are part of a path segment
+        let (_, n) = name_inputs("https://h.example/a/report=final&v2+draft.pdf").unwrap();
+        assert_eq!(n, "report=final&v2+draft.pdf");
         assert_eq!(name_inputs("https://h.example/").unwrap().1, "download");
         assert!(name_inputs("ftp://h/x").is_none());
     }

@@ -160,7 +160,7 @@ async fn a_registry_entry_without_a_row_is_dropped_before_the_engine_restores_it
     let r = first_run(&w).await;
     // the row vanishes behind the torrent engine's back (an older build, a restored backup)
     {
-        let mut store = riptide_store::Store::open(&w.dir.path().join("riptide.sqlite")).unwrap();
+        let mut store = riptide_store::Store::open(w.dir.path().join("riptide.sqlite")).unwrap();
         store.remove_download(r.id).unwrap();
     }
     assert_eq!(registry_ids(&w), vec![r.hash.clone()]);
@@ -306,6 +306,89 @@ async fn a_finished_file_is_marked_while_the_rest_of_the_torrent_still_runs() {
         state,
         DownloadState::Completed,
         "the torrent must still be running"
+    );
+    e.shutdown().await;
+}
+
+/// A torrent whose names are hostile (so the planned layout differs from them) and that lists
+/// `seed` as its web seed.
+fn seeded_torrent(seed: &str) -> Vec<u8> {
+    let f = |path: &[&str], seed: u64| TFile {
+        path: path.iter().map(|s| (*s).to_string()).collect(),
+        data: bytes(seed, 20_000),
+    };
+    let files = vec![
+        f(&["CON"], 1),
+        f(&["a b.txt"], 2),
+        f(&["A B.TXT"], 3),
+        f(&["sub", "c#1.bin"], 4),
+    ];
+    build_torrent_with(
+        "set.",
+        &files,
+        PIECE,
+        vec![("url-list", B::List(vec![B::s(seed)]))],
+    )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn web_seed_downloads_use_the_names_of_the_torrent_and_refuse_private_addresses() {
+    let w = World::new().await;
+    let e = w.engine().await;
+    enable(&e).await;
+
+    // a seed on the machine itself, on the LAN, or at the cloud metadata address is refused
+    for private in [
+        "http://127.0.0.1:9/seed/",
+        "http://localhost/seed/",
+        "http://192.168.1.1/seed/",
+        "http://169.254.169.254/seed/",
+        "http://[::1]/seed/",
+    ] {
+        let p = e
+            .torrent_preview(save_torrent(w.dir.path(), &seeded_torrent(private)), None)
+            .await
+            .unwrap();
+        assert_eq!(p.web_seeds.len(), 1, "{private}");
+        let r = e
+            .torrent_web_seed_add(&p.token, None, Some(w.dir.path().join("mirror")), true)
+            .await;
+        assert!(r.is_err(), "{private} must be refused: {r:?}");
+    }
+    assert!(e.list().await.unwrap().is_empty(), "nothing was added");
+
+    // a public address is accepted; the files are fetched under the torrent's own names
+    let p = e
+        .torrent_preview(
+            save_torrent(w.dir.path(), &seeded_torrent("http://93.184.216.34/seed/")),
+            None,
+        )
+        .await
+        .unwrap();
+    let dir = w.dir.path().join("mirror");
+    let done = e
+        .torrent_web_seed_add(&p.token, None, Some(dir.clone()), true)
+        .await
+        .unwrap();
+    assert_eq!(done.added.len(), 4);
+    let mut urls = Vec::new();
+    for id in &done.added {
+        let d = e.get(*id).await.unwrap().unwrap();
+        assert_eq!(d.state, DownloadState::Paused);
+        urls.push(d.url.clone());
+    }
+    urls.sort();
+    assert_eq!(
+        urls,
+        vec![
+            "http://93.184.216.34/seed/set./A%20B.TXT",
+            "http://93.184.216.34/seed/set./CON",
+            "http://93.184.216.34/seed/set./a%20b.txt",
+            "http://93.184.216.34/seed/set./sub/c%231.bin",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect::<Vec<_>>()
     );
     e.shutdown().await;
 }

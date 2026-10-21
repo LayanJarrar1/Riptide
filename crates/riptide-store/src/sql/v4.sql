@@ -52,6 +52,14 @@ SELECT id, url, final_url, filename, dir, size, supports_ranges, etag,
     added_at, started_at, completed_at, kind, media_format, queue_pos
 FROM downloads;
 
+-- The AUTOINCREMENT high-water mark belongs to the old table and would be lost with it: ids of
+-- downloads removed before the upgrade must never come back (the UI keys caches and the "already
+-- downloaded" hints by id). The copy above left a row for downloads_v4 only up to the highest
+-- id still present.
+DELETE FROM sqlite_sequence WHERE name = 'downloads_v4';
+INSERT INTO sqlite_sequence (name, seq)
+    SELECT 'downloads_v4', seq FROM sqlite_sequence WHERE name = 'downloads';
+
 DROP TABLE downloads;
 ALTER TABLE downloads_v4 RENAME TO downloads;
 

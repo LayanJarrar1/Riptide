@@ -260,6 +260,26 @@ fn url_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r#"(?i)(https?://|www\.)\S+"#).expect("static regex"))
 }
 
+/// Markup the model may put in a reason: `<tags>`, `[text](target)` links and the schemes a
+/// browser would act on. The text is shown as plain text, so none of it is dangerous today; it is
+/// removed anyway so that it stays harmless if the way it is shown ever changes.
+fn markup_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r#"(?i)<[^>]{0,300}>|\[([^\]]{0,200})\]\([^)]{0,500}\)|\b(?:javascript|vbscript|data|file|about|blob|ftps?|mailto|tel|sms|intent|chrome|magnet|ed2k|wss?|ms-[a-z-]+):\S*"#,
+        )
+        .expect("static regex")
+    })
+}
+
+/// A reason as plain text: no markup, no links, no ids the model was given.
+fn plain_why(why: &str) -> String {
+    let why = markup_re().replace_all(why, "$1");
+    let why = url_re().replace_all(&why, "");
+    tidy(&id_ref_re().replace_all(&why, ""), 240)
+}
+
 fn norm(u: &str) -> String {
     riptide_core::dedup::normalize_url(u).unwrap_or_else(|| u.trim().to_string())
 }
@@ -324,8 +344,7 @@ impl RankValidator {
         let why = e.get("why").and_then(Value::as_str).unwrap_or("");
         // the model sometimes mentions the short ids it was given ("like h14"); they mean
         // nothing to the reader
-        let why = url_re().replace_all(why, "");
-        let why = tidy(&id_ref_re().replace_all(&why, ""), 240);
+        let why = plain_why(why);
         let score = e
             .get("score")
             .and_then(|s| s.as_f64())
@@ -625,6 +644,32 @@ mod tests {
         );
         assert_eq!(ranked[1].id, h[0].id);
         assert_eq!(ranked[1].score, 70);
+    }
+
+    #[test]
+    fn a_reason_keeps_no_markup_links_or_active_schemes() {
+        let nasty = "Good [click](javascript:alert(1)) <img src=x onerror=alert(1)> data:text/html,<b>x</b> \
+                     see www.evil.example/a and https://evil.example/b mailto:a@b.c h12";
+        let why = plain_why(nasty);
+        for needle in [
+            "javascript",
+            "<",
+            ">",
+            "data:",
+            "mailto",
+            "evil",
+            "onerror",
+            "](",
+            "h12",
+        ] {
+            assert!(!why.contains(needle), "{needle:?} survived in {why:?}");
+        }
+        assert!(why.starts_with("Good click"), "{why:?}");
+        // ordinary prose, colons and numbers are left alone
+        assert_eq!(
+            plain_why("Covers the topic: ratio 3:1, see section 2:4."),
+            "Covers the topic: ratio 3:1, see section 2:4."
+        );
     }
 
     #[test]

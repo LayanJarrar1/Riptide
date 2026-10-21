@@ -860,7 +860,7 @@ pub struct AddSkip {
     /// The hit id.
     pub id: String,
     /// `unknown` (not from the current search), `page` (a web page, not a file),
-    /// `already_downloaded` or `failed`.
+    /// `already_downloaded`, `private_address` (the file is on a private network) or `failed`.
     pub reason: &'static str,
 }
 
@@ -874,13 +874,34 @@ pub struct AddResponse {
     pub skipped: Vec<AddSkip>,
 }
 
+/// Whether a hit points at a private network address that the source itself does not account
+/// for. The address of a result comes from a third party (or from a model-ranked list of them),
+/// so a click must not turn into a request to `127.0.0.1`, the router or a cloud metadata
+/// service. The one exception is a result of the user's own SearXNG when that instance is itself
+/// on a private address (the owner searching their LAN).
+pub async fn aims_at_private_network(engine: &Engine, hit: &Hit, searxng_is_private: bool) -> bool {
+    if hit.source == riptide_research::Source::Web && searxng_is_private {
+        return false;
+    }
+    engine.is_private_target(&hit.download_url).await
+}
+
 /// Adds results from the latest search as normal downloads.
 #[tauri::command]
 pub async fn research_add(
     engine: State<'_, Engine>,
     state: State<'_, ResearchState>,
+    ai: State<'_, AiService>,
     request: AddRequest,
 ) -> Result<AddResponse, String> {
+    let searxng_is_private = match read_settings(&ai) {
+        ResearchSettings {
+            web: WebChoice::Searxng,
+            searxng_url: Some(u),
+            ..
+        } => engine.is_private_target(&u).await,
+        _ => false,
+    };
     let dir: Option<PathBuf> = request
         .category
         .as_deref()
@@ -908,6 +929,13 @@ pub async fn research_add(
         };
         if hit.kind == HitKind::Page || !riptide_core::batch::is_http_url(&hit.download_url) {
             out.skipped.push(AddSkip { id, reason: "page" });
+            continue;
+        }
+        if aims_at_private_network(&engine, &hit, searxng_is_private).await {
+            out.skipped.push(AddSkip {
+                id,
+                reason: "private_address",
+            });
             continue;
         }
         let req = DownloadRequest {

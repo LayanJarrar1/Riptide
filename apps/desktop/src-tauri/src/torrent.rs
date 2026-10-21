@@ -6,6 +6,7 @@
 //! |---|---|---|
 //! | `torrent_preview` | `source` (magnet link or `.torrent` path), `dir?` | `TorrentPreviewInfo` (files, token) |
 //! | `add_torrent` | `add: TorrentAdd` | new download id |
+//! | `torrent_web_seed_add` | `request: WebSeedRequest` | ids of the new downloads |
 //! | `list_torrents` | – | `TorrentInfo` of every torrent |
 //! | `torrent_live` | `id` | `TorrentLive` (per-file progress, peers, speeds, ratio) |
 //! | `pick_torrent_file` | – | path of the `.torrent` the user chose in the OS dialog, or `null` |
@@ -63,6 +64,62 @@ pub async fn preview(
 pub async fn add(engine: &Engine, add: TorrentAdd) -> CmdResult<i64> {
     engine.enable_torrents().await.map_err(err)?;
     engine.add_torrent(add).await.map(|id| id.0).map_err(err)
+}
+
+/// The web-seed download request of the add dialog.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebSeedRequest {
+    /// Token of the preview.
+    pub token: String,
+    /// Chosen file indices (`null` = every file).
+    pub only_files: Option<Vec<u32>>,
+    /// Destination folder (`null` = the default).
+    pub dir: Option<String>,
+    /// Add paused.
+    #[serde(default)]
+    pub start_paused: bool,
+}
+
+/// What came of it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebSeedResult {
+    /// Ids of the new downloads.
+    pub added: Vec<i64>,
+    /// Files left out (not an http(s) address, or aimed at a private network).
+    pub refused: usize,
+}
+
+/// Downloads the chosen files of a previewed torrent from its web seed as ordinary downloads
+/// (see [`Engine::torrent_web_seed_add`]).
+pub async fn web_seed_add(engine: &Engine, request: WebSeedRequest) -> CmdResult<WebSeedResult> {
+    let dir = request
+        .dir
+        .filter(|d| !d.trim().is_empty())
+        .map(std::path::PathBuf::from);
+    let done = engine
+        .torrent_web_seed_add(
+            &request.token,
+            request.only_files,
+            dir,
+            request.start_paused,
+        )
+        .await
+        .map_err(err)?;
+    Ok(WebSeedResult {
+        added: done.added.iter().map(|d| d.0).collect(),
+        refused: done.refused,
+    })
+}
+
+/// Downloads the chosen files of a previewed torrent from its first web seed.
+#[tauri::command]
+pub async fn torrent_web_seed_add(
+    engine: State<'_, Engine>,
+    request: WebSeedRequest,
+) -> CmdResult<WebSeedResult> {
+    web_seed_add(&engine, request).await
 }
 
 /// Resolves a magnet link or a `.torrent` file into the files it would write; nothing is added.

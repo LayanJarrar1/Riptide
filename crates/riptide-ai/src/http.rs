@@ -161,6 +161,7 @@ impl HttpCore {
         let base = validate_base_url(base_override.unwrap_or(default_base))?;
         let client = Client::builder()
             .redirect(redirect::Policy::none())
+            .referer(false)
             .user_agent(concat!("Riptide/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|_| AiError::Config("could not build the HTTP client".into()))?;

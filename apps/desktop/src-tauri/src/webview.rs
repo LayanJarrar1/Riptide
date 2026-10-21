@@ -5,6 +5,11 @@
 //! the profile must live with the rest of the data, in `<data>\webview`, so nothing is left
 //! behind and nothing is inherited (theme, UI preferences, cache) from another copy.
 
+#[cfg(all(feature = "cdp", not(debug_assertions)))]
+compile_error!(
+    "the `cdp` feature opens WebView2 remote debugging with every origin allowed; it is for debug test builds only"
+);
+
 use std::path::PathBuf;
 
 use riptide_log::Paths;
@@ -58,9 +63,26 @@ pub fn create_main_window(app: &tauri::App<Wry>, paths: &Paths) -> tauri::Result
     Ok(())
 }
 
+// A release build must never carry the remote-debugging switch (see the `cdp` feature above).
+// The guard is the `compile_error!` at the top of this file; the test below keeps it there.
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_remote_debugging_feature_cannot_reach_a_release_build() {
+        let source = include_str!("webview.rs");
+        assert!(
+            source.contains(concat!(
+                "#[cfg(all(feature = \"cdp\", ",
+                "not(debug_assertions)))]\ncompile_error!"
+            )) || source.contains(concat!(
+                "#[cfg(all(feature = \"cdp\", ",
+                "not(debug_assertions)))]\r\ncompile_error!"
+            )),
+            "the compile_error guard for the cdp feature is missing"
+        );
+    }
 
     #[test]
     fn portable_keeps_the_webview_profile_in_the_data_folder() {

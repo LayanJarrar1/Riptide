@@ -389,6 +389,7 @@
   "torrent.webSeed": "This torrent also lists web seeds (HTTP mirrors). If few peers are online it can be slow or never start; the files can be downloaded from the web seed instead (a normal download, not checked against the torrent's piece hashes).",
   "torrent.webSeedDownload": "Download from the web seed",
   "torrent.webSeedAdded": "{n} file(s) added as normal downloads from the web seed",
+  "torrent.webSeedRefused": "{n} file(s) were left out: their address is not a public web address.",
   "menu.openMagnet": "Open magnet link from clipboard",
   "torrent.noMagnetOnClipboard": "There is no magnet link on the clipboard.",
   "torrent.multiTitle": "{n} magnet links found",
