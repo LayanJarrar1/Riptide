@@ -99,6 +99,13 @@ fn with_no_foreign_handler_everything_of_ours_is_gone_and_old_registrations_are_
         None,
         "the magnet key is gone"
     );
+    // nothing of ours is left under Classes, not even the empty shared `.torrent` key
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let left: Vec<String> = hkcu
+        .open_subkey(format!(r"{root}\Software\Classes"))
+        .map(|k| k.enum_keys().flatten().collect())
+        .unwrap_or_default();
+    assert!(left.is_empty(), "left behind: {left:?}");
 
     // an old registration is removed by the uninstaller as well
     let mut reg = platform_registry().unwrap();
@@ -110,5 +117,24 @@ fn with_no_foreign_handler_everything_of_ours_is_gone_and_old_registrations_are_
     assert_eq!(platform_registry().unwrap().default_value(MAGNET_KEY), None);
 
     let _ = RegKey::predef(HKEY_CURRENT_USER).delete_subkey_all(&root);
+    std::env::remove_var(REGISTRY_ROOT_ENV);
+}
+
+#[test]
+fn a_plain_register_and_uninstall_leaves_nothing_under_classes() {
+    let _env = ENV.lock().unwrap_or_else(|p| p.into_inner());
+    let root = format!(r"Software\RiptideUninstallTest3_{}", std::process::id());
+    std::env::set_var(REGISTRY_ROOT_ENV, &root);
+    let exe = std::env::current_exe().unwrap();
+    let mut reg = platform_registry().unwrap();
+    register(&exe, reg.as_mut()).unwrap();
+    assert_eq!(run_cli(&args(&["--unregister-handlers"])), Some(0));
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let left: Vec<String> = hkcu
+        .open_subkey(format!(r"{root}\Software\Classes"))
+        .map(|k| k.enum_keys().flatten().collect())
+        .unwrap_or_default();
+    assert!(left.is_empty(), "left behind: {left:?}");
+    let _ = hkcu.delete_subkey_all(&root);
     std::env::remove_var(REGISTRY_ROOT_ENV);
 }

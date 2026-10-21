@@ -253,6 +253,11 @@ pub fn unregister(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolSta
                 .delete_named_value(TORRENT_EXT_KEY, "")
                 .map_err(|e| io("cannot remove the torrent key", &e))?;
         }
+        // what is left of the shared `.torrent` key goes when nothing else is in it
+        registry
+            .delete_key_if_empty(&format!(r"{TORRENT_EXT_KEY}\OpenWithProgids"))
+            .and_then(|_| registry.delete_key_if_empty(TORRENT_EXT_KEY))
+            .map_err(|e| io("cannot remove the torrent key", &e))?;
     }
     tracing::info!("magnet and .torrent handlers removed");
     Ok(status(exe, registry))

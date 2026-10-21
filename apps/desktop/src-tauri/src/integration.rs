@@ -56,6 +56,12 @@ pub trait Registry {
     fn delete_named_value(&mut self, _key: &str, _name: &str) -> std::io::Result<()> {
         Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
     }
+    /// Deletes `key` only when it holds no value and every key under it is empty too (what is
+    /// left once everything of ours is gone from a key other apps share). Returns whether it was
+    /// deleted; a registry that cannot tell leaves it alone.
+    fn delete_key_if_empty(&mut self, _key: &str) -> std::io::Result<bool> {
+        Ok(false)
+    }
 }
 
 /// Test knob: moves every registry key under `HKCU\<value>` (an installer test run must not
@@ -130,6 +136,28 @@ impl Registry for CurrentUserRegistry {
         let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
         let (k, _) = hkcu.create_subkey(self.path(key))?;
         k.set_value(name, &value)
+    }
+
+    fn delete_key_if_empty(&mut self, key: &str) -> std::io::Result<bool> {
+        fn empty(k: &winreg::RegKey) -> bool {
+            k.enum_values().next().is_none()
+                && k.enum_keys()
+                    .flatten()
+                    .all(|name| k.open_subkey(&name).map(|sub| empty(&sub)).unwrap_or(false))
+        }
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        let Ok(k) = hkcu.open_subkey(self.path(key)) else {
+            return Ok(false);
+        };
+        if !empty(&k) {
+            return Ok(false);
+        }
+        drop(k);
+        match hkcu.delete_subkey_all(self.path(key)) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
     fn delete_named_value(&mut self, key: &str, name: &str) -> std::io::Result<()> {
