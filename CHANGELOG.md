@@ -15,6 +15,10 @@ Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/rel
 
 ### Security and hardening
 
+- Updated TLS trust roots: `rustls-webpki` 0.103.16 and `webpki-roots` 1.0.10 stop trusting the
+  distrusted emSign intermediates (RUSTSEC-2026-0381, -0382, -0383). Four remaining advisories
+  (`ringbuf` in the torrent transport, `zip` in the updater plugin) are not reachable and are
+  documented with an expiry in `docs/decisions.md` (D-advisories-1).
 - Hardening from the independent security review of this release:
   - Two torrents that name the same file no longer share it, and removing or cancelling a torrent
     deletes only files it created itself; names are planned around every other torrent, queued

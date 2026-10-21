@@ -20,3 +20,9 @@ regexes = ['''"key"\s*:\s*"MIIBIjANBgkq''']
 [[allowlists]]
 description = "Known fake test fixtures: redaction and auth tests use hunter2-style passwords"
 regexes = ['''hunter2''']
+
+[[allowlists]]
+description = "Fake API key constant in the AI settings spec: it exists to prove the key is masked and never logged"
+condition = "AND"
+paths = ['''(^|/)apps/desktop/src/app/ai/ai\.spec\.ts$''']
+regexes = ['''sk-SECRET-1234567890-wxyz''']

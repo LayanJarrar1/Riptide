@@ -167,3 +167,20 @@ handful of hardening gaps. The rules that came out of it:
   the `.torrent`) and search results are refused when they point at a private, loopback or
   link-local address, unless the result comes from the user's own private SearXNG.
 - **Bodies are bounded as they arrive**, not after they were buffered.
+
+## D-advisories-1: Dependency advisories accepted for 0.1.0-alpha.5
+
+*Status: accepted, review by 2026-12-31.* `cargo audit` on the alpha.5 lockfile (advisory database of
+2026-10-21) reported seven vulnerabilities. Three are fixed by a targeted patch update
+(`rustls-webpki` 0.103.16, `webpki-roots` and `webpki-root-certs` 1.0.10: the distrusted emSign
+intermediates, RUSTSEC-2026-0381, -0382, -0383). Four are accepted for now because no compatible
+fixed release exists, and each is listed in `.cargo/audit.toml` with the same reason and expiry:
+
+| Id | Crate (pulled in by) | Why it is not reachable | What to bump later |
+|---|---|---|---|
+| RUSTSEC-2026-0293 | `ringbuf` 0.4.8 (`librqbit-utp` 0.7.0, the uTP transport of librqbit) | Undefined behaviour only when an element's `Drop` panics during `Consumer::skip`/`clear`. uTP stores plain bytes, which have no `Drop`, so the condition cannot occur. Fixed upstream in `ringbuf` 0.5.2, which `librqbit-utp` 0.7.0 (the newest release) does not allow. | `librqbit-utp` once it moves to `ringbuf` >= 0.5.2, or a librqbit that does. |
+| RUSTSEC-2026-0367, -0368, -0369 | `zip` 4.6.1 (`tauri-plugin-updater` 2.14.0) | All three are about `ZipArchive::extract` / `ZipStreamReader::extract` (SUID bits, symlink targets). Riptide never calls them; on Windows the updater downloads a signed NSIS installer and runs it, and the archive path is used only for other platforms. Fixed in `zip` >= 9.0.0, which the updater plugin does not allow yet. | `tauri-plugin-updater` once it depends on `zip` >= 9. |
+
+The remaining `cargo audit` warnings are unmaintained or unsound crates that only build for Linux
+(`proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive`, `glib`); the Windows build does not
+contain them. They stay visible as warnings. Revisit this entry when `.cargo/audit.toml` expires.
