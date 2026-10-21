@@ -234,3 +234,43 @@ fn only_created_unselected_files_with_at_most_boundary_data_are_placeholders() {
     e.file_progress = Some(vec![0]);
     assert!(list(&e).is_empty());
 }
+
+#[test]
+fn progress_of_a_stopped_torrent_comes_from_the_stored_state() {
+    use riptide_torrent::offline::file_progress;
+    use riptide_torrent::registry::Entry;
+    let mk = |completed: bool, selected: Option<Vec<usize>>, progress: Option<Vec<u64>>| Entry {
+        dir: PathBuf::from("out"),
+        files: Some(vec!["a".into(), "b".into(), "c".into()]),
+        name: "n".into(),
+        total_bytes: 0,
+        selected_bytes: 0,
+        selected,
+        sequential: false,
+        adopt: false,
+        user_paused: false,
+        completed,
+        seeding_done: false,
+        added_at: 0,
+        finished_at: None,
+        progress_bytes: 0,
+        error: None,
+        peers: Vec::new(),
+        created: None,
+        piece_length: Some(100),
+        file_lens: Some(vec![1000, 2000, 3000]),
+        file_progress: progress,
+    };
+    // finished: every selected file is complete, the others show what is recorded
+    assert_eq!(
+        file_progress(&mk(true, Some(vec![0, 2]), Some(vec![0, 40, 0]))),
+        vec![1000, 40, 3000]
+    );
+    assert_eq!(file_progress(&mk(true, None, None)), vec![1000, 2000, 3000]);
+    // unfinished: only what was recorded, never more than the file holds
+    assert_eq!(
+        file_progress(&mk(false, None, Some(vec![5, 9999, 0]))),
+        vec![5, 2000, 0]
+    );
+    assert_eq!(file_progress(&mk(false, None, None)), vec![0, 0, 0]);
+}

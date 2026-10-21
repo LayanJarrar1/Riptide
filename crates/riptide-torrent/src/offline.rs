@@ -19,6 +19,40 @@ fn open(state_dir: &Path) -> Result<Registry> {
     Registry::open(state_dir.join(REGISTRY_FILE))
 }
 
+/// Verified bytes per file of a torrent the library is not running: every selected file of a
+/// finished torrent is complete; otherwise what was recorded the last time the engine knew
+/// (empty when nothing is known).
+pub fn file_progress(entry: &Entry) -> Vec<u64> {
+    let (Some(lens), Some(files)) = (entry.file_lens.as_ref(), entry.files.as_ref()) else {
+        return Vec::new();
+    };
+    if lens.len() != files.len() {
+        return Vec::new();
+    }
+    (0..lens.len())
+        .map(|i| {
+            let wanted = entry.selected.as_ref().is_none_or(|s| s.contains(&i));
+            if entry.completed && wanted {
+                lens[i]
+            } else {
+                entry
+                    .file_progress
+                    .as_ref()
+                    .and_then(|p| p.get(i).copied())
+                    .unwrap_or(0)
+                    .min(lens[i])
+            }
+        })
+        .collect()
+}
+
+/// Snapshot of one torrent from the stored state of `state_dir`.
+pub fn snapshot_for(state_dir: &Path, id: &str) -> Result<TorrentSnapshot> {
+    let reg = open(state_dir)?;
+    let entry = reg.get(id).ok_or_else(|| Error::NotFound(id.to_string()))?;
+    Ok(snapshot(id, &entry))
+}
+
 /// Snapshot of a torrent that is not being run by an engine.
 pub fn snapshot(id: &str, entry: &Entry) -> TorrentSnapshot {
     let state = match (&entry.error, entry.completed, entry.user_paused) {
@@ -46,7 +80,7 @@ pub fn snapshot(id: &str, entry: &Entry) -> TorrentSnapshot {
         peers_connected: 0,
         peers_seen: 0,
         eta_secs: None,
-        file_progress: Vec::new(),
+        file_progress: file_progress(entry),
         selected: entry.selected.clone(),
     }
 }
