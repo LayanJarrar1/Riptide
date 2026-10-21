@@ -613,7 +613,7 @@ export class AiSettingsComponent implements OnInit {
     this.busy.set('models');
     this.modelsError.set(null);
     try {
-      this.models.set(await this.ai.listModels(st.settings.provider, st.settings.baseUrl));
+      this.models.set(await this.ai.listModels(st.settings.provider));
     } catch (e: unknown) {
       this.modelsError.set(this.ai.errorText(e));
     } finally {

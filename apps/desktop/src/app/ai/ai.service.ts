@@ -69,8 +69,9 @@ export class AiService {
     return s;
   }
 
-  listModels(provider: ProviderId, baseUrl: string | null): Promise<ModelView[]> {
-    return this.invoke<ModelView[]>('ai_list_models', { provider, baseUrl });
+  /** The models the stored key can use; the app asks the endpoint the key was saved for. */
+  listModels(provider: ProviderId): Promise<ModelView[]> {
+    return this.invoke<ModelView[]>('ai_list_models', { provider });
   }
 
   testConnection(): Promise<ConnectionView> {
