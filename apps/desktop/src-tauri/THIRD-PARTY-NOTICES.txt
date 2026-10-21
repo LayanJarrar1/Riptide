@@ -33,4 +33,14 @@ BitTorrent (linked into riptide-desktop.exe)
             MPL-2.0. Riptide replaces librqbit's file storage with its own, so file names from a
             torrent are sanitised by Riptide's code, not by the library.
 
+Servo / MPL-2.0 crates (linked into riptide-desktop.exe through Tauri's HTML handling)
+  Crates:   cssparser 0.37.0 and cssparser-macros 0.7.1 (https://github.com/servo/rust-cssparser),
+            dtoa-short 0.3.5 (https://github.com/upsuper/dtoa-short), selectors 0.38.0
+            (https://github.com/servo/stylo), and option-ext 0.2.0 (https://github.com/soc/option-ext).
+  License:  MPL-2.0 (https://www.mozilla.org/MPL/2.0/), a file-level copyleft: it covers those
+            files only, not Riptide's own code. The source of each is at the address above and
+            on crates.io under the same name and version.
+  Changes:  none. Riptide uses these crates unmodified, exactly as published, so no modified
+            MPL-covered file is distributed.
+
 Riptide itself is dual-licensed under MIT or Apache-2.0 (see LICENSE-MIT and LICENSE-APACHE).
