@@ -126,7 +126,88 @@ impl Category {
             (_, None) => Category::Other,
         }
     }
+
+    /// Category of a `Content-Type` value (parameters and case ignored), for a file whose name
+    /// says nothing. `None` for types that do not tell (`application/octet-stream`, unknown).
+    ///
+    /// ```
+    /// use riptide_core::category::Category;
+    /// assert_eq!(Category::from_mime("video/mp4"), Some(Category::Video));
+    /// assert_eq!(Category::from_mime("application/PDF; charset=binary"), Some(Category::Documents));
+    /// assert_eq!(Category::from_mime("application/octet-stream"), None);
+    /// ```
+    pub fn from_mime(content_type: &str) -> Option<Self> {
+        let mime = content_type
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
+        let (kind, sub) = mime.split_once('/')?;
+        Some(match (kind, sub) {
+            ("video", _) => Category::Video,
+            ("audio", _) => Category::Music,
+            ("image", _) => Category::Images,
+            ("text", "plain" | "csv" | "rtf") => Category::Documents,
+            ("application", sub) => {
+                match sub {
+                    "pdf" | "msword" | "rtf" | "epub+zip" | "vnd.ms-excel"
+                    | "vnd.ms-powerpoint" => Category::Documents,
+                    s if s.starts_with("vnd.openxmlformats-officedocument.")
+                        || s.starts_with("vnd.oasis.opendocument.") =>
+                    {
+                        Category::Documents
+                    }
+                    "zip" | "x-zip-compressed" | "x-7z-compressed" | "x-rar-compressed"
+                    | "vnd.rar" | "gzip" | "x-gzip" | "x-tar" | "x-bzip2" | "x-xz" | "zstd"
+                    | "x-iso9660-image" => Category::Compressed,
+                    "x-msdownload"
+                    | "x-msi"
+                    | "x-ms-installer"
+                    | "vnd.microsoft.portable-executable"
+                    | "x-dosexec"
+                    | "vnd.android.package-archive"
+                    | "x-apple-diskimage"
+                    | "vnd.debian.binary-package"
+                    | "x-rpm"
+                    | "msix"
+                    | "appx" => Category::Programs,
+                    _ => return None,
+                }
+            }
+            _ => return None,
+        })
+    }
+
+    /// Category of a download: the file name's extension decides; only when it says nothing
+    /// (`Other`) does the server's `Content-Type` get a say. The name wins because the server's
+    /// type is often generic or wrong, and the name is what the user sees.
+    pub fn detect(filename: &str, content_type: Option<&str>) -> Self {
+        match Self::from_filename(filename) {
+            Category::Other => content_type
+                .and_then(Self::from_mime)
+                .unwrap_or(Category::Other),
+            known => known,
+        }
+    }
+
+    /// Name of this category's folder when downloads are organised into folders (see the
+    /// engine's `organize` setting). English, like the other folders of a Windows profile.
+    pub const fn folder_name(self) -> &'static str {
+        match self {
+            Category::Compressed => "Archives",
+            Category::Documents => "Documents",
+            Category::Music => "Audio",
+            Category::Video => "Videos",
+            Category::Programs => "Applications",
+            Category::Images => "Images",
+            Category::Other => "Other",
+        }
+    }
 }
+
+/// Folder name for torrents when downloads are organised into folders.
+pub const TORRENTS_FOLDER: &str = "Torrents";
 
 impl fmt::Display for Category {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -136,6 +217,51 @@ impl fmt::Display for Category {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mime_decides_only_when_the_name_does_not() {
+        assert_eq!(
+            Category::detect("clip.mp4", Some("application/zip")),
+            Category::Video
+        );
+        assert_eq!(
+            Category::detect("download", Some("application/pdf")),
+            Category::Documents
+        );
+        assert_eq!(
+            Category::detect("setup", Some("application/x-msdownload")),
+            Category::Programs
+        );
+        assert_eq!(
+            Category::detect("data.bin", Some("application/octet-stream")),
+            Category::Other
+        );
+        assert_eq!(Category::detect("x", None), Category::Other);
+        assert_eq!(
+            Category::detect("song", Some("AUDIO/MPEG")),
+            Category::Music
+        );
+        assert_eq!(
+            Category::detect(
+                "report",
+                Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            ),
+            Category::Documents
+        );
+        assert_eq!(Category::from_mime("garbage"), None);
+        assert_eq!(Category::from_mime("text/html"), None);
+    }
+
+    #[test]
+    fn every_category_has_a_distinct_folder() {
+        let mut names: Vec<_> = Category::ALL.iter().map(|c| c.folder_name()).collect();
+        names.push(TORRENTS_FOLDER);
+        let n = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), n);
+    }
+
     use super::*;
 
     /// A literal copy of the table. If this test fails you changed `extensions()`: update the

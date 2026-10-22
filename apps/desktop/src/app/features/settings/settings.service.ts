@@ -9,6 +9,12 @@ import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
 export interface Settings {
   readonly defaultDir: string;
   readonly categoryDirs: Readonly<Partial<Record<CategoryKey, string>>>;
+  /** Sort new downloads into `<root>/<Category>` folders (engine-side; on for a new install). */
+  readonly organize: boolean;
+  /** Root of the category folders; empty = `<defaultDir>\Riptide`. */
+  readonly organizeRoot: string;
+  /** Folder for torrents; empty = the organised `Torrents` folder or the default folder. */
+  readonly torrentsDir: string;
   /** Connections per download (1..32). */
   readonly connections: number;
   /** Connections per host across downloads. */
@@ -47,6 +53,34 @@ export interface Settings {
   readonly sidebarVisible: boolean;
 }
 
+/** Folder name per category under the organised root; mirrors `Category::folder_name`. */
+export const CATEGORY_FOLDERS: Readonly<Record<CategoryKey, string>> = {
+  compressed: 'Archives',
+  documents: 'Documents',
+  music: 'Audio',
+  video: 'Videos',
+  programs: 'Applications',
+  images: 'Images',
+  other: 'Other',
+};
+
+/** Torrents' folder name under the organised root (`TORRENTS_FOLDER` in riptide-core). */
+export const TORRENTS_FOLDER = 'Torrents';
+/** `category_dirs` key of the torrents folder (`TORRENTS_KEY` in riptide-engine). */
+const TORRENTS_KEY = 'torrents';
+
+/** The organised root: the chosen one, else `<defaultDir>\Riptide`. */
+export function organizedRoot(s: Pick<Settings, 'organizeRoot' | 'defaultDir'>): string {
+  const root = s.organizeRoot.trim();
+  return root.length > 0 ? root : joinPath(s.defaultDir, 'Riptide');
+}
+
+/** Joins a folder and a name with the separator the folder already uses (`\\` on Windows). */
+export function joinPath(dir: string, name: string): string {
+  const sep = dir.includes('\\') || !dir.includes('/') ? '\\' : '/';
+  return dir.endsWith('\\') || dir.endsWith('/') ? `${dir}${name}` : `${dir}${sep}${name}`;
+}
+
 /** `localStorage` key. */
 export const SETTINGS_STORAGE_KEY = 'riptide.settings';
 
@@ -60,6 +94,9 @@ export const ENGINE_SYNC_DEBOUNCE = new InjectionToken<number>('riptide.settings
 export const DEFAULT_SETTINGS: Settings = {
   defaultDir: 'D:\\Downloads',
   categoryDirs: {},
+  organize: true,
+  organizeRoot: '',
+  torrentsDir: '',
   connections: 8,
   perHost: 4,
   speedLimitBps: null,
@@ -153,9 +190,29 @@ export class SettingsService {
     });
   }
 
-  /** Folder a new download of `category` goes to. */
+  /** Folder a new download of `category` goes to; mirrors `EngineSettings::dir_for`. */
   dirFor(category: CategoryKey): string {
-    return this.settings().categoryDirs[category] ?? this.settings().defaultDir;
+    const s = this.settings();
+    const own = s.categoryDirs[category]?.trim();
+    if (own) {
+      return own;
+    }
+    return s.organize ? joinPath(organizedRoot(s), CATEGORY_FOLDERS[category]) : s.defaultDir;
+  }
+
+  /** Folder a new torrent goes to; mirrors `EngineSettings::torrent_dir`. */
+  torrentDir(): string {
+    const s = this.settings();
+    const own = s.torrentsDir.trim();
+    if (own) {
+      return own;
+    }
+    return s.organize ? joinPath(organizedRoot(s), TORRENTS_FOLDER) : s.defaultDir;
+  }
+
+  /** The organised folders back to the shipped layout: on, under the default folder, no overrides. */
+  restoreDefaultFolders(): void {
+    this.patch({ organize: true, organizeRoot: '', torrentsDir: '', categoryDirs: {} });
   }
 
   /** Back to defaults. */
@@ -195,12 +252,16 @@ export class SettingsService {
           categoryDirs[key] = dir;
         }
       }
+      const torrentsDir = engine.category_dirs?.[TORRENTS_KEY];
       this.settings.update((s) => ({
         ...s,
         defaultDir: engine.default_dir,
         connections: engine.connections,
         perHost: engine.per_host,
         categoryDirs,
+        organize: engine.organize ?? false,
+        organizeRoot: engine.organize_root ?? '',
+        torrentsDir: typeof torrentsDir === 'string' ? torrentsDir : '',
         speedLimitBps: engine.global_speed_limit ?? null,
         markDownloads: engine.mark_of_the_web ?? true,
         allowPrivateRedirects: engine.allow_private_redirects ?? false,
@@ -242,6 +303,10 @@ export class SettingsService {
         category_dirs[key] = dir;
       }
     }
+    if (current.torrentsDir.trim().length > 0) {
+      category_dirs[TORRENTS_KEY] = current.torrentsDir.trim();
+    }
+    const organize_root = current.organizeRoot.trim();
     const global_speed_limit = current.speedLimitBps !== null && current.speedLimitBps > 0 ? current.speedLimitBps : null;
     // a manual proxy without an address is not applied (the engine would refuse it)
     const proxy: EngineSettings['proxy'] =
@@ -260,6 +325,8 @@ export class SettingsService {
       known.connections === connections &&
       known.per_host === perHost &&
       JSON.stringify(known.category_dirs ?? {}) === JSON.stringify(category_dirs) &&
+      (known.organize ?? false) === current.organize &&
+      (known.organize_root ?? '') === organize_root &&
       (known.global_speed_limit ?? null) === global_speed_limit &&
       known.proxy.mode === proxy.mode &&
       known.proxy.url === proxy.url &&
@@ -275,6 +342,8 @@ export class SettingsService {
       max_active: known.max_active,
       user_agent: known.user_agent,
       category_dirs,
+      organize: current.organize,
+      organize_root,
       global_speed_limit,
       proxy,
       mark_of_the_web: current.markDownloads,

@@ -492,7 +492,7 @@ export class TorrentDialogComponent {
   protected readonly selection = signal<ReadonlySet<number> | null>(null);
   protected readonly sequential = signal(false);
   protected readonly startPaused = signal(false);
-  protected readonly dir = signal(this.settingsService.settings().defaultDir);
+  protected readonly dir = signal(this.settingsService.torrentDir());
   protected readonly submitting = signal(false);
   protected readonly freeBytes = signal<number | null>(null);
   protected readonly seedBusy = signal(false);
@@ -523,7 +523,7 @@ export class TorrentDialogComponent {
     effect(() => {
       if (this.open() && this.source() !== null) {
         untracked(() => {
-          this.dir.set(this.settingsService.settings().defaultDir);
+          this.dir.set(this.settingsService.torrentDir());
           this.sequential.set(false);
           this.startPaused.set(false);
           this.submitting.set(false);

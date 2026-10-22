@@ -79,6 +79,7 @@ async fn open_engine(dir: &tempfile::TempDir) -> Engine {
     let e = Engine::open(EngineConfig {
         db_path: dir.path().join("riptide.sqlite"),
         default_dir: dir.path().join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();

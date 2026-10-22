@@ -5,7 +5,7 @@
  */
 
 import {
-  categoryOf,
+  detectCategory,
   MediaProbe,
   Download as UiDownload,
   DownloadRequest as UiDownloadRequest,
@@ -156,7 +156,7 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     size,
     supportsRanges: d.supports_ranges,
     state,
-    category: categoryOf(d.filename),
+    category: detectCategory(d.filename, d.content_type),
     queueId: d.queue_id,
     queuePosition: d.queue_position,
     priority: d.priority,
@@ -227,7 +227,7 @@ export function toUiProbe(p: ProbeInfo): ProbeResult {
     size: toUiSize(p.size),
     supportsRanges: p.supports_ranges,
     contentType: p.content_type,
-    category: categoryOf(p.filename),
+    category: detectCategory(p.filename, p.content_type),
   };
 }
 

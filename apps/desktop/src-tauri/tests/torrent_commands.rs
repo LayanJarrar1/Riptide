@@ -18,6 +18,7 @@ async fn engine(root: &std::path::Path) -> Engine {
     let e = Engine::open(EngineConfig {
         db_path: root.join("data").join("riptide.sqlite"),
         default_dir: root.join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();

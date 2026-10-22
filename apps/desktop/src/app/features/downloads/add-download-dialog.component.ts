@@ -36,7 +36,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [...FORMAT_PIPES, ButtonComponent, DialogComponent, DuplicateDialogComponent, IconComponent, SeenNoticeComponent],
   template: `
-    <app-dialog [open]="open()" [title]="i18n.t('add.title')" [wide]="true" (closed)="close()">
+    <app-dialog [open]="open()" [title]="i18n.t('add.title')" (closed)="close()">
       <form class="form" (submit)="submit($event)">
         <label class="field">
           <span class="label">{{ i18n.t('add.url') }}</span>
@@ -148,49 +148,48 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
         @if (media(); as m) {
           <section class="media" aria-live="polite">
-            <div class="media-head">
-              @if (m.thumbnail) {
-                <img class="media-thumb" [src]="m.thumbnail" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="hideThumb($event)" />
-              } @else {
-                <span class="media-thumb media-thumb-empty" aria-hidden="true"><app-icon name="play" [size]="22" /></span>
-              }
-              <span class="media-text">
-                <span class="media-title" dir="auto">{{ m.title }}</span>
-                <span class="media-sub" dir="auto">
-                  @if (m.uploader) {
-                    <span>{{ m.uploader }}</span>
-                  }
-                  @if (m.uploader && m.duration !== null) {
-                    <span aria-hidden="true">·</span>
-                  }
-                  @if (m.duration !== null) {
-                    <span class="num">{{ m.duration | duration }}</span>
-                  }
-                </span>
-              </span>
-            </div>
-            <div class="field">
-              <span class="label">{{ i18n.t('add.quality') }}</span>
-              <div class="qualities" role="radiogroup" [attr.aria-label]="i18n.t('add.quality')">
-                @for (c of m.choices; track c.key) {
-                  <button type="button" role="radio" class="quality" [class.is-active]="c.key === choiceKey()" [attr.aria-checked]="c.key === choiceKey()" (click)="chooseQuality(c)">
-                    <span class="quality-name">{{ choiceLabel(c) }}</span>
-                    @if (c.approxSize !== null) {
-                      <span class="quality-size num">~{{ c.approxSize | bytes }}</span>
-                    }
-                  </button>
+            @if (m.thumbnail) {
+              <img class="media-thumb" [src]="m.thumbnail" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="hideThumb($event)" />
+            } @else {
+              <span class="media-thumb media-thumb-empty" aria-hidden="true"><app-icon name="play" [size]="18" /></span>
+            }
+            <span class="media-text">
+              <span class="media-title" dir="auto" [attr.title]="m.title">{{ m.title }}</span>
+              <span class="media-sub" dir="auto">
+                @if (m.uploader) {
+                  <span>{{ m.uploader }}</span>
                 }
-              </div>
-            </div>
+                @if (m.uploader && m.duration !== null) {
+                  <span aria-hidden="true">·</span>
+                }
+                @if (m.duration !== null) {
+                  <span class="num">{{ m.duration | duration }}</span>
+                }
+              </span>
+            </span>
           </section>
         }
 
         @if (!isMagnet() && magnets().length < 2) {
         <div class="row">
-          <label class="field grow">
-            <span class="label">{{ i18n.t('add.filename') }}</span>
-            <input class="input" type="text" name="filename" dir="auto" [value]="filename()" (input)="onFilename($event)" [placeholder]="i18n.t('add.filenameHint')" />
-          </label>
+          @if (media(); as m) {
+            <label class="field grow">
+              <span class="label">{{ i18n.t('add.quality') }}</span>
+              <span class="select-wrap">
+                <app-icon class="input-icon" [name]="choiceKind() === 'audio' ? 'fileMusic' : 'fileVideo'" [size]="16" />
+                <select class="input select" name="quality" (change)="onQuality($event, m.choices)">
+                  @for (c of m.choices; track c.key) {
+                    <option [value]="c.key" [selected]="c.key === choiceKey()">{{ choiceOption(c) }}</option>
+                  }
+                </select>
+              </span>
+            </label>
+          } @else {
+            <label class="field grow">
+              <span class="label">{{ i18n.t('add.filename') }}</span>
+              <input class="input" type="text" name="filename" dir="auto" [value]="filename()" (input)="onFilename($event)" [placeholder]="i18n.t('add.filenameHint')" />
+            </label>
+          }
           <label class="field category">
             <span class="label">{{ i18n.t('add.category') }}</span>
             <span class="select-wrap">
@@ -204,6 +203,13 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           </label>
         </div>
 
+        @if (media()) {
+          <label class="field">
+            <span class="label">{{ i18n.t('add.filename') }}</span>
+            <input class="input" type="text" name="filename" dir="auto" [value]="filename()" (input)="onFilename($event)" [placeholder]="i18n.t('add.filenameHint')" />
+          </label>
+        }
+
         <label class="field">
           <span class="label">{{ i18n.t('add.saveTo') }}</span>
           <span class="input-wrap">
@@ -213,32 +219,34 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
           </span>
         </label>
 
-        <div class="row">
-          @if (!media()) {
-          <div class="field grow">
-            <span class="label">{{ i18n.t('add.connections') }}</span>
-            <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.connections')">
-              @for (n of presets; track n) {
-                <button type="button" role="radio" class="preset num" [class.is-active]="n === connections()" [attr.aria-checked]="n === connections()" (click)="connections.set(n)">{{ n }}</button>
-              }
-            </div>
-          </div>
-          }
-          <div class="field" [class.grow]="media()">
-            <span class="label">{{ i18n.t('add.start') }}</span>
-            <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.start')">
-              <button type="button" role="radio" class="preset" [class.is-active]="!startPaused()" [attr.aria-checked]="!startPaused()" (click)="startPaused.set(false)">{{ i18n.t('add.startNow') }}</button>
-              <button type="button" role="radio" class="preset" [class.is-active]="startPaused()" [attr.aria-checked]="startPaused()" (click)="startPaused.set(true)">{{ i18n.t('add.startLater') }}</button>
-            </div>
-          </div>
-        </div>
-
         <details class="advanced" [open]="advancedOpen()" (toggle)="onToggle($event)">
           <summary class="advanced-summary">
             <app-icon name="chevronEnd" [size]="14" class="chev" />
-            {{ i18n.t('add.advanced') }}
+            {{ i18n.t('add.moreOptions') }}
+            @if (!advancedOpen() && advancedSummary(); as summary) {
+              <span class="advanced-hint">{{ summary }}</span>
+            }
           </summary>
           <div class="advanced-body">
+        <div class="row">
+              @if (!media()) {
+              <div class="field grow">
+                <span class="label">{{ i18n.t('add.connections') }}</span>
+                <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.connections')">
+                  @for (n of presets; track n) {
+                    <button type="button" role="radio" class="preset num" [class.is-active]="n === connections()" [attr.aria-checked]="n === connections()" (click)="connections.set(n)">{{ n }}</button>
+                  }
+                </div>
+              </div>
+              }
+              <div class="field" [class.grow]="media()">
+                <span class="label">{{ i18n.t('add.start') }}</span>
+                <div class="presets" role="radiogroup" [attr.aria-label]="i18n.t('add.start')">
+                  <button type="button" role="radio" class="preset" [class.is-active]="!startPaused()" [attr.aria-checked]="!startPaused()" (click)="startPaused.set(false)">{{ i18n.t('add.startNow') }}</button>
+                  <button type="button" role="radio" class="preset" [class.is-active]="startPaused()" [attr.aria-checked]="startPaused()" (click)="startPaused.set(true)">{{ i18n.t('add.startLater') }}</button>
+                </div>
+              </div>
+            </div>
             @if (!media()) {
             <label class="field">
               <span class="label">{{ i18n.t('add.checksum') }}</span>
@@ -282,7 +290,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
     .form {
       display: flex;
       flex-direction: column;
-      gap: var(--space-4);
+      gap: var(--space-3);
       padding-block: var(--space-2) var(--space-3);
     }
 
@@ -334,7 +342,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
     }
 
     .category {
-      inline-size: 200px;
+      inline-size: 172px;
     }
 
     .field {
@@ -600,28 +608,23 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       color: var(--color-on-accent);
     }
 
+    /* the video found at the link: a compact strip, the choices are in the fields below */
     .media {
       display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: var(--space-3);
-      padding: var(--space-3);
+      min-inline-size: 0;
+      padding: var(--space-2);
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
       background: var(--color-surface-2);
       animation: help-in var(--dur-2) var(--ease-emphasized-out) both;
     }
 
-    .media-head {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      min-inline-size: 0;
-    }
-
     .media-thumb {
       flex: none;
-      inline-size: 96px;
-      block-size: 54px;
+      inline-size: 72px;
+      block-size: 40px;
       border-radius: var(--radius-sm);
       object-fit: cover;
     }
@@ -641,11 +644,10 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
     }
 
     .media-title {
-      font-weight: var(--weight-medium);
       overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      font-weight: var(--weight-medium);
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .media-sub {
@@ -653,47 +655,6 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       gap: 6px;
       color: var(--color-text-secondary);
       font-size: var(--text-xs);
-    }
-
-    .qualities {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .quality {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      block-size: 32px;
-      padding-inline: 12px;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-sm);
-      background: transparent;
-      color: var(--color-text-secondary);
-      font: inherit;
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-      cursor: pointer;
-      transition:
-        background-color var(--motion-fast) var(--ease-standard),
-        color var(--motion-fast) var(--ease-standard),
-        border-color var(--motion-fast) var(--ease-standard);
-    }
-
-    .quality:hover {
-      color: var(--color-text);
-    }
-
-    .quality.is-active {
-      border-color: var(--color-accent);
-      background: var(--color-accent);
-      color: var(--color-on-accent);
-    }
-
-    .quality-size {
-      font-size: var(--text-xs);
-      opacity: 0.8;
     }
 
     .advanced {
@@ -711,6 +672,15 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
       user-select: none;
+    }
+
+    .advanced-hint {
+      overflow: hidden;
+      margin-inline-start: auto;
+      color: var(--color-text-muted);
+      font-weight: var(--weight-regular, 400);
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .advanced-summary::-webkit-details-marker {
@@ -764,6 +734,26 @@ export class AddDownloadDialogComponent {
   protected readonly connections = signal<number>(this.settingsService.settings().connections);
   protected readonly startPaused = signal(false);
   protected readonly advancedOpen = signal(false);
+  /** What the collapsed "More options" holds that differs from the defaults, so nothing is hidden by surprise. */
+  protected readonly advancedSummary = computed(() => {
+    const parts: string[] = [];
+    if (this.media() === null && this.connections() !== this.settingsService.settings().connections) {
+      parts.push(this.i18n.t('add.optConnections').replace('{n}', String(this.connections())));
+    }
+    if (this.startPaused()) {
+      parts.push(this.i18n.t('add.optLater'));
+    }
+    if (this.checksum().trim()) {
+      parts.push(this.i18n.t('add.optChecksum'));
+    }
+    if (this.username().trim()) {
+      parts.push(this.i18n.t('add.optLogin'));
+    }
+    if (this.headers().trim()) {
+      parts.push(this.i18n.t('add.optHeaders'));
+    }
+    return parts.join(' · ');
+  });
   protected readonly checksum = signal('');
   protected readonly username = signal('');
   protected readonly password = signal('');
@@ -792,6 +782,8 @@ export class AddDownloadDialogComponent {
   protected readonly media = signal<MediaProbe | null>(null);
   /** The picked quality's key (a [`MediaChoice`] key). */
   protected readonly choiceKey = signal('best');
+  /** Kind of the chosen quality, for the field's icon. */
+  protected readonly choiceKind = computed(() => this.media()?.choices.find((c) => c.key === this.choiceKey())?.kind ?? 'best');
   /** i18n key of why the page is not a downloadable video; `null` when there is no problem. */
   protected readonly mediaError = signal<string | null>(null);
   /** yt-dlp's own error line (plain text, at most 300 characters) behind the "Details" link. */
@@ -938,9 +930,19 @@ export class AddDownloadDialogComponent {
     return `${c.height ?? ''}p`;
   }
 
-  protected chooseQuality(c: MediaChoice): void {
-    this.choiceKey.set(c.key);
-    this.applyChoice(c);
+  /** One line of the quality menu: `Best · 1080p — ~1.56 GB`, `720p — ~104 MB`, `Audio · MP3`. */
+  protected choiceOption(c: MediaChoice): string {
+    const name = c.kind === 'best' && c.height !== null ? `${this.choiceLabel(c)} · ${c.height}p` : this.choiceLabel(c);
+    return c.approxSize === null ? name : `${name} — ~${this.format.bytes(c.approxSize)}`;
+  }
+
+  protected onQuality(event: Event, choices: readonly MediaChoice[]): void {
+    const key = (event.target as HTMLSelectElement).value;
+    const c = choices.find((x) => x.key === key);
+    if (c !== undefined) {
+      this.choiceKey.set(c.key);
+      this.applyChoice(c);
+    }
   }
 
   protected onCategory(event: Event): void {
@@ -1208,12 +1210,13 @@ export class AddDownloadDialogComponent {
   private showMedia(m: MediaProbe): void {
     this.mediaError.set(null);
     this.media.set(m);
-    const first = m.choices[0];
-    if (first === undefined) {
+    // the best available quality is the default; a page with only audio starts on its first option
+    const initial = m.choices.find((c) => c.kind === 'best') ?? m.choices[0];
+    if (initial === undefined) {
       return;
     }
-    this.choiceKey.set(first.key);
-    this.applyChoice(first);
+    this.choiceKey.set(initial.key);
+    this.applyChoice(initial);
   }
 
   /** The chosen quality decides the extension and the category (unless the user typed a name). */

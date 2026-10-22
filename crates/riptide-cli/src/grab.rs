@@ -159,6 +159,7 @@ pub async fn grab(opts: GrabOptions, lang: Lang) -> anyhow::Result<()> {
     let engine = Engine::open(EngineConfig {
         db_path: tmp.path().join("grab.sqlite"),
         default_dir: output.clone(),
+        organize_new_install: false,
     })
     .await?;
     let mut settings = EngineSettings::with_default_dir(&output);
