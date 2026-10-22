@@ -47,6 +47,7 @@ riptide-media = { workspace = true }
 riptide-crawl = { workspace = true }
 riptide-ai = { workspace = true }
 riptide-research = { workspace = true }
+riptide-fs = { workspace = true }
 chrono = { workspace = true }
 tokio-util = { workspace = true }
 

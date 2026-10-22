@@ -1,0 +1,27 @@
+[package]
+name = "riptide-fs"
+description = "Riptide download manager - file manager operations: listing, names, copy and move with conflict handling, Recycle Bin, properties and search"
+license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+riptide-core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+trash = "5.2"
+ts-rs = { workspace = true, optional = true }
+
+[features]
+# writes the TypeScript bindings the desktop app uses (see scripts/check.ps1)
+ts = ["dep:ts-rs"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -25,10 +25,24 @@ Phase 1 merged in PR #66.
 | 7 | Add Download redesign | Done | Standard-width dialog, compact video card, "More options" with a summary of non-default choices. |
 | 8 | Best quality by default | Done | Quality dropdown of the engine's detected choices; Best preferred explicitly. |
 
-## Phases 3–4
+Phase 2 merged in PR #67.
 
-Not started: file manager and dual pane, AI research chat (Angular 20 app — Astryx targets
-React 19, so its patterns would be reproduced in Angular rather than installed).
+## Phase 3 — file manager
+
+| # | Feature | State | Notes |
+| --- | --- | --- | --- |
+| 9 | Basic file operations | Done | `crates/riptide-fs` + `src-tauri/src/files.rs` commands + `features/files/`. |
+| 10 | Folder colours | Done | `FolderColorsService`, preference `riptide.folderColors`, follows renames and moves. |
+| 11 | Dual pane | Done | `FilesPageComponent` hosts two `FilePaneComponent`s; layout in `riptide.files.layout`. |
+| 12 | Drag and drop | Done | `application/x-riptide-files` between panes and onto folders, crumbs and places; Ctrl copies. |
+
+Needs a real Windows session to confirm: Recycle Bin restore through the shell, moves across
+drives, locked files (another program has them open), OneDrive placeholder files.
+
+## Phase 4
+
+Not started: AI research chat (Angular 20 app — Astryx targets React 19, so its patterns would be
+reproduced in Angular rather than installed).
 
 ## Test evidence
 
@@ -45,5 +59,6 @@ Rust (Linux container): `cargo fmt --check` and clippy `-D warnings` on core/sto
 
 ## Next action
 
-Phase 3, item 9: file manager basics. Needs new Tauri commands for listing, rename, copy, move,
-delete-to-Recycle-Bin and properties (path-checked against traversal), then an Angular page.
+Phase 4, item 13: read the current research page (`features/research/`), then redesign it as a
+conversation with history, progress steps and result cards, reproducing Astryx-style patterns in
+Angular.
