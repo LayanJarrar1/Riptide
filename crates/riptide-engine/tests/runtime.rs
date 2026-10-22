@@ -29,6 +29,7 @@ impl World {
         EngineConfig {
             db_path: self.dir.path().join("riptide.sqlite"),
             default_dir: self.dir.path().join("downloads"),
+            organize_new_install: false,
         }
     }
 
@@ -873,5 +874,111 @@ async fn refresh_url_swaps_the_link_of_a_running_download_and_finishes_byte_exac
         .refresh_url(id, "file:///etc/passwd", None, None)
         .await
         .is_err());
+    engine.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_new_install_organises_downloads_into_category_folders_once() {
+    use riptide_core::Category;
+
+    let w = World::new().await;
+    let downloads = w.dir.path().join("downloads");
+    let config = EngineConfig {
+        organize_new_install: true,
+        ..w.config()
+    };
+    let engine = Engine::open(config.clone()).await.unwrap();
+    let s = engine.settings();
+    assert!(s.organize);
+    let root = downloads.join("Riptide");
+    assert_eq!(s.organized_root(), root);
+    for name in [
+        "Applications",
+        "Archives",
+        "Documents",
+        "Images",
+        "Videos",
+        "Audio",
+        "Torrents",
+        "Other",
+    ] {
+        assert!(root.join(name).is_dir(), "{name} created on first run");
+    }
+    assert_eq!(s.dir_for(Category::Video), root.join("Videos"));
+    assert_eq!(s.torrent_dir(), root.join("Torrents"));
+
+    // a name with no extension: the server's Content-Type decides the category and the folder
+    let mut rx = engine.subscribe();
+    let id = engine
+        .add(w.request("/file/report?size=2048&ct=application%2Fpdf"))
+        .await
+        .unwrap();
+    let done = wait_for(
+        &mut rx,
+        Duration::from_secs(30),
+        |e| matches!(e, Event::Completed { id: i, .. } if *i == id),
+    )
+    .await;
+    let Event::Completed { path, .. } = done else {
+        unreachable!()
+    };
+    assert_eq!(path.parent(), Some(root.join("Documents").as_path()));
+    engine.shutdown().await;
+    drop(engine);
+
+    // a folder the user deleted is not brought back at the next start
+    std::fs::remove_dir(root.join("Images")).unwrap();
+    let engine = Engine::open(config).await.unwrap();
+    assert!(engine.settings().organize);
+    assert!(!root.join("Images").exists());
+    engine.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn settings_saved_before_organising_existed_keep_files_where_they_went() {
+    let w = World::new().await;
+    // an alpha.5 settings row: no `organize` field
+    {
+        let engine = w.engine().await;
+        engine.set_settings(engine.settings()).await.unwrap();
+        engine.shutdown().await;
+    }
+    let engine = Engine::open(EngineConfig {
+        organize_new_install: true,
+        ..w.config()
+    })
+    .await
+    .unwrap();
+    let s = engine.settings();
+    assert!(!s.organize, "an upgrade does not change where files go");
+    assert_eq!(
+        s.dir_for(riptide_core::Category::Video),
+        w.dir.path().join("downloads")
+    );
+    assert!(!w.dir.path().join("downloads").join("Riptide").exists());
+
+    // turned on later: a custom root and a custom torrents folder are honoured, a relative
+    // root is dropped
+    let custom = w.dir.path().join("sorted");
+    let seeds = w.dir.path().join("seeds");
+    let mut s = engine.settings();
+    s.organize = true;
+    s.organize_root = custom.to_string_lossy().into_owned();
+    s.category_dirs
+        .insert("torrents".into(), seeds.to_string_lossy().into_owned());
+    engine.set_settings(s).await.unwrap();
+    let s = engine.settings();
+    assert_eq!(
+        s.dir_for(riptide_core::Category::Programs),
+        custom.join("Applications")
+    );
+    assert_eq!(s.torrent_dir(), seeds);
+    let mut s = engine.settings();
+    s.organize_root = "relative/root".into();
+    engine.set_settings(s).await.unwrap();
+    assert_eq!(
+        engine.settings().organized_root(),
+        w.dir.path().join("downloads").join("Riptide")
+    );
     engine.shutdown().await;
 }

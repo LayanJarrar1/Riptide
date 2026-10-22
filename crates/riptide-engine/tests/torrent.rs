@@ -23,6 +23,7 @@ async fn open(tmp: &Path) -> Engine {
     let e = Engine::open(EngineConfig {
         db_path: tmp.join("data").join("riptide.sqlite"),
         default_dir: tmp.join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();
@@ -578,6 +579,7 @@ async fn settings_reach_the_torrent_engine_and_seeding_is_off_by_default() {
     let e2 = Engine::open(EngineConfig {
         db_path: tmp.path().join("data").join("riptide.sqlite"),
         default_dir: tmp.path().join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();

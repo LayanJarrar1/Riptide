@@ -72,12 +72,17 @@ describe('AddDownloadDialogComponent video mode', () => {
   it('shows the quality picker for a video page and submits it as media', async () => {
     const add = spyOn(engine, 'add').and.callThrough();
     await typeUrl('https://www.youtube.com/watch?v=abc');
-    expect(el().querySelectorAll('.quality').length).toBe(6);
+    // one compact dropdown, only the formats the page offers, Best chosen
+    const quality = el().querySelector<HTMLSelectElement>('select[name="quality"]') as HTMLSelectElement;
+    expect(quality.options.length).toBe(6);
+    expect(quality.value).toBe('best');
+    expect(quality.options[0].textContent).toMatch(/Best|add\.qualityBest/);
     expect(el().querySelector('input[name="checksum"]')).toBeNull();
     const filename = el().querySelector<HTMLInputElement>('input[name="filename"]');
     expect(filename?.value).toBe('Big Buck Bunny.mp4');
 
-    el().querySelectorAll<HTMLButtonElement>('.quality')[4]?.click();
+    quality.value = quality.options[4].value;
+    quality.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     expect(filename?.value).toBe('Big Buck Bunny.m4a');
 
@@ -91,10 +96,41 @@ describe('AddDownloadDialogComponent video mode', () => {
     expect(request.checksum).toBeUndefined();
   });
 
-  it('stays a plain link for an ordinary file', async () => {
+  it('stays a plain link for an ordinary file: no quality choice at all', async () => {
     await typeUrl('https://example.com/files/a.zip');
     expect(el().querySelector('.media')).toBeNull();
+    expect(el().querySelector('select[name="quality"]')).toBeNull();
     expect(el().querySelector('input[name="checksum"]')).not.toBeNull();
+  });
+
+  it('keeps the rarely used options folded away and says when one of them is not the default', async () => {
+    await typeUrl('https://example.com/files/a.zip');
+    const details = el().querySelector<HTMLDetailsElement>('details.advanced') as HTMLDetailsElement;
+    expect(details.open).toBeFalse();
+    // connections and the start choice live inside it now
+    expect(details.querySelector('[role="radiogroup"]')).not.toBeNull();
+    expect(el().querySelector('.advanced-hint')).toBeNull();
+    const later = Array.from(details.querySelectorAll<HTMLButtonElement>('.preset')).find((b) => b.getAttribute('aria-checked') === 'false' && !/^\d+$/.test(b.textContent?.trim() ?? ''));
+    later?.click();
+    fixture.detectChanges();
+    expect(el().querySelector('.advanced-hint')?.textContent).toMatch(/starts later|add\.optLater/);
+  });
+
+  it('is the compact dialog, not the wide one', () => {
+    expect(el().querySelector('dialog.is-wide')).toBeNull();
+  });
+
+  it('flags an address that is not a link', async () => {
+    await typeUrl('not a link at all');
+    expect(el().querySelector('.is-invalid')).not.toBeNull();
+    const submit = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.className.includes('primary'));
+    expect(submit?.disabled).toBeTrue();
+  });
+
+  it('accepts a very long link without breaking the layout', async () => {
+    await typeUrl(`https://example.com/files/${'a'.repeat(1800)}.zip?token=${'b'.repeat(400)}`);
+    const dialog = el().querySelector<HTMLElement>('dialog') as HTMLElement;
+    expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth + 1);
   });
 
   it('in RTL keeps the start of the LTR path field clear of the Browse button', () => {

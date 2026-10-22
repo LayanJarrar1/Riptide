@@ -8,6 +8,23 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+### Download folders and the add dialog
+
+- New installations sort downloads into category folders: `Downloads\Riptide\Applications`,
+  `Archives`, `Documents`, `Images`, `Videos`, `Audio`, `Torrents` and `Other`. The Downloads
+  folder is the Windows Downloads known folder, so one moved in its properties or redirected to
+  OneDrive is followed. The folders are created once, on the first start; a folder deleted later
+  is only made again when a download needs it. Existing files are never moved, and an upgrade
+  keeps sending files where they went before (the option starts off for existing settings).
+- Settings > Downloads: turn category folders on or off, choose their root folder, set a folder per
+  category or for torrents, and restore the default folders.
+- A file whose name has no known extension is categorised by the server's `Content-Type`
+  (e.g. `application/pdf` -> Documents); the name still wins when it says something.
+- The add dialog is smaller and calmer: the standard width instead of the wide one, a one-line
+  video card, the quality as one dropdown of the formats the page actually offers (Best by
+  default, no quality control for an ordinary file), and connections, start later, checksum,
+  login and headers folded into "More options", which says what in it differs from the defaults.
+
 ### Downloads list
 
 - Columns can be resized: drag the grip on a header's edge, or focus it and use the arrow keys

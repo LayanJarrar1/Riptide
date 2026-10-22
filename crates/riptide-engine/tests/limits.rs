@@ -21,6 +21,7 @@ fn config(dir: &tempfile::TempDir) -> EngineConfig {
     EngineConfig {
         db_path: dir.path().join("riptide.sqlite"),
         default_dir: dir.path().join("downloads"),
+        organize_new_install: false,
     }
 }
 

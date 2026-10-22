@@ -347,6 +347,54 @@ export function categoryOf(filename: string): CategoryKey {
   return 'other';
 }
 
+/** Category of a `Content-Type`; `null` when it does not tell. Mirrors `Category::from_mime`. */
+export function categoryOfMime(contentType: string | null | undefined): CategoryKey | null {
+  const mime = (contentType ?? '').split(';')[0].trim().toLowerCase();
+  const slash = mime.indexOf('/');
+  if (slash < 0) {
+    return null;
+  }
+  const kind = mime.slice(0, slash);
+  const sub = mime.slice(slash + 1);
+  if (kind === 'video') {
+    return 'video';
+  }
+  if (kind === 'audio') {
+    return 'music';
+  }
+  if (kind === 'image') {
+    return 'images';
+  }
+  if (kind === 'text') {
+    return ['plain', 'csv', 'rtf'].includes(sub) ? 'documents' : null;
+  }
+  if (kind !== 'application') {
+    return null;
+  }
+  if (
+    ['pdf', 'msword', 'rtf', 'epub+zip', 'vnd.ms-excel', 'vnd.ms-powerpoint'].includes(sub) ||
+    sub.startsWith('vnd.openxmlformats-officedocument.') ||
+    sub.startsWith('vnd.oasis.opendocument.')
+  ) {
+    return 'documents';
+  }
+  if (['zip', 'x-zip-compressed', 'x-7z-compressed', 'x-rar-compressed', 'vnd.rar', 'gzip', 'x-gzip', 'x-tar', 'x-bzip2', 'x-xz', 'zstd', 'x-iso9660-image'].includes(sub)) {
+    return 'compressed';
+  }
+  if (
+    ['x-msdownload', 'x-msi', 'x-ms-installer', 'vnd.microsoft.portable-executable', 'x-dosexec', 'vnd.android.package-archive', 'x-apple-diskimage', 'vnd.debian.binary-package', 'x-rpm', 'msix', 'appx'].includes(sub)
+  ) {
+    return 'programs';
+  }
+  return null;
+}
+
+/** The name's extension decides; only an unknown one lets the server's type speak. Mirrors `Category::detect`. */
+export function detectCategory(filename: string, contentType: string | null | undefined): CategoryKey {
+  const byName = categoryOf(filename);
+  return byName === 'other' ? (categoryOfMime(contentType) ?? 'other') : byName;
+}
+
 /** File name from a URL path, URL-decoded; `download` when the path has none. */
 export function filenameFromUrl(url: string): string {
   try {

@@ -12,6 +12,7 @@ async fn hits_aimed_at_the_lan_or_localhost_are_refused_unless_the_private_searx
     let engine = Engine::open(EngineConfig {
         db_path: dir.path().join("riptide.sqlite"),
         default_dir: dir.path().join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();

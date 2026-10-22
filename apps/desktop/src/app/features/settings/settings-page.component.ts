@@ -21,7 +21,7 @@ import { ToastService } from '../../ui/toast.service';
 import { CATEGORY_ICONS } from '../downloads/download-row.component';
 import { AiSettingsComponent } from './ai-settings.component';
 import { ResearchSettingsComponent } from './research-settings.component';
-import { Settings, SettingsService } from './settings.service';
+import { CATEGORY_FOLDERS, joinPath, organizedRoot, Settings, SettingsService, TORRENTS_FOLDER } from './settings.service';
 
 /** What `protocol_status` reports (`src-tauri/src/protocol.rs`). */
 export interface ProtocolStatus {
@@ -110,18 +110,49 @@ export function isValidProxyUrl(raw: string): boolean {
           </div>
         </div>
 
+        <label class="setting toggle-row">
+          <div class="setting-text">
+            <span class="setting-name">{{ i18n.t('settings.organize') }}</span>
+            <span class="setting-desc">{{ i18n.t('settings.organizeDesc') }}</span>
+          </div>
+          <span class="switch" [class.is-on]="s().organize">
+            <input type="checkbox" role="switch" [checked]="s().organize" (change)="patch({ organize: checked($event) })" />
+            <span class="knob"></span>
+          </span>
+        </label>
+
+        @if (s().organize) {
+          <div class="setting column">
+            <div class="setting-text">
+              <span class="setting-name">{{ i18n.t('settings.organizeRoot') }}</span>
+              <span class="setting-desc">{{ i18n.t('settings.organizeRootDesc') }}</span>
+            </div>
+            <div class="input-row">
+              <app-icon name="folder" [size]="16" class="input-icon" />
+              <input class="input" type="text" dir="ltr" [value]="s().organizeRoot" [placeholder]="defaultRoot()" (change)="patch({ organizeRoot: value($event) })" />
+            </div>
+          </div>
+        }
+
         <div class="setting column">
           <div class="setting-text">
             <span class="setting-name">{{ i18n.t('settings.categoryDirs') }}</span>
-            <span class="setting-desc">{{ i18n.t('settings.categoryDirsDesc') }}</span>
+            <span class="setting-desc">{{ i18n.t(s().organize ? 'settings.categoryDirsOrganizedDesc' : 'settings.categoryDirsDesc') }}</span>
           </div>
           <div class="table">
             @for (c of categories; track c) {
               <div class="table-row">
-                <span class="table-cat"><app-icon [name]="icons[c]" [size]="16" />{{ i18n.t('category.' + c) }}</span>
-                <input class="input small" type="text" dir="ltr" [value]="s().categoryDirs[c] ?? ''" [placeholder]="s().defaultDir" (change)="settings.setCategoryDir(c, value($event))" />
+                <span class="table-cat"><app-icon [name]="icons[c]" [size]="16" />{{ i18n.t(categoryLabel(c)) }}</span>
+                <input class="input small" type="text" dir="ltr" [value]="s().categoryDirs[c] ?? ''" [placeholder]="placeholderFor(c)" (change)="settings.setCategoryDir(c, value($event))" />
               </div>
             }
+            <div class="table-row">
+              <span class="table-cat"><app-icon name="magnet" [size]="16" />{{ i18n.t('settings.torrentsFolder') }}</span>
+              <input class="input small" type="text" dir="ltr" [value]="s().torrentsDir" [placeholder]="torrentPlaceholder()" (change)="patch({ torrentsDir: value($event) })" />
+            </div>
+          </div>
+          <div class="folder-actions">
+            <button appButton size="sm" variant="ghost" icon="retry" type="button" (click)="settings.restoreDefaultFolders()">{{ i18n.t('settings.restoreFolders') }}</button>
           </div>
         </div>
 
@@ -498,6 +529,12 @@ export function isValidProxyUrl(raw: string): boolean {
       gap: var(--space-2);
     }
 
+    .folder-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-block-start: var(--space-2);
+    }
+
     .table-row {
       display: grid;
       grid-template-columns: 160px 1fr;
@@ -830,6 +867,22 @@ export class SettingsPageComponent {
     }
   }
   protected readonly categories = CATEGORY_KEYS;
+  /** Where the category folders go when no root is chosen. */
+  protected readonly defaultRoot = computed(() => organizedRoot({ organizeRoot: '', defaultDir: this.s().defaultDir }));
+  protected readonly torrentPlaceholder = computed(() => {
+    const s = this.s();
+    return s.organize ? joinPath(organizedRoot(s), TORRENTS_FOLDER) : s.defaultDir;
+  });
+
+  /** What an empty category row means: its organised folder, or the default folder. */
+  protected placeholderFor(c: CategoryKey): string {
+    const s = this.s();
+    return s.organize ? joinPath(organizedRoot(s), CATEGORY_FOLDERS[c]) : s.defaultDir;
+  }
+
+  protected categoryLabel(c: CategoryKey): string {
+    return `category.${c}`;
+  }
   protected readonly icons = CATEGORY_ICONS;
   protected readonly Math = Math;
   /** The typed proxy URL was refused (not saved, so the engine keeps the last good one). */

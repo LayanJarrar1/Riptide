@@ -1,4 +1,4 @@
-import { CATEGORY_EXTENSIONS, CATEGORY_KEYS, categoryOf } from './download';
+import { CATEGORY_EXTENSIONS, CATEGORY_KEYS, categoryOf, categoryOfMime, detectCategory } from './download';
 
 /**
  * A literal copy of the extension table. If this spec fails you changed `CATEGORY_EXTENSIONS`:
@@ -45,5 +45,20 @@ describe('categories (shared table with riptide-core)', () => {
     expect(categoryOf('photo.jpeg')).toBe('images');
     expect(categoryOf('README')).toBe('other');
     expect(categoryOf('weird.xyz')).toBe('other');
+  });
+});
+
+describe('category from the server type', () => {
+  it('lets the type decide only when the name says nothing (same cases as Category::detect)', () => {
+    expect(detectCategory('clip.mp4', 'application/zip')).toBe('video');
+    expect(detectCategory('download', 'application/pdf')).toBe('documents');
+    expect(detectCategory('setup', 'application/x-msdownload')).toBe('programs');
+    expect(detectCategory('data.bin', 'application/octet-stream')).toBe('other');
+    expect(detectCategory('x', null)).toBe('other');
+    expect(detectCategory('song', 'AUDIO/MPEG')).toBe('music');
+    expect(detectCategory('report', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('documents');
+    expect(categoryOfMime('garbage')).toBeNull();
+    expect(categoryOfMime('text/html')).toBeNull();
+    expect(categoryOfMime('application/PDF; charset=binary')).toBe('documents');
   });
 });

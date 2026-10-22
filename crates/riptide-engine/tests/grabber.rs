@@ -30,6 +30,7 @@ async fn crawl_site_add_every_file_and_the_bytes_match() {
     let engine = Engine::open(EngineConfig {
         db_path: tmp.path().join("riptide.sqlite"),
         default_dir: tmp.path().join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();
@@ -127,6 +128,7 @@ async fn crawl_errors_and_cancellation_through_the_engine() {
     let engine = Engine::open(EngineConfig {
         db_path: tmp.path().join("riptide.sqlite"),
         default_dir: tmp.path().join("downloads"),
+        organize_new_install: false,
     })
     .await
     .unwrap();

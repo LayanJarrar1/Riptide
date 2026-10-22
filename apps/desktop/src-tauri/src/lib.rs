@@ -119,7 +119,9 @@ pub fn start_logging(filter: &str) -> Option<riptide_log::LogGuard> {
 }
 
 /// Where the engine keeps its database and where downloads go by default: the user's
-/// Downloads folder, or `<data>/downloads` when the OS does not report one.
+/// Downloads folder (on Windows the Downloads known folder, so a folder moved in its
+/// properties or redirected to OneDrive is followed), or `<data>/downloads` when the OS does
+/// not report one.
 fn engine_config() -> Result<EngineConfig, riptide_log::Error> {
     let paths = riptide_log::Paths::resolve()?;
     paths.ensure_dirs()?;
@@ -128,6 +130,8 @@ fn engine_config() -> Result<EngineConfig, riptide_log::Error> {
     Ok(EngineConfig {
         db_path: paths.db_path,
         default_dir,
+        // a new installation gets Downloads/Riptide/<category> folders, made once
+        organize_new_install: true,
     })
 }
 

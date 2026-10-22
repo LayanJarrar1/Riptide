@@ -179,6 +179,7 @@ mod tests {
         Engine::open(EngineConfig {
             db_path: dir.path().join("riptide.sqlite"),
             default_dir: dir.path().join("downloads"),
+            organize_new_install: false,
         })
         .await
         .unwrap()

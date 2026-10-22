@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
 }
 
 describe('SettingsService', () => {
-  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, torrent: { seeding: false, seed_ratio_percent: 100, seed_minutes: 1440, upload_limit: null, dht: true, listen_port: 0 } };
+  const engine: EngineSettings = { default_dir: 'D:\\Engine', connections: 12, per_host: 6, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, organize: false, organize_root: '', global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, torrent: { seeding: false, seed_ratio_percent: 100, seed_minutes: 1440, upload_limit: null, dht: true, listen_port: 0 } };
   let calls: Call[];
 
   function configure(tauri: boolean): SettingsService {
@@ -90,7 +90,7 @@ describe('SettingsService', () => {
     const writes = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(writes.length).toBe(1);
     expect(writes[0].args).toEqual({
-      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, torrent: { seeding: false, seed_ratio_percent: 100, seed_minutes: 1440, upload_limit: null, dht: true, listen_port: 0 } },
+      settings: { default_dir: 'D:\\Engine', connections: 4, per_host: 2, max_active: 5, user_agent: 'Riptide/1', category_dirs: { video: 'D:\\Engine\\Video' }, organize: false, organize_root: '', global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, torrent: { seeding: false, seed_ratio_percent: 100, seed_minutes: 1440, upload_limit: null, dht: true, listen_port: 0 } },
     });
     // a UI-only change does not reach the engine
     service.patch({ closeToTray: false });
@@ -107,6 +107,38 @@ describe('SettingsService', () => {
     const again = calls.filter((c) => c.cmd === 'set_engine_settings');
     expect(again.length).toBe(2);
     expect((again[1].args?.['settings'] as EngineSettings).category_dirs).toEqual({ images: 'D:\\Pics' });
+  });
+
+  it('puts a category in its organised folder, honours overrides, and restores the defaults', async () => {
+    const service = configure(true);
+    await service.engineLoaded;
+    TestBed.tick();
+    // an engine that predates organising: everything goes to the default folder or an override
+    expect(service.settings().organize).toBeFalse();
+    expect(service.dirFor('documents')).toBe('D:\\Engine');
+    expect(service.dirFor('video')).toBe('D:\\Engine\\Video');
+    expect(service.torrentDir()).toBe('D:\\Engine');
+
+    service.patch({ organize: true });
+    expect(service.dirFor('documents')).toBe('D:\\Engine\\Riptide\\Documents');
+    expect(service.dirFor('programs')).toBe('D:\\Engine\\Riptide\\Applications');
+    expect(service.dirFor('video')).toBe('D:\\Engine\\Video');
+    expect(service.torrentDir()).toBe('D:\\Engine\\Riptide\\Torrents');
+    service.patch({ organizeRoot: 'E:\\Sorted\\', torrentsDir: 'E:\\Seeds' });
+    expect(service.dirFor('music')).toBe('E:\\Sorted\\Audio');
+    expect(service.torrentDir()).toBe('E:\\Seeds');
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const sent = calls.filter((c) => c.cmd === 'set_engine_settings').pop()?.args?.['settings'] as EngineSettings;
+    expect(sent.organize).toBeTrue();
+    expect(sent.organize_root).toBe('E:\\Sorted\\');
+    expect(sent.category_dirs).toEqual({ video: 'D:\\Engine\\Video', torrents: 'E:\\Seeds' });
+
+    service.restoreDefaultFolders();
+    expect(service.settings().categoryDirs).toEqual({});
+    expect(service.dirFor('video')).toBe('D:\\Engine\\Riptide\\Videos');
+    expect(service.torrentDir()).toBe('D:\\Engine\\Riptide\\Torrents');
   });
 
   it('Mark-of-the-Web is on by default and turning it off reaches the engine', async () => {

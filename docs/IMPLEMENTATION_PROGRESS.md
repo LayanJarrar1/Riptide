@@ -3,7 +3,7 @@
 Checkpoint for the multi-phase upgrade (downloads table, folders, add dialog, file manager, AI
 research). Update this file at the end of every working session.
 
-Branch: `claude/clever-lovelace-dvz0r8`
+Branch: `claude/clever-lovelace-dvz0r8` (restarted from `main` after each merge)
 
 ## Phase 1 — main download experience
 
@@ -15,11 +15,20 @@ Branch: `claude/clever-lovelace-dvz0r8`
 | 4 | Details panel responsiveness | Done | Docks when the list keeps ≥ 600 px, otherwise overlays with a scrim. |
 | 5 | Global search | Improved | Search box already in the top bar; now matches status/category names (en/ar), folds Arabic, debounced for ≥ 5,000 rows. |
 
-## Phases 2–4
+Phase 1 merged in PR #66.
 
-Not started: categorized folders, Add Download redesign / quality dropdown, file manager and
-dual pane, AI research chat (Angular 20 app — Astryx targets React 19, so its patterns would be
-reproduced in Angular rather than installed).
+## Phase 2 — download management
+
+| # | Feature | State | Notes |
+| --- | --- | --- | --- |
+| 6 | Category folders | Done | `EngineSettings.organize` / `organize_root`, `dir_for` / `torrent_dir`, `"torrents"` key in `category_dirs`; first-run folder creation behind `EngineConfig::organize_new_install` (desktop only); `Category::detect` adds the `Content-Type` fallback. Settings UI with restore defaults. |
+| 7 | Add Download redesign | Done | Standard-width dialog, compact video card, "More options" with a summary of non-default choices. |
+| 8 | Best quality by default | Done | Quality dropdown of the engine's detected choices; Best preferred explicitly. |
+
+## Phases 3–4
+
+Not started: file manager and dual pane, AI research chat (Angular 20 app — Astryx targets
+React 19, so its patterns would be reproduced in Angular rather than installed).
 
 ## Test evidence
 
@@ -36,6 +45,5 @@ Rust (Linux container): `cargo fmt --check` and clippy `-D warnings` on core/sto
 
 ## Next action
 
-Phase 2, item 6: categorized download folders. Start from `EngineSettings::default_dir` and the
-category assignment in `crates/riptide-engine/src/lib.rs` (`add`), and the Windows Known Folder
-lookup in `apps/desktop/src-tauri`.
+Phase 3, item 9: file manager basics. Needs new Tauri commands for listing, rename, copy, move,
+delete-to-Recycle-Bin and properties (path-checked against traversal), then an Angular page.

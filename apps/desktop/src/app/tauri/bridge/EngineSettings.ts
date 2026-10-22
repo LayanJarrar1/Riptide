@@ -31,10 +31,22 @@ max_active: number,
 user_agent: string | null, 
 /**
  * Folder per category key (`"video"`, `"documents"`, … — see
- * [`riptide_core::Category::key`]). A missing or empty entry means `default_dir`.
- * Only absolute paths under known keys survive [`Engine::set_settings`].
+ * [`riptide_core::Category::key`]), plus `"torrents"` for torrents. A missing or empty entry
+ * means the organised folder (when `organize` is on) or `default_dir`. Only absolute paths
+ * under known keys survive [`Engine::set_settings`].
  */
 category_dirs: { [key in string]?: string }, 
+/**
+ * Sort new downloads into one folder per category under [`Self::organize_root`]
+ * (`Riptide/Documents`, `Riptide/Videos`, …). On for a new installation; off for settings
+ * saved before it existed, so an upgrade does not change where files go. Existing files are
+ * never moved.
+ */
+organize: boolean, 
+/**
+ * Root of the organised folders; empty means `<default_dir>/Riptide`.
+ */
+organize_root: string, 
 /**
  * Cap in bytes per second across all downloads together; `None` = unlimited. Applies to
  * running downloads within a second.

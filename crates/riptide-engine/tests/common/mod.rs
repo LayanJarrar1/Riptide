@@ -32,6 +32,7 @@ impl World {
         EngineConfig {
             db_path: self.dir.path().join("riptide.sqlite"),
             default_dir: self.downloads(),
+            organize_new_install: false,
         }
     }
 

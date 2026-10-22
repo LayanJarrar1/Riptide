@@ -639,7 +639,7 @@ impl Engine {
         dir: Option<PathBuf>,
     ) -> Result<TorrentPreviewInfo> {
         let (rt, _busy) = self.acquire_torrents().await?;
-        let dir = dir.unwrap_or_else(|| PathBuf::from(self.settings().default_dir));
+        let dir = dir.unwrap_or_else(|| self.settings().torrent_dir());
         let opts = AddOptions {
             dir: Some(dir.clone()),
             reserved: self.http_name_claims().await?,
@@ -744,10 +744,7 @@ impl Engine {
         })?;
 
         let settings = self.settings();
-        let dir = add
-            .dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from(&settings.default_dir));
+        let dir = add.dir.clone().unwrap_or_else(|| settings.torrent_dir());
         let opts = AddOptions {
             dir: Some(dir.clone()),
             only_files: to_selection(&add.only_files),
@@ -877,7 +874,7 @@ impl Engine {
         };
         let (name, originals) = riptide_torrent::meta::original_layout(&preview.torrent_bytes)?;
         let multi = preview.files.len() > 1;
-        let dir = dir.unwrap_or_else(|| PathBuf::from(self.settings().default_dir));
+        let dir = dir.unwrap_or_else(|| self.settings().torrent_dir());
         let mut out = WebSeedAdded::default();
         for (i, f) in preview.files.iter().enumerate() {
             let chosen = only_files

@@ -73,6 +73,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 mod torrent;
 
+use riptide_core::category::TORRENTS_FOLDER;
 use riptide_core::{
     Category, Clock, Download, DownloadId, DownloadKind, DownloadRequest, DownloadState, Event,
     MediaInfo, MediaSelection, QueueId, Secrets, Segment,
@@ -138,6 +139,9 @@ pub enum Error {
     Internal(String),
 }
 
+/// `category_dirs` key of the torrents folder (not a [`Category`]: a torrent may hold anything).
+pub const TORRENTS_KEY: &str = "torrents";
+
 /// `Result` with this crate's [`Error`].
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -161,10 +165,20 @@ pub struct EngineSettings {
     /// `User-Agent` for requests that do not carry a browser's.
     pub user_agent: Option<String>,
     /// Folder per category key (`"video"`, `"documents"`, … — see
-    /// [`riptide_core::Category::key`]). A missing or empty entry means `default_dir`.
-    /// Only absolute paths under known keys survive [`Engine::set_settings`].
+    /// [`riptide_core::Category::key`]), plus `"torrents"` for torrents. A missing or empty entry
+    /// means the organised folder (when `organize` is on) or `default_dir`. Only absolute paths
+    /// under known keys survive [`Engine::set_settings`].
     #[serde(default)]
     pub category_dirs: BTreeMap<String, String>,
+    /// Sort new downloads into one folder per category under [`Self::organize_root`]
+    /// (`Riptide/Documents`, `Riptide/Videos`, …). On for a new installation; off for settings
+    /// saved before it existed, so an upgrade does not change where files go. Existing files are
+    /// never moved.
+    #[serde(default)]
+    pub organize: bool,
+    /// Root of the organised folders; empty means `<default_dir>/Riptide`.
+    #[serde(default)]
+    pub organize_root: String,
     /// Cap in bytes per second across all downloads together; `None` = unlimited. Applies to
     /// running downloads within a second.
     #[serde(default)]
@@ -260,13 +274,53 @@ impl EngineSettings {
     }
 
     /// Where a download of `category` goes when the request names no folder: the category's
-    /// folder if one is set, else `default_dir`.
+    /// own folder if the user set one, else its organised folder (`organize` on), else
+    /// `default_dir`.
     pub fn dir_for(&self, category: Category) -> PathBuf {
+        self.custom_dir(category.key()).unwrap_or_else(|| {
+            if self.organize {
+                self.organized_root().join(category.folder_name())
+            } else {
+                PathBuf::from(&self.default_dir)
+            }
+        })
+    }
+
+    /// Where a torrent goes when the request names no folder; see [`Self::dir_for`].
+    pub fn torrent_dir(&self) -> PathBuf {
+        self.custom_dir(TORRENTS_KEY).unwrap_or_else(|| {
+            if self.organize {
+                self.organized_root().join(TORRENTS_FOLDER)
+            } else {
+                PathBuf::from(&self.default_dir)
+            }
+        })
+    }
+
+    /// The root of the organised folders: `organize_root`, else `<default_dir>/Riptide`.
+    pub fn organized_root(&self) -> PathBuf {
+        let root = self.organize_root.trim();
+        if root.is_empty() {
+            Path::new(&self.default_dir).join("Riptide")
+        } else {
+            PathBuf::from(root)
+        }
+    }
+
+    /// Every organised folder: one per category and one for torrents.
+    pub fn organized_dirs(&self) -> Vec<PathBuf> {
+        Category::ALL
+            .into_iter()
+            .map(|c| self.dir_for(c))
+            .chain(std::iter::once(self.torrent_dir()))
+            .collect()
+    }
+
+    fn custom_dir(&self, key: &str) -> Option<PathBuf> {
         self.category_dirs
-            .get(category.key())
+            .get(key)
             .filter(|d| !d.trim().is_empty())
             .map(|d| PathBuf::from(d.trim()))
-            .unwrap_or_else(|| PathBuf::from(&self.default_dir))
     }
 
     fn sanitized(mut self) -> Self {
@@ -280,12 +334,19 @@ impl EngineSettings {
             .into_iter()
             .filter_map(|(key, dir)| {
                 let dir = dir.trim();
-                (Category::from_key(&key).is_some()
+                ((Category::from_key(&key).is_some() || key == TORRENTS_KEY)
                     && !dir.is_empty()
                     && Path::new(dir).is_absolute())
                 .then(|| (key, dir.to_owned()))
             })
             .collect();
+        // the organised root is an absolute folder or "the default" (empty)
+        let root = self.organize_root.trim();
+        self.organize_root = if Path::new(root).is_absolute() {
+            root.to_owned()
+        } else {
+            String::new()
+        };
         // 0 means unlimited, as everywhere else
         self.global_speed_limit = self.global_speed_limit.filter(|&l| l > 0);
         self.proxy.url = self.proxy.url.trim().to_string();
@@ -317,6 +378,8 @@ impl Default for EngineSettings {
             max_active: 3,
             user_agent: None,
             category_dirs: BTreeMap::new(),
+            organize: false,
+            organize_root: String::new(),
             global_speed_limit: None,
             proxy: ProxySettings::default(),
             mark_of_the_web: true,
@@ -353,6 +416,9 @@ pub struct EngineConfig {
     pub db_path: PathBuf,
     /// Default download folder for a fresh settings row.
     pub default_dir: PathBuf,
+    /// On a new installation (no settings saved yet), turn on [`EngineSettings::organize`] and
+    /// create the organised folders once. The desktop app sets it; tools and tests do not.
+    pub organize_new_install: bool,
 }
 
 /// What `add` left to the engine for a media record.
@@ -374,6 +440,17 @@ enum StopReason {
     Restart,
     /// The queue was stopped: back to `Queued` (via `Paused`), so starting the queue resumes it.
     Requeue,
+}
+
+/// Creates the organised folders of a new installation. Best effort: a folder that cannot be
+/// created (permissions, a file in the way) is logged and made later by the download that
+/// needs it. Never touches what is already there.
+fn create_organized_dirs(settings: &EngineSettings) {
+    for dir in settings.organized_dirs() {
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            tracing::warn!(dir = %dir.display(), error = %e, "could not create a download folder");
+        }
+    }
 }
 
 /// Per-download flags kept in the `settings` table (the record has no columns for them).
@@ -842,18 +919,32 @@ impl Engine {
         let store = Arc::new(Mutex::new(store));
 
         let default_dir = config.default_dir.clone();
-        let settings = db(&store, move |s| {
-            let loaded = s
-                .setting(EngineSettings::KEY)?
+        let organize_new_install = config.organize_new_install;
+        let (settings, first_run) = db(&store, move |s| {
+            let saved = s.setting(EngineSettings::KEY)?;
+            let first_run = saved.is_none();
+            let mut loaded = saved
                 .and_then(|raw| serde_json::from_str::<EngineSettings>(&raw).ok())
                 .unwrap_or_else(|| EngineSettings::with_default_dir(&default_dir));
+            if first_run && organize_new_install {
+                loaded.organize = true;
+            }
             let mut loaded = loaded.sanitized();
             if loaded.default_dir.is_empty() {
                 loaded.default_dir = default_dir.to_string_lossy().into_owned();
             }
-            Ok(loaded)
+            if first_run && organize_new_install {
+                // saved now, so the folders below are created once, not at every start
+                let raw = serde_json::to_string(&loaded)
+                    .map_err(|e| riptide_store::Error::Corrupt(e.to_string()))?;
+                s.set_setting(EngineSettings::KEY, &raw)?;
+            }
+            Ok((loaded, first_run))
         })
         .await?;
+        if first_run && settings.organize {
+            create_organized_dirs(&settings);
+        }
 
         // crash recovery: anything still "active" belongs back in the queue
         db(&store, |s| {
@@ -2027,7 +2118,7 @@ impl Engine {
             record.filename = probed.filename.clone();
             // the server's name decides the category; a category-chosen folder follows it
             if auto_category {
-                let category = Category::from_filename(&record.filename);
+                let category = Category::detect(&record.filename, record.content_type.as_deref());
                 let category_id = db(store, move |s| category_row_id(s, category)).await?;
                 if category_id.is_some() {
                     record.category_id = category_id;
