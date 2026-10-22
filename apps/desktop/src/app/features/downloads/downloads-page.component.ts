@@ -1,4 +1,5 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -14,9 +15,22 @@ import {
 
 import { FormatService } from '../../core/format.service';
 import { DUR, MotionService } from '../../core/motion.service';
+import { PREFERENCE_STORE } from '../../core/preferences';
 import { finalPath } from '../../data/bridge-mapping';
+import {
+  clampWidth,
+  ColumnKey,
+  ColumnWidths,
+  gridVars,
+  loadColumnWidths,
+  loadHiddenColumns,
+  MAX_COLUMN_WIDTH,
+  OPTIONAL_COLUMNS,
+  saveColumnWidths,
+  saveHiddenColumns,
+} from '../../data/column-widths';
 import { DownloadEngine } from '../../data/download-engine';
-import { DownloadRow, DownloadsStore, SortKey } from '../../data/downloads.store';
+import { DownloadRow, DownloadsStore } from '../../data/downloads.store';
 import { navFromKey, scrollToReveal } from '../../data/list-nav';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
@@ -40,7 +54,7 @@ import { RestartDialogComponent } from './restart-dialog.component';
 
 /** Table columns in order; `grow` ones share the leftover width. */
 interface Column {
-  readonly key: SortKey;
+  readonly key: ColumnKey;
   readonly labelKey: string;
   readonly align: 'start' | 'end';
 }
@@ -50,8 +64,11 @@ const COLUMNS: readonly Column[] = [
   { key: 'size', labelKey: 'column.size', align: 'end' },
   { key: 'progress', labelKey: 'column.progress', align: 'start' },
   { key: 'speed', labelKey: 'column.speed', align: 'end' },
+  { key: 'avgSpeed', labelKey: 'column.avgSpeed', align: 'end' },
   { key: 'eta', labelKey: 'column.eta', align: 'end' },
+  { key: 'duration', labelKey: 'column.duration', align: 'end' },
   { key: 'status', labelKey: 'column.status', align: 'start' },
+  { key: 'category', labelKey: 'column.category', align: 'start' },
   { key: 'added', labelKey: 'column.added', align: 'start' },
 ];
 
@@ -63,6 +80,12 @@ const OVERSCAN = 6;
 const STAGGER_ROWS = 12;
 /** Skeleton rows shown while the engine's list is still loading. */
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5] as const;
+/** The list keeps at least this much width beside a docked details drawer; below it the drawer overlays. */
+const MIN_LIST_BESIDE_DRAWER = 600;
+/** Fallback for `--drawer-width` (tokens.css) when the style cannot be read. */
+const DRAWER_PX = 420;
+/** Arrow-key step when resizing a column from the keyboard (Shift: four times as much). */
+const RESIZE_STEP = 16;
 /** A row added during the session counts as "fresh" (slides in) for this long. */
 const FRESH_MS = 600;
 
@@ -91,7 +114,8 @@ const FRESH_MS = 600;
     RestartDialogComponent,
   ],
   host: {
-    '[class.has-details]': 'store.details() !== null',
+    '[class.has-details]': 'store.details() !== null && !detailsOverlay()',
+    '[class.details-overlay]': 'store.details() !== null && detailsOverlay()',
     '(keydown)': 'onKey($event)',
   },
   template: `
@@ -136,26 +160,46 @@ const FRESH_MS = 600;
         class="grid"
         role="grid"
         tabindex="0"
+        [style]="gridStyle()"
         [attr.aria-label]="i18n.t('view.' + store.view())"
         [attr.aria-rowcount]="store.rows().length + 1"
         [attr.aria-multiselectable]="true"
         [attr.aria-activedescendant]="activeRowId()"
       >
-        <div class="header" role="row" [class.boot]="ui.booting()">
-          @for (c of columns; track c.key) {
-            <button
-              type="button"
+        <div #header class="header" role="row" [class.boot]="ui.booting()" [class.is-resizing]="resizing() !== null" (contextmenu)="onHeaderContext($event)">
+          @for (c of visibleColumns(); track c.key) {
+            <div
               role="columnheader"
-              [class]="'th th-' + c.key"
-              [class.is-end]="c.align === 'end'"
-              [class.is-sorted]="store.sortKey() === c.key"
+              [class]="'hc hc-' + c.key"
               [attr.aria-sort]="store.sortKey() === c.key ? (store.sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'"
-              [attr.title]="store.sortKey() === c.key ? i18n.t(store.sortDir() === 'asc' ? 'sort.asc' : 'sort.desc') : i18n.t('sort.by').replace('{column}', i18n.t(c.labelKey))"
-              (click)="store.sortBy(c.key)"
             >
-              <span>{{ i18n.t(c.labelKey) }}</span>
-              <app-icon class="sort-icon" name="arrowDown" [size]="12" [class.is-asc]="store.sortDir() === 'asc'" />
-            </button>
+              <button
+                type="button"
+                [class]="'th th-' + c.key"
+                [class.is-end]="c.align === 'end'"
+                [class.is-sorted]="store.sortKey() === c.key"
+                [attr.title]="store.sortKey() === c.key ? i18n.t(store.sortDir() === 'asc' ? 'sort.asc' : 'sort.desc') : i18n.t('sort.by').replace('{column}', i18n.t(c.labelKey))"
+                (click)="store.sortBy(c.key)"
+              >
+                <span class="th-label">{{ i18n.t(c.labelKey) }}</span>
+                <app-icon class="sort-icon" name="arrowDown" [size]="12" [class.is-asc]="store.sortDir() === 'asc'" />
+              </button>
+              <span
+                class="col-resize"
+                role="separator"
+                tabindex="0"
+                aria-orientation="vertical"
+                [class.is-active]="resizing() === c.key"
+                [attr.aria-label]="i18n.t('column.resize').replace('{column}', i18n.t(c.labelKey))"
+                [attr.title]="i18n.t('column.resizeHint')"
+                [attr.aria-valuenow]="columnWidths()[c.key] ?? null"
+                [attr.aria-valuemin]="0"
+                [attr.aria-valuemax]="maxColumnWidth"
+                (pointerdown)="startResize($event, c.key)"
+                (dblclick)="resetColumn(c.key)"
+                (keydown)="onResizeKey($event, c.key)"
+              ></span>
+            </div>
           }
           <span class="th th-actions" role="columnheader"></span>
         </div>
@@ -203,6 +247,7 @@ const FRESH_MS = 600;
                 [attr.aria-rowindex]="window().start + i + 2"
                 [class.is-active]="store.cursor() === row.d.id"
                 [row]="row"
+                [hidden]="hiddenColumns()"
                 [selected]="store.selected().has(row.d.id)"
                 [open]="store.detailsId() === row.d.id"
                 [staggerIndex]="ui.booting() && window().top === 0 && i < staggerRows ? i : null"
@@ -230,11 +275,15 @@ const FRESH_MS = 600;
 
     @defer (when store.details() !== null; prefetch on idle) {
       @if (store.details(); as details) {
-        <app-download-details class="drawer" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
+        @if (detailsOverlay()) {
+          <div class="scrim" aria-hidden="true" (click)="store.closeDetails()"></div>
+        }
+        <app-download-details class="drawer" [class.is-overlay]="detailsOverlay()" [row]="details" (closed)="store.closeDetails()" (action)="act(details, $event)" />
       }
     }
 
     <app-menu [open]="menu().open" [items]="menuItems()" [x]="menu().x" [y]="menu().y" (selected)="onMenu($event)" (closed)="closeMenu()" />
+    <app-menu [open]="headerMenu() !== null" [items]="headerMenuItems()" [x]="headerMenu()?.x ?? 0" [y]="headerMenu()?.y ?? 0" (selected)="onHeaderMenu($event)" (closed)="headerMenu.set(null)" />
 
     <app-dialog [open]="removal() !== null" [title]="i18n.t('remove.title')" (closed)="removal.set(null)">
       @if (removal(); as rows) {
@@ -262,6 +311,7 @@ const FRESH_MS = 600;
   `,
   styles: `
     :host {
+      position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1fr) 0;
       block-size: 100%;
@@ -394,14 +444,9 @@ const FRESH_MS = 600;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       min-block-size: 0;
-      /* rows and header share these; the row component reads them through inheritance and
-         switches to the compact set in the same container query (see download-row). The full
-         set needs 1034px plus the scrollbar gutter, so it fits a 1280px window with the sidebar
-         open; --grid-break is where it stops fitting. */
-      --grid-columns: minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 84px 172px 104px 64px;
-      --grid-columns-compact: minmax(180px, 2fr) 128px minmax(120px, 1.4fr) 92px 150px 60px;
-      --grid-columns-narrow: minmax(160px, 2fr) 110px minmax(100px, 1.4fr) 140px 52px;
-      --grid-columns-tiny: minmax(140px, 1fr) minmax(90px, 1fr) 44px;
+      /* rows, skeleton and header read --grid-columns(-compact|-narrow|-tiny) and --grid-min(...)
+         from the [style] binding (see data/column-widths.ts: the defaults plus the user's widths);
+         the rows switch set in the same container queries as the header (see download-row). */
       container-type: inline-size;
       container-name: grid;
     }
@@ -419,10 +464,20 @@ const FRESH_MS = 600;
       scrollbar-gutter: stable;
     }
 
+    /* A header cell: the sort button fills it, the resize grip sits on its trailing edge. */
+    .hc {
+      position: relative;
+      display: flex;
+      min-inline-size: 0;
+      block-size: 100%;
+    }
+
     .th {
       display: inline-flex;
+      flex: 1 1 auto;
       align-items: center;
       gap: 4px;
+      min-inline-size: 0;
       block-size: 100%;
       padding-inline: var(--space-2);
       border: 0;
@@ -436,8 +491,54 @@ const FRESH_MS = 600;
       transition: color var(--dur-1) var(--ease-standard);
     }
 
-    .th:first-child {
+    .hc-name .th {
       padding-inline-start: 0;
+    }
+
+    .th-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Drag (or arrow keys when focused) to resize; double-click restores the default width.
+       The grip is wider than the hairline it draws so it is easy to catch. */
+    .col-resize {
+      position: absolute;
+      z-index: 1;
+      inset-block: 0;
+      inset-inline-end: -5px;
+      inline-size: 10px;
+      cursor: col-resize;
+      touch-action: none;
+    }
+
+    .col-resize::after {
+      content: '';
+      position: absolute;
+      inset-block: 8px;
+      inset-inline-start: 4.5px;
+      inline-size: 1px;
+      background: var(--color-border);
+      transition:
+        background-color var(--dur-1) var(--ease-standard),
+        inset-block var(--dur-1) var(--ease-standard);
+    }
+
+    .col-resize:hover::after,
+    .col-resize:focus-visible::after,
+    .col-resize.is-active::after {
+      inset-block: 4px;
+      inline-size: 2px;
+      background: var(--color-accent);
+    }
+
+    .col-resize:focus-visible {
+      outline: none;
+    }
+
+    .header.is-resizing,
+    .header.is-resizing .th {
+      cursor: col-resize;
     }
 
     .th:hover {
@@ -488,8 +589,15 @@ const FRESH_MS = 600;
         grid-template-columns: var(--grid-columns-compact);
       }
 
-      .th-eta,
-      .th-added,
+      .sk-row {
+        min-inline-size: var(--grid-min-compact);
+      }
+
+      .hc-eta,
+      .hc-added,
+      .hc-avgSpeed,
+      .hc-duration,
+      .hc-category,
       .sk-eta,
       .sk-added {
         display: none;
@@ -502,7 +610,11 @@ const FRESH_MS = 600;
         grid-template-columns: var(--grid-columns-narrow);
       }
 
-      .th-speed,
+      .sk-row {
+        min-inline-size: var(--grid-min-narrow);
+      }
+
+      .hc-speed,
       .sk-speed {
         display: none;
       }
@@ -514,8 +626,12 @@ const FRESH_MS = 600;
         grid-template-columns: var(--grid-columns-tiny);
       }
 
-      .th-size,
-      .th-status,
+      .sk-row {
+        min-inline-size: var(--grid-min-tiny);
+      }
+
+      .hc-size,
+      .hc-status,
       .sk-size,
       .sk-status {
         display: none;
@@ -532,9 +648,11 @@ const FRESH_MS = 600;
       outline-offset: -2px;
     }
 
+    /* Sideways scrolling only appears when the user has widened columns past the window; the
+       header follows the viewport's scrollLeft (see the scroll listener). */
     .viewport {
       overflow-y: auto;
-      overflow-x: hidden;
+      overflow-x: auto;
       outline-offset: -2px;
       scrollbar-gutter: stable;
     }
@@ -547,6 +665,7 @@ const FRESH_MS = 600;
     .sk-row {
       display: grid;
       grid-template-columns: var(--grid-columns);
+      min-inline-size: var(--grid-min);
       align-items: center;
       block-size: var(--row-height);
       padding-inline: var(--space-3);
@@ -651,6 +770,31 @@ const FRESH_MS = 600;
       animation: drawer-in var(--dur-3) var(--ease-emphasized-out) both;
     }
 
+    /* A window too narrow to dock the drawer beside a usable table: it slides over the list
+       instead, which keeps its full width, columns and scroll position underneath. */
+    .drawer.is-overlay {
+      position: absolute;
+      z-index: var(--z-raised);
+      inset-block: 0;
+      inset-inline-end: 0;
+      inline-size: min(var(--drawer-width), calc(100% - 48px));
+      box-shadow: var(--shadow-3);
+    }
+
+    .scrim {
+      position: absolute;
+      z-index: var(--z-raised);
+      inset: 0;
+      background: rgb(0 0 0 / 18%);
+      animation: scrim-in var(--dur-2) var(--ease-standard) both;
+    }
+
+    @keyframes scrim-in {
+      from {
+        opacity: 0;
+      }
+    }
+
     @keyframes drawer-in {
       from {
         opacity: 0;
@@ -726,15 +870,48 @@ export class DownloadsPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly gridRef = viewChild<ElementRef<HTMLElement>>('grid');
+  private readonly headerRef = viewChild<ElementRef<HTMLElement>>('header');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly prefs = inject(PREFERENCE_STORE);
   private readonly zone = inject(NgZone);
   private readonly settings = inject(SettingsService);
 
-  protected readonly columns = COLUMNS;
   protected readonly skeletonRows = SKELETON_ROWS;
   protected readonly staggerRows = STAGGER_ROWS;
 
   private readonly scrollTop = signal(0);
   private readonly viewportHeight = signal(600);
+
+  /** Width of the page (list plus drawer), for choosing a docked or an overlaid drawer. */
+  private readonly hostWidth = signal(Number.POSITIVE_INFINITY);
+  private readonly drawerWidth = signal(DRAWER_PX);
+
+  /** Whether the details drawer slides over the list rather than taking a column beside it. */
+  protected readonly detailsOverlay = computed(() => this.hostWidth() < this.drawerWidth() + MIN_LIST_BESIDE_DRAWER);
+
+  protected readonly maxColumnWidth = MAX_COLUMN_WIDTH;
+  /** The user's column widths (persisted); unset columns keep their responsive defaults. */
+  protected readonly columnWidths = signal<ColumnWidths>({});
+  /** Columns the user turned off (persisted); the optional new ones start off. */
+  protected readonly hiddenColumns = signal<ReadonlySet<ColumnKey>>(new Set());
+  protected readonly visibleColumns = computed(() => {
+    const hidden = this.hiddenColumns();
+    return COLUMNS.filter((c) => !hidden.has(c.key));
+  });
+  /** Track lists and minimum widths for the header, skeleton and rows. */
+  protected readonly gridStyle = computed(() => gridVars(this.columnWidths(), this.hiddenColumns()));
+  /** The column being dragged, for the grip's active look. */
+  protected readonly resizing = signal<ColumnKey | null>(null);
+  /** The header's context menu (reset widths), at a viewport point. */
+  protected readonly headerMenu = signal<{ readonly x: number; readonly y: number } | null>(null);
+  protected readonly headerMenuItems = computed<readonly MenuItem[]>(() => {
+    const hidden = this.hiddenColumns();
+    const toggles = OPTIONAL_COLUMNS.map((key): MenuItem => {
+      const column = COLUMNS.find((c) => c.key === key);
+      return { id: `toggle:${key}`, label: this.i18n.t(column?.labelKey ?? key), ...(hidden.has(key) ? {} : { icon: 'check' }) };
+    });
+    return [...toggles, { id: 'resetWidths', label: this.i18n.t('column.resetWidths'), icon: 'retry', separator: true, disabled: Object.keys(this.columnWidths()).length === 0 }];
+  });
 
   /** Row height for the display density chosen in the View menu. */
   protected readonly rowHeight = computed(() => ROW_HEIGHTS[this.settings.settings().density]);
@@ -911,6 +1088,25 @@ export class DownloadsPageComponent {
   private lastListKey: string | null = null;
 
   constructor() {
+    this.columnWidths.set(loadColumnWidths(this.prefs));
+    this.hiddenColumns.set(loadHiddenColumns(this.prefs));
+
+    // the page's own width decides where the details drawer goes; measured, not guessed from the
+    // window, because the sidebar's width varies
+    afterNextRender(() => {
+      const el = this.host.nativeElement;
+      const drawer = Number.parseFloat(getComputedStyle(el).getPropertyValue('--drawer-width'));
+      if (Number.isFinite(drawer) && drawer > 0) {
+        this.drawerWidth.set(drawer);
+      }
+      this.hostWidth.set(el.clientWidth);
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => this.hostWidth.set(el.clientWidth));
+        ro.observe(el);
+        this.destroyRef.onDestroy(() => ro.disconnect());
+      }
+    });
+
     // the first list to arrive is the baseline: nothing in it is "new"
     effect(() => {
       const loaded = this.engine.loaded();
@@ -941,7 +1137,14 @@ export class DownloadsPageComponent {
       if (!el) {
         return;
       }
-      const onScroll = (): void => this.scrollTop.set(el.scrollTop);
+      const onScroll = (): void => {
+        this.scrollTop.set(el.scrollTop);
+        // widened columns scroll sideways: the header follows the rows
+        const header = this.headerRef()?.nativeElement;
+        if (header && header.scrollLeft !== el.scrollLeft) {
+          header.scrollLeft = el.scrollLeft;
+        }
+      };
       this.zone.runOutsideAngular(() => el.addEventListener('scroll', onScroll, { passive: true }));
       onCleanup(() => el.removeEventListener('scroll', onScroll));
       if (typeof ResizeObserver !== 'undefined') {
@@ -1249,6 +1452,103 @@ export class DownloadsPageComponent {
     this.toasts.show('info', this.i18n.t('toast.restarted').replace('{name}', d.filename));
   }
 
+  /** Drag a column's grip: the column follows the pointer (mirrored in RTL), saved on release. */
+  protected startResize(event: PointerEvent, key: ColumnKey): void {
+    if (event.button !== 0) {
+      return;
+    }
+    const grip = event.currentTarget as HTMLElement;
+    const cell = grip.parentElement;
+    if (cell === null) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = cell.getBoundingClientRect().width;
+    const sign = getComputedStyle(cell).direction === 'rtl' ? -1 : 1;
+    grip.setPointerCapture?.(event.pointerId);
+    this.resizing.set(key);
+    const move = (e: PointerEvent): void => this.setColumnWidth(key, startWidth + (e.clientX - startX) * sign);
+    const end = (): void => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', end);
+      grip.removeEventListener('pointercancel', end);
+      this.resizing.set(null);
+      saveColumnWidths(this.prefs, this.columnWidths());
+    };
+    this.zone.runOutsideAngular(() => {
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', end);
+      grip.addEventListener('pointercancel', end);
+    });
+  }
+
+  /** Arrow keys on a focused grip widen or narrow the column; Enter or Delete restores it. */
+  protected onResizeKey(event: KeyboardEvent, key: ColumnKey): void {
+    const grip = event.currentTarget as HTMLElement;
+    const cell = grip.parentElement;
+    if (cell === null) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      this.resetColumn(key);
+      return;
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+    event.preventDefault();
+    const rtl = getComputedStyle(cell).direction === 'rtl';
+    const wider = (event.key === 'ArrowRight') !== rtl;
+    const step = RESIZE_STEP * (event.shiftKey ? 4 : 1) * (wider ? 1 : -1);
+    this.setColumnWidth(key, cell.getBoundingClientRect().width + step);
+    saveColumnWidths(this.prefs, this.columnWidths());
+  }
+
+  /** Back to the column's responsive default width. */
+  protected resetColumn(key: ColumnKey): void {
+    const next: Partial<Record<ColumnKey, number>> = { ...this.columnWidths() };
+    delete next[key];
+    this.columnWidths.set(next);
+    saveColumnWidths(this.prefs, next);
+  }
+
+  protected onHeaderContext(event: MouseEvent): void {
+    event.preventDefault();
+    this.headerMenu.set({ x: event.clientX, y: event.clientY });
+  }
+
+  protected onHeaderMenu(id: string): void {
+    this.headerMenu.set(null);
+    if (id === 'resetWidths') {
+      this.columnWidths.set({});
+      saveColumnWidths(this.prefs, {});
+      return;
+    }
+    const key = OPTIONAL_COLUMNS.find((k) => id === `toggle:${k}`);
+    if (key !== undefined) {
+      const next = new Set(this.hiddenColumns());
+      if (!next.delete(key)) {
+        next.add(key);
+      }
+      this.hiddenColumns.set(next);
+      saveHiddenColumns(this.prefs, next);
+      // a column sorted on and then hidden would leave an order nobody can see
+      if (next.has(key) && this.store.sortKey() === key) {
+        this.store.sortBy('added');
+      }
+    }
+  }
+
+  private setColumnWidth(key: ColumnKey, px: number): void {
+    const width = clampWidth(key, px);
+    if (this.columnWidths()[key] !== width) {
+      this.columnWidths.update((w) => ({ ...w, [key]: width }));
+    }
+  }
+
   protected onKey(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
@@ -1265,7 +1565,7 @@ export class DownloadsPageComponent {
       return;
     }
     // buttons and links inside the page (toolbar, headers, row actions, drawer) keep their own keys
-    if (target !== null && target !== this.gridRef()?.nativeElement && target.closest('button, a, [role="menuitem"], app-download-details')) {
+    if (target !== null && target !== this.gridRef()?.nativeElement && target.closest('button, a, [role="menuitem"], [role="separator"], app-download-details')) {
       return;
     }
     const mod = event.ctrlKey || event.metaKey;

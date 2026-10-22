@@ -1,7 +1,7 @@
-import { CategoryKey, Download, DownloadState, downloadedBytes, etaSeconds, isActive, progressOf } from '../model/download';
+import { activeMillis, averageSpeed, CATEGORY_KEYS, CategoryKey, Download, DownloadState, downloadedBytes, etaSeconds, isActive, progressOf } from '../model/download';
 
 /** Sortable columns. */
-export type SortKey = 'name' | 'size' | 'progress' | 'speed' | 'eta' | 'status' | 'added' | 'queue';
+export type SortKey = 'name' | 'size' | 'progress' | 'speed' | 'avgSpeed' | 'eta' | 'duration' | 'status' | 'category' | 'added' | 'queue';
 
 /** Sort direction. */
 export type SortDir = 'asc' | 'desc';
@@ -13,6 +13,10 @@ export interface DownloadRow {
   /** 0..1 or `null` when unknown. */
   readonly progress: number | null;
   readonly eta: number | null;
+  /** Time spent downloading when the row was made (see `activeMillis`); `null` = never recorded. */
+  readonly activeMs: number | null;
+  /** Average bytes per second over `activeMs`; `null` when unknown. */
+  readonly avgBps: number | null;
   /** Lower-cased name and link, filled the first time a search needs it (see `haystack`). */
   hay?: string;
 }
@@ -36,8 +40,12 @@ export interface RowFilter {
   readonly states: ReadonlySet<DownloadState>;
   readonly category: CategoryKey | null;
   readonly queue: number | null;
-  /** Lower-cased and trimmed; empty = no search. */
+  /** Folded with `foldSearch` and trimmed; empty = no search. */
   readonly query: string;
+  /** States whose name the search text matches ("paused", "مكتمل"): their rows match too. */
+  readonly queryStates?: ReadonlySet<DownloadState>;
+  /** Categories whose name the search text matches ("documents", "فيديو"): their rows match too. */
+  readonly queryCategories?: ReadonlySet<CategoryKey>;
 }
 
 /** What one update produced. The arrays are never mutated afterwards (callers may keep them). */
@@ -65,12 +73,28 @@ const COLLATOR = new Intl.Collator();
 
 /** Lower-cased name and link of a row, built once per row object. */
 export function haystack(row: DownloadRow): string {
-  return (row.hay ??= `${row.d.filename}\n${row.d.url}`.toLowerCase());
+  return (row.hay ??= foldSearch(`${row.d.filename}\n${row.d.url}`));
+}
+
+/**
+ * Text as search compares it: compatibility-normalised and lower-cased, with Arabic diacritics
+ * and tatweel dropped and the alef / yeh variants unified, so "إحصاء" finds "احصاء" and a
+ * full-width "ＰＤＦ" finds "pdf". Applied to both the query and the names searched.
+ */
+export function foldSearch(text: string): string {
+  return text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
+    .replace(/\u0649/g, '\u064A');
 }
 
 /** A row for a download. */
-export function makeRow(d: Download): DownloadRow {
-  return { d, downloaded: downloadedBytes(d), progress: progressOf(d), eta: etaSeconds(d) };
+export function makeRow(d: Download, now = Date.now()): DownloadRow {
+  const downloaded = downloadedBytes(d);
+  const activeMs = activeMillis(d, now);
+  return { d, downloaded, progress: progressOf(d), eta: etaSeconds(d), activeMs, avgBps: averageSpeed(downloaded, activeMs) };
 }
 
 /** Negative when `a` sorts before `b` for `key` (ascending). */
@@ -90,6 +114,12 @@ export function compare(a: DownloadRow, b: DownloadRow, key: SortKey): number {
       return STATE_ORDER[a.d.state] - STATE_ORDER[b.d.state];
     case 'added':
       return a.d.addedAt - b.d.addedAt;
+    case 'avgSpeed':
+      return (a.avgBps ?? -1) - (b.avgBps ?? -1);
+    case 'duration':
+      return (a.activeMs ?? -1) - (b.activeMs ?? -1);
+    case 'category':
+      return CATEGORY_KEYS.indexOf(a.d.category) - CATEGORY_KEYS.indexOf(b.d.category);
     case 'queue':
       return (a.d.queuePosition ?? 0) - (b.d.queuePosition ?? 0) || a.d.id - b.d.id;
   }
@@ -102,12 +132,26 @@ export function matches(row: DownloadRow, f: RowFilter): boolean {
     f.states.has(d.state) &&
     (f.category === null || d.category === f.category) &&
     (f.queue === null || d.queueId === f.queue) &&
-    (f.query.length === 0 || haystack(row).includes(f.query))
+    (f.query.length === 0 || haystack(row).includes(f.query) || f.queryStates?.has(d.state) === true || (d.category !== null && f.queryCategories?.has(d.category) === true))
   );
 }
 
+function sameSet<T>(a: ReadonlySet<T> | undefined, b: ReadonlySet<T> | undefined): boolean {
+  if (a === b) {
+    return true;
+  }
+  return (a?.size ?? 0) === (b?.size ?? 0) && [...(a ?? [])].every((v) => b?.has(v) === true);
+}
+
 function sameFilter(a: RowFilter, b: RowFilter): boolean {
-  return a.states === b.states && a.category === b.category && a.queue === b.queue && a.query === b.query;
+  return (
+    a.states === b.states &&
+    a.category === b.category &&
+    a.queue === b.queue &&
+    a.query === b.query &&
+    sameSet(a.queryStates, b.queryStates) &&
+    sameSet(a.queryCategories, b.queryCategories)
+  );
 }
 
 /** Counters being changed; turned into a read-only {@link Stats} when done. */

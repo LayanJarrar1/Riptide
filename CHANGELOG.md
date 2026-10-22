@@ -8,6 +8,29 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+### Downloads list
+
+- Columns can be resized: drag the grip on a header's edge, or focus it and use the arrow keys
+  (Shift for bigger steps). Double-click a grip, or press Enter on it, to restore that column;
+  right-click the header to reset every column. Widths are kept across restarts, and a list wider
+  than the window scrolls sideways with the header following.
+- The details drawer docks beside the list only when the list keeps at least 600 px; in a narrower
+  window it slides over the list instead, so the table keeps its columns, scroll position and
+  selection. Click outside it or press Escape to close it.
+- Search also finds downloads by status and category name (in English or Arabic, e.g. "paused",
+  "مستندات"), ignores Arabic diacritics, tatweel and alef/yeh variants, and waits for a pause in
+  typing on histories of 5,000 or more downloads.
+- Download time and average speed: the engine records how long each download spends actually
+  downloading (paused, queued, probing, verifying and failed time excluded; segment retries inside
+  a running transfer included). It is checkpointed with the segment progress, stops when the app
+  quits, and after a crash only the time since the last checkpoint is lost. Three optional
+  columns, Avg. speed, Duration and Category, can be turned on from the header's right-click menu,
+  and the details drawer shows duration and average speed. Downloads added before this version
+  show "—": their time was never recorded and is not estimated. Database schema v6.
+- Columns can be hidden or shown from the header's right-click menu (the name always shows).
+- New tests hold the list to a bounded number of rendered rows at 100, 1,000, 10,000 and 50,000
+  downloads, while scrolling, sorting, searching and with the details drawer open.
+
 ## [0.1.0-alpha.5] - 2026-10-21
 
 BitTorrent, Research with an optional AI assistant, and an integrated title bar with menus. An alpha for

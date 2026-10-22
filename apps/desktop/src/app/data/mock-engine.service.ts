@@ -218,6 +218,7 @@ export class MockEngineService extends DownloadEngine {
       speedHistory: new Array<number>(60).fill(0),
       addedAt: now,
       startedAt: null,
+      activeMs: 0,
       completedAt: null,
       failure: null,
       checksum: request.checksum ?? null,
@@ -281,6 +282,7 @@ export class MockEngineService extends DownloadEngine {
       speedHistory: new Array<number>(60).fill(0),
       addedAt: Date.now(),
       startedAt: null,
+      activeMs: 0,
       completedAt: null,
       failure: null,
       checksum: null,
@@ -383,6 +385,7 @@ export class MockEngineService extends DownloadEngine {
       speedBps: 0,
       speedHistory: new Array<number>(60).fill(0),
       startedAt: null,
+      activeMs: 0,
       completedAt: null,
       failure: null,
     }));
@@ -500,9 +503,9 @@ export class MockEngineService extends DownloadEngine {
             }
             return d;
           case 'probing':
-            return { ...d, state: 'downloading' as const, speedBps: this.targetSpeed(d) * 0.3 };
+            return withActiveSpan(d, { ...d, state: 'downloading' as const, speedBps: this.targetSpeed(d) * 0.3 }, now);
           case 'downloading':
-            return this.advance(d, elapsedMs, sample);
+            return withActiveSpan(d, this.advance(d, elapsedMs, sample), now);
           case 'verifying':
             return this.rng() < 0.15 ? { ...d, state: 'completed' as const, completedAt: now, speedBps: 0 } : d;
           default:
@@ -518,7 +521,8 @@ export class MockEngineService extends DownloadEngine {
   }
 
   private update(id: number, fn: (d: Download) => Download): void {
-    this.list.update((all) => all.map((d) => (d.id === id ? fn(d) : d)));
+    const now = Date.now();
+    this.list.update((all) => all.map((d) => (d.id === id ? withActiveSpan(d, fn(d), now) : d)));
   }
 
   /** The speed a download settles around, derived from its connection count. */
@@ -606,3 +610,20 @@ function stripFragment(url: string): string {
 
 /** Convenience for templates: bytes on disk. */
 export { downloadedBytes };
+
+/**
+ * Keeps the simulated active time like the engine's store does: a span opens on entering
+ * `downloading` and is added to `activeMs` on leaving it. Unknown time stays unknown.
+ */
+function withActiveSpan(prev: Download, next: Download, now: number): Download {
+  if (next.activeMs === null || next.activeMs === undefined || prev.state === next.state) {
+    return next;
+  }
+  if (next.state === 'downloading') {
+    return { ...next, activeSince: now };
+  }
+  if (prev.state === 'downloading' && typeof prev.activeSince === 'number') {
+    return { ...next, activeMs: next.activeMs + Math.max(0, now - prev.activeSince), activeSince: null };
+  }
+  return next;
+}

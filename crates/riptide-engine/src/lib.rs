@@ -864,6 +864,8 @@ impl Engine {
                 }
                 match d.state {
                     DownloadState::Probing | DownloadState::Downloading => {
+                        // a span still open here was cut by a crash: keep the checkpointed time
+                        s.abandon_active_span(d.id)?;
                         s.set_state(d.id, DownloadState::Paused, None)?;
                         s.set_state(d.id, DownloadState::Queued, None)?;
                     }
@@ -1464,6 +1466,7 @@ impl Engine {
         let to_save = fresh.clone();
         db(&self.inner.store, move |s| {
             s.update_download(&to_save)?;
+            s.reset_active(id)?;
             s.replace_segments(id, &[])
         })
         .await?;
@@ -1656,6 +1659,8 @@ impl Engine {
     /// `open`), then returns. Call before the process exits.
     pub async fn shutdown(&self) {
         self.inner.shutting_down.store(true, Ordering::SeqCst);
+        // downloads stay "downloading" in the database across a quit; their time stops here
+        let _ = db(&self.inner.store, |s| s.close_active_spans()).await;
         self.shutdown_torrents().await;
         self.inner.wake.notify_one();
         self.inner.sched_wake.notify_one();
@@ -2112,8 +2117,11 @@ impl Engine {
                         });
                     }
                     TransferEvent::Checkpoint { segments } => {
-                        let _ =
-                            db(&forward_store, move |s| s.replace_segments(id, &segments)).await;
+                        let _ = db(&forward_store, move |s| {
+                            s.replace_segments(id, &segments)?;
+                            s.checkpoint_active(id)
+                        })
+                        .await;
                     }
                     TransferEvent::Verifying => {
                         let _ = forward_engine

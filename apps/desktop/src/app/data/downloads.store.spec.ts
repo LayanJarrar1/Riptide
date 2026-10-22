@@ -43,6 +43,27 @@ describe('DownloadsStore', () => {
     expect(store.rows().length).toBe(0);
   });
 
+  it('search also matches a status or a category by its name, and the extension and site of a file', () => {
+    store.query.set('paused');
+    const paused = engine.downloads().filter((d) => d.state === 'paused').length;
+    expect(paused).toBeGreaterThan(0);
+    expect(store.rows().length).toBeGreaterThanOrEqual(paused);
+    expect(store.rows().filter((r) => r.d.state === 'paused').length).toBe(paused);
+    store.query.set('video');
+    const videos = engine.downloads().filter((d) => d.category === 'video').length;
+    expect(store.rows().filter((r) => r.d.category === 'video').length).toBe(videos);
+    const ext = engine.downloads()[0].filename.split('.').pop() ?? '';
+    store.query.set(`.${ext}`.toUpperCase());
+    expect(store.rows().length).toBeGreaterThan(0);
+    expect(store.rows().every((r) => r.d.filename.toLowerCase().includes(`.${ext}`) || r.d.url.toLowerCase().includes(`.${ext}`))).toBeTrue();
+    const host = new URL(engine.downloads()[0].url).hostname;
+    store.query.set(host);
+    expect(store.rows().length).toBeGreaterThan(0);
+    // short queries never match every status by its first letters
+    store.query.set('pa');
+    expect(store.rows().every((r) => r.d.filename.toLowerCase().includes('pa') || r.d.url.toLowerCase().includes('pa'))).toBeTrue();
+  });
+
   it('sorts by any column and flips direction on a second click', () => {
     store.sortBy('size');
     expect(store.sortKey()).toBe('size');

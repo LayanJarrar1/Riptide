@@ -1,9 +1,10 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 
-import { CategoryKey, DownloadState } from '../model/download';
+import { I18nService } from '../i18n/i18n.service';
+import { CATEGORY_KEYS, CategoryKey, DOWNLOAD_STATES, DownloadState } from '../model/download';
 import { DownloadEngine } from './download-engine';
 import { ListNav, navigateIndex } from './list-nav';
-import { DownloadRow, QueueCount, RowIndex, SortDir, SortKey } from './row-index';
+import { DownloadRow, foldSearch, QueueCount, RowIndex, SortDir, SortKey } from './row-index';
 
 export type { DownloadRow, QueueCount, SortDir, SortKey } from './row-index';
 
@@ -31,6 +32,9 @@ const VIEW_STATE_SETS: Readonly<Record<ListView, ReadonlySet<DownloadState>>> = 
 
 const NO_ROWS: readonly DownloadRow[] = [];
 
+/** Search text at least this long also matches a status or category by its name. */
+const MIN_LABEL_QUERY = 3;
+
 /**
  * Everything the list screen needs that is not the engine's business: the active view and
  * filters, sort order, selection and which item the details drawer shows. All signals.
@@ -38,6 +42,7 @@ const NO_ROWS: readonly DownloadRow[] = [];
 @Injectable({ providedIn: 'root' })
 export class DownloadsStore {
   private readonly engine = inject(DownloadEngine);
+  private readonly i18n = inject(I18nService);
 
   readonly view = signal<ListView>('all');
   readonly category = signal<CategoryKey | null>(null);
@@ -57,10 +62,28 @@ export class DownloadsStore {
   /** Rows, sort order and counters, kept up to date between engine ticks (see `RowIndex`). */
   private readonly index = new RowIndex();
 
+  /**
+   * The search as the index applies it: the folded text, plus the statuses and categories whose
+   * name (in the UI language or the English key) starts with it, so "paused" or "مستندات" lists
+   * those rows even when no file name contains the word.
+   */
+  private readonly search = computed(() => {
+    const query = foldSearch(this.query().trim());
+    if (query.length < MIN_LABEL_QUERY) {
+      return { query };
+    }
+    const named = (key: string, label: string): boolean => key.startsWith(query) || foldSearch(this.i18n.t(label)).startsWith(query);
+    return {
+      query,
+      queryStates: new Set(DOWNLOAD_STATES.filter((s) => named(s, `state.${s}`))),
+      queryCategories: new Set(CATEGORY_KEYS.filter((c) => named(c, `category.${c}`))),
+    };
+  });
+
   private readonly derived = computed(() =>
     this.index.update(
       this.engine.downloads(),
-      { states: VIEW_STATE_SETS[this.view()], category: this.category(), queue: this.queue(), query: this.query().trim().toLowerCase() },
+      { states: VIEW_STATE_SETS[this.view()], category: this.category(), queue: this.queue(), ...this.search() },
       this.sortKey(),
       this.sortDir(),
     ),

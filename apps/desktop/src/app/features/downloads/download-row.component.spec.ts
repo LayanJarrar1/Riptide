@@ -11,7 +11,7 @@ describe('DownloadRowComponent failure text and fix', () => {
 
   function failedRow(failure: FailureKind): DownloadRow {
     const base = seedDownloads(Date.now())[0];
-    return { d: { ...base, state: 'failed', failure }, downloaded: 0, progress: 0, eta: null };
+    return { d: { ...base, state: 'failed', failure }, downloaded: 0, progress: 0, eta: null, activeMs: null, avgBps: null };
   }
 
   function render(failure: FailureKind, lang = 'en-US'): HTMLElement {

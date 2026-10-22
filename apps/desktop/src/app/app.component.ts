@@ -67,6 +67,10 @@ const BOOT_MS = 900;
  * settings), the routed page, the status bar, and the overlays (add dialog, shortcuts,
  * toasts). Keyboard: Ctrl+N add, Ctrl+F search, Ctrl+, settings, ? or Ctrl+/ shortcuts.
  */
+/** Lists at least this long debounce the search box (see `onSearch`). */
+const SEARCH_DEBOUNCE_ROWS = 5000;
+const SEARCH_DEBOUNCE_MS = 120;
+
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -94,6 +98,7 @@ const BOOT_MS = 900;
   host: { '(document:keydown)': 'onKey($event)' },
 })
 export class AppComponent implements OnInit {
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
   protected readonly i18n = inject(I18nService);
   protected readonly theme = inject(ThemeService);
   protected readonly tauri = inject(TauriService);
@@ -190,7 +195,10 @@ export class AppComponent implements OnInit {
     // first interaction) has to wait for the orchestration window to close
     const zone = inject(NgZone);
     const boot = zone.runOutsideAngular(() => setTimeout(() => this.ui.markBooted(), BOOT_MS));
-    inject(DestroyRef).onDestroy(() => clearTimeout(boot));
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(boot);
+      clearTimeout(this.searchTimer);
+    });
   }
 
   ngOnInit(): void {
@@ -200,11 +208,22 @@ export class AppComponent implements OnInit {
     void this.updates.announceUpdated();
   }
 
+  /**
+   * Typing filters at once in an ordinary list; past SEARCH_DEBOUNCE_ROWS the filter waits for a
+   * short pause in typing, so a long history is filtered once per word rather than per key.
+   */
   protected onSearch(event: Event): void {
-    this.store.query.set((event.target as HTMLInputElement).value);
+    const value = (event.target as HTMLInputElement).value;
+    clearTimeout(this.searchTimer);
+    if (this.store.allRows().length < SEARCH_DEBOUNCE_ROWS || value.length === 0) {
+      this.store.query.set(value);
+      return;
+    }
+    this.searchTimer = setTimeout(() => this.store.query.set(value), SEARCH_DEBOUNCE_MS);
   }
 
   protected clearSearch(): void {
+    clearTimeout(this.searchTimer);
     this.store.query.set('');
     this.searchRef()?.nativeElement.focus();
   }

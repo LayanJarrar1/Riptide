@@ -50,6 +50,8 @@ export function bridgeDownload(overrides: Partial<Download> = {}): Download {
     completed_at: 0,
     kind: 'http',
     media_format: null,
+    active_ms: 0,
+    active_since: null,
     ...overrides,
   };
 }
@@ -215,6 +217,15 @@ describe('bridge-mapping', () => {
       expect(d.addedAt).toBe(0);
       const previous = toUiDownload(bridgeDownload(), []);
       expect(toUiDownload(bridgeDownload({ added_at: 0 }), [], previous).addedAt).toBe(ADDED_MS);
+    });
+
+    it('carries the active time, and keeps a time that was never recorded unknown', () => {
+      const running = toUiDownload(bridgeDownload({ state: { state: 'downloading' }, active_ms: 42_000, active_since: ADDED_MS + 9000 }), []);
+      expect(running.activeMs).toBe(42_000);
+      expect(running.activeSince).toBe(ADDED_MS + 9000);
+      const old = toUiDownload(bridgeDownload({ active_ms: null }), []);
+      expect(old.activeMs).toBeNull();
+      expect(toUiDownload(bridgeDownload({ active_ms: -5 }), []).activeMs).toBeNull();
     });
 
     it('synthesises one done segment for a completed file without segments, else an empty pending one', () => {

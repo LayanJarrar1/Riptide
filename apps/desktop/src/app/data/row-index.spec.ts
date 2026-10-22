@@ -1,6 +1,6 @@
 import { CategoryKey, Download, DownloadState, isActive } from '../model/download';
 import { mulberry32, planSegments } from './mock-data';
-import { compare, DownloadRow, makeRow, matches, RowFilter, RowIndex, SortDir, SortKey } from './row-index';
+import { compare, DownloadRow, foldSearch, makeRow, matches, RowFilter, RowIndex, SortDir, SortKey } from './row-index';
 
 const STATES: readonly DownloadState[] = ['queued', 'probing', 'downloading', 'paused', 'verifying', 'completed', 'failed', 'cancelled'];
 const CATEGORIES: readonly CategoryKey[] = ['video', 'music', 'documents', 'compressed', 'programs', 'images', 'other'];
@@ -76,6 +76,17 @@ function statsOf(index: ReturnType<RowIndex['update']>): ReturnType<typeof refer
 }
 
 const FILTER_ALL: RowFilter = { states: ALL_STATES, category: null, queue: null, query: '' };
+
+describe('foldSearch', () => {
+  it('ignores case, width and Arabic diacritics, tatweel and letter variants', () => {
+    expect(foldSearch('ＰＤＦ Report')).toBe('pdf report');
+    expect(foldSearch('إحصاء')).toBe(foldSearch('احصاء'));
+    expect(foldSearch('آمِنَة')).toBe(foldSearch('امنة'));
+    expect(foldSearch('مـكـتـبة')).toBe('مكتبة');
+    expect(foldSearch('مستشفى')).toBe(foldSearch('مستشفي'));
+    expect(foldSearch('تقرير-٢٠٢٦.pdf')).toContain('تقرير');
+  });
+});
 
 describe('RowIndex', () => {
   it('builds rows, the filtered order and the counters', () => {

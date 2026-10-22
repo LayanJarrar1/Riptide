@@ -57,7 +57,7 @@ type SecretsRow = (Option<String>, String, Option<String>, Option<String>);
 const DOWNLOAD_COLUMNS: &str = "id, url, final_url, filename, dir, size, supports_ranges, etag, \
     last_modified, content_type, state, retryable, category_id, queue_id, priority, speed_limit, \
     connections, checksum_algo, checksum_expected, checksum_actual_algo, checksum_actual, error, \
-    added_at, started_at, completed_at, kind, media_format, queue_pos";
+    added_at, started_at, completed_at, kind, media_format, queue_pos, active_ms, active_since";
 
 impl Store {
     /// Opens (or creates) the database file, applies PRAGMAs and migrations.
@@ -143,9 +143,9 @@ impl Store {
              last_modified, content_type, state, retryable, category_id, queue_id, priority, \
              speed_limit, connections, checksum_algo, checksum_expected, checksum_actual_algo, \
              checksum_actual, error, added_at, started_at, completed_at, kind, media_format, \
-             queue_pos) \
+             queue_pos, active_ms) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, \
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
             params![
                 d.url,
                 d.final_url,
@@ -174,6 +174,7 @@ impl Store {
                 d.kind.name(),
                 d.media_format,
                 position,
+                d.active_ms.map(to_db).transpose()?,
             ],
         )?;
         Ok(DownloadId(self.conn.last_insert_rowid()))
@@ -269,14 +270,17 @@ impl Store {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let row: Option<(String, Option<bool>, Option<i64>)> = tx
+        type StateRow = (String, Option<bool>, Option<i64>, Option<i64>, Option<i64>);
+        let row: Option<StateRow> = tx
             .query_row(
-                "SELECT state, retryable, started_at FROM downloads WHERE id = ?1",
+                "SELECT state, retryable, started_at, active_ms, active_since FROM downloads \
+                 WHERE id = ?1",
                 [id.0],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .optional()?;
-        let (name, retryable, started_at) = row.ok_or(Error::NotFound(id))?;
+        let (name, retryable, started_at, active_ms, active_since) =
+            row.ok_or(Error::NotFound(id))?;
         let from = DownloadState::from_name(&name, retryable.unwrap_or(false))
             .ok_or_else(|| Error::Corrupt(format!("unknown state {name:?}")))?;
         from.transition(to)?;
@@ -286,6 +290,16 @@ impl Store {
             (None, DownloadState::Probing) => Some(now),
             (s, _) => s,
         };
+        // active time: a span opens on entering Downloading and is added on leaving it. A row
+        // whose time was never recorded (`active_ms` NULL) stays unknown rather than partial.
+        let (active_ms, active_since) = match (active_ms, active_since) {
+            (None, _) => (None, None),
+            (Some(ms), since) if to == DownloadState::Downloading => {
+                (Some(ms), since.or(Some(now)))
+            }
+            (Some(ms), Some(since)) => (Some(ms + (now - since).max(0)), None),
+            (Some(ms), None) => (Some(ms), None),
+        };
         let completed_at = matches!(to, DownloadState::Completed).then_some(now);
         let error = match to {
             DownloadState::Failed { .. } => error.map(str::to_owned),
@@ -293,14 +307,17 @@ impl Store {
         };
         tx.execute(
             "UPDATE downloads SET state = ?2, retryable = ?3, error = ?4, started_at = ?5, \
-             completed_at = COALESCE(?6, completed_at) WHERE id = ?1",
+             completed_at = COALESCE(?6, completed_at), active_ms = ?7, active_since = ?8 \
+             WHERE id = ?1",
             params![
                 id.0,
                 to.name(),
                 to.retryable(),
                 error,
                 started_at,
-                completed_at
+                completed_at,
+                active_ms,
+                active_since
             ],
         )?;
         if to.is_terminal() {
@@ -308,6 +325,48 @@ impl Store {
         }
         tx.commit()?;
         Ok(from)
+    }
+
+    /// Adds the open active span of a download to its total and starts a new span now, so a
+    /// crash loses at most the time since the last checkpoint. No-op outside `Downloading`.
+    pub fn checkpoint_active(&mut self, id: DownloadId) -> Result<()> {
+        self.conn.execute(
+            "UPDATE downloads SET active_ms = active_ms + MAX(0, ?2 - active_since), \
+             active_since = ?2 WHERE id = ?1 AND active_since IS NOT NULL AND active_ms IS NOT NULL",
+            params![id.0, now_millis()],
+        )?;
+        Ok(())
+    }
+
+    /// Closes every open active span at this moment (the app is quitting): the time so far
+    /// counts, the time until the next start does not.
+    pub fn close_active_spans(&mut self) -> Result<()> {
+        self.conn.execute(
+            "UPDATE downloads SET active_ms = active_ms + MAX(0, ?1 - active_since), \
+             active_since = NULL WHERE active_since IS NOT NULL AND active_ms IS NOT NULL",
+            [now_millis()],
+        )?;
+        Ok(())
+    }
+
+    /// Drops an open span without counting it: after a crash its end is unknown, so only the
+    /// time up to the last checkpoint stays.
+    pub fn abandon_active_span(&mut self, id: DownloadId) -> Result<()> {
+        self.conn.execute(
+            "UPDATE downloads SET active_since = NULL WHERE id = ?1",
+            [id.0],
+        )?;
+        Ok(())
+    }
+
+    /// Starts the active time over (a restart from zero bytes); also makes a record whose time
+    /// was never tracked a tracked one, since none of its old bytes remain.
+    pub fn reset_active(&mut self, id: DownloadId) -> Result<()> {
+        self.conn.execute(
+            "UPDATE downloads SET active_ms = 0, active_since = NULL WHERE id = ?1",
+            [id.0],
+        )?;
+        Ok(())
     }
 
     /// Deletes the download, its segments and its secrets. Returns `false` if it did not exist.
@@ -1022,6 +1081,11 @@ fn read_download(row: &Row<'_>) -> Result<Download> {
         completed_at: row.get("completed_at")?,
         kind,
         media_format: row.get("media_format")?,
+        active_ms: row
+            .get::<_, Option<i64>>("active_ms")?
+            .map(from_db)
+            .transpose()?,
+        active_since: row.get("active_since")?,
     })
 }
 
@@ -1187,6 +1251,127 @@ mod tests {
             store.update_download(&d),
             Err(Error::NotFound(DownloadId(12345)))
         ));
+    }
+
+    /// Moves the open span's start `ms` into the past, as if that much time had gone by.
+    fn age_span(store: &Store, id: DownloadId, ms: i64) {
+        store
+            .conn
+            .execute(
+                "UPDATE downloads SET active_since = active_since - ?2 WHERE id = ?1",
+                params![id.0, ms],
+            )
+            .unwrap();
+    }
+
+    fn active(store: &Store, id: DownloadId) -> Option<u64> {
+        store.get_download(id).unwrap().unwrap().active_ms
+    }
+
+    #[test]
+    fn active_time_counts_only_downloading_spans() {
+        let mut store = Store::open_in_memory().unwrap();
+        let id = store.insert_download(&sample("https://a/t.bin")).unwrap();
+        assert_eq!(
+            active(&store, id),
+            Some(0),
+            "a new download is tracked from zero"
+        );
+
+        store.set_state(id, DownloadState::Probing, None).unwrap();
+        store
+            .set_state(id, DownloadState::Downloading, None)
+            .unwrap();
+        age_span(&store, id, 4_000);
+        store.set_state(id, DownloadState::Paused, None).unwrap();
+        let first = active(&store, id).unwrap();
+        assert!((4_000..4_500).contains(&first), "{first}");
+
+        // paused for a long time: none of it counts
+        store
+            .conn
+            .execute(
+                "UPDATE downloads SET added_at = added_at - 3600000 WHERE id = ?1",
+                [id.0],
+            )
+            .unwrap();
+        store.set_state(id, DownloadState::Queued, None).unwrap();
+        store.set_state(id, DownloadState::Probing, None).unwrap();
+        store
+            .set_state(id, DownloadState::Downloading, None)
+            .unwrap();
+        age_span(&store, id, 2_000);
+        // a checkpoint folds the span in and keeps it open
+        store.checkpoint_active(id).unwrap();
+        let mid = active(&store, id).unwrap();
+        assert!((first + 2_000..first + 2_500).contains(&mid), "{mid}");
+        age_span(&store, id, 1_000);
+        store.set_state(id, DownloadState::Verifying, None).unwrap();
+        store.set_state(id, DownloadState::Completed, None).unwrap();
+        let done = active(&store, id).unwrap();
+        assert!((mid + 1_000..mid + 1_500).contains(&done), "{done}");
+        // a checkpoint outside Downloading changes nothing
+        store.checkpoint_active(id).unwrap();
+        assert_eq!(active(&store, id), Some(done));
+    }
+
+    #[test]
+    fn active_time_after_a_quit_a_crash_and_a_restart() {
+        let mut store = Store::open_in_memory().unwrap();
+        let id = store.insert_download(&sample("https://a/q.bin")).unwrap();
+        store.set_state(id, DownloadState::Probing, None).unwrap();
+        store
+            .set_state(id, DownloadState::Downloading, None)
+            .unwrap();
+        age_span(&store, id, 3_000);
+        // quitting closes the span: the time until the next start does not count
+        store.close_active_spans().unwrap();
+        let quit = active(&store, id).unwrap();
+        assert!((3_000..3_500).contains(&quit), "{quit}");
+        store.set_state(id, DownloadState::Paused, None).unwrap();
+        assert_eq!(active(&store, id), Some(quit));
+
+        // a crash: the open span is dropped, only the checkpointed time stays
+        store.set_state(id, DownloadState::Queued, None).unwrap();
+        store.set_state(id, DownloadState::Probing, None).unwrap();
+        store
+            .set_state(id, DownloadState::Downloading, None)
+            .unwrap();
+        age_span(&store, id, 9_000_000);
+        store.abandon_active_span(id).unwrap();
+        store.set_state(id, DownloadState::Paused, None).unwrap();
+        assert_eq!(active(&store, id), Some(quit));
+
+        store.reset_active(id).unwrap();
+        assert_eq!(active(&store, id), Some(0));
+    }
+
+    #[test]
+    fn rows_from_before_tracking_stay_unknown_until_restarted() {
+        let mut store = Store::open_in_memory().unwrap();
+        let id = store.insert_download(&sample("https://a/old.bin")).unwrap();
+        // what the v6 migration leaves on an existing row
+        store
+            .conn
+            .execute(
+                "UPDATE downloads SET active_ms = NULL WHERE id = ?1",
+                [id.0],
+            )
+            .unwrap();
+        store.set_state(id, DownloadState::Probing, None).unwrap();
+        store
+            .set_state(id, DownloadState::Downloading, None)
+            .unwrap();
+        store.checkpoint_active(id).unwrap();
+        store.close_active_spans().unwrap();
+        store.set_state(id, DownloadState::Paused, None).unwrap();
+        assert_eq!(
+            active(&store, id),
+            None,
+            "a partial time would understate the duration"
+        );
+        store.reset_active(id).unwrap();
+        assert_eq!(active(&store, id), Some(0));
     }
 
     #[test]

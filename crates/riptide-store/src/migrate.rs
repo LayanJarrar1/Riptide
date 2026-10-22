@@ -47,10 +47,15 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "seen_index",
         sql: include_str!("sql/v5.sql"),
     },
+    Migration {
+        version: 6,
+        name: "active_time",
+        sql: include_str!("sql/v6.sql"),
+    },
 ];
 
 /// The version a freshly migrated database has.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 const CREATE_VERSION_TABLE: &str = "CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,

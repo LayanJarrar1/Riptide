@@ -113,4 +113,17 @@ kind: DownloadKind,
 /**
  * For [`DownloadKind::Media`]: the yt-dlp format selector the user picked.
  */
-media_format: string | null, };
+media_format: string | null, 
+/**
+ * Milliseconds spent in [`DownloadState::Downloading`], summed over every run: paused,
+ * queued, probing, verifying and failed time (including the wait before an automatic
+ * retry) are excluded; segment retries inside a running transfer are included. `None` when
+ * the time was never recorded (downloads added before this was tracked), so no average is
+ * invented for them. Maintained by the store's state changes, not by `update_download`.
+ */
+active_ms: number | null, 
+/**
+ * Start of the open active span while the download is in `Downloading` (moved forward at
+ * each checkpoint): the live duration is `active_ms + (now - active_since)`.
+ */
+active_since: number | null, };
