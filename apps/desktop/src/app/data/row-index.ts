@@ -36,8 +36,12 @@ export interface RowFilter {
   readonly states: ReadonlySet<DownloadState>;
   readonly category: CategoryKey | null;
   readonly queue: number | null;
-  /** Lower-cased and trimmed; empty = no search. */
+  /** Folded with `foldSearch` and trimmed; empty = no search. */
   readonly query: string;
+  /** States whose name the search text matches ("paused", "مكتمل"): their rows match too. */
+  readonly queryStates?: ReadonlySet<DownloadState>;
+  /** Categories whose name the search text matches ("documents", "فيديو"): their rows match too. */
+  readonly queryCategories?: ReadonlySet<CategoryKey>;
 }
 
 /** What one update produced. The arrays are never mutated afterwards (callers may keep them). */
@@ -65,7 +69,21 @@ const COLLATOR = new Intl.Collator();
 
 /** Lower-cased name and link of a row, built once per row object. */
 export function haystack(row: DownloadRow): string {
-  return (row.hay ??= `${row.d.filename}\n${row.d.url}`.toLowerCase());
+  return (row.hay ??= foldSearch(`${row.d.filename}\n${row.d.url}`));
+}
+
+/**
+ * Text as search compares it: compatibility-normalised and lower-cased, with Arabic diacritics
+ * and tatweel dropped and the alef / yeh variants unified, so "إحصاء" finds "احصاء" and a
+ * full-width "ＰＤＦ" finds "pdf". Applied to both the query and the names searched.
+ */
+export function foldSearch(text: string): string {
+  return text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
+    .replace(/\u0649/g, '\u064A');
 }
 
 /** A row for a download. */
@@ -102,12 +120,26 @@ export function matches(row: DownloadRow, f: RowFilter): boolean {
     f.states.has(d.state) &&
     (f.category === null || d.category === f.category) &&
     (f.queue === null || d.queueId === f.queue) &&
-    (f.query.length === 0 || haystack(row).includes(f.query))
+    (f.query.length === 0 || haystack(row).includes(f.query) || f.queryStates?.has(d.state) === true || (d.category !== null && f.queryCategories?.has(d.category) === true))
   );
 }
 
+function sameSet<T>(a: ReadonlySet<T> | undefined, b: ReadonlySet<T> | undefined): boolean {
+  if (a === b) {
+    return true;
+  }
+  return (a?.size ?? 0) === (b?.size ?? 0) && [...(a ?? [])].every((v) => b?.has(v) === true);
+}
+
 function sameFilter(a: RowFilter, b: RowFilter): boolean {
-  return a.states === b.states && a.category === b.category && a.queue === b.queue && a.query === b.query;
+  return (
+    a.states === b.states &&
+    a.category === b.category &&
+    a.queue === b.queue &&
+    a.query === b.query &&
+    sameSet(a.queryStates, b.queryStates) &&
+    sameSet(a.queryCategories, b.queryCategories)
+  );
 }
 
 /** Counters being changed; turned into a read-only {@link Stats} when done. */

@@ -140,6 +140,7 @@ export function hostOf(url: string): string {
     :host {
       display: grid;
       grid-template-columns: var(--grid-columns);
+      min-inline-size: var(--grid-min, 0);
       align-items: center;
       block-size: var(--row-height);
       padding-inline: var(--space-3);
@@ -418,6 +419,7 @@ export function hostOf(url: string): string {
     @container grid (max-width: 1050px) {
       :host {
         grid-template-columns: var(--grid-columns-compact);
+        min-inline-size: var(--grid-min-compact, 0);
       }
 
       .c-eta,
@@ -429,6 +431,7 @@ export function hostOf(url: string): string {
     @container grid (max-width: 780px) {
       :host {
         grid-template-columns: var(--grid-columns-narrow);
+        min-inline-size: var(--grid-min-narrow, 0);
       }
 
       .c-speed {
@@ -439,6 +442,7 @@ export function hostOf(url: string): string {
     @container grid (max-width: 600px) {
       :host {
         grid-template-columns: var(--grid-columns-tiny);
+        min-inline-size: var(--grid-min-tiny, 0);
       }
 
       .c-size,

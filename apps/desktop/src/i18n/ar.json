@@ -42,6 +42,9 @@
   "column.eta": "الوقت المتبقي",
   "column.status": "الحالة",
   "column.added": "أُضيف",
+  "column.resize": "تغيير عرض عمود {column}",
+  "column.resizeHint": "اسحب لتغيير العرض، وانقر مرتين للاستعادة",
+  "column.resetWidths": "استعادة عرض الأعمدة الافتراضي",
 
   "state.queued": "بالانتظار",
   "state.probing": "جارٍ الاتصال",

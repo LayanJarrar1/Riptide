@@ -116,8 +116,10 @@ describe('DownloadsPageComponent', () => {
     engine.loaded.set(true);
     fixture.detectChanges();
     const header = (key: string): HTMLButtonElement | null => el().querySelector<HTMLButtonElement>(`.th-${key}`);
+    // aria-sort sits on the columnheader cell that holds the sort button and the resize grip
+    const columnHeader = (key: string): HTMLElement | null => el().querySelector<HTMLElement>(`.hc-${key}[role="columnheader"]`);
     expect(header('added')?.classList).toContain('is-sorted');
-    expect(header('added')?.getAttribute('aria-sort')).toBe('descending');
+    expect(columnHeader('added')?.getAttribute('aria-sort')).toBe('descending');
     expect(header('added')?.title).toBe('Sorted descending — click to flip');
     expect(header('added')?.querySelector('.sort-icon')?.classList).not.toContain('is-asc');
     expect(header('size')?.classList).not.toContain('is-sorted');
@@ -125,7 +127,7 @@ describe('DownloadsPageComponent', () => {
 
     header('added')?.click();
     fixture.detectChanges();
-    expect(header('added')?.getAttribute('aria-sort')).toBe('ascending');
+    expect(columnHeader('added')?.getAttribute('aria-sort')).toBe('ascending');
     expect(header('added')?.querySelector('.sort-icon')?.classList).toContain('is-asc');
   });
 
