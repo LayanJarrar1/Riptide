@@ -1,13 +1,18 @@
 import { MemoryPreferenceStore } from '../core/preferences';
 import {
   clampWidth,
+  ColumnKey,
   COLUMN_WIDTHS_KEY,
   gridMinWidth,
   gridTracks,
   gridVars,
+  DEFAULT_HIDDEN,
+  HIDDEN_COLUMNS_KEY,
   loadColumnWidths,
+  loadHiddenColumns,
   MAX_COLUMN_WIDTH,
   saveColumnWidths,
+  saveHiddenColumns,
 } from './column-widths';
 
 describe('column widths', () => {
@@ -53,5 +58,29 @@ describe('column widths', () => {
     expect(loadColumnWidths(new MemoryPreferenceStore({ [COLUMN_WIDTHS_KEY]: '[1,2]' }))).toEqual({});
     const odd = JSON.stringify({ name: 'wide', size: 5, bogus: 300, status: 1e9, eta: null });
     expect(loadColumnWidths(new MemoryPreferenceStore({ [COLUMN_WIDTHS_KEY]: odd }))).toEqual({ size: 64, status: MAX_COLUMN_WIDTH });
+  });
+
+  it('shows the optional columns only when turned on, and only in the full layout', () => {
+    const shown = new Set<ColumnKey>();
+    expect(gridTracks('full', {}, shown)).toBe(
+      'minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 104px 84px 96px 172px 112px 104px 64px',
+    );
+    expect(gridTracks('compact', {}, shown)).toBe(gridTracks('compact', {}));
+    expect(gridTracks('full', {}, new Set<ColumnKey>(['size', 'eta', 'avgSpeed', 'duration', 'category']))).toBe(
+      'minmax(190px, 2.2fr) minmax(150px, 1.6fr) 96px 172px 104px 64px',
+    );
+    // the name can never be hidden
+    expect(gridTracks('tiny', {}, new Set<ColumnKey>(['name', 'progress']))).toBe('minmax(140px, 1fr) 44px');
+  });
+
+  it('round-trips the hidden columns and falls back to the defaults', () => {
+    const store = new MemoryPreferenceStore();
+    expect(loadHiddenColumns(store)).toBe(DEFAULT_HIDDEN);
+    saveHiddenColumns(store, new Set<ColumnKey>(['added', 'name', 'eta']));
+    expect(store.get(HIDDEN_COLUMNS_KEY)).toBe('["eta","added"]');
+    expect([...loadHiddenColumns(store)]).toEqual(['eta', 'added']);
+    expect(loadHiddenColumns(new MemoryPreferenceStore({ [HIDDEN_COLUMNS_KEY]: '{"a":1}' }))).toBe(DEFAULT_HIDDEN);
+    expect(loadHiddenColumns(new MemoryPreferenceStore({ [HIDDEN_COLUMNS_KEY]: 'nope' }))).toBe(DEFAULT_HIDDEN);
+    expect(loadHiddenColumns(new MemoryPreferenceStore({ [HIDDEN_COLUMNS_KEY]: '[]' })).size).toBe(0);
   });
 });

@@ -22,9 +22,10 @@ interface LayoutSpec {
 }
 
 /**
- * Default tracks per layout. The narrower layouts drop columns in order of usefulness: time left
- * and added, then speed, then size and status (which the details drawer still shows). The full
- * set needs 1034px, so it fits a 1280px window with the sidebar open.
+ * Default tracks per layout. The narrower layouts drop columns in order of usefulness: time left,
+ * added and the optional columns, then speed, then size and status (which the details drawer
+ * still shows). The default full set needs 1034px, so it fits a 1280px window with the sidebar
+ * open; turning on optional columns can make the list scroll sideways.
  */
 export const GRID_LAYOUTS: Readonly<Record<GridLayout, LayoutSpec>> = {
   full: {
@@ -33,8 +34,11 @@ export const GRID_LAYOUTS: Readonly<Record<GridLayout, LayoutSpec>> = {
       ['size', { min: 150 }],
       ['progress', { min: 150, fr: 1.6 }],
       ['speed', { min: 96 }],
+      ['avgSpeed', { min: 104 }],
       ['eta', { min: 84 }],
+      ['duration', { min: 96 }],
       ['status', { min: 172 }],
+      ['category', { min: 112 }],
       ['added', { min: 104 }],
     ],
     actions: 64,
@@ -79,7 +83,19 @@ const MIN_WIDTH: Readonly<Record<ColumnKey, number>> = {
   eta: 56,
   status: 88,
   added: 72,
+  avgSpeed: 64,
+  duration: 56,
+  category: 72,
 };
+
+/** Columns that can be turned off (the name always shows). */
+export const OPTIONAL_COLUMNS: readonly ColumnKey[] = COLUMN_KEYS.filter((k) => k !== 'name');
+
+/** Off until the user turns them on, so the default table still fits a 1280px window. */
+export const DEFAULT_HIDDEN: ReadonlySet<ColumnKey> = new Set<ColumnKey>(['avgSpeed', 'duration', 'category']);
+
+/** Preference key the hidden columns are saved under. */
+export const HIDDEN_COLUMNS_KEY = 'riptide.hiddenColumns';
 
 /** Widest a column can be dragged. */
 export const MAX_COLUMN_WIDTH = 1600;
@@ -93,9 +109,9 @@ export function clampWidth(key: ColumnKey, px: number): number {
 }
 
 /** The `grid-template-columns` value for one layout with the user's widths applied. */
-export function gridTracks(layout: GridLayout, widths: ColumnWidths): string {
+export function gridTracks(layout: GridLayout, widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): string {
   const spec = GRID_LAYOUTS[layout];
-  const tracks = spec.columns.map(([key, t]) => {
+  const tracks = shown(spec, hidden).map(([key, t]) => {
     const w = widths[key];
     if (w !== undefined) {
       return `${w}px`;
@@ -106,9 +122,18 @@ export function gridTracks(layout: GridLayout, widths: ColumnWidths): string {
 }
 
 /** The narrowest the layout's tracks can get, in px (without the row's inline padding). */
-export function gridMinWidth(layout: GridLayout, widths: ColumnWidths): number {
+export function gridMinWidth(layout: GridLayout, widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): number {
   const spec = GRID_LAYOUTS[layout];
-  return spec.columns.reduce((sum, [key, t]) => sum + (widths[key] ?? t.min), spec.actions);
+  return shown(spec, hidden).reduce((sum, [key, t]) => sum + (widths[key] ?? t.min), spec.actions);
+}
+
+function shown(spec: LayoutSpec, hidden: ReadonlySet<ColumnKey>): LayoutSpec['columns'] {
+  return spec.columns.filter(([key]) => key === 'name' || !hidden.has(key));
+}
+
+/** Whether a layout shows a column at all (the narrower layouts drop some). */
+export function inLayout(layout: GridLayout, key: ColumnKey): boolean {
+  return GRID_LAYOUTS[layout].columns.some(([k]) => k === key);
 }
 
 /**
@@ -116,12 +141,12 @@ export function gridMinWidth(layout: GridLayout, widths: ColumnWidths): number {
  * width per layout. The rows overflow (and the viewport scrolls sideways) only when the user has
  * widened columns past what the window holds.
  */
-export function gridVars(widths: ColumnWidths): Record<string, string> {
+export function gridVars(widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const layout of Object.keys(GRID_LAYOUTS) as GridLayout[]) {
     const suffix = layout === 'full' ? '' : `-${layout}`;
-    vars[`--grid-columns${suffix}`] = gridTracks(layout, widths);
-    vars[`--grid-min${suffix}`] = `calc(${gridMinWidth(layout, widths)}px + 2 * var(--space-3))`;
+    vars[`--grid-columns${suffix}`] = gridTracks(layout, widths, hidden);
+    vars[`--grid-min${suffix}`] = `calc(${gridMinWidth(layout, widths, hidden)}px + 2 * var(--space-3))`;
   }
   return vars;
 }
@@ -154,4 +179,26 @@ export function loadColumnWidths(store: PreferenceStore): ColumnWidths {
 /** Saves the widths; an empty set removes the customisation. */
 export function saveColumnWidths(store: PreferenceStore, widths: ColumnWidths): void {
   store.set(COLUMN_WIDTHS_KEY, JSON.stringify(widths));
+}
+
+/** The hidden columns; the defaults when nothing (or nothing valid) was saved. */
+export function loadHiddenColumns(store: PreferenceStore): ReadonlySet<ColumnKey> {
+  const raw = store.get(HIDDEN_COLUMNS_KEY);
+  if (raw === null) {
+    return DEFAULT_HIDDEN;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return DEFAULT_HIDDEN;
+    }
+    return new Set(OPTIONAL_COLUMNS.filter((k) => parsed.includes(k)));
+  } catch {
+    return DEFAULT_HIDDEN;
+  }
+}
+
+/** Saves the hidden columns, in table order. */
+export function saveHiddenColumns(store: PreferenceStore, hidden: ReadonlySet<ColumnKey>): void {
+  store.set(HIDDEN_COLUMNS_KEY, JSON.stringify(OPTIONAL_COLUMNS.filter((k) => hidden.has(k))));
 }

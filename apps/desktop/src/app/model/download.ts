@@ -119,6 +119,13 @@ export interface Download {
   readonly addedAt: number;
   readonly startedAt: number | null;
   readonly completedAt: number | null;
+  /**
+   * Milliseconds spent downloading (paused, queued and failed time excluded), up to the last
+   * checkpoint. `null` or absent: never recorded (added before the engine tracked it).
+   */
+  readonly activeMs?: number | null;
+  /** Start of the running span while `downloading`; the live time adds `now - activeSince`. */
+  readonly activeSince?: number | null;
   readonly failure: FailureKind | null;
   /** For a refused video: yt-dlp's own error line (plain text, at most 300 characters), shown behind "Details". */
   readonly errorDetail?: string | null;
@@ -213,6 +220,27 @@ export function progressOf(d: Pick<Download, 'segments' | 'size' | 'state'>): nu
 }
 
 /** Seconds left at the current speed, `null` when it cannot be estimated. */
+/** Time spent downloading as of `now`, or `null` when it was never recorded. */
+export function activeMillis(d: Pick<Download, 'activeMs' | 'activeSince' | 'state'>, now: number): number | null {
+  if (d.activeMs === null || d.activeMs === undefined) {
+    return null;
+  }
+  const running = d.state === 'downloading' && typeof d.activeSince === 'number' ? Math.max(0, now - d.activeSince) : 0;
+  return d.activeMs + running;
+}
+
+/**
+ * Average speed over the time spent downloading, in bytes per second: `null` while the time is
+ * unknown or under a second (an average over a few milliseconds says nothing). Distinct from
+ * `speedBps`, which is the current, smoothed speed.
+ */
+export function averageSpeed(downloaded: number, activeMs: number | null): number | null {
+  if (activeMs === null || activeMs < 1000 || downloaded <= 0) {
+    return null;
+  }
+  return (downloaded * 1000) / activeMs;
+}
+
 export function etaSeconds(d: Pick<Download, 'segments' | 'size' | 'state' | 'speedBps'>): number | null {
   if (d.state !== 'downloading' || d.size === null || d.speedBps <= 0) {
     return null;

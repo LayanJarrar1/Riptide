@@ -255,6 +255,9 @@ export function seedDownloads(now: number, seed = 7): Download[] {
     const startedAt = s.state === 'queued' ? null : addedAt + 2_000;
     const completedAt = s.state === 'completed' ? addedAt + 60_000 * (3 + Math.floor(rng() * 20)) : null;
     const speed = s.state === 'downloading' ? (s.speed ?? 5 * MB) : 0;
+    // one in five demo rows predates time tracking, so the "—" for unknown time shows up too
+    const tracked = i % 5 !== 4 && startedAt !== null;
+    const activeMs = !tracked ? null : completedAt !== null ? Math.round((completedAt - startedAt) * 0.8) : Math.round(60_000 * (1 + rng() * 6));
     return {
       id: i + 1,
       url: s.url,
@@ -274,6 +277,8 @@ export function seedDownloads(now: number, seed = 7): Download[] {
       addedAt,
       startedAt,
       completedAt,
+      activeMs,
+      activeSince: s.state === 'downloading' && activeMs !== null ? now - 20_000 : null,
       failure: s.failure ?? null,
       checksum: s.checksum ?? null,
     };
@@ -361,6 +366,8 @@ export function generateDownloads(count: number, active: number, now: number, se
       addedAt,
       startedAt: state === 'queued' ? null : addedAt + 1000,
       completedAt: state === 'completed' ? addedAt + 60_000 : null,
+      activeMs: state === 'queued' ? 0 : 20_000 + (i % 37) * 1000,
+      activeSince: state === 'downloading' ? now - 5000 : null,
       failure: state === 'failed' ? 'network' : null,
       checksum: null,
     };

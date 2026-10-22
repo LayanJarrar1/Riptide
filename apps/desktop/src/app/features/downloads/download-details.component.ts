@@ -184,6 +184,10 @@ interface LogLine {
             <dt>{{ i18n.t('details.server') }}</dt>
             <dd dir="ltr">{{ host() }}</dd>
           }
+          <dt>{{ i18n.t('column.duration') }}</dt>
+          <dd class="num" [attr.title]="row().activeMs === null ? i18n.t('column.unrecorded') : null">{{ (row().activeMs === null ? null : row().activeMs! / 1000) | duration }}</dd>
+          <dt>{{ i18n.t('column.avgSpeed') }}</dt>
+          <dd class="num" [attr.title]="row().avgBps === null ? i18n.t('column.unrecorded') : null">{{ row().avgBps | speed }}</dd>
           <dt>{{ i18n.t('details.saveTo') }}</dt>
           <dd class="fact-url">
             <span dir="ltr" class="truncate" [attr.title]="d().dir">{{ d().dir }}</span>

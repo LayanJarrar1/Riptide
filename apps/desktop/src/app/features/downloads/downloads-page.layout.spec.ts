@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { FRAME_SCHEDULER, FrameScheduler, REDUCED_MOTION_QUERY } from '../../core/motion.service';
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../../core/preferences';
-import { COLUMN_WIDTHS_KEY } from '../../data/column-widths';
+import { COLUMN_WIDTHS_KEY, HIDDEN_COLUMNS_KEY } from '../../data/column-widths';
 import { DownloadsStore } from '../../data/downloads.store';
 import { provideDownloadEngine } from '../../data/engine.provider';
 import { MOCK_ENGINE_AUTOSTART, MOCK_LIST_SIZE } from '../../data/mock-engine.service';
@@ -227,6 +227,42 @@ describe('DownloadsPageComponent layout and scale', () => {
       await settle();
       expect(prefs.get(COLUMN_WIDTHS_KEY)).toBe('{}');
       expect(Math.round(cell('name').getBoundingClientRect().width)).not.toBe(320);
+    });
+
+    it('turns the optional columns on from the header menu, shows them in every row and remembers it', async () => {
+      await setup(200, 1600);
+      expect(el().querySelector('.hc-duration')).toBeNull();
+      expect(rows()[0].querySelector('.c-duration')).toBeNull();
+      const menuItem = (pattern: RegExp): HTMLElement | undefined =>
+        Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((b) => pattern.test(b.textContent ?? ''));
+      for (const pattern of [/Duration|column\.duration/, /Avg\. speed|column\.avgSpeed/]) {
+        header().dispatchEvent(new MouseEvent('contextmenu', { clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+        await settle();
+        menuItem(pattern)?.click();
+        await settle();
+      }
+      expect(el().querySelector('.hc-duration')).not.toBeNull();
+      expect(el().querySelector('.hc-avgSpeed')).not.toBeNull();
+      expect(rows().every((r) => r.querySelector('.c-duration') !== null && r.querySelector('.c-avgSpeed') !== null)).toBeTrue();
+      expect(JSON.parse(prefs.get(HIDDEN_COLUMNS_KEY) ?? '[]')).toEqual(['category']);
+      // the cells line up with their headers
+      const h = cell('duration').getBoundingClientRect();
+      const c = (rows()[0].querySelector('.c-duration') as HTMLElement).getBoundingClientRect();
+      expect(Math.round(c.left)).toBe(Math.round(h.left));
+      // a sort on it works, and every row with a recorded time shows one
+      store.sortBy('duration');
+      await settle();
+      const recorded = rows().filter((r) => r.querySelector('.c-duration')?.textContent?.trim() !== '—');
+      expect(recorded.length).toBeGreaterThan(0);
+    });
+
+    it('hides a column the user turned off, in the header and in the rows', async () => {
+      await setup(100, 1400, { [HIDDEN_COLUMNS_KEY]: JSON.stringify(['avgSpeed', 'duration', 'category', 'size']) });
+      expect(el().querySelector('.hc-size')).toBeNull();
+      expect(rows()[0].querySelector('.c-size')).toBeNull();
+      const h = cell('progress').getBoundingClientRect();
+      const c = (rows()[0].querySelector('.c-progress') as HTMLElement).getBoundingClientRect();
+      expect(Math.round(c.left)).toBe(Math.round(h.left));
     });
 
     it('ignores corrupt saved widths', async () => {

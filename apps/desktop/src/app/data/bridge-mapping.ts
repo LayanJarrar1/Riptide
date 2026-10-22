@@ -169,6 +169,8 @@ export function toUiDownload(d: Download, segments: readonly Segment[], previous
     addedAt: toMillis(d.added_at) ?? previous?.addedAt ?? 0,
     startedAt: toMillis(d.started_at),
     completedAt: toMillis(d.completed_at),
+    activeMs: typeof d.active_ms === 'number' && Number.isFinite(d.active_ms) && d.active_ms >= 0 ? d.active_ms : null,
+    activeSince: toMillis(d.active_since),
     failure: state === 'failed' ? failureKindOf(d.error, d.url) : null,
     errorDetail: state === 'failed' && d.kind === 'media' ? errorDetailOf(d.error) : null,
     checksum: d.checksum_expected === null ? null : { algo: d.checksum_expected.algo, hex: d.checksum_expected.hex },

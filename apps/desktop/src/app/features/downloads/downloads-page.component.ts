@@ -17,7 +17,18 @@ import { FormatService } from '../../core/format.service';
 import { DUR, MotionService } from '../../core/motion.service';
 import { PREFERENCE_STORE } from '../../core/preferences';
 import { finalPath } from '../../data/bridge-mapping';
-import { clampWidth, ColumnKey, ColumnWidths, gridVars, loadColumnWidths, MAX_COLUMN_WIDTH, saveColumnWidths } from '../../data/column-widths';
+import {
+  clampWidth,
+  ColumnKey,
+  ColumnWidths,
+  gridVars,
+  loadColumnWidths,
+  loadHiddenColumns,
+  MAX_COLUMN_WIDTH,
+  OPTIONAL_COLUMNS,
+  saveColumnWidths,
+  saveHiddenColumns,
+} from '../../data/column-widths';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadRow, DownloadsStore } from '../../data/downloads.store';
 import { navFromKey, scrollToReveal } from '../../data/list-nav';
@@ -53,8 +64,11 @@ const COLUMNS: readonly Column[] = [
   { key: 'size', labelKey: 'column.size', align: 'end' },
   { key: 'progress', labelKey: 'column.progress', align: 'start' },
   { key: 'speed', labelKey: 'column.speed', align: 'end' },
+  { key: 'avgSpeed', labelKey: 'column.avgSpeed', align: 'end' },
   { key: 'eta', labelKey: 'column.eta', align: 'end' },
+  { key: 'duration', labelKey: 'column.duration', align: 'end' },
   { key: 'status', labelKey: 'column.status', align: 'start' },
+  { key: 'category', labelKey: 'column.category', align: 'start' },
   { key: 'added', labelKey: 'column.added', align: 'start' },
 ];
 
@@ -153,7 +167,7 @@ const FRESH_MS = 600;
         [attr.aria-activedescendant]="activeRowId()"
       >
         <div #header class="header" role="row" [class.boot]="ui.booting()" [class.is-resizing]="resizing() !== null" (contextmenu)="onHeaderContext($event)">
-          @for (c of columns; track c.key) {
+          @for (c of visibleColumns(); track c.key) {
             <div
               role="columnheader"
               [class]="'hc hc-' + c.key"
@@ -233,6 +247,7 @@ const FRESH_MS = 600;
                 [attr.aria-rowindex]="window().start + i + 2"
                 [class.is-active]="store.cursor() === row.d.id"
                 [row]="row"
+                [hidden]="hiddenColumns()"
                 [selected]="store.selected().has(row.d.id)"
                 [open]="store.detailsId() === row.d.id"
                 [staggerIndex]="ui.booting() && window().top === 0 && i < staggerRows ? i : null"
@@ -580,6 +595,9 @@ const FRESH_MS = 600;
 
       .hc-eta,
       .hc-added,
+      .hc-avgSpeed,
+      .hc-duration,
+      .hc-category,
       .sk-eta,
       .sk-added {
         display: none;
@@ -858,7 +876,6 @@ export class DownloadsPageComponent {
   private readonly zone = inject(NgZone);
   private readonly settings = inject(SettingsService);
 
-  protected readonly columns = COLUMNS;
   protected readonly skeletonRows = SKELETON_ROWS;
   protected readonly staggerRows = STAGGER_ROWS;
 
@@ -875,15 +892,26 @@ export class DownloadsPageComponent {
   protected readonly maxColumnWidth = MAX_COLUMN_WIDTH;
   /** The user's column widths (persisted); unset columns keep their responsive defaults. */
   protected readonly columnWidths = signal<ColumnWidths>({});
+  /** Columns the user turned off (persisted); the optional new ones start off. */
+  protected readonly hiddenColumns = signal<ReadonlySet<ColumnKey>>(new Set());
+  protected readonly visibleColumns = computed(() => {
+    const hidden = this.hiddenColumns();
+    return COLUMNS.filter((c) => !hidden.has(c.key));
+  });
   /** Track lists and minimum widths for the header, skeleton and rows. */
-  protected readonly gridStyle = computed(() => gridVars(this.columnWidths()));
+  protected readonly gridStyle = computed(() => gridVars(this.columnWidths(), this.hiddenColumns()));
   /** The column being dragged, for the grip's active look. */
   protected readonly resizing = signal<ColumnKey | null>(null);
   /** The header's context menu (reset widths), at a viewport point. */
   protected readonly headerMenu = signal<{ readonly x: number; readonly y: number } | null>(null);
-  protected readonly headerMenuItems = computed<readonly MenuItem[]>(() => [
-    { id: 'resetWidths', label: this.i18n.t('column.resetWidths'), icon: 'retry', disabled: Object.keys(this.columnWidths()).length === 0 },
-  ]);
+  protected readonly headerMenuItems = computed<readonly MenuItem[]>(() => {
+    const hidden = this.hiddenColumns();
+    const toggles = OPTIONAL_COLUMNS.map((key): MenuItem => {
+      const column = COLUMNS.find((c) => c.key === key);
+      return { id: `toggle:${key}`, label: this.i18n.t(column?.labelKey ?? key), ...(hidden.has(key) ? {} : { icon: 'check' }) };
+    });
+    return [...toggles, { id: 'resetWidths', label: this.i18n.t('column.resetWidths'), icon: 'retry', separator: true, disabled: Object.keys(this.columnWidths()).length === 0 }];
+  });
 
   /** Row height for the display density chosen in the View menu. */
   protected readonly rowHeight = computed(() => ROW_HEIGHTS[this.settings.settings().density]);
@@ -1061,6 +1089,7 @@ export class DownloadsPageComponent {
 
   constructor() {
     this.columnWidths.set(loadColumnWidths(this.prefs));
+    this.hiddenColumns.set(loadHiddenColumns(this.prefs));
 
     // the page's own width decides where the details drawer goes; measured, not guessed from the
     // window, because the sidebar's width varies
@@ -1496,6 +1525,20 @@ export class DownloadsPageComponent {
     if (id === 'resetWidths') {
       this.columnWidths.set({});
       saveColumnWidths(this.prefs, {});
+      return;
+    }
+    const key = OPTIONAL_COLUMNS.find((k) => id === `toggle:${k}`);
+    if (key !== undefined) {
+      const next = new Set(this.hiddenColumns());
+      if (!next.delete(key)) {
+        next.add(key);
+      }
+      this.hiddenColumns.set(next);
+      saveHiddenColumns(this.prefs, next);
+      // a column sorted on and then hidden would leave an order nobody can see
+      if (next.has(key) && this.store.sortKey() === key) {
+        this.store.sortBy('added');
+      }
     }
   }
 

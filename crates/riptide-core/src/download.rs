@@ -268,6 +268,19 @@ pub struct Download {
     /// For [`DownloadKind::Media`]: the yt-dlp format selector the user picked.
     #[serde(default)]
     pub media_format: Option<String>,
+    /// Milliseconds spent in [`DownloadState::Downloading`], summed over every run: paused,
+    /// queued, probing, verifying and failed time (including the wait before an automatic
+    /// retry) are excluded; segment retries inside a running transfer are included. `None` when
+    /// the time was never recorded (downloads added before this was tracked), so no average is
+    /// invented for them. Maintained by the store's state changes, not by `update_download`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub active_ms: Option<u64>,
+    /// Start of the open active span while the download is in `Downloading` (moved forward at
+    /// each checkpoint): the live duration is `active_ms + (now - active_since)`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(type = "number | null"))]
+    pub active_since: Option<UnixMillis>,
 }
 
 impl Download {
@@ -305,7 +318,16 @@ impl Download {
             completed_at: None,
             kind: DownloadKind::Http,
             media_format: None,
+            active_ms: Some(0),
+            active_since: None,
         }
+    }
+
+    /// Average speed over the active time in bytes per second, from `bytes` written so far.
+    /// `None` when the active time is unknown or shorter than a second (too short to mean much).
+    pub fn average_speed(&self, bytes: u64) -> Option<u64> {
+        let ms = self.active_ms?;
+        (ms >= 1000).then(|| bytes.saturating_mul(1000) / ms)
     }
 
     /// Full path of the finished file.

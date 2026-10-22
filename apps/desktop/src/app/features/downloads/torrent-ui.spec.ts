@@ -282,7 +282,7 @@ describe('DownloadRowComponent for a torrent', () => {
       ratio: 0.5,
       ...over,
     };
-    return { d: { ...base, kind: 'torrent', state, filename: 'Big Buck Bunny', url: `magnet:?xt=urn:btih:${HASH}`, torrent: view }, downloaded: 0, progress: 0, eta: null };
+    return { d: { ...base, kind: 'torrent', state, filename: 'Big Buck Bunny', url: `magnet:?xt=urn:btih:${HASH}`, torrent: view }, downloaded: 0, progress: 0, eta: null, activeMs: null, avgBps: null };
   }
 
   function render(row: DownloadRow, lang = 'en-US'): HTMLElement {

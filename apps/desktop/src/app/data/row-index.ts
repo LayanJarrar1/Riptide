@@ -1,7 +1,7 @@
-import { CategoryKey, Download, DownloadState, downloadedBytes, etaSeconds, isActive, progressOf } from '../model/download';
+import { activeMillis, averageSpeed, CATEGORY_KEYS, CategoryKey, Download, DownloadState, downloadedBytes, etaSeconds, isActive, progressOf } from '../model/download';
 
 /** Sortable columns. */
-export type SortKey = 'name' | 'size' | 'progress' | 'speed' | 'eta' | 'status' | 'added' | 'queue';
+export type SortKey = 'name' | 'size' | 'progress' | 'speed' | 'avgSpeed' | 'eta' | 'duration' | 'status' | 'category' | 'added' | 'queue';
 
 /** Sort direction. */
 export type SortDir = 'asc' | 'desc';
@@ -13,6 +13,10 @@ export interface DownloadRow {
   /** 0..1 or `null` when unknown. */
   readonly progress: number | null;
   readonly eta: number | null;
+  /** Time spent downloading when the row was made (see `activeMillis`); `null` = never recorded. */
+  readonly activeMs: number | null;
+  /** Average bytes per second over `activeMs`; `null` when unknown. */
+  readonly avgBps: number | null;
   /** Lower-cased name and link, filled the first time a search needs it (see `haystack`). */
   hay?: string;
 }
@@ -87,8 +91,10 @@ export function foldSearch(text: string): string {
 }
 
 /** A row for a download. */
-export function makeRow(d: Download): DownloadRow {
-  return { d, downloaded: downloadedBytes(d), progress: progressOf(d), eta: etaSeconds(d) };
+export function makeRow(d: Download, now = Date.now()): DownloadRow {
+  const downloaded = downloadedBytes(d);
+  const activeMs = activeMillis(d, now);
+  return { d, downloaded, progress: progressOf(d), eta: etaSeconds(d), activeMs, avgBps: averageSpeed(downloaded, activeMs) };
 }
 
 /** Negative when `a` sorts before `b` for `key` (ascending). */
@@ -108,6 +114,12 @@ export function compare(a: DownloadRow, b: DownloadRow, key: SortKey): number {
       return STATE_ORDER[a.d.state] - STATE_ORDER[b.d.state];
     case 'added':
       return a.d.addedAt - b.d.addedAt;
+    case 'avgSpeed':
+      return (a.avgBps ?? -1) - (b.avgBps ?? -1);
+    case 'duration':
+      return (a.activeMs ?? -1) - (b.activeMs ?? -1);
+    case 'category':
+      return CATEGORY_KEYS.indexOf(a.d.category) - CATEGORY_KEYS.indexOf(b.d.category);
     case 'queue':
       return (a.d.queuePosition ?? 0) - (b.d.queuePosition ?? 0) || a.d.id - b.d.id;
   }

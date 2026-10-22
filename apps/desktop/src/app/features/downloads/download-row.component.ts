@@ -4,6 +4,7 @@ import { FORMAT_PIPES } from '../../core/format.pipes';
 import { FormatService } from '../../core/format.service';
 import { TickerDirective } from '../../core/ticker.directive';
 import { I18nService } from '../../i18n/i18n.service';
+import { ColumnKey, DEFAULT_HIDDEN } from '../../data/column-widths';
 import { DownloadRow } from '../../data/downloads.store';
 import { canPause, canResume, CategoryKey, failureFix } from '../../model/download';
 import { formatRatio } from '../../model/torrent';
@@ -100,30 +101,54 @@ export function hostOf(url: string): string {
       </span>
     </div>
 
-    <div class="cell c-size num" role="gridcell">
-      @if (showDownloaded()) {
-        <span class="size-done">{{ row().downloaded | bytes }}</span>
-        <span class="size-sep">/</span>
-      }
-      <span>{{ row().d.size | bytes }}</span>
-    </div>
+    @if (!hidden().has('size')) {
+      <div class="cell c-size num" role="gridcell">
+        @if (showDownloaded()) {
+          <span class="size-done">{{ row().downloaded | bytes }}</span>
+          <span class="size-sep">/</span>
+        }
+        <span>{{ row().d.size | bytes }}</span>
+      </div>
+    }
 
-    <div class="cell c-progress" role="gridcell">
-      <app-progress-flow [segments]="row().d.segments" [size]="row().d.size" [state]="row().d.state" />
-      <span class="pct num">{{ row().progress | pct }}</span>
-    </div>
+    @if (!hidden().has('progress')) {
+      <div class="cell c-progress" role="gridcell">
+        <app-progress-flow [segments]="row().d.segments" [size]="row().d.size" [state]="row().d.state" />
+        <span class="pct num">{{ row().progress | pct }}</span>
+      </div>
+    }
 
-    <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat" [tickerStream]="true"></span>
+    @if (!hidden().has('speed')) {
+      <span class="cell c-speed num" role="gridcell" [appTicker]="row().d.speedBps" [tickerFormat]="speedFormat" [tickerStream]="true"></span>
+    }
 
-    <div class="cell c-eta num" role="gridcell">{{ row().eta | duration }}</div>
+    @if (!hidden().has('avgSpeed')) {
+      <div class="cell c-avgSpeed num" role="gridcell" [attr.title]="row().avgBps === null ? i18n.t('column.unrecorded') : null">{{ row().avgBps | speed }}</div>
+    }
 
-    <div class="cell c-status" role="gridcell">
-      <app-status-pill [state]="row().d.state" [failure]="row().d.failure" [compact]="true" />
-    </div>
+    @if (!hidden().has('eta')) {
+      <div class="cell c-eta num" role="gridcell">{{ row().eta | duration }}</div>
+    }
 
-    <div class="cell c-added num" role="gridcell" [attr.title]="row().d.addedAt | dateTime">
-      {{ row().d.addedAt | relTime }}
-    </div>
+    @if (!hidden().has('duration')) {
+      <div class="cell c-duration num" role="gridcell" [attr.title]="row().activeMs === null ? i18n.t('column.unrecorded') : null">{{ activeSeconds() | duration }}</div>
+    }
+
+    @if (!hidden().has('status')) {
+      <div class="cell c-status" role="gridcell">
+        <app-status-pill [state]="row().d.state" [failure]="row().d.failure" [compact]="true" />
+      </div>
+    }
+
+    @if (!hidden().has('category')) {
+      <div class="cell c-category" role="gridcell">{{ i18n.t(categoryLabel()) }}</div>
+    }
+
+    @if (!hidden().has('added')) {
+      <div class="cell c-added num" role="gridcell" [attr.title]="row().d.addedAt | dateTime">
+        {{ row().d.addedAt | relTime }}
+      </div>
+    }
 
     <div class="cell c-actions" role="gridcell">
       @if (canPause(row().d.state)) {
@@ -352,7 +377,9 @@ export function hostOf(url: string): string {
 
     .c-size,
     .c-speed,
-    .c-eta {
+    .c-avgSpeed,
+    .c-eta,
+    .c-duration {
       text-align: end;
       color: var(--color-text-secondary);
       white-space: nowrap;
@@ -401,6 +428,13 @@ export function hostOf(url: string): string {
       white-space: nowrap;
     }
 
+    .c-category {
+      overflow: hidden;
+      color: var(--color-text-secondary);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .c-actions {
       display: flex;
       justify-content: flex-end;
@@ -423,7 +457,10 @@ export function hostOf(url: string): string {
       }
 
       .c-eta,
-      .c-added {
+      .c-added,
+      .c-avgSpeed,
+      .c-duration,
+      .c-category {
         display: none;
       }
     }
@@ -493,12 +530,20 @@ export class DownloadRowComponent {
   readonly fresh = input(false);
   /** About to be removed: fades and collapses. */
   readonly leaving = input(false);
+  /** Columns the user turned off (the page's header shows the same set). */
+  readonly hidden = input<ReadonlySet<ColumnKey>>(DEFAULT_HIDDEN);
 
   readonly rowClick = output<MouseEvent>();
   readonly rowDblClick = output<void>();
   readonly rowContext = output<MouseEvent>();
   readonly action = output<RowAction>();
 
+  protected readonly categoryLabel = computed(() => `category.${this.row().d.category}`);
+  /** Seconds spent downloading, for the duration pipe; `null` when never recorded. */
+  protected readonly activeSeconds = computed(() => {
+    const ms = this.row().activeMs;
+    return ms === null ? null : ms / 1000;
+  });
   protected readonly icon = computed<IconName>(() => (this.row().d.kind === 'torrent' ? 'magnet' : CATEGORY_ICONS[this.row().d.category]));
   /** The second line of a torrent row: peers (or seeding) and the share ratio; `null` for other rows. */
   protected readonly torrentLine = computed(() => {
