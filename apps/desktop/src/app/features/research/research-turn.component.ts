@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output, si
 import { Router } from '@angular/router';
 
 import { AiService } from '../../ai/ai.service';
-import { safeWebUrl, SourceId } from '../../ai/research.models';
+import { safeWebUrl, SearchMode, SourceId } from '../../ai/research.models';
 import { SourceStatus } from '../../ai/research.session';
 import { FormatService } from '../../core/format.service';
 import { QueuesService } from '../../data/queues.service';
@@ -14,13 +14,29 @@ import { IconComponent } from '../../ui/icon.component';
 import { MenuComponent, MenuItem } from '../../ui/menu.component';
 import { ToastService } from '../../ui/toast.service';
 import { UiState } from '../shell/ui-state.service';
-import { exportName, ExportContext, responseText, summaryLines, toBibtex, toMarkdown, toRis } from './research-export';
+import { exportName, ExportContext, isCitable, responseText, summaryLines, toBibtex, toMarkdown, toRis } from './research-export';
 import { Turn, TurnItem } from './research-history';
 import { ResearchCardComponent } from './research-result-card.component';
-import { deriveSteps, summarize } from './research-turn';
+import { deriveSteps, isAddable } from './research-turn';
 
-/** Cards shown before "Show all"; a turn keeps at most 60. */
+/** Cards shown per group before "Show more"; a turn keeps at most 60. */
 const FIRST_PAGE = 20;
+
+/** Search the same prompt again: with or without the AI, in this mode. */
+export interface RerunRequest {
+  readonly useAi: boolean;
+  readonly mode: SearchMode;
+}
+
+/** The three groups of a result list, best first. */
+export type GroupId = 'exact' | 'strong' | 'related';
+
+interface Group {
+  readonly id: GroupId;
+  readonly count: number;
+  readonly shown: readonly TurnItem[];
+  readonly more: number;
+}
 
 /**
  * One prompt and its answer: the message, the progress steps (driven by the real events), the
@@ -37,43 +53,10 @@ const FIRST_PAGE = 20;
     <section class="turn" [attr.aria-label]="t.prompt">
       <div class="user">
         <p class="bubble" dir="auto">{{ t.prompt }}</p>
-        <span class="kind">{{ i18n.t('research.cat.' + t.category) }}{{ t.useAi ? ' · ' + i18n.t('research.aiBadge') : '' }}</span>
+        <span class="kind">{{ i18n.t('research.cat.' + t.category) }} · {{ i18n.t('research.mode.' + t.mode) }}{{ t.useAi ? ' · ' + i18n.t('research.aiBadge') : '' }}</span>
       </div>
 
       <div class="assistant">
-        <ol class="steps" [attr.aria-label]="i18n.t('research.steps')" aria-live="polite">
-          @for (s of steps(); track s.id) {
-            <li class="step" [class]="'is-' + s.state">
-              <span class="mark" aria-hidden="true">
-                @switch (s.state) {
-                  @case ('done') {
-                    <app-icon name="check" [size]="12" />
-                  }
-                  @case ('failed') {
-                    <app-icon name="alert" [size]="12" />
-                  }
-                  @case ('active') {
-                    <span class="spin"></span>
-                  }
-                  @case ('skipped') {
-                    <span class="dash"></span>
-                  }
-                  @case ('stopped') {
-                    <app-icon name="stop" [size]="10" />
-                  }
-                  @default {
-                    <span class="dot"></span>
-                  }
-                }
-              </span>
-              <span class="label">{{ stepLabel(s.id, s.state) }}</span>
-              @if (s.count !== null && s.state !== 'skipped') {
-                <span class="count num">{{ fmt.int(s.count) }}</span>
-              }
-              <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
-            </li>
-          }
-        </ol>
 
         @if (running() && live()) {
           <button appButton size="sm" variant="secondary" icon="stop" type="button" class="stop" (click)="stopSearch.emit()">{{ i18n.t('research.cancel') }}</button>
@@ -106,22 +89,60 @@ const FIRST_PAGE = 20;
           </p>
         }
 
-        @if (t.plan.length > 0) {
-          <p class="plan">
-            <app-icon name="sparkles" [size]="14" />
-            <span>{{ i18n.t('research.queries') }}:</span>
-            @for (q of t.plan; track q) {
-              <span class="query" dir="auto">{{ q }}</span>
+        <details class="info" [open]="running()">
+          <summary>{{ i18n.t('research.steps') }}</summary>
+          <ol class="steps" [attr.aria-label]="i18n.t('research.steps')" aria-live="polite">
+            @for (s of steps(); track s.id) {
+              <li class="step" [class]="'is-' + s.state">
+                <span class="mark" aria-hidden="true">
+                  @switch (s.state) {
+                    @case ('done') {
+                      <app-icon name="check" [size]="12" />
+                    }
+                    @case ('failed') {
+                      <app-icon name="alert" [size]="12" />
+                    }
+                    @case ('active') {
+                      <span class="spin"></span>
+                    }
+                    @case ('skipped') {
+                      <span class="dash"></span>
+                    }
+                    @case ('stopped') {
+                      <app-icon name="stop" [size]="10" />
+                    }
+                    @default {
+                      <span class="dot"></span>
+                    }
+                  }
+                </span>
+                <span class="label">{{ stepLabel(s.id, s.state) }}</span>
+                @if (s.count !== null && s.state !== 'skipped') {
+                  <span class="count num">{{ fmt.int(s.count) }}</span>
+                }
+                <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
+              </li>
             }
-          </p>
-        }
+          </ol>
+          @if (searched().length > 0) {
+            <p class="plan">
+              <app-icon name="sparkles" [size]="14" />
+              <span>{{ i18n.t('research.queries') }}:</span>
+              @for (q of searched(); track q) {
+                <span class="query" dir="auto">{{ q }}</span>
+              }
+            </p>
+          }
+        </details>
+
+
 
         @if (t.ai?.failed && t.ai?.failMessage; as msg) {
           <div class="warn" role="alert">
             <app-icon name="alert" [size]="14" />
             <span>{{ i18n.t('research.ai.failed') }} <span dir="auto">{{ msg }}</span></span>
             @if (live() || !running()) {
-              <button appButton size="sm" variant="ghost" type="button" (click)="rerun.emit(false)">{{ i18n.t('research.retryNoAi') }}</button>
+              <button appButton size="sm" variant="ghost" type="button" (click)="rerun.emit({ useAi: false, mode: t.mode })">{{ i18n.t('research.retryNoAi') }}</button>
             }
           </div>
         }
@@ -133,32 +154,60 @@ const FIRST_PAGE = 20;
           <div class="warn is-error" role="alert">
             <app-icon name="alert" [size]="14" />
             <span dir="auto">{{ t.error }}</span>
-            <button appButton size="sm" variant="secondary" icon="retry" type="button" (click)="rerun.emit(t.useAi)">{{ i18n.t('research.tryAgain') }}</button>
+            <button appButton size="sm" variant="secondary" icon="retry" type="button" (click)="rerun.emit({ useAi: t.useAi, mode: t.mode })">{{ i18n.t('research.tryAgain') }}</button>
           </div>
         }
 
         @if (t.reused) {
-          <p class="note"><app-icon name="info" [size]="14" /> {{ i18n.t('research.reused') }} <button appButton size="sm" variant="ghost" icon="retry" type="button" (click)="rerun.emit(t.useAi)">{{ i18n.t('research.searchAgain') }}</button></p>
+          <p class="note"><app-icon name="info" [size]="14" /> {{ i18n.t('research.reused') }} <button appButton size="sm" variant="ghost" icon="retry" type="button" (click)="rerun.emit({ useAi: t.useAi, mode: t.mode })">{{ i18n.t('research.searchAgain') }}</button></p>
         }
 
         @if (t.status === 'cancelled') {
           <p class="note">{{ i18n.t('research.cancelled') }}</p>
         }
 
-        @if (t.items.length > 0 || (!running() && !t.error)) {
+        @if (lines().length > 0) {
           <div class="answer" role="status">
             @for (line of lines(); track $index) {
               <p dir="auto">{{ line }}</p>
             }
-            @if (top().length > 0 && !running()) {
-              <p class="top-title">{{ i18n.t(ranked() ? 'research.sum.top' : 'research.sum.first') }}</p>
-              <ol class="top">
-                @for (p of top(); track p.id) {
-                  <li dir="auto"><strong>{{ p.title }}</strong>@if (p.why) {: {{ p.why }}}</li>
-                }
-              </ol>
+          </div>
+        }
+
+        @if (t.summary && t.summary.hidden > 0 && !running()) {
+          <p class="note hidden-note">
+            <app-icon name="info" [size]="14" />
+            <span>{{ i18n.plural('research.hidden', t.summary.hidden).replace('{n}', fmt.int(t.summary.hidden)) }}</span>
+            @if (t.mode === 'quick-search' && !noExact()) {
+              <button appButton size="sm" variant="ghost" type="button" (click)="deeper()">{{ i18n.t('research.tryDeep') }}</button>
+            }
+          </p>
+        }
+
+        @if (noExact()) {
+          <div class="noexact" role="status">
+            <p class="noexact-title">{{ i18n.t(t.items.length > 0 ? 'research.noExact.some' : 'research.noExact.none') }}</p>
+            <p class="noexact-searched">
+              <span>{{ i18n.t('research.noExact.searched').replace('{sources}', sourceNames()) }}</span>
+              @for (q of searched().length > 0 ? searched() : [t.prompt]; track q) {
+                <span class="query" dir="auto">{{ q }}</span>
+              }
+            </p>
+            @if (t.mode === 'quick-search') {
+              <button appButton size="sm" variant="secondary" icon="layers" type="button" (click)="deeper()">{{ i18n.t('research.tryDeep') }}</button>
             }
           </div>
+        }
+
+        @if (comparisonNotes().length > 0) {
+          <details class="compare">
+            <summary>{{ i18n.plural('research.compare', comparisonNotes().length).replace('{n}', fmt.int(comparisonNotes().length)) }}</summary>
+            <ul>
+              @for (n of comparisonNotes(); track $index) {
+                <li><strong dir="auto">{{ n.title }}</strong> · {{ i18n.t('research.field.' + n.field) }}: {{ n.values }}</li>
+              }
+            </ul>
+          </details>
         }
 
         @if (t.items.length > 0) {
@@ -167,74 +216,95 @@ const FIRST_PAGE = 20;
               <button appButton size="sm" variant="ghost" type="button" (click)="only.set(null)">{{ i18n.t('research.showAll') }} ({{ i18n.t('research.source.' + o) }} ×)</button>
             </div>
           }
-          <div class="results">
-            @for (it of shown(); track it.id) {
-              <app-research-card
-                [item]="it"
-                [selected]="selected().has(it.id)"
-                [canDownload]="canAdd() && !adding()"
-                [canSelect]="canAdd()"
-                (pick)="toggle(it.id)"
-                (download)="addIds([it.id])"
-                (findFiles)="findFiles(it)"
-                (openPage)="openPage(it)"
-                (copyLink)="copyLink(it)"
-              />
-            }
-          </div>
-          @if (hidden() > 0) {
-            <button appButton size="sm" variant="ghost" type="button" class="more" (click)="showAll.set(true)">{{ i18n.t('research.showMore').replace('{n}', fmt.int(hidden())) }}</button>
+          @for (g of groups(); track g.id) {
+            <section class="group" [attr.aria-label]="i18n.t('research.group.' + g.id)">
+              @if (g.id === 'related') {
+                <button type="button" class="group-head is-toggle" [attr.aria-expanded]="relatedOpen()" (click)="relatedOpen.set(!relatedOpen())">
+                  <app-icon [name]="relatedOpen() ? 'chevronDown' : 'chevronEnd'" [size]="14" />
+                  <span class="group-name">{{ i18n.t('research.group.related') }}</span>
+                  <span class="group-count num">{{ fmt.int(g.count) }}</span>
+                </button>
+              } @else {
+                <h3 class="group-head">
+                  <span class="group-name">{{ i18n.t('research.group.' + g.id) }}</span>
+                  <span class="group-count num">{{ fmt.int(g.count) }}</span>
+                </h3>
+              }
+              @if (g.id !== 'related' || relatedOpen()) {
+                <div class="results" [class.is-grid]="t.category === 'images'">
+                  @for (it of g.shown; track it.id) {
+                    <app-research-card
+                      [item]="it"
+                      [category]="t.category"
+                      [alsoIn]="alsoFor(it)"
+                      [selected]="selected().has(it.id)"
+                      [canDownload]="canAdd() && !adding()"
+                      [canSelect]="canAdd()"
+                      (pick)="toggle(it.id)"
+                      (download)="addIds([it.id])"
+                      (findFiles)="findFiles(it)"
+                      (openPage)="openPage(it)"
+                      (copyLink)="copyLink(it)"
+                      (copyCite)="copyCite(it)"
+                    />
+                  }
+                </div>
+                @if (g.more > 0) {
+                  <button appButton size="sm" variant="ghost" type="button" class="more" (click)="expand(g.id)">{{ i18n.t('research.showMore').replace('{n}', fmt.int(g.more)) }}</button>
+                }
+              }
+            </section>
           }
 
           @if (!canAdd() && !running()) {
-            <p class="note"><app-icon name="info" [size]="14" /> {{ i18n.t('research.expired') }} <button appButton size="sm" variant="secondary" icon="retry" type="button" (click)="rerun.emit(t.useAi)">{{ i18n.t('research.searchAgain') }}</button></p>
+            <p class="note"><app-icon name="info" [size]="14" /> {{ i18n.t('research.expired') }} <button appButton size="sm" variant="secondary" icon="retry" type="button" (click)="rerun.emit({ useAi: t.useAi, mode: t.mode })">{{ i18n.t('research.searchAgain') }}</button></p>
           }
 
           <div class="bar" role="group" [attr.aria-label]="i18n.t('research.actions')">
-            @if (canAdd()) {
-              <div class="bar-row">
-                <label class="mini">
-                  <span>{{ i18n.t('research.queue') }}</span>
-                  <select class="select" (change)="queueId.set(numberOrNull($event))">
-                    <option value="">{{ i18n.t('queue.main') }}</option>
-                    @for (q of queues.queues(); track q.id) {
-                      <option [value]="q.id">{{ q.name }}</option>
-                    }
-                  </select>
-                </label>
-                <label class="mini">
-                  <span>{{ i18n.t('research.category') }}</span>
-                  <select class="select" (change)="saveAs.set(value($event))">
-                    <option value="">{{ i18n.t('research.categoryAuto') }}</option>
-                    @for (c of fileCategories; track c) {
-                      <option [value]="c">{{ i18n.t('category.' + c) }}</option>
-                    }
-                  </select>
-                </label>
-                <label class="mini check-mini">
-                  <input type="checkbox" [checked]="later()" (change)="later.set(checked($event))" />
-                  <span>{{ i18n.t('research.startLater') }}</span>
-                </label>
-              </div>
-            }
             <div class="bar-row">
               @if (canAdd()) {
                 <button appButton variant="primary" size="sm" icon="download" type="button" [busy]="adding()" [disabled]="selected().size === 0 || adding()" (click)="addIds(selectedIds())">
                   {{ i18n.t('research.addSelected').replace('{n}', fmt.int(selected().size)) }}
                 </button>
                 <button appButton size="sm" variant="ghost" type="button" (click)="selectAll()">{{ i18n.t('research.selectAll') }}</button>
-                <button appButton size="sm" variant="ghost" type="button" [disabled]="selected().size === 0" (click)="selected.set(none)">{{ i18n.t('research.selectNone') }}</button>
               }
               <span class="grow"></span>
-              <button appButton size="sm" variant="ghost" icon="copy" type="button" (click)="copyResponse()">{{ i18n.t('research.copyResponse') }}</button>
-              <button appButton size="sm" variant="ghost" icon="fileDoc" type="button" (click)="saveResearch()">{{ i18n.t('research.save') }}</button>
-              <button appButton size="sm" variant="ghost" icon="book" type="button" aria-haspopup="menu" (click)="openCiteMenu($event)">{{ i18n.t('research.cite') }}</button>
+              <button appButton size="sm" variant="ghost" icon="more" type="button" [iconOnly]="true" aria-haspopup="menu" [attr.aria-label]="i18n.t('research.moreActions')" [attr.title]="i18n.t('research.moreActions')" (click)="openMore($event)"></button>
             </div>
+            @if (canAdd()) {
+              <details class="opts">
+                <summary>{{ i18n.t('research.downloadOptions') }}</summary>
+                <div class="bar-row">
+                  <label class="mini">
+                    <span>{{ i18n.t('research.queue') }}</span>
+                    <select class="select" (change)="queueId.set(numberOrNull($event))">
+                      <option value="">{{ i18n.t('queue.main') }}</option>
+                      @for (q of queues.queues(); track q.id) {
+                        <option [value]="q.id">{{ q.name }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="mini">
+                    <span>{{ i18n.t('research.category') }}</span>
+                    <select class="select" (change)="saveAs.set(value($event))">
+                      <option value="">{{ i18n.t('research.categoryAuto') }}</option>
+                      @for (c of fileCategories; track c) {
+                        <option [value]="c">{{ i18n.t('category.' + c) }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="mini check-mini">
+                    <input type="checkbox" [checked]="later()" (change)="later.set(checked($event))" />
+                    <span>{{ i18n.t('research.startLater') }}</span>
+                  </label>
+                </div>
+              </details>
+            }
           </div>
         }
       </div>
     </section>
-    <app-menu [open]="citeMenu() !== null" [items]="citeItems()" [x]="citeMenu()?.x ?? 0" [y]="citeMenu()?.y ?? 0" (selected)="exportCitations($event)" (closed)="citeMenu.set(null)" />
+    <app-menu [open]="moreMenu() !== null" [items]="moreItems()" [x]="moreMenu()?.x ?? 0" [y]="moreMenu()?.y ?? 0" (selected)="onMore($event)" (closed)="moreMenu.set(null)" />
   `,
   styles: `
     :host {
@@ -275,6 +345,20 @@ const FIRST_PAGE = 20;
       flex-direction: column;
       gap: var(--space-3);
       min-inline-size: 0;
+    }
+
+    .info summary {
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+    }
+
+    .info[open] summary {
+      margin-block-end: var(--space-2);
+    }
+
+    .info > .plan {
+      margin-block-start: var(--space-2);
     }
 
     .steps {
@@ -531,24 +615,112 @@ const FIRST_PAGE = 20;
       line-height: var(--leading-normal);
     }
 
-    .top-title {
-      font-weight: var(--weight-semibold);
-      margin-block-start: var(--space-1);
+    .noexact {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border: 1px dashed var(--color-border-strong);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-1, var(--color-surface-2));
     }
 
-    .top {
-      margin: 0;
+    .noexact-title {
+      font-weight: var(--weight-semibold);
+    }
+
+    .noexact-searched {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      color: var(--color-text-secondary);
+      font-size: var(--text-sm);
+    }
+
+    .compare {
+      font-size: var(--text-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .compare summary,
+    .opts summary {
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+    }
+
+    .compare ul {
+      margin: var(--space-2) 0 0;
       padding-inline-start: var(--space-5);
       display: flex;
       flex-direction: column;
       gap: var(--space-1);
-      font-size: var(--text-sm);
+    }
+
+    .opts {
+      margin-block-start: var(--space-1);
+    }
+
+    .opts .bar-row {
+      margin-block-start: var(--space-2);
+    }
+
+    .group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .group-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-text);
+      font: inherit;
+      font-size: var(--text-md);
+      font-weight: var(--weight-semibold);
+      text-align: start;
+    }
+
+    .group-head.is-toggle {
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+    }
+
+    .group-head.is-toggle:hover {
+      color: var(--color-text);
+    }
+
+    .group-head.is-toggle:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: 2px;
+    }
+
+    .group-count {
+      padding: 0 8px;
+      border-radius: var(--radius-full);
+      background: var(--color-surface-3);
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
     }
 
     .results {
       display: flex;
       flex-direction: column;
       gap: var(--space-2);
+    }
+
+    .results.is-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     }
 
     .more {
@@ -621,7 +793,7 @@ export class ResearchTurnComponent {
   readonly stopSearch = output<void>();
   readonly retrySource = output<SourceId>();
   /** Search the prompt again, with or without the AI. */
-  readonly rerun = output<boolean>();
+  readonly rerun = output<RerunRequest>();
   /** Some results were added to the downloads. */
   readonly added = output<void>();
 
@@ -629,33 +801,85 @@ export class ResearchTurnComponent {
   protected readonly none: ReadonlySet<string> = new Set<string>();
   protected readonly selected = signal<ReadonlySet<string>>(this.none);
   protected readonly only = signal<SourceId | null>(null);
-  protected readonly showAll = signal(false);
+  protected readonly relatedOpen = signal(false);
+  /** Groups whose "Show more" was used. */
+  private readonly expanded = signal<ReadonlySet<GroupId>>(new Set());
   protected readonly adding = signal(false);
   protected readonly queueId = signal<number | null>(null);
   protected readonly saveAs = signal('');
   protected readonly later = signal(false);
-  protected readonly citeMenu = signal<{ x: number; y: number } | null>(null);
+  protected readonly moreMenu = signal<{ x: number; y: number } | null>(null);
 
   protected readonly running = computed(() => this.turn().status === 'running');
-  protected readonly canAdd = computed(() => this.addable() && this.turn().items.some((i) => i.kind === 'file'));
+  protected readonly canAdd = computed(() => this.addable() && this.turn().items.some(isAddable));
   protected readonly steps = computed(() => deriveSteps(this.turn()));
-  protected readonly top = computed(() => summarize(this.turn()).top);
-  protected readonly ranked = computed(() => summarize(this.turn()).ranked);
-  protected readonly lines = computed(() => (this.running() && this.turn().items.length === 0 ? [] : summaryLines(this.turn(), this.exportContext())));
+  protected readonly lines = computed(() => {
+    const t = this.turn();
+    return (this.running() && t.items.length === 0) || t.items.length === 0 ? [] : summaryLines(t, this.exportContext());
+  });
+
+  /** What was searched: the AI's phrasings, else the ones the search started with. */
+  protected readonly searched = computed(() => (this.turn().plan.length > 0 ? this.turn().plan : this.turn().queries));
+  protected readonly sourceNames = computed(() => this.turn().sources.map((s) => this.i18n.t(`research.source.${s.id}`)).join(', '));
 
   protected readonly visible = computed<readonly TurnItem[]>(() => {
     const only = this.only();
     const items = this.turn().items;
     return only === null ? items : items.filter((i) => i.source === only);
   });
-  protected readonly shown = computed(() => (this.showAll() ? this.visible() : this.visible().slice(0, FIRST_PAGE)));
-  protected readonly hidden = computed(() => this.visible().length - this.shown().length);
+
+  /** Exact, likely and related results (in that order); a group with nothing in it does not exist. */
+  protected readonly groups = computed<readonly Group[]>(() => {
+    const open = this.expanded();
+    return (['exact', 'strong', 'related'] as const)
+      .map((id) => {
+        const all = this.visible().filter((i) => i.confidence === id);
+        const shown = open.has(id) ? all : all.slice(0, FIRST_PAGE);
+        return { id, count: all.length, shown, more: all.length - shown.length };
+      })
+      .filter((g) => g.count > 0);
+  });
+
+  /** The search is over and nothing in it is an exact match. */
+  protected readonly noExact = computed(() => {
+    const t = this.turn();
+    return t.status === 'done' && !t.error && !t.items.some((i) => i.confidence === 'exact');
+  });
+
+  /** Deep research: where sources disagree, with the result's title (only for results on the page). */
+  protected readonly comparisonNotes = computed(() => {
+    const c = this.turn().comparison;
+    if (c === null) {
+      return [];
+    }
+    const byId = new Map(this.turn().items.map((i) => [i.id, i] as const));
+    return c.notes.flatMap((n) => {
+      const it = byId.get(n.id);
+      return it === undefined ? [] : [{ title: it.title, field: n.field, values: n.values.map(([src, v]) => `${this.i18n.t(`research.source.${src}`)} ${v}`).join(', ') }];
+    });
+  });
   protected readonly selectedIds = computed(() => [...this.selected()]);
 
-  protected readonly citeItems = computed<readonly MenuItem[]>(() => [
-    { id: 'bib', label: this.i18n.t('research.cite.bibtex'), icon: 'file' },
-    { id: 'ris', label: this.i18n.t('research.cite.ris'), icon: 'file' },
+  protected readonly moreItems = computed<readonly MenuItem[]>(() => [
+    { id: 'none', label: this.i18n.t('research.selectNone'), icon: 'close', disabled: this.selected().size === 0 },
+    { id: 'copy', label: this.i18n.t('research.copyResponse'), icon: 'copy', separator: true },
+    { id: 'save', label: this.i18n.t('research.save'), icon: 'fileDoc' },
+    { id: 'bib', label: this.i18n.t('research.cite.bibtex'), icon: 'book', separator: true },
+    { id: 'ris', label: this.i18n.t('research.cite.ris'), icon: 'book' },
   ]);
+
+  protected alsoFor(it: TurnItem): readonly SourceId[] {
+    return this.turn().comparison?.alsoIn[it.id] ?? [];
+  }
+
+  protected expand(id: GroupId): void {
+    this.expanded.update((s) => new Set([...s, id]));
+  }
+
+  /** The same prompt in Deep Research mode. */
+  protected deeper(): void {
+    this.rerun.emit({ useAi: this.turn().useAi, mode: 'deep-research' });
+  }
 
   protected stepLabel(id: string, state: string): string {
     return this.i18n.t(id === 'prepare' && state === 'done' ? 'research.step.prepared' : `research.step.${id}`);
@@ -704,13 +928,11 @@ export class ResearchTurnComponent {
   }
 
   protected selectAll(): void {
-    this.selected.set(new Set(this.visible().filter((i) => i.kind === 'file').map((i) => i.id)));
+    this.selected.set(new Set(this.visible().filter((i) => isAddable(i) && (i.confidence !== 'related' || this.relatedOpen())).map((i) => i.id)));
   }
 
   protected openResearchSettings(): void {
-    void this.router.navigateByUrl('/settings').then(() => {
-      setTimeout(() => document.getElementById('research-sources')?.scrollIntoView({ block: 'start' }), 50);
-    });
+    void this.router.navigateByUrl('/settings#research-sources');
   }
 
   private exportContext(): ExportContext {
@@ -793,13 +1015,29 @@ export class ResearchTurnComponent {
     void this.saveFile(exportName(t.prompt, 'md'), toMarkdown(t, this.exportContext()), 'md', 'research.saved');
   }
 
-  protected openCiteMenu(event: MouseEvent): void {
+  protected openMore(event: MouseEvent): void {
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    this.citeMenu.set({ x: this.i18n.dir() === 'rtl' ? r.right - 190 : r.left, y: r.bottom + 4 });
+    this.moreMenu.set({ x: this.i18n.dir() === 'rtl' ? r.left + 220 : r.right - 220, y: r.top - 5 * 30 - 20 });
+  }
+
+  protected onMore(id: string): void {
+    switch (id) {
+      case 'none':
+        this.selected.set(this.none);
+        break;
+      case 'copy':
+        this.copyResponse();
+        break;
+      case 'save':
+        this.saveResearch();
+        break;
+      default:
+        this.exportCitations(id);
+    }
   }
 
   protected exportCitations(id: string): void {
-    this.citeMenu.set(null);
+    this.moreMenu.set(null);
     const t = this.turn();
     const r = id === 'ris' ? toRis(t.items) : toBibtex(t.items);
     if (r.count === 0) {
@@ -808,6 +1046,17 @@ export class ResearchTurnComponent {
     }
     const done = r.skipped > 0 ? this.i18n.t('research.cite.savedSome').replace('{n}', this.fmt.int(r.count)).replace('{skipped}', this.fmt.int(r.skipped)) : this.i18n.t('research.cite.saved').replace('{n}', this.fmt.int(r.count));
     void this.saveFile(exportName(t.prompt, id === 'ris' ? 'ris' : 'bib'), r.text, id === 'ris' ? 'ris' : 'bib', done, true);
+  }
+
+  /** One result's reference as plain text on the clipboard. */
+  protected copyCite(it: TurnItem): void {
+    if (!isCitable(it)) {
+      return;
+    }
+    const who = it.authors.slice(0, 6).join(', ');
+    const id = it.doi !== null ? `https://doi.org/${it.doi}` : it.arxiv !== null ? `arXiv:${it.arxiv}` : (it.pageUrl ?? it.downloadUrl);
+    const text = [who, it.year === null ? '' : `(${it.year})`, `${it.title}.`, `${this.i18n.t(`research.source.${it.source}`)}.`, id].filter((p) => p.length > 0).join(' ');
+    this.copy(text, 'research.citeCopied');
   }
 
   private copy(text: string, doneKey: string): void {

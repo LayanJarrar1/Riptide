@@ -1,5 +1,5 @@
-import { AiOutcome, CategoryId, CATEGORY_IDS, ResultItem, safeWebUrl, SOURCE_IDS, SourceId, SourceState } from '../../ai/research.models';
-import { SourceStatus } from '../../ai/research.session';
+import { AiOutcome, CategoryId, ConstraintId, MODE_IDS, normalizeCategory, MatchClass, MatchReason, ResultItem, safeWebUrl, SearchMode, SOURCE_IDS, SourceComparison, SourceId, SourceState, StopReason, Trust } from '../../ai/research.models';
+import { SearchSummary, SourceStatus } from '../../ai/research.session';
 
 /** Where the conversations live (browser storage of this machine only; never sent anywhere). */
 export const HISTORY_KEY = 'riptide.research.history.v1';
@@ -37,6 +37,8 @@ export interface Turn {
   readonly id: string;
   readonly prompt: string;
   readonly category: CategoryId;
+  /** How the search ran (quick, deep, video, source finder). */
+  readonly mode: SearchMode;
   /** The AI was asked to plan and rank this turn. */
   readonly useAi: boolean;
   readonly createdAt: number;
@@ -49,6 +51,12 @@ export interface Turn {
   /** Sources that need setting up (a key or an address) and so were not searched. */
   readonly unavailable: readonly SourceId[];
   readonly plan: readonly string[];
+  /** The phrasings the search started with (what was searched, when no AI planned more). */
+  readonly queries: readonly string[];
+  /** Deep research: which sources found the same item and where they disagree. */
+  readonly comparison: SourceComparison | null;
+  /** The program's own count of exact and likely matches, and how many results it hid. */
+  readonly summary: SearchSummary | null;
   readonly ai: TurnAi | null;
   readonly rankedCount: number;
   readonly items: readonly TurnItem[];
@@ -86,15 +94,16 @@ export function titleFrom(prompt: string): string {
 }
 
 /** Two prompts that mean the same search (for reusing the results already on the page). */
-export function promptKey(prompt: string, category: CategoryId, useAi: boolean): string {
-  return `${category}|${useAi ? 'ai' : 'kw'}|${prompt.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+export function promptKey(prompt: string, category: CategoryId, useAi: boolean, mode: SearchMode = 'quick-search'): string {
+  return `${category}|${mode}|${useAi ? 'ai' : 'kw'}|${prompt.replace(/\s+/g, ' ').trim().toLowerCase()}`;
 }
 
-export function emptyTurn(prompt: string, category: CategoryId, useAi: boolean, now = Date.now()): Turn {
+export function emptyTurn(prompt: string, category: CategoryId, useAi: boolean, now = Date.now(), mode: SearchMode = 'quick-search'): Turn {
   return {
     id: newId('t'),
     prompt: cleanText(prompt, MAX_PROMPT),
     category,
+    mode,
     useAi,
     createdAt: now,
     status: 'running',
@@ -103,6 +112,9 @@ export function emptyTurn(prompt: string, category: CategoryId, useAi: boolean, 
     sources: [],
     unavailable: [],
     plan: [],
+    queries: [],
+    comparison: null,
+    summary: null,
     ai: null,
     rankedCount: 0,
     items: [],
@@ -175,6 +187,95 @@ const strOrNull = (v: unknown, max: number): string | null => {
   return s.length > 0 ? s : null;
 };
 
+const CONSTRAINTS: readonly ConstraintId[] = ['episode', 'season', 'year', 'version', 'file-type'];
+const STOPS: readonly StopReason[] = ['max-rounds', 'enough-exact', 'deadline', 'token-budget', 'no-more-queries'];
+const SOURCE_SET: ReadonlySet<string> = new Set(SOURCE_IDS);
+
+/** The reasons of a stored result: only the known kinds, with short text. */
+function parseReasons(raw: unknown): readonly MatchReason[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: MatchReason[] = [];
+  const constraint = (v: unknown): ConstraintId | null => (CONSTRAINTS.includes(v as ConstraintId) ? (v as ConstraintId) : null);
+  for (const r of raw.slice(0, 12)) {
+    if (!isObj(r) || typeof r['kind'] !== 'string') {
+      continue;
+    }
+    const c = constraint(r['constraint']);
+    switch (r['kind']) {
+      case 'title_all_words':
+      case 'words_only_in_description':
+      case 'loose_title':
+      case 'words_out_of_order':
+        out.push({ kind: r['kind'] });
+        break;
+      case 'title_partial':
+        out.push({ kind: 'title_partial', found: num(r['found']), of: num(r['of']) });
+        break;
+      case 'phrase_matched':
+      case 'phrase_only_in_description':
+      case 'phrase_missing':
+        out.push({ kind: r['kind'], phrase: str(r['phrase'], 120) });
+        break;
+      case 'excluded_word':
+        out.push({ kind: 'excluded_word', word: str(r['word'], 60) });
+        break;
+      case 'matched':
+        if (c !== null) {
+          out.push({ kind: 'matched', constraint: c, value: str(r['value'], 60) });
+        }
+        break;
+      case 'missing':
+        if (c !== null) {
+          out.push({ kind: 'missing', constraint: c });
+        }
+        break;
+      case 'conflict':
+        if (c !== null) {
+          out.push({ kind: 'conflict', constraint: c, wanted: str(r['wanted'], 60), found: str(r['found'], 60) });
+        }
+        break;
+    }
+  }
+  return out;
+}
+
+/** The comparison of a stored turn, capped and with only known sources. */
+function parseComparison(raw: unknown): SourceComparison | null {
+  if (!isObj(raw)) {
+    return null;
+  }
+  const alsoIn: Record<string, readonly SourceId[]> = {};
+  if (isObj(raw['alsoIn'])) {
+    for (const [id, list] of Object.entries(raw['alsoIn']).slice(0, MAX_RESULTS)) {
+      if (Array.isArray(list)) {
+        alsoIn[id.slice(0, 300)] = list.filter((s): s is SourceId => typeof s === 'string' && SOURCE_SET.has(s)).slice(0, 8);
+      }
+    }
+  }
+  const notes: SourceComparison['notes'][number][] = [];
+  if (Array.isArray(raw['notes'])) {
+    for (const n of raw['notes'].slice(0, 20)) {
+      if (!isObj(n) || !Array.isArray(n['values']) || !['year', 'version', 'size'].includes(n['field'] as string)) {
+        continue;
+      }
+      const values = n['values'].flatMap((v: unknown): (readonly [SourceId, string])[] =>
+        Array.isArray(v) && typeof v[0] === 'string' && SOURCE_SET.has(v[0]) && typeof v[1] === 'string' ? [[v[0] as SourceId, cleanText(v[1], 60)] as const] : [],
+      );
+      notes.push({ field: n['field'] as 'year' | 'version' | 'size', id: str(n['id'], 300), values: values.slice(0, 6) });
+    }
+  }
+  return { alsoIn, notes };
+}
+
+function parseSummary(raw: unknown): SearchSummary | null {
+  if (!isObj(raw)) {
+    return null;
+  }
+  return { exact: num(raw['exact']), strong: num(raw['strong']), hidden: num(raw['hidden']), stop: STOPS.includes(raw['stop'] as StopReason) ? (raw['stop'] as StopReason) : null };
+}
+
 function parseItem(raw: unknown): TurnItem | null {
   if (!isObj(raw)) {
     return null;
@@ -206,6 +307,17 @@ function parseItem(raw: unknown): TurnItem | null {
     pmid: strOrNull(raw['pmid'], 30),
     pmcid: strOrNull(raw['pmcid'], 30),
     kind: raw['kind'] === 'page' ? 'page' : 'file',
+    durationSecs: typeof raw['durationSecs'] === 'number' && raw['durationSecs'] >= 0 ? raw['durationSecs'] : null,
+    thumbnail: safeWebUrl(typeof raw['thumbnail'] === 'string' ? raw['thumbnail'] : null),
+    publisher: strOrNull(raw['publisher'], 120),
+    version: strOrNull(raw['version'], 60),
+    // an entry saved before results were verified was never checked: it is shown as related
+    confidence: raw['confidence'] === 'exact' || raw['confidence'] === 'strong' ? (raw['confidence'] as MatchClass) : 'related',
+    coverage: num(raw['coverage']),
+    matchScore: num(raw['matchScore']),
+    reasons: parseReasons(raw['reasons']),
+    trust: raw['trust'] === 'official' || raw['trust'] === 'primary' || raw['trust'] === 'mirror' ? (raw['trust'] as Trust) : 'unknown',
+    mirror: raw['mirror'] === true,
     rights: {
       kind: kind === 'public-domain' || kind === 'cc' || kind === 'open-source' ? kind : 'unknown',
       label: str(rights['label'], 120),
@@ -226,7 +338,8 @@ function parseTurn(raw: unknown): Turn | null {
   if (id === '' || prompt === '') {
     return null;
   }
-  const category = CATEGORY_IDS.includes(raw['category'] as CategoryId) ? (raw['category'] as CategoryId) : 'all';
+  // older history holds the previous ids (`papers`, `video`, `all`...): map them to the seven categories
+  const category = normalizeCategory(raw['category']);
   const status = STATUSES.includes(raw['status'] as TurnStatus) ? (raw['status'] as TurnStatus) : 'cancelled';
   const sources: SourceStatus[] = Array.isArray(raw['sources'])
     ? raw['sources'].flatMap((s: unknown) =>
@@ -252,6 +365,7 @@ function parseTurn(raw: unknown): Turn | null {
     id,
     prompt,
     category,
+    mode: MODE_IDS.includes(raw['mode'] as SearchMode) ? (raw['mode'] as SearchMode) : 'quick-search',
     useAi: raw['useAi'] === true,
     createdAt: num(raw['createdAt']),
     status: interrupted ? 'cancelled' : status,
@@ -260,6 +374,9 @@ function parseTurn(raw: unknown): Turn | null {
     sources: sources.map((s) => (interrupted && s.state === 'searching' ? { ...s, state: 'stopped' as const } : s)),
     unavailable: Array.isArray(raw['unavailable']) ? raw['unavailable'].filter((u): u is SourceId => SOURCE_IDS.includes(u as SourceId)) : [],
     plan: Array.isArray(raw['plan']) ? raw['plan'].filter((q): q is string => typeof q === 'string').slice(0, 8).map((q) => cleanText(q, 200)) : [],
+    queries: Array.isArray(raw['queries']) ? raw['queries'].filter((q): q is string => typeof q === 'string').slice(0, 8).map((q) => cleanText(q, 200)) : [],
+    comparison: parseComparison(raw['comparison']),
+    summary: parseSummary(raw['summary']),
     ai,
     rankedCount: num(raw['rankedCount']),
     items,

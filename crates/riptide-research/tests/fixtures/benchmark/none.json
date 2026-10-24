@@ -1,0 +1,268 @@
+{
+ "queries": [
+  {
+   "id": "none-naruto-9999",
+   "query": "naruto shippuden episode 9999",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episode 21",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episode 22",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episodes 1-10 Full Pack",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Naruto Shippuden complete series",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Naruto Shippuden Opening 1",
+     "pg": true,
+     "p": "Channel"
+    }
+   ],
+   "relevant": []
+  },
+  {
+   "id": "none-vlc-99",
+   "query": "vlc 99.0.1",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "videolan/vlc 3.0.20 - vlc-3.0.20-win64.exe",
+     "f": "vlc-3.0.20-win64.exe",
+     "v": "3.0.20",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "videolan/vlc 3.0.18 - vlc-3.0.18-win64.exe",
+     "f": "vlc-3.0.18-win64.exe",
+     "v": "3.0.18",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "videolan/vlc-android 3.5.4 - VLC-Android-3.5.4-arm64.apk",
+     "f": "VLC-Android-3.5.4-arm64.apk",
+     "v": "3.5.4"
+    }
+   ],
+   "relevant": []
+  },
+  {
+   "id": "none-qiyamat-500",
+   "query": "قيامة عثمان الحلقة 500",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 21",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 22",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 5",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 50",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 1",
+     "pg": true,
+     "p": "Channel"
+    }
+   ],
+   "relevant": []
+  },
+  {
+   "id": "none-unicorns",
+   "query": "\"quantum gravity of invisible unicorns\"",
+   "category": "academic",
+   "mode": "quick-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "arxiv",
+     "title": "Loop Quantum Gravity",
+     "f": "1.pdf",
+     "ax": "0001.00001"
+    },
+    {
+     "id": "b",
+     "source": "open-alex",
+     "title": "Invisible Unicorns: A Satire",
+     "f": "2.pdf"
+    },
+    {
+     "id": "c",
+     "source": "crossref",
+     "title": "Quantum Gravity and the Standard Model",
+     "f": "3.pdf"
+    },
+    {
+     "id": "d",
+     "source": "arxiv",
+     "title": "Unicorn Startups and Venture Capital",
+     "f": "4.pdf",
+     "ax": "0001.00004"
+    }
+   ],
+   "relevant": []
+  },
+  {
+   "id": "none-godot-9",
+   "query": "godot 9.0",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "godotengine/godot 4.2-stable - Godot_v4.2-stable_win64.exe.zip",
+     "f": "Godot_v4.2-stable_win64.exe.zip",
+     "v": "4.2-stable",
+     "p": "godotengine"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "godotengine/godot 4.3-stable - Godot_v4.3-stable_win64.exe.zip",
+     "f": "Godot_v4.3-stable_win64.exe.zip",
+     "v": "4.3-stable",
+     "p": "godotengine"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "godotengine/godot 3.5.3-stable - Godot_v3.5.3-stable_win64.exe.zip",
+     "f": "Godot_v3.5.3-stable_win64.exe.zip",
+     "v": "3.5.3-stable",
+     "p": "godotengine"
+    }
+   ],
+   "relevant": []
+  },
+  {
+   "id": "none-bb-s9",
+   "query": "breaking bad season 9",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Breaking Bad Season 5 Episode 14 - Ozymandias",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Breaking Bad Season 1 Episode 1 - Pilot",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Breaking Bad S04E01 Box Cutter",
+     "pg": true,
+     "p": "Channel"
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Breaking Bad fan theory: why the series ended",
+     "pg": true,
+     "p": "Channel"
+    }
+   ],
+   "relevant": []
+  },
+  {
+   "id": "none-dune-1962",
+   "query": "dune 1962 film",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "none",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "Dune (1984)",
+     "y": 1984,
+     "f": "dune84.mp4"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Dune (2021)",
+     "y": 2021,
+     "f": "dune21.mp4"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Dune (1965 novel) audiobook",
+     "y": 1965,
+     "f": "dune.mp3"
+    }
+   ],
+   "relevant": []
+  }
+ ]
+}

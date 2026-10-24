@@ -166,11 +166,9 @@ export class DesktopShellService {
     });
   }
 
-  /** Opens Settings and scrolls to the About section (where the update card is). */
+  /** Opens Settings on Updates & About (where the update card is). */
   openAbout(): void {
-    void this.router.navigateByUrl('/settings').then(() => {
-      setTimeout(() => document.getElementById('about')?.scrollIntoView({ block: 'start' }), 50);
-    });
+    void this.router.navigateByUrl('/settings#updates');
   }
 
   /** Prompts for a copied link unless it is already in the list. */

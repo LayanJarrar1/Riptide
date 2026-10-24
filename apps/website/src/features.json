@@ -55,6 +55,51 @@
       "text_ar": "ملف، التنزيلات، أدوات، عرض، نافذة، مساعدة، وتعمل بلوحة المفاتيح أيضًا.",
       "verified": true,
       "release": "0.1.0-beta.1"
+    },
+    {
+      "id": "research-categories",
+      "title_en": "Research by category and mode",
+      "title_ar": "البحث حسب الفئة والوضع",
+      "text_en": "Pick what you are looking for (videos, software, documents, images, academic papers, open-source projects or the general web) and one of four modes. Quick Search answers fast; Deep Research looks wider.",
+      "text_ar": "اختر ما تبحث عنه (فيديو أو برامج أو مستندات أو صور أو أوراق أكاديمية أو مشاريع مفتوحة المصدر أو الويب العام) وأحد أربعة أوضاع. البحث السريع يجيب بسرعة، والبحث المعمّق ينظر أوسع.",
+      "verified": false,
+      "release": null
+    },
+    {
+      "id": "research-grouped-results",
+      "title_en": "Results grouped by match",
+      "title_ar": "نتائج مجمّعة حسب التطابق",
+      "text_en": "Exact matches come first, then likely matches, and loosely related results stay folded away. Each card says what was confirmed, such as the season and episode, so you can see why it is there.",
+      "text_ar": "تأتي المطابقات التامة أولًا ثم المطابقات المحتملة، وتبقى النتائج القريبة مطوية. تبيّن كل بطاقة ما تأكد منه، كالموسم والحلقة، لتعرف سبب ظهورها.",
+      "verified": false,
+      "release": null
+    },
+    {
+      "id": "settings-redesign",
+      "title_en": "Redesigned Settings",
+      "title_ar": "إعدادات بتصميم جديد",
+      "text_en": "A list of sections (General, Downloads, Browser integration, Network, AI & Research, Privacy & Data, Updates & About) with grouped rows, and deep links from the places that need a setting.",
+      "text_ar": "قائمة أقسام (عام والتنزيلات وتكامل المتصفح والشبكة والذكاء الاصطناعي والبحث والخصوصية والبيانات والتحديثات وحول) بصفوف مجمّعة، وروابط مباشرة من الأماكن التي تحتاج إعدادًا.",
+      "verified": false,
+      "release": null
+    },
+    {
+      "id": "auto-updates",
+      "title_en": "Automatic update checks",
+      "title_ar": "فحص التحديثات تلقائيًا",
+      "text_en": "Riptide checks when it starts and every few hours. Packages are signed and verified, and an update is never installed over active downloads: it waits until they finish.",
+      "text_ar": "يفحص ريبتايد التحديثات عند التشغيل وكل بضع ساعات. الحزم موقّعة ويُتحقق منها، ولا يُثبَّت تحديث فوق تحميلات نشطة بل ينتظر حتى تنتهي.",
+      "verified": false,
+      "release": null
+    },
+    {
+      "id": "research-rail",
+      "title_en": "Icon rail",
+      "title_ar": "شريط أيقونات",
+      "text_en": "In Research and Files the sidebar folds into a slim icon rail that remembers whether you expanded it.",
+      "text_ar": "في البحث والملفات يتقلص الشريط الجانبي إلى شريط أيقونات رفيع يتذكر إن كنت قد وسّعته.",
+      "verified": false,
+      "release": null
     }
   ]
 }

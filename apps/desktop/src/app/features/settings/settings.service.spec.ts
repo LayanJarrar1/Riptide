@@ -185,4 +185,25 @@ describe('SettingsService', () => {
     const last = calls.filter((c) => c.cmd === 'set_engine_settings').pop()?.args?.['settings'] as EngineSettings;
     expect([last.torrent.listen_port, last.torrent.upload_limit]).toEqual([65535, null]);
   });
+  it('max active and auto-retry load from the engine and reach it when changed (clamped to 1..32)', async () => {
+    expect(DEFAULT_SETTINGS.maxActive).toBe(3);
+    expect(DEFAULT_SETTINGS.autoRetry).toBe(true);
+    const service = configure(true);
+    await service.engineLoaded;
+    TestBed.tick();
+    expect(service.settings().maxActive).toBe(5);
+    expect(service.settings().autoRetry).toBe(true);
+    service.patch({ maxActive: 8, autoRetry: false });
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const first = calls.filter((c) => c.cmd === 'set_engine_settings').pop()?.args?.['settings'] as EngineSettings;
+    expect([first.max_active, first.auto_retry]).toEqual([8, false]);
+    service.patch({ maxActive: 99 });
+    TestBed.tick();
+    await wait(20);
+    await service.whenSynced();
+    const last = calls.filter((c) => c.cmd === 'set_engine_settings').pop()?.args?.['settings'] as EngineSettings;
+    expect(last.max_active).toBe(32);
+  });
 });

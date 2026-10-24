@@ -1,0 +1,409 @@
+{
+ "queries": [
+  {
+   "id": "sw-vlc-3.0.20",
+   "query": "vlc 3.0.20",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "videolan/vlc 3.0.20 - vlc-3.0.20-win64.exe",
+     "f": "vlc-3.0.20-win64.exe",
+     "v": "3.0.20",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "videolan/vlc 3.0.20 - vlc-3.0.20-win32.exe",
+     "f": "vlc-3.0.20-win32.exe",
+     "v": "3.0.20",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "videolan/vlc 3.0.20 - vlc-3.0.20-win64.zip",
+     "f": "vlc-3.0.20-win64.zip",
+     "v": "3.0.20",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "videolan/vlc 3.0.18 - vlc-3.0.18-win64.exe",
+     "f": "vlc-3.0.18-win64.exe",
+     "v": "3.0.18",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "e",
+     "source": "github",
+     "title": "videolan/vlc 3.0.19 - vlc-3.0.19-win64.exe",
+     "f": "vlc-3.0.19-win64.exe",
+     "v": "3.0.19",
+     "p": "videolan",
+     "z": 40000000
+    },
+    {
+     "id": "f",
+     "source": "github",
+     "title": "videolan/vlc-android 3.5.4 - VLC-Android-3.5.4-arm64.apk",
+     "f": "VLC-Android-3.5.4-arm64.apk",
+     "v": "3.5.4",
+     "p": "videolan"
+    },
+    {
+     "id": "g",
+     "source": "github",
+     "title": "obsproject/obs-studio 30.0.2 - OBS-Studio-30.0.2-Windows.zip",
+     "f": "OBS-Studio-30.0.2-Windows.zip",
+     "v": "30.0.2",
+     "p": "obsproject"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "id": "sw-godot-4.2",
+   "query": "godot 4.2",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "godotengine/godot 4.2-stable - Godot_v4.2-stable_win64.exe.zip",
+     "f": "Godot_v4.2-stable_win64.exe.zip",
+     "v": "4.2-stable",
+     "p": "godotengine"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "godotengine/godot 4.2-stable - Godot_v4.2-stable_linux.x86_64.zip",
+     "f": "Godot_v4.2-stable_linux.x86_64.zip",
+     "v": "4.2-stable",
+     "p": "godotengine"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "godotengine/godot 4.1.3-stable - Godot_v4.1.3-stable_win64.exe.zip",
+     "f": "Godot_v4.1.3-stable_win64.exe.zip",
+     "v": "4.1.3-stable",
+     "p": "godotengine"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "godotengine/godot 3.5.3-stable - Godot_v3.5.3-stable_win64.exe.zip",
+     "f": "Godot_v3.5.3-stable_win64.exe.zip",
+     "v": "3.5.3-stable",
+     "p": "godotengine"
+    },
+    {
+     "id": "e",
+     "source": "github",
+     "title": "godotengine/godot 4.3-stable - Godot_v4.3-stable_win64.exe.zip",
+     "f": "Godot_v4.3-stable_win64.exe.zip",
+     "v": "4.3-stable",
+     "p": "godotengine"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sw-7zip-23.01-exe",
+   "query": "7zip 23.01 exe",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "ip7z/7zip 23.01 - 7z2301-x64.exe",
+     "f": "7z2301-x64.exe",
+     "v": "23.01",
+     "p": "ip7z"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "ip7z/7zip 23.01 - 7z2301.exe",
+     "f": "7z2301.exe",
+     "v": "23.01",
+     "p": "ip7z"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "ip7z/7zip 23.01 - 7z2301-src.7z",
+     "f": "7z2301-src.7z",
+     "v": "23.01",
+     "p": "ip7z"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "ip7z/7zip 22.01 - 7z2201-x64.exe",
+     "f": "7z2201-x64.exe",
+     "v": "22.01",
+     "p": "ip7z"
+    },
+    {
+     "id": "e",
+     "source": "github",
+     "title": "ip7z/7zip 24.08 - 7z2408-x64.exe",
+     "f": "7z2408-x64.exe",
+     "v": "24.08",
+     "p": "ip7z"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sw-obs-30.0.2",
+   "query": "obs studio 30.0.2",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "obsproject/obs-studio 30.0.2 - OBS-Studio-30.0.2-Windows.zip",
+     "f": "OBS-Studio-30.0.2-Windows.zip",
+     "v": "30.0.2",
+     "p": "obsproject"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "obsproject/obs-studio 30.0.2 - OBS-Studio-30.0.2-Windows-Installer.exe",
+     "f": "OBS-Studio-30.0.2-Windows-Installer.exe",
+     "v": "30.0.2",
+     "p": "obsproject"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "obsproject/obs-studio 30.0.1 - OBS-Studio-30.0.1-Windows.zip",
+     "f": "OBS-Studio-30.0.1-Windows.zip",
+     "v": "30.0.1",
+     "p": "obsproject"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "obsproject/obs-studio 30.1.0 - OBS-Studio-30.1.0-Windows.zip",
+     "f": "OBS-Studio-30.1.0-Windows.zip",
+     "v": "30.1.0",
+     "p": "obsproject"
+    },
+    {
+     "id": "e",
+     "source": "github",
+     "title": "obsproject/obs-websocket 5.3.4 - obs-websocket-5.3.4-windows-x64.zip",
+     "f": "obs-websocket-5.3.4-windows-x64.zip",
+     "v": "5.3.4"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sw-python-3.11.5-exe",
+   "query": "python 3.11.5 installer exe",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "Python 3.11.5 (64-bit) installer",
+     "f": "python-3.11.5-amd64.exe"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Python 3.11.5 (32-bit) installer",
+     "f": "python-3.11.5.exe"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Python 3.11.4 installer",
+     "f": "python-3.11.4-amd64.exe"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Python 3.11.5 embeddable installer package",
+     "f": "python-3.11.5-embed-amd64.zip"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Python 3.10.12 installer",
+     "f": "python-3.10.12-amd64.exe"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sw-node-20.11.0-msi",
+   "query": "node v20.11.0 msi",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "Node.js v20.11.0 (x64) installer",
+     "f": "node-v20.11.0-x64.msi"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Node.js v20.11.0 (x86) installer",
+     "f": "node-v20.11.0-x86.msi"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Node.js v20.11.0 (x64) archive",
+     "f": "node-v20.11.0-win-x64.zip"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Node.js v20.10.0 (x64) installer",
+     "f": "node-v20.10.0-x64.msi"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Node.js v18.19.0 (x64) installer",
+     "f": "node-v18.19.0-x64.msi"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sw-blender-3.6.5",
+   "query": "blender 3.6.5",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "Blender 3.6.5",
+     "f": "blender-3.6.5-windows-x64.zip"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Blender 3.6.5",
+     "f": "blender-3.6.5-windows-x64.msi"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Blender 3.6.4",
+     "f": "blender-3.6.4-windows-x64.zip"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Blender 4.0.2",
+     "f": "blender-4.0.2-windows-x64.zip"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Blender 2.93.18 LTS",
+     "f": "blender-2.93.18-windows-x64.zip"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sw-ffmpeg-6.1",
+   "query": "ffmpeg 6.1",
+   "category": "software",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "FFmpeg 6.1 Windows build",
+     "f": "ffmpeg-6.1-win64.zip"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "FFmpeg 6.1 full build",
+     "f": "ffmpeg-6.1-full.7z"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "FFmpeg 6.0 Windows build",
+     "f": "ffmpeg-6.0-win64.zip"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "FFmpeg 5.1.4 Windows build",
+     "f": "ffmpeg-5.1.4-win64.zip"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "FFmpeg 7.0 Windows build",
+     "f": "ffmpeg-7.0-win64.zip"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  }
+ ]
+}

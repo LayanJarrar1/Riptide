@@ -104,15 +104,14 @@ describe('AiSettingsComponent', () => {
     fixture.detectChanges();
     await settle(fixture);
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('AI is off');
+    expect(el.querySelector('[data-testid="ai-enabled"]')?.textContent).toContain('Off');
+    expect(el.querySelector('[data-testid="ai-provider"]')?.textContent).toContain('No key');
     expect(el.textContent).toContain('nothing is ever sent anywhere');
     expect(el.querySelector('#ai')).not.toBeNull();
     const key = el.querySelector<HTMLInputElement>('input[name="ai-api-key"]');
     expect(key?.type).toBe('password');
-    // the privacy toggles start off
-    const toggles = [...el.querySelectorAll<HTMLInputElement>('input[role="switch"]')];
-    expect(toggles.length).toBeGreaterThanOrEqual(3);
-    expect(toggles.filter((t) => t.checked).length).toBe(0);
+    // the privacy switches moved to Settings > Privacy & Data
+    expect(el.querySelectorAll('input[role="switch"]').length).toBe(0);
   });
 
   it('offers Quick setup as the primary action, keeps the advanced form collapsed, and opens the guided dialog', async () => {
@@ -123,12 +122,13 @@ describe('AiSettingsComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const quick = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Quick setup')) as HTMLButtonElement;
     expect(quick.className).toContain('v-primary');
-    expect(el.textContent).toContain('Smarter results with AI: free, takes about a minute');
     const advanced = el.querySelector('details.advanced') as HTMLDetailsElement;
     expect(advanced.open).toBeFalse();
     expect(advanced.textContent).toContain('Advanced');
-    // the existing form is still there, inside it
-    expect(advanced.querySelector('input[name="ai-api-key"]')).not.toBeNull();
+    // the endpoint and the daily limits are inside it; the key stays in plain sight
+    expect(advanced.querySelector('input[aria-label="Custom endpoint (optional)"]')).not.toBeNull();
+    expect(advanced.querySelector('input[name="ai-api-key"]')).toBeNull();
+    expect(el.querySelector('input[name="ai-api-key"]')).not.toBeNull();
     expect((el.querySelector('dialog') as HTMLDialogElement).open).toBeFalse();
     quick.click();
     await settle(fixture);
@@ -142,7 +142,7 @@ describe('AiSettingsComponent', () => {
     fixture.detectChanges();
     await settle(fixture);
     const el = fixture.nativeElement as HTMLElement;
-    const top = el.querySelector('.top-key') as HTMLElement;
+    const top = el.querySelector('[data-testid="ai-key-stored"]') as HTMLElement;
     expect(top.textContent).toContain('••••wxyz');
     expect(el.querySelector('details.advanced')?.contains(top)).toBeFalse();
     (top.querySelector('button') as HTMLButtonElement).click();
@@ -207,7 +207,7 @@ describe('AiSettingsComponent', () => {
     expect(test.disabled).toBe(false);
     test.click();
     await settle(fixture);
-    expect(el.textContent).toContain('Connected');
+    expect(el.querySelector('[data-testid="ai-provider"]')?.textContent).toContain('Working');
     expect(el.textContent).toContain('42 models');
     expect(el.textContent).toContain('120 ms');
     expect(el.textContent).toContain('13 tokens');
@@ -215,7 +215,8 @@ describe('AiSettingsComponent', () => {
     test.click();
     await settle(fixture);
     // a rejection arrives as the typed object; the sentence is the translated one
-    expect(el.textContent).not.toContain('Connected.');
+    expect(el.querySelector('[data-testid="ai-enabled"]')?.textContent).toContain('Enabled');
+    expect(el.querySelector('[data-testid="ai-provider"]')?.textContent).toContain('Not answering');
     expect(el.textContent).toContain('The provider rejected the key');
   });
 });

@@ -3,20 +3,36 @@ import { computed, inject, Injectable, OnDestroy, signal } from '@angular/core';
 import { TAURI_INVOKE, TAURI_LISTEN } from '../tauri/tauri-bridge';
 import {
   AiOutcome,
+  MatchClass,
   Phase,
+  QueryIntent,
   Ranked,
   ResearchBatch,
   ResearchEvent,
   ResultItem,
+  SearchMode,
   SearchRequest,
+  SourceComparison,
   SourceId,
   SourceState,
   StartResponse,
+  StopReason,
   Unavailable,
 } from './research.models';
 
+const CLASS_ORDER: Readonly<Record<MatchClass, number>> = { exact: 0, strong: 1, related: 2 };
+
 /** The webview event the backend streams a search on (`EVENT` in `research.rs`). */
 export const RESEARCH_EVENT = 'riptide://research';
+
+/** The program's count of what it found (the `summary` event). */
+export interface SearchSummary {
+  readonly exact: number;
+  readonly strong: number;
+  /** Results that did not match well enough to be shown. */
+  readonly hidden: number;
+  readonly stop: StopReason | null;
+}
 
 /** What one source chip shows. */
 export interface SourceStatus {
@@ -44,6 +60,13 @@ export class ResearchSession implements OnDestroy {
   /** Results in arrival order, with the AI's verdict merged in as it arrives. */
   readonly items = signal<readonly ResultItem[]>([]);
   readonly plan = signal<readonly string[]>([]);
+  /** The mode the backend ran, and what it understood of the query and searched first. */
+  readonly mode = signal<SearchMode>('quick-search');
+  readonly intent = signal<QueryIntent | null>(null);
+  readonly queries = signal<readonly string[]>([]);
+  /** Deep research: which sources found the same item, and where they disagree. */
+  readonly comparison = signal<SourceComparison | null>(null);
+  readonly summary = signal<SearchSummary | null>(null);
   readonly ai = signal<AiOutcome | null>(null);
   /** The AI will plan and rank this search. */
   readonly aiActive = signal(false);
@@ -54,13 +77,31 @@ export class ResearchSession implements OnDestroy {
   /** The search is still working (searching or ranking). */
   readonly busy = computed(() => this.phase() === 'searching' || this.phase() === 'ranking');
 
-  /** Ranked results first (best first), then the rest in arrival order; filtered by source. */
+  /**
+   * Best class first (exact, strong, related). Inside a class the AI-ranked ones come first, best
+   * first, then the rest by the program's own match score, in arrival order when equal. Filtered by source.
+   */
   readonly ordered = computed<readonly ResultItem[]>(() => {
     const only = this.onlySource();
     const all = only === null ? this.items() : this.items().filter((i) => i.source === only);
-    const ranked = all.filter((i) => i.score !== null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-    const rest = all.filter((i) => i.score === null);
-    return [...ranked, ...rest];
+    const rank = (i: ResultItem): number => CLASS_ORDER[i.confidence];
+    return all
+      .map((item, n) => ({ item, n }))
+      .sort((a, b) => {
+        if (rank(a.item) !== rank(b.item)) {
+          return rank(a.item) - rank(b.item);
+        }
+        const sa = a.item.score;
+        const sb = b.item.score;
+        if (sa !== null && sb !== null) {
+          return sb - sa || a.n - b.n;
+        }
+        if (sa !== null || sb !== null) {
+          return sa !== null ? -1 : 1;
+        }
+        return b.item.matchScore - a.item.matchScore || a.n - b.n;
+      })
+      .map((x) => x.item);
   });
 
   private searchId: number | null = null;
@@ -130,6 +171,9 @@ export class ResearchSession implements OnDestroy {
     this.searchId = res.searchId;
     this.aiActive.set(res.ai);
     this.unavailable.set(res.unavailable);
+    this.mode.set(res.mode ?? request.mode ?? 'quick-search');
+    this.intent.set(res.intent ?? null);
+    this.queries.set(res.queries ?? []);
     this.sources.set(res.sources.map((id) => ({ id, state: 'searching' as const, found: 0, code: null })));
     if (res.sources.length === 0) {
       this.phase.set('done');
@@ -177,6 +221,11 @@ export class ResearchSession implements OnDestroy {
     this.unavailable.set([]);
     this.items.set([]);
     this.plan.set([]);
+    this.mode.set('quick-search');
+    this.intent.set(null);
+    this.queries.set([]);
+    this.comparison.set(null);
+    this.summary.set(null);
     this.ai.set(null);
     this.aiActive.set(false);
     this.rankedCount.set(0);
@@ -247,6 +296,12 @@ export class ResearchSession implements OnDestroy {
         this.rankedCount.set(this.ranks.size);
         break;
       }
+      case 'compare':
+        this.comparison.set(e.comparison);
+        break;
+      case 'summary':
+        this.summary.set({ exact: e.exact, strong: e.strong, hidden: e.hidden, stop: e.stop });
+        break;
       case 'ai':
         this.ai.set(e.outcome);
         break;

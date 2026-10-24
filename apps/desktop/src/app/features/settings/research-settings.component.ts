@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 
-import { FORM_STYLES } from '../../ai/ai-styles';
 import { AiService } from '../../ai/ai.service';
 import { ResearchSettingsView, WebChoice } from '../../ai/research.models';
 import { I18nService } from '../../i18n/i18n.service';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
+import { SettingGroupComponent, SettingRowComponent } from './setting-layout.component';
 
 /**
  * Settings → Research sources: the two optional extras. The open sources need nothing. Jamendo
@@ -18,212 +18,141 @@ import { ToastService } from '../../ui/toast.service';
 @Component({
   selector: 'app-research-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, IconComponent],
+  imports: [ButtonComponent, IconComponent, SettingGroupComponent, SettingRowComponent],
   template: `
-    <section class="section" id="research-sources">
-      <h2 class="section-title">{{ i18n.t('rs.title') }}</h2>
-      <p class="intro">{{ i18n.t('rs.subtitle') }}</p>
-
+    <app-setting-group anchor="research-sources" [heading]="i18n.t('rs.title')" [description]="i18n.t('rs.subtitle')">
       @if (!ai.available) {
-        <p class="setting-desc">{{ i18n.t('ai.desktopOnly') }}</p>
+        <div class="sr-block"><p class="sr-note">{{ i18n.t('ai.desktopOnly') }}</p></div>
       } @else if (view(); as v) {
-        <div class="setting column">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('rs.jamendo') }}</span>
-            <span class="setting-desc">{{ i18n.t('rs.jamendoDesc') }}</span>
-          </div>
+        <app-setting-row [stack]="true" [label]="i18n.t('rs.jamendo')" [description]="i18n.t('rs.jamendoDesc')">
           @if (v.jamendoHint; as hint) {
-            <div class="key-stored">
-              <app-icon name="shieldCheck" [size]="16" class="ok" />
+            <div class="sr-fields">
+              <app-icon name="shieldCheck" [size]="16" class="sr-ok" />
               <span>{{ i18n.t('rs.stored') }}</span>
-              <code class="hint num" dir="ltr">{{ hint }}</code>
+              <code class="sr-hint num" dir="ltr">{{ hint }}</code>
               <button appButton variant="secondary" size="sm" icon="trash" type="button" (click)="removeSecret('jamendo')">{{ i18n.t('ai.keyRemove') }}</button>
             </div>
           }
-          <div class="key-row">
-            <input class="input key-input" type="password" name="jamendo-id" dir="ltr" autocomplete="off" spellcheck="false" [placeholder]="i18n.t('rs.jamendoPlaceholder')" [attr.aria-label]="i18n.t('rs.jamendo')" [value]="jamendoDraft()" (input)="jamendoDraft.set(value($event))" (keydown.enter)="saveSecret('jamendo')" />
+          <div class="sr-fields">
+            <input class="sr-input" type="password" name="jamendo-id" dir="ltr" autocomplete="off" spellcheck="false" [placeholder]="i18n.t('rs.jamendoPlaceholder')" [attr.aria-label]="i18n.t('rs.jamendo')" [value]="jamendoDraft()" (input)="jamendoDraft.set(value($event))" (keydown.enter)="saveSecret('jamendo')" />
             <button appButton variant="primary" type="button" [disabled]="jamendoDraft().trim().length === 0" (click)="saveSecret('jamendo')">{{ i18n.t('rs.save') }}</button>
           </div>
-        </div>
+        </app-setting-row>
 
         <details class="advanced" [open]="v.settings.web !== 'none'">
-         <summary class="advanced-summary">
-          <app-icon name="chevronEnd" [size]="14" class="chev" />
-          <span>{{ i18n.t('rs.advanced') }}</span>
-         </summary>
-        <div class="setting column">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('rs.web') }}</span>
-            <span class="setting-desc">{{ i18n.t('rs.webDesc') }}</span>
-          </div>
-          <div class="choices" role="radiogroup" [attr.aria-label]="i18n.t('rs.web')">
-            @for (c of choices; track c) {
-              <label class="choice" [class.is-on]="v.settings.web === c">
-                <input type="radio" name="web-backend" [value]="c" [checked]="v.settings.web === c" (change)="pickWeb(c)" />
-                <span>{{ i18n.t('rs.web.' + c) }}</span>
-              </label>
-            }
-          </div>
+          <summary class="advanced-summary">
+            <app-icon name="chevronEnd" [size]="14" class="chev" />
+            <span>{{ i18n.t('rs.advanced') }}</span>
+          </summary>
+          <app-setting-row [stack]="true" [label]="i18n.t('rs.web')" [description]="i18n.t('rs.webDesc')">
+            <div class="choices" role="radiogroup" [attr.aria-label]="i18n.t('rs.web')">
+              @for (c of choices; track c) {
+                <label class="choice" [class.is-on]="v.settings.web === c">
+                  <input type="radio" name="web-backend" [value]="c" [checked]="v.settings.web === c" (change)="pickWeb(c)" />
+                  <span>{{ i18n.t('rs.web.' + c) }}</span>
+                </label>
+              }
+            </div>
 
-          @if (v.settings.web === 'brave') {
-            <p class="setting-desc">{{ i18n.t('rs.braveDesc') }}</p>
-            @if (v.braveHint; as hint) {
-              <div class="key-stored">
-                <app-icon name="shieldCheck" [size]="16" class="ok" />
-                <span>{{ i18n.t('rs.stored') }}</span>
-                <code class="hint num" dir="ltr">{{ hint }}</code>
-                <button appButton variant="secondary" size="sm" icon="trash" type="button" (click)="removeSecret('brave')">{{ i18n.t('ai.keyRemove') }}</button>
+            @if (v.settings.web === 'brave') {
+              <p class="sr-note">{{ i18n.t('rs.braveDesc') }}</p>
+              @if (v.braveHint; as hint) {
+                <div class="sr-fields">
+                  <app-icon name="shieldCheck" [size]="16" class="sr-ok" />
+                  <span>{{ i18n.t('rs.stored') }}</span>
+                  <code class="sr-hint num" dir="ltr">{{ hint }}</code>
+                  <button appButton variant="secondary" size="sm" icon="trash" type="button" (click)="removeSecret('brave')">{{ i18n.t('ai.keyRemove') }}</button>
+                </div>
+              }
+              <div class="sr-fields">
+                <input class="sr-input" type="password" name="brave-key" dir="ltr" autocomplete="off" spellcheck="false" [placeholder]="i18n.t('rs.bravePlaceholder')" [attr.aria-label]="i18n.t('rs.braveKey')" [value]="braveDraft()" (input)="braveDraft.set(value($event))" (keydown.enter)="saveSecret('brave')" />
+                <button appButton variant="primary" type="button" [disabled]="braveDraft().trim().length === 0" (click)="saveSecret('brave')">{{ i18n.t('rs.save') }}</button>
               </div>
             }
-            <div class="key-row">
-              <input class="input key-input" type="password" name="brave-key" dir="ltr" autocomplete="off" spellcheck="false" [placeholder]="i18n.t('rs.bravePlaceholder')" [attr.aria-label]="i18n.t('rs.braveKey')" [value]="braveDraft()" (input)="braveDraft.set(value($event))" (keydown.enter)="saveSecret('brave')" />
-              <button appButton variant="primary" type="button" [disabled]="braveDraft().trim().length === 0" (click)="saveSecret('brave')">{{ i18n.t('rs.save') }}</button>
-            </div>
-          }
 
-          @if (v.settings.web === 'searxng') {
-            <p class="setting-desc">{{ i18n.t('rs.searxDesc') }}</p>
-            <div class="key-row">
-              <input class="input key-input" type="url" name="searxng-url" dir="ltr" autocomplete="off" spellcheck="false" [class.is-invalid]="urlError() !== null" [placeholder]="'https://search.example.org'" [attr.aria-label]="i18n.t('rs.searxUrl')" [value]="urlDraft()" (input)="urlDraft.set(value($event))" (keydown.enter)="saveUrl()" />
-              <button appButton variant="primary" type="button" (click)="saveUrl()">{{ i18n.t('rs.save') }}</button>
-            </div>
-            @if (urlError(); as e) {
-              <p class="field-error" role="alert">{{ e }}</p>
+            @if (v.settings.web === 'searxng') {
+              <p class="sr-note">{{ i18n.t('rs.searxDesc') }}</p>
+              <div class="sr-fields">
+                <input class="sr-input" type="url" name="searxng-url" dir="ltr" autocomplete="off" spellcheck="false" [class.is-invalid]="urlError() !== null" [placeholder]="'https://search.example.org'" [attr.aria-label]="i18n.t('rs.searxUrl')" [value]="urlDraft()" (input)="urlDraft.set(value($event))" (keydown.enter)="saveUrl()" />
+                <button appButton variant="primary" type="button" (click)="saveUrl()">{{ i18n.t('rs.save') }}</button>
+              </div>
+              @if (urlError(); as e) {
+                <p class="sr-error" role="alert">{{ e }}</p>
+              }
             }
-          }
 
-          <div class="state" [class.is-on]="v.webReady" role="status">
-            <span class="dot" [class.is-on]="v.webReady"></span>
-            <span>{{ i18n.t(v.webReady ? 'rs.webReady' : 'rs.webOff') }}</span>
-          </div>
-        </div>
+            <span class="sr-pill" [class.is-ok]="v.webReady" role="status">
+              <span class="sr-dot"></span>{{ i18n.t(v.webReady ? 'rs.webReady' : 'rs.webOff') }}
+            </span>
+          </app-setting-row>
         </details>
       }
-    </section>
+    </app-setting-group>
   `,
-  styles: [
-    FORM_STYLES,
-    `
-      .section {
-        margin-block-start: var(--space-8);
-        padding-block-start: var(--space-5);
-        border-block-start: 1px solid var(--color-border);
-      }
+  styles: `
+    :host {
+      display: block;
+    }
 
-      .section-title {
-        font-size: var(--text-md);
-        font-weight: var(--weight-semibold);
-        margin-block-end: var(--space-1);
-      }
+    .choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
 
-      .intro {
-        color: var(--color-text-muted);
-        font-size: var(--text-sm);
-        margin-block-end: var(--space-3);
-        max-inline-size: 70ch;
-      }
+    .choice {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 6px 14px;
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm);
+      cursor: pointer;
+    }
 
-      .ok {
-        color: var(--color-success);
-        flex-shrink: 0;
-      }
+    .choice.is-on {
+      border-color: var(--color-accent);
+      background: var(--color-accent-soft, var(--color-surface-3));
+    }
 
-      .key-stored,
-      .key-row {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--space-2);
-        font-size: var(--text-sm);
-      }
+    .choice input {
+      accent-color: var(--color-accent);
+    }
 
-      .key-row {
-        flex-wrap: nowrap;
-      }
+    .choice:has(input:focus-visible) {
+      outline: 2px solid var(--color-focus);
+      outline-offset: 2px;
+    }
 
-      .key-input {
-        flex: 1;
-        min-inline-size: 0;
-      }
+    .advanced-summary {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-5);
+      cursor: pointer;
+      list-style: none;
+      font-weight: var(--weight-medium);
+      user-select: none;
+    }
 
-      .hint {
-        padding: 2px 8px;
-        border-radius: var(--radius-sm);
-        background: var(--color-surface-3);
-        letter-spacing: 0.04em;
-        unicode-bidi: isolate;
-      }
+    .advanced-summary::-webkit-details-marker {
+      display: none;
+    }
 
-      .choices {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-2);
-      }
+    .advanced-summary:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: -2px;
+    }
 
-      .choice {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-2);
-        padding: 6px 14px;
-        border: 1px solid var(--color-border-strong);
-        border-radius: var(--radius-full);
-        font-size: var(--text-sm);
-        cursor: pointer;
-      }
+    .chev {
+      transition: transform var(--motion-fast) var(--ease-standard);
+    }
 
-      .choice.is-on {
-        border-color: var(--color-accent);
-        background: var(--color-accent-soft, var(--color-surface-3));
-      }
-
-      .choice input {
-        accent-color: var(--color-accent);
-      }
-
-      .advanced {
-        margin-block-start: var(--space-2);
-        border-block-start: 1px solid var(--color-border);
-        padding-block-start: var(--space-3);
-      }
-
-      .advanced-summary {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        cursor: pointer;
-        list-style: none;
-        font-weight: var(--weight-medium);
-        user-select: none;
-      }
-
-      .advanced-summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .chev {
-        transition: transform var(--motion-fast) var(--ease-standard);
-      }
-
-      .advanced[open] .chev {
-        transform: rotate(calc(var(--dir-sign) * 90deg));
-      }
-
-      .state {
-        display: inline-flex;
-        align-items: center;
-        align-self: flex-start;
-        gap: var(--space-2);
-        padding: 4px 12px;
-        border: 1px solid var(--color-border-strong);
-        border-radius: var(--radius-full);
-        font-size: var(--text-sm);
-      }
-
-      .state.is-on {
-        border-color: var(--color-success);
-      }
-    `,
-  ],
+    .advanced[open] .chev {
+      transform: rotate(calc(var(--dir-sign) * 90deg));
+    }
+  `,
 })
 export class ResearchSettingsComponent implements OnInit {
   protected readonly i18n = inject(I18nService);

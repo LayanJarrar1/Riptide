@@ -456,6 +456,36 @@
   line-height: 1.2;
 }
 
+/* ---- Icon rail: Research and Files shrink the navigation to icons (tooltips carry the names) ---- */
+.frame.is-rail,
+.frame.is-rail .topbar {
+  --sidebar-width: 56px;
+}
+
+.frame.is-rail :is(.brand-name, .nav-heading, .nav-text, .nav-count, .nav-key, .queues-group, .brand-logo) {
+  display: none;
+}
+
+.frame.is-rail :is(.nav-item, .brand) {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.frame.is-rail .brand-mark {
+  display: block;
+}
+
+/* ---- Medium windows: the shortcut hint goes first so the placeholder keeps its room ---- */
+@media (max-width: 1100px) {
+  .search-key {
+    display: none;
+  }
+
+  .search-input {
+    padding-inline-end: 12px;
+  }
+}
+
 /* ---- Narrow windows: the sidebar collapses to icons ----------------------------------- */
 @media (max-width: 900px) {
   .frame,
@@ -469,7 +499,8 @@
   .nav-count,
   .nav-key,
   .search-key,
-  .status-help-key {
+  .status-help-key,
+  .rail-toggle {
     display: none;
   }
 

@@ -106,6 +106,7 @@ pub fn start_logging(filter: &str) -> Option<riptide_log::LogGuard> {
     match riptide_log::init(&config) {
         Ok(guard) => {
             tracing::info!(
+                version = env!("CARGO_PKG_VERSION"),
                 portable = paths.portable,
                 data_dir = %paths.data_dir.display(),
                 "data directory resolved"
@@ -240,6 +241,9 @@ fn startup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
+
+    #[cfg(feature = "update-e2e")]
+    updater::e2e_autorun(app.handle().clone());
     Ok(())
 }
 
@@ -316,7 +320,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(exit::ExitGuard::default())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(updater::plugin())
         .manage(updater::PendingUpdate::default())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -388,6 +392,7 @@ pub fn run() {
             research::research_remove_secret,
             research::research_preview,
             research::research_add,
+            research::research_thumbnail,
             research::seen_check,
             research::seen_settings,
             research::seen_set_skip,
@@ -434,6 +439,8 @@ pub fn run() {
             media::media_tools_info,
             media::update_media_tools,
             updater::check_update,
+            updater::download_update,
+            updater::active_download_count,
             updater::install_update,
             updater::open_release_page,
             notify::notify_update,

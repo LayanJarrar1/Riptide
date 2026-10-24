@@ -1,0 +1,233 @@
+{
+ "queries": [
+  {
+   "id": "oss-ripgrep",
+   "query": "ripgrep",
+   "category": "open-source",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "BurntSushi/ripgrep",
+     "pg": false,
+     "f": "ripgrep.zip",
+     "p": "BurntSushi",
+     "s": "ripgrep recursively searches directories for a regex pattern while respecting your gitignore",
+     "u": "https://github.com/BurntSushi/ripgrep/archive/main.zip"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "phiresky/ripgrep-all",
+     "pg": false,
+     "f": "ripgrep-all.zip",
+     "p": "phiresky",
+     "s": "rga: ripgrep, but also search in PDFs, E-Books, Office documents, zip, tar.gz, etc.",
+     "u": "https://github.com/phiresky/ripgrep-all/archive/main.zip"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "microsoft/vscode-ripgrep",
+     "pg": false,
+     "f": "vscode-ripgrep.zip",
+     "p": "microsoft",
+     "s": "Node module that downloads the ripgrep binary for VS Code",
+     "u": "https://github.com/microsoft/vscode-ripgrep/archive/main.zip"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "sharkdp/fd",
+     "pg": false,
+     "f": "fd.zip",
+     "p": "sharkdp",
+     "s": "A simple, fast and user-friendly alternative to find",
+     "u": "https://github.com/sharkdp/fd/archive/main.zip"
+    },
+    {
+     "id": "e",
+     "source": "github",
+     "title": "mikf/gallery-dl",
+     "pg": false,
+     "f": "gallery-dl.zip",
+     "p": "mikf",
+     "s": "Command-line program to download image galleries and collections",
+     "u": "https://github.com/mikf/gallery-dl/archive/main.zip"
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "oss-ytdlp",
+   "query": "yt-dlp",
+   "category": "open-source",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "yt-dlp/yt-dlp",
+     "pg": false,
+     "f": "yt-dlp.zip",
+     "p": "yt-dlp",
+     "s": "A feature-rich command-line audio/video downloader",
+     "u": "https://github.com/yt-dlp/yt-dlp/archive/main.zip"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "ytdl-org/youtube-dl",
+     "pg": false,
+     "f": "youtube-dl.zip",
+     "p": "ytdl-org",
+     "s": "Command-line program to download videos from YouTube.com and other video sites",
+     "u": "https://github.com/ytdl-org/youtube-dl/archive/main.zip"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "mikf/gallery-dl",
+     "pg": false,
+     "f": "gallery-dl.zip",
+     "p": "mikf",
+     "s": "Command-line program to download image galleries and collections",
+     "u": "https://github.com/mikf/gallery-dl/archive/main.zip"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "aria2/aria2",
+     "pg": false,
+     "f": "aria2.zip",
+     "p": "aria2",
+     "s": "aria2 is a lightweight multi-protocol and multi-source download utility",
+     "u": "https://github.com/aria2/aria2/archive/main.zip"
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "oss-tauri",
+   "query": "tauri",
+   "category": "open-source",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "tauri-apps/tauri",
+     "pg": false,
+     "f": "tauri.zip",
+     "p": "tauri-apps",
+     "s": "Build smaller, faster, and more secure desktop applications with a web frontend",
+     "u": "https://github.com/tauri-apps/tauri/archive/main.zip"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "tauri-apps/tauri-docs",
+     "pg": false,
+     "f": "tauri-docs.zip",
+     "p": "tauri-apps",
+     "s": "The Tauri documentation website",
+     "u": "https://github.com/tauri-apps/tauri-docs/archive/main.zip"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "tauri-apps/plugins-workspace",
+     "pg": false,
+     "f": "plugins-workspace.zip",
+     "p": "tauri-apps",
+     "s": "All of the official Tauri plugins in one place",
+     "u": "https://github.com/tauri-apps/plugins-workspace/archive/main.zip"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "electron/electron",
+     "pg": false,
+     "f": "electron.zip",
+     "p": "electron",
+     "s": "Build cross-platform desktop apps with JavaScript, HTML, and CSS",
+     "u": "https://github.com/electron/electron/archive/main.zip"
+    },
+    {
+     "id": "e",
+     "source": "github",
+     "title": "tauri-apps/wry",
+     "pg": false,
+     "f": "wry.zip",
+     "p": "tauri-apps",
+     "s": "Cross-platform WebView rendering library",
+     "u": "https://github.com/tauri-apps/wry/archive/main.zip"
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "oss-godot-engine",
+   "query": "godot engine",
+   "category": "open-source",
+   "mode": "quick-search",
+   "subset": "semantic",
+   "note": "the repository name does not contain the word engine; its description does",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "github",
+     "title": "godotengine/godot",
+     "pg": false,
+     "f": "godot.zip",
+     "p": "godotengine",
+     "s": "Godot Engine - Multi-platform 2D and 3D game engine",
+     "u": "https://github.com/godotengine/godot/archive/main.zip"
+    },
+    {
+     "id": "b",
+     "source": "github",
+     "title": "godot-rust/gdext",
+     "pg": false,
+     "f": "gdext.zip",
+     "p": "godot-rust",
+     "s": "Rust bindings for Godot 4",
+     "u": "https://github.com/godot-rust/gdext/archive/main.zip"
+    },
+    {
+     "id": "c",
+     "source": "github",
+     "title": "godotengine/godot-docs",
+     "pg": false,
+     "f": "godot-docs.zip",
+     "p": "godotengine",
+     "s": "Godot Engine official documentation",
+     "u": "https://github.com/godotengine/godot-docs/archive/main.zip"
+    },
+    {
+     "id": "d",
+     "source": "github",
+     "title": "o3de/o3de",
+     "pg": false,
+     "f": "o3de.zip",
+     "p": "o3de",
+     "s": "Open 3D Engine (O3DE) is an Apache 2.0-licensed multi-platform 3D engine",
+     "u": "https://github.com/o3de/o3de/archive/main.zip"
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  }
+ ]
+}

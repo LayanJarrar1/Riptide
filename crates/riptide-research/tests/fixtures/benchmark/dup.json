@@ -1,0 +1,183 @@
+{
+ "queries": [
+  {
+   "id": "dup-deep-learning",
+   "query": "deep learning",
+   "category": "academic",
+   "mode": "deep-research",
+   "subset": "duplicates",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "open-alex",
+     "title": "Deep learning",
+     "d": "10.1038/nature14539",
+     "f": "dl.pdf",
+     "y": 2015,
+     "g": "g1",
+     "a": [
+      "Yann LeCun"
+     ]
+    },
+    {
+     "id": "b",
+     "source": "crossref",
+     "title": "Deep learning",
+     "d": "10.1038/NATURE14539",
+     "f": "dl2.pdf",
+     "y": 2015,
+     "g": "g1",
+     "a": [
+      "Yann LeCun"
+     ]
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Deep Learning",
+     "f": "deeplearning.pdf",
+     "z": 12345678,
+     "g": "g2",
+     "a": [
+      "Ian Goodfellow"
+     ]
+    },
+    {
+     "id": "d",
+     "source": "open-library",
+     "title": "Deep Learning",
+     "f": "deeplearning-ol.pdf",
+     "z": 12345678,
+     "g": "g2",
+     "a": [
+      "Ian Goodfellow"
+     ]
+    },
+    {
+     "id": "e",
+     "source": "arxiv",
+     "title": "Deep Learning in Neural Networks: An Overview",
+     "f": "1404.7828.pdf",
+     "ax": "1404.7828",
+     "y": 2014,
+     "g": "g3"
+    },
+    {
+     "id": "f",
+     "source": "open-alex",
+     "title": "Deep Learning in Neural Networks: An Overview",
+     "f": "dlnn.pdf",
+     "y": 2015,
+     "ax": "1404.7828",
+     "g": "g3"
+    },
+    {
+     "id": "g",
+     "source": "europe-pmc",
+     "title": "Deep learning for healthcare",
+     "f": "dlh.pdf",
+     "y": 2018
+    }
+   ],
+   "relevant": [
+    "a",
+    "c",
+    "e",
+    "g"
+   ]
+  },
+  {
+   "id": "dup-bert",
+   "query": "bert language model",
+   "category": "academic",
+   "mode": "deep-research",
+   "subset": "duplicates",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "arxiv",
+     "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+     "f": "1810.04805.pdf",
+     "ax": "1810.04805",
+     "y": 2018,
+     "g": "g1",
+     "u": "https://arxiv.org/pdf/1810.04805v2"
+    },
+    {
+     "id": "b",
+     "source": "open-alex",
+     "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+     "f": "bert.pdf",
+     "ax": "1810.04805",
+     "y": 2018,
+     "g": "g1",
+     "u": "https://arxiv.org/pdf/1810.04805v1"
+    },
+    {
+     "id": "c",
+     "source": "crossref",
+     "title": "A Primer in BERTology: What We Know About How BERT Works",
+     "f": "primer.pdf",
+     "y": 2020
+    },
+    {
+     "id": "d",
+     "source": "open-alex",
+     "title": "How multilingual is Multilingual BERT?",
+     "f": "mbert.pdf",
+     "y": 2019
+    },
+    {
+     "id": "e",
+     "source": "arxiv",
+     "title": "Cooking with butter",
+     "f": "butter.pdf",
+     "y": 2020
+    }
+   ],
+   "relevant": [
+    "a",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "id": "dup-sintel-url",
+   "query": "sintel",
+   "category": "videos",
+   "mode": "deep-research",
+   "subset": "duplicates",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "blender",
+     "title": "Sintel",
+     "f": "sintel.mp4",
+     "y": 2010,
+     "u": "https://download.blender.org/durian/movies/Sintel.2010.1080p.mkv",
+     "g": "g1"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Sintel",
+     "f": "sintel.mp4",
+     "y": 2010,
+     "u": "https://download.blender.org/durian/movies/Sintel.2010.1080p.mkv",
+     "g": "g1"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Sintel (2010) trailer",
+     "f": "sintel-trailer.mp4",
+     "y": 2010
+    }
+   ],
+   "relevant": [
+    "a",
+    "c"
+   ]
+  }
+ ]
+}

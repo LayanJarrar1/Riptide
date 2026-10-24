@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, OnInit, signal, untracked, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { AiSetupDialogComponent } from '../../ai/ai-setup-dialog.component';
 import { AiService } from '../../ai/ai.service';
-import { CategoryId, SourceId } from '../../ai/research.models';
+import { CATEGORY_IDS, CategoryId, SearchMode, SourceId } from '../../ai/research.models';
 import { ResearchSession } from '../../ai/research.session';
+import { MotionService } from '../../core/motion.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
@@ -12,11 +13,16 @@ import { ToastService } from '../../ui/toast.service';
 import { emptyTurn, keepItems, MAX_RESULTS, promptKey, Turn, turnAi } from './research-history';
 import { ResearchHistoryService } from './research-history.service';
 import { ResearchComposerComponent } from './research-composer.component';
+import { SIDE_DEFAULT, SIDE_MAX, SIDE_MIN, ResearchLayoutService } from './research-layout.service';
+import { CATEGORY_ICONS, chooseCategory, chooseMode } from './research-modes';
 import { ResearchSidebarComponent } from './research-sidebar.component';
-import { ResearchTurnComponent } from './research-turn.component';
+import { RerunRequest, ResearchTurnComponent } from './research-turn.component';
 
 /** How long the results of an identical prompt are reused instead of searching again. */
 const REUSE_MS = 10 * 60 * 1000;
+
+/** Arrow keys on the sidebar's resize handle move it this far (Shift: three times as far). */
+const KEY_STEP = 16;
 
 /** The turn the running search belongs to. */
 interface LiveRef {
@@ -30,6 +36,9 @@ interface LiveRef {
  * cards. One search runs at a time and each sends only its own prompt (no earlier turns go to the
  * AI). The search itself is the unchanged `ResearchSession`; this page mirrors its signals into the
  * stored turn, so a running turn and one restored from history are rendered by the same component.
+ *
+ * A search needs a category, chosen on purpose: a new conversation starts without one (the one used
+ * last is only suggested). Video Search is tied to Videos.
  */
 @Component({
   selector: 'app-research-page',
@@ -43,8 +52,8 @@ interface LiveRef {
         <p class="muted">{{ i18n.t('research.desktopOnly') }}</p>
       </div>
     } @else {
-      <div class="shell" [class.is-side-open]="sideOpen()">
-        <aside class="sidebar">
+      <div class="shell" [class.is-collapsed]="!layout.sideOpen()" [class.is-side-open]="drawerOpen()" [style.--side-w]="layout.sideWidth() + 'px'">
+        <aside class="sidebar" id="research-side">
           <app-research-sidebar
             [conversations]="history.conversations()"
             [activeId]="history.activeId()"
@@ -54,68 +63,113 @@ interface LiveRef {
             (deleted)="remove($event)"
             (cleared)="clearAll()"
           />
+          @if (layout.sideOpen()) {
+            <div
+              class="handle"
+              role="separator"
+              aria-orientation="vertical"
+              tabindex="0"
+              [attr.aria-label]="i18n.t('research.history.resize')"
+              [attr.aria-valuemin]="sideMin"
+              [attr.aria-valuemax]="sideMax"
+              [attr.aria-valuenow]="layout.sideWidth()"
+              (pointerdown)="startDrag($event)"
+              (pointermove)="onDrag($event)"
+              (pointerup)="endDrag()"
+              (pointercancel)="endDrag()"
+              (keydown)="onHandleKey($event)"
+              (dblclick)="layout.setSideWidth(sideDefault)"
+            ></div>
+          }
         </aside>
 
         <main class="main">
           <header class="head">
-            <button appButton variant="ghost" icon="list" [iconOnly]="true" type="button" class="side-toggle" [attr.aria-expanded]="sideOpen()" [attr.aria-label]="i18n.t('research.history')" (click)="sideOpen.set(!sideOpen())"></button>
+            <button appButton variant="ghost" icon="panelStart" [iconOnly]="true" type="button" class="side-toggle is-wide" aria-controls="research-side" [attr.aria-expanded]="layout.sideOpen()" [attr.aria-label]="i18n.t('research.history')" [attr.title]="i18n.t('research.history')" (click)="layout.toggleSide()"></button>
+            <button appButton variant="ghost" icon="list" [iconOnly]="true" type="button" class="side-toggle is-narrow" aria-controls="research-side" [attr.aria-expanded]="drawerOpen()" [attr.aria-label]="i18n.t('research.history')" (click)="drawerOpen.set(!drawerOpen())"></button>
             <div class="head-text">
               <h1 class="title">{{ history.active()?.title || i18n.t('research.title') }}</h1>
               <p class="rights" role="note"><app-icon name="shieldCheck" [size]="14" /> {{ i18n.t('research.notice') }}</p>
             </div>
           </header>
 
-          <div class="thread" #thread>
-            <div class="column">
-              @if (turns().length === 0) {
-                <div class="hello">
-                  <h2 class="hello-title">{{ i18n.t('research.hello') }}</h2>
-                  <p class="muted">{{ i18n.t('research.subtitle') }}</p>
-                  <p class="ready"><app-icon name="check" [size]="14" /> {{ i18n.t('research.hello.ready') }}</p>
-                  @if (ai.status() !== null && !aiOn()) {
-                    <p class="upgrade">
-                      <app-icon name="sparkles" [size]="14" />
-                      <span>{{ i18n.t('research.hello.upgrade') }}</span>
-                      <button type="button" class="upgrade-link" (click)="setupOpen.set(true)">{{ i18n.t('research.hello.setup') }}</button>
-                    </p>
-                  }
-                  <div class="examples" role="group" [attr.aria-label]="i18n.t('research.examples')">
-                    @for (n of examples; track n) {
-                      <button type="button" class="example" dir="auto" (click)="useExample(n)">{{ i18n.t('research.example.' + n) }}</button>
+          <div class="stage" [class.is-empty]="empty()">
+            <div class="thread" #thread>
+              @if (empty()) {
+                <div class="hello" [class.is-animated]="animate()">
+                  <div class="mark-wrap">
+                    @if (animate()) {
+                      <span class="ripple r1" aria-hidden="true"></span>
+                      <span class="ripple r2" aria-hidden="true"></span>
                     }
+                    <img class="mark" src="brand-mark.svg" alt="" width="64" height="64" />
                   </div>
+                  <h2 class="hello-title">{{ i18n.t('research.hello') }}</h2>
+                  <p class="muted">{{ i18n.t('research.hello.sub') }}</p>
+                </div>
+              } @else {
+                <div class="column">
+                  @for (t of turns(); track t.id) {
+                    <app-research-turn
+                      [turn]="t"
+                      [live]="liveRef()?.turnId === t.id"
+                      [addable]="history.isLive(t.id)"
+                      (stopSearch)="cancel()"
+                      (retrySource)="retrySource($event)"
+                      (rerun)="rerun(t, $event)"
+                      (added)="recheckSeen(t.id)"
+                    />
+                  }
                 </div>
               }
-              @for (t of turns(); track t.id) {
-                <app-research-turn
-                  [turn]="t"
-                  [live]="liveRef()?.turnId === t.id"
-                  [addable]="history.isLive(t.id)"
-                  (stopSearch)="cancel()"
-                  (retrySource)="retrySource($event)"
-                  (rerun)="rerun(t, $event)"
-                  (added)="recheckSeen(t.id)"
-                />
-              }
             </div>
-          </div>
 
-          <div class="dock">
-            <div class="column">
-              <app-research-composer
-                #composer
-                [(category)]="category"
-                [(useAi)]="useAi"
-                [aiReady]="aiOn()"
-                [providerLabel]="providerLabel()"
-                [busy]="session.busy()"
-                (send)="send($event)"
-                (stop)="cancel()"
-                (openAiSettings)="openAiSettings()"
-                (setupAi)="setupOpen.set(true)"
-              />
-              <p class="policy">{{ i18n.t('research.footer') }}</p>
+            <div class="dock">
+              <div class="column">
+                <app-research-composer
+                  #composer
+                  [category]="category()"
+                  [mode]="mode()"
+                  [(useAi)]="useAi"
+                  [aiReady]="aiOn()"
+                  [providerLabel]="providerLabel()"
+                  [busy]="session.busy()"
+                  [note]="noteText()"
+                  [placement]="empty() ? 'down' : 'up'"
+                  [compact]="!empty()"
+                  (send)="send($event)"
+                  (stop)="cancel()"
+                  (pickMode)="pickMode($event)"
+                  (pickCategory)="pickCategory($event)"
+                  (openAiSettings)="openAiSettings()"
+                  (setupAi)="setupOpen.set(true)"
+                />
+                @if (!empty()) {
+                  <p class="policy is-line" [attr.title]="i18n.t('research.footer')">{{ i18n.t('research.footer') }}</p>
+                }
+              </div>
             </div>
+
+            @if (empty()) {
+              <div class="cats column">
+                <p class="cats-title" id="research-cats">{{ i18n.t('research.categories') }}</p>
+                <div class="cat-grid" role="group" aria-labelledby="research-cats">
+                  @for (c of categoryIds; track c) {
+                    <button type="button" class="cat" [class.is-on]="category() === c" [class.is-suggested]="category() === null && layout.lastCategory() === c" [attr.aria-pressed]="category() === c" (click)="chooseCard(c)">
+                      <app-icon [name]="categoryIcons[c]" [size]="18" />
+                      <span class="cat-text">
+                        <span class="cat-name">{{ i18n.t('research.cat.' + c) }}</span>
+                        <span class="cat-desc">{{ i18n.t('research.catDesc.' + c) }}</span>
+                      </span>
+                      @if (category() === null && layout.lastCategory() === c) {
+                        <span class="cat-tag">{{ i18n.t('research.lastUsed') }}</span>
+                      }
+                    </button>
+                  }
+                </div>
+                <p class="policy">{{ i18n.t('research.footer') }}</p>
+              </div>
+            }
           </div>
         </main>
       </div>
@@ -137,14 +191,54 @@ interface LiveRef {
 
     .shell {
       display: grid;
-      grid-template-columns: 264px minmax(0, 1fr);
+      grid-template-columns: var(--side-w, 264px) minmax(0, 1fr);
       block-size: 100%;
     }
 
+    .shell.is-collapsed {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .shell.is-collapsed .sidebar {
+      display: none;
+    }
+
     .sidebar {
+      position: relative;
       border-inline-end: 1px solid var(--color-border);
       background: var(--color-surface-1, var(--color-surface-2));
       min-block-size: 0;
+      min-inline-size: 0;
+    }
+
+    /* the drag handle straddles the sidebar's edge; it is also a keyboard separator */
+    .handle {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: -4px;
+      inline-size: 8px;
+      z-index: 2;
+      cursor: col-resize;
+      touch-action: none;
+    }
+
+    .handle::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 3px;
+      inline-size: 2px;
+      background: transparent;
+      transition: background-color var(--dur-1) var(--ease-standard);
+    }
+
+    .handle:hover::after,
+    .handle:focus-visible::after {
+      background: var(--color-accent);
+    }
+
+    .handle:focus-visible {
+      outline: none;
     }
 
     .main {
@@ -189,12 +283,20 @@ interface LiveRef {
     }
 
     .rights app-icon {
-      color: var(--color-accent);
+      color: var(--color-accent-fg);
       flex-shrink: 0;
     }
 
-    .side-toggle {
+    .side-toggle.is-narrow {
       display: none;
+    }
+
+    /* one scroll container: the thread scrolls, the composer stays; on the empty page the stage scrolls instead */
+    .stage {
+      flex: 1;
+      min-block-size: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     .thread {
@@ -205,9 +307,22 @@ interface LiveRef {
       scroll-padding-block-end: var(--space-6);
     }
 
+    .stage.is-empty {
+      overflow-y: auto;
+      padding-inline: var(--space-6);
+    }
+
+    .stage.is-empty .thread {
+      flex: none;
+      overflow: visible;
+      padding: 0;
+      margin-block-start: auto;
+    }
+
     .column {
-      max-inline-size: 860px;
+      max-inline-size: 900px;
       margin-inline: auto;
+      inline-size: 100%;
       display: flex;
       flex-direction: column;
       gap: var(--space-8, 32px);
@@ -223,100 +338,287 @@ interface LiveRef {
       gap: var(--space-2);
     }
 
+    .stage.is-empty .dock {
+      padding: var(--space-6) 0 var(--space-4);
+      border-block-start: 0;
+      background: transparent;
+    }
+
+    .stage.is-empty .dock .column {
+      max-inline-size: 840px;
+    }
+
+    .stage.is-empty .cats {
+      max-inline-size: 880px;
+    }
+
     .policy {
+      margin: 0;
       color: var(--color-text-muted);
       font-size: var(--text-xs);
       line-height: var(--leading-normal);
     }
 
+    /* legal text is never cut with an ellipsis: it wraps */
+    .policy.is-line {
+      font-size: 11px;
+    }
+
     .hello {
-      padding-block: var(--space-10, 48px) var(--space-4);
+      padding-block-start: var(--space-2);
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: var(--space-3);
+      gap: var(--space-2);
+    }
+
+    .mark-wrap {
+      position: relative;
+      display: grid;
+      place-items: center;
+      inline-size: 64px;
+      block-size: 64px;
+      margin-block-end: var(--space-2);
+    }
+
+    .mark {
+      position: relative;
+      display: block;
+      inline-size: 64px;
+      block-size: 64px;
+    }
+
+    /* the logo is shown exactly as the brand kit draws it; only its position and opacity move */
+    .is-animated .mark {
+      animation: mark-in var(--dur-4) var(--ease-emphasized-out) both;
+    }
+
+    /* a ripple behind the mark, played once: it spreads out like a wave and fades */
+    .ripple {
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      border: 1.5px solid var(--color-accent);
+      opacity: 0;
+      animation: ripple 1400ms var(--ease-emphasized-out) both;
+    }
+
+    .ripple.r1 {
+      animation-delay: 220ms;
+    }
+
+    .ripple.r2 {
+      animation-delay: 520ms;
+    }
+
+    @keyframes mark-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.92);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @keyframes ripple {
+      from {
+        opacity: 0.5;
+        transform: scale(0.95);
+      }
+
+      to {
+        opacity: 0;
+        transform: scale(1.7);
+      }
+    }
+
+    .is-animated .hello-title,
+    .is-animated .muted {
+      animation: text-in var(--dur-4) var(--ease-emphasized-out) 160ms both;
+    }
+
+    @keyframes text-in {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
     }
 
     .hello-title {
+      margin: 0;
       font-size: var(--text-2xl);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-tight);
+    }
+
+    .hello .muted {
+      max-inline-size: 52ch;
+      font-size: var(--text-sm);
+    }
+
+    .cats {
+      margin-block-end: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      padding-block-end: var(--space-4);
+    }
+
+    .cats-title {
+      margin: 0;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
+    }
+
+    .cat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: var(--space-2);
+    }
+
+    .cat {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-1, var(--color-surface-2));
+      color: var(--color-text);
+      font: inherit;
+      text-align: start;
+      cursor: pointer;
+      transition:
+        border-color var(--dur-1) var(--ease-standard),
+        background-color var(--dur-1) var(--ease-standard);
+    }
+
+    .cat app-icon {
+      flex: none;
+      margin-block-start: 1px;
+      color: var(--color-text-secondary);
+    }
+
+    .cat:hover {
+      border-color: var(--color-border-strong);
+      background: var(--color-surface-2);
+    }
+
+    .cat:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: 2px;
+    }
+
+    .cat.is-on {
+      border-color: var(--color-accent);
+      background: var(--color-accent-soft);
+    }
+
+    .cat.is-on app-icon {
+      color: var(--color-accent-fg);
+    }
+
+    .cat.is-suggested {
+      border-style: dashed;
+      border-color: var(--color-accent);
+    }
+
+    .cat-text {
+      display: flex;
+      flex-direction: column;
+      min-inline-size: 0;
+    }
+
+    .cat-name {
+      font-size: var(--text-sm);
       font-weight: var(--weight-semibold);
     }
 
-    .ready,
-    .upgrade {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-      font-size: var(--text-sm);
-    }
-
-    .ready {
-      color: var(--color-text-secondary);
-    }
-
-    .ready app-icon {
-      color: var(--color-success);
-    }
-
-    .upgrade {
+    .cat-desc {
       color: var(--color-text-muted);
+      font-size: var(--text-xs);
+      line-height: var(--leading-normal);
     }
 
-    .upgrade app-icon {
-      color: var(--color-accent);
-    }
-
-    .upgrade-link {
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: var(--color-accent);
-      font: inherit;
-      text-decoration: underline;
-      cursor: pointer;
-    }
-
-    .upgrade-link:focus-visible {
-      outline: 2px solid var(--color-accent);
-      outline-offset: 2px;
-    }
-
-    .examples {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: var(--space-2);
-      margin-block-start: var(--space-3);
-    }
-
-    .example {
-      padding: var(--space-2) var(--space-4);
-      border: 1px solid var(--color-border-strong);
+    .cat-tag {
+      position: absolute;
+      inset-block-start: var(--space-2);
+      inset-inline-end: var(--space-2);
+      padding: 0 6px;
       border-radius: var(--radius-full);
-      background: var(--color-surface-2);
-      color: var(--color-text-secondary);
-      font: inherit;
-      font-size: var(--text-sm);
-      cursor: pointer;
+      background: var(--color-accent-soft);
+      color: var(--color-accent-fg);
+      font-size: 10px;
+      font-weight: var(--weight-medium);
     }
 
-    .example:hover {
-      border-color: var(--color-accent);
-      color: var(--color-text);
+    /* short windows (a 1080p screen at 200 %, 720p laptops): the greeting shrinks so the box and Send stay on screen */
+    @media (max-height: 800px) {
+      .hello {
+        gap: var(--space-1);
+      }
+
+      .mark-wrap,
+      .mark {
+        inline-size: 44px;
+        block-size: 44px;
+      }
+
+      .mark-wrap {
+        margin-block-end: 0;
+      }
+
+      .ripple {
+        border-radius: 15px;
+      }
+
+      .hello-title {
+        font-size: var(--text-xl, 1.25rem);
+      }
+
+      .hello .muted {
+        display: none;
+      }
+
+      .stage.is-empty .dock {
+        padding-block-start: var(--space-3);
+      }
+
+      .head {
+        padding-block: var(--space-2);
+      }
     }
 
-    .example:focus-visible {
-      outline: 2px solid var(--color-accent);
-      outline-offset: 2px;
+    @media (max-height: 620px) {
+      .mark-wrap {
+        display: none;
+      }
+
+      .stage.is-empty .dock {
+        padding-block-start: var(--space-2);
+      }
     }
 
     @media (max-width: 900px) {
-      .shell {
+      .shell,
+      .shell.is-collapsed {
         grid-template-columns: minmax(0, 1fr);
         position: relative;
+      }
+
+      .shell.is-collapsed .sidebar {
+        display: block;
       }
 
       .sidebar {
@@ -339,7 +641,15 @@ interface LiveRef {
         transition-delay: 0s;
       }
 
-      .side-toggle {
+      .handle {
+        display: none;
+      }
+
+      .side-toggle.is-wide {
+        display: none;
+      }
+
+      .side-toggle.is-narrow {
         display: inline-flex;
       }
 
@@ -361,23 +671,42 @@ export class ResearchPageComponent implements OnInit {
   protected readonly i18n = inject(I18nService);
   protected readonly ai = inject(AiService);
   protected readonly history = inject(ResearchHistoryService);
+  protected readonly layout = inject(ResearchLayoutService);
   protected readonly session = inject(ResearchSession);
+  private readonly motion = inject(MotionService);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
 
   private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
   private readonly composer = viewChild<ResearchComposerComponent>('composer');
 
-  protected readonly examples = [1, 2, 3] as const;
-  protected readonly category = signal<CategoryId>('all');
+  protected readonly categoryIds = CATEGORY_IDS;
+  protected readonly categoryIcons = CATEGORY_ICONS;
+  protected readonly sideMin = SIDE_MIN;
+  protected readonly sideMax = SIDE_MAX;
+  protected readonly sideDefault = SIDE_DEFAULT;
+
+  /** `null` until the user picks one: a new conversation never starts with a category chosen for it. */
+  protected readonly category = signal<CategoryId | null>(null);
+  protected readonly mode = signal<SearchMode>('quick-search');
+  /** Translation key of the line explaining what a choice changed. */
+  private readonly noteKey = signal<string | null>(null);
+  protected readonly noteText = computed(() => {
+    const key = this.noteKey();
+    return key === null ? null : this.i18n.t(key);
+  });
   protected readonly useAi = signal(true);
-  protected readonly sideOpen = signal(false);
+  protected readonly drawerOpen = signal(false);
   protected readonly setupOpen = signal(false);
   protected readonly liveRef = signal<LiveRef | null>(null);
+
+  /** The entrance of the empty page plays unless the user asked for reduced motion. */
+  protected readonly animate = computed(() => !this.motion.reduced());
 
   /** The AI is set up (provider + key + model). */
   protected readonly aiOn = computed(() => this.ai.status()?.configured === true);
   protected readonly turns = computed<readonly Turn[]>(() => this.history.active()?.turns ?? []);
+  protected readonly empty = computed(() => this.turns().length === 0);
   /** `Provider · model` for the indicator next to the AI switch. */
   protected readonly providerLabel = computed(() => {
     const s = this.ai.status();
@@ -388,18 +717,34 @@ export class ResearchPageComponent implements OnInit {
     return s.settings.model ? `${name} · ${s.settings.model}` : name;
   });
 
+  /** Where each conversation was scrolled to, so switching back finds the same place. */
+  private readonly scrollAt = new Map<string, number>();
+  private view: { id: string | null; n: number } = { id: null, n: 0 };
+  private drag: { x: number; w: number } | null = null;
+
   constructor() {
     // mirror the running search into its turn, whenever the search changes
     this.session.watch(() => this.mirror());
-    // the newest turn comes into view
+    // a new turn comes into view; another conversation comes back to where it was left
     effect(() => {
+      const id = this.history.activeId();
       const n = this.turns().length;
-      if (n > 0) {
-        setTimeout(() => {
-          const el = this.thread()?.nativeElement;
-          el?.scrollTo({ top: el.scrollHeight });
-        }, 0);
+      const before = untracked(() => this.view);
+      this.view = { id, n };
+      if (n === 0) {
+        return;
       }
+      setTimeout(() => {
+        const el = this.thread()?.nativeElement;
+        if (!el) {
+          return;
+        }
+        if (id !== before.id) {
+          el.scrollTo({ top: (id !== null ? this.scrollAt.get(id) : undefined) ?? el.scrollHeight });
+        } else if (n > before.n) {
+          el.scrollTo({ top: el.scrollHeight });
+        }
+      }, 0);
     });
   }
 
@@ -417,6 +762,9 @@ export class ResearchPageComponent implements OnInit {
       sources: this.session.sources(),
       unavailable: this.session.unavailable().map((u) => u.source),
       plan: this.session.plan(),
+      queries: this.session.queries(),
+      comparison: this.session.comparison(),
+      summary: this.session.summary(),
       ai: turnAi(this.session.ai(), (o) => (o.error ? this.ai.failText(o.error) : '')),
       rankedCount: this.session.rankedCount(),
       items: keepItems(this.session.ordered(), MAX_RESULTS),
@@ -429,25 +777,81 @@ export class ResearchPageComponent implements OnInit {
     }
   }
 
+  // ---------------------------------------------------------------- choices
+
+  protected pickMode(mode: SearchMode): void {
+    const s = chooseMode(mode, this.category());
+    this.mode.set(s.mode);
+    this.category.set(s.category);
+    this.noteKey.set(s.note);
+  }
+
+  protected pickCategory(category: CategoryId): void {
+    const s = chooseCategory(category, this.mode());
+    this.mode.set(s.mode);
+    this.category.set(s.category);
+    this.noteKey.set(s.note);
+  }
+
+  /** A card on the empty page: choosing is explicit, then the cursor goes to the prompt. */
+  protected chooseCard(category: CategoryId): void {
+    this.pickCategory(category);
+    this.composer()?.focus();
+  }
+
+  /** The conversation's own context: what its last search used, or nothing chosen yet. */
+  private restoreContext(turns: readonly Turn[]): void {
+    const last = turns[turns.length - 1];
+    this.category.set(last?.category ?? null);
+    this.mode.set(last?.mode ?? 'quick-search');
+    this.noteKey.set(null);
+  }
+
+  // ---------------------------------------------------------------- conversations
+
+  private saveScroll(): void {
+    const id = this.history.activeId();
+    const el = this.thread()?.nativeElement;
+    if (id !== null && el) {
+      this.scrollAt.set(id, el.scrollTop);
+    }
+  }
+
   protected newConversation(): void {
+    this.saveScroll();
     this.history.select(null);
-    this.sideOpen.set(false);
+    this.drawerOpen.set(false);
     this.composer()?.clear();
+    this.restoreContext([]);
+    this.composer()?.focus();
   }
 
   protected open(id: string): void {
+    if (id === this.history.activeId()) {
+      this.drawerOpen.set(false);
+      return;
+    }
+    this.saveScroll();
     this.history.select(id);
-    this.sideOpen.set(false);
+    this.drawerOpen.set(false);
+    this.restoreContext(this.turns());
   }
 
   protected remove(id: string): void {
     this.stopIfLive(id);
+    const wasActive = this.history.activeId() === id;
     this.history.remove(id);
+    this.scrollAt.delete(id);
+    if (wasActive) {
+      this.restoreContext([]);
+    }
   }
 
   protected clearAll(): void {
     this.stopIfLive(null);
     this.history.clearAll();
+    this.scrollAt.clear();
+    this.restoreContext([]);
   }
 
   /** Deleting a conversation stops its search (`null`: whatever is running). */
@@ -462,14 +866,55 @@ export class ResearchPageComponent implements OnInit {
     }
   }
 
-  protected useExample(n: number): void {
-    this.composer()?.fill(this.i18n.t(`research.example.${n}`));
+  // ---------------------------------------------------------------- sidebar width
+
+  protected startDrag(event: PointerEvent): void {
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    this.drag = { x: event.clientX, w: this.layout.sideWidth() };
   }
 
+  protected onDrag(event: PointerEvent): void {
+    if (this.drag === null) {
+      return;
+    }
+    // the sidebar is on the right in RTL, so dragging left widens it
+    const sign = this.i18n.dir() === 'rtl' ? -1 : 1;
+    this.layout.setSideWidth(this.drag.w + (event.clientX - this.drag.x) * sign, false);
+  }
+
+  protected endDrag(): void {
+    if (this.drag !== null) {
+      this.drag = null;
+      this.layout.setSideWidth(this.layout.sideWidth());
+    }
+  }
+
+  protected onHandleKey(event: KeyboardEvent): void {
+    const sign = this.i18n.dir() === 'rtl' ? -1 : 1;
+    const step = event.shiftKey ? KEY_STEP * 3 : KEY_STEP;
+    switch (event.key) {
+      case 'ArrowRight':
+        this.layout.setSideWidth(this.layout.sideWidth() + sign * step);
+        break;
+      case 'ArrowLeft':
+        this.layout.setSideWidth(this.layout.sideWidth() - sign * step);
+        break;
+      case 'Home':
+        this.layout.setSideWidth(SIDE_MIN);
+        break;
+      case 'End':
+        this.layout.setSideWidth(SIDE_MAX);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  }
+
+  // ---------------------------------------------------------------- searching
+
   protected openAiSettings(): void {
-    void this.router.navigateByUrl('/settings').then(() => {
-      setTimeout(() => document.getElementById('ai')?.scrollIntoView({ block: 'start' }), 50);
-    });
+    void this.router.navigateByUrl('/settings#ai');
   }
 
   protected cancel(): void {
@@ -481,24 +926,27 @@ export class ResearchPageComponent implements OnInit {
   }
 
   protected send(prompt: string): void {
-    if (this.session.busy()) {
+    const category = this.category();
+    if (this.session.busy() || category === null) {
       return;
     }
     const useAi = this.useAi() && this.aiOn();
-    const category = this.category();
+    const mode = this.mode();
     const conv = this.history.active() ?? this.history.startConversation(prompt);
-    const reusable = this.findReusable(conv.turns, prompt, category, useAi);
+    const reusable = this.findReusable(conv.turns, prompt, category, useAi, mode);
+    this.layout.rememberCategory(category);
+    this.noteKey.set(null);
     if (reusable !== null) {
       // the copy keeps the original's time, so repeating a prompt never stretches the reuse window
-      this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi, reusable.createdAt), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
+      this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi, reusable.createdAt, mode), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
     } else {
-      void this.run(conv.id, emptyTurn(prompt, category, useAi));
+      void this.run(conv.id, emptyTurn(prompt, category, useAi, Date.now(), mode));
     }
     this.composer()?.clear();
   }
 
-  /** Searches the same prompt again, with or without the AI. */
-  protected rerun(turn: Turn, withAi: boolean): void {
+  /** Searches the same prompt again, with or without the AI, in the given mode. */
+  protected rerun(turn: Turn, request: RerunRequest): void {
     if (this.session.busy()) {
       return;
     }
@@ -506,15 +954,16 @@ export class ResearchPageComponent implements OnInit {
     if (conv === null) {
       return;
     }
-    void this.run(conv.id, emptyTurn(turn.prompt, turn.category, withAi && this.aiOn()));
+    this.mode.set(request.mode);
+    void this.run(conv.id, emptyTurn(turn.prompt, turn.category, request.useAi && this.aiOn(), Date.now(), request.mode));
   }
 
   /** An identical, finished turn whose results the backend still holds: no new search, nothing sent. */
-  private findReusable(turns: readonly Turn[], prompt: string, category: CategoryId, useAi: boolean): Turn | null {
-    const key = promptKey(prompt, category, useAi);
+  private findReusable(turns: readonly Turn[], prompt: string, category: CategoryId, useAi: boolean, mode: SearchMode): Turn | null {
+    const key = promptKey(prompt, category, useAi, mode);
     const now = Date.now();
     return (
-      [...turns].reverse().find((t) => t.status === 'done' && t.items.length > 0 && t.sources.every((s) => s.state === 'done') && now - t.createdAt < REUSE_MS && this.history.isLive(t.id) && promptKey(t.prompt, t.category, t.useAi) === key) ?? null
+      [...turns].reverse().find((t) => t.status === 'done' && t.items.length > 0 && t.sources.every((s) => s.state === 'done') && now - t.createdAt < REUSE_MS && this.history.isLive(t.id) && promptKey(t.prompt, t.category, t.useAi, t.mode) === key) ?? null
     );
   }
 
@@ -523,7 +972,7 @@ export class ResearchPageComponent implements OnInit {
     this.liveRef.set({ conversationId, turnId: turn.id });
     try {
       // only the prompt travels: no earlier turn, no history, nothing local
-      await this.session.start({ topic: turn.prompt, useAi: turn.useAi, lang: this.i18n.lang(), category: turn.category });
+      await this.session.start({ topic: turn.prompt, useAi: turn.useAi, lang: this.i18n.lang(), category: turn.category, mode: turn.mode });
     } catch (e: unknown) {
       this.liveRef.set(null);
       this.history.patchTurn(conversationId, turn.id, { status: 'error', error: this.ai.errorText(e) });
@@ -564,5 +1013,5 @@ export class ResearchPageComponent implements OnInit {
 
 /** The parts of a finished turn that a reused turn shares. */
 function pickResults(t: Turn): Partial<Turn> {
-  return { sources: t.sources, unavailable: t.unavailable, plan: t.plan, ai: t.ai, rankedCount: t.rankedCount, items: t.items };
+  return { sources: t.sources, unavailable: t.unavailable, plan: t.plan, queries: t.queries, comparison: t.comparison, summary: t.summary, ai: t.ai, rankedCount: t.rankedCount, items: t.items };
 }

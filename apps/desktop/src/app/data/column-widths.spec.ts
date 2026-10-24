@@ -17,16 +17,16 @@ import {
 
 describe('column widths', () => {
   it('keeps the shipped tracks when nothing was customised', () => {
-    expect(gridTracks('full', {})).toBe('minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 84px 172px 104px 64px');
+    expect(gridTracks('full', {})).toBe('minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 112px 172px 104px 64px');
     expect(gridTracks('compact', {})).toBe('minmax(180px, 2fr) 128px minmax(120px, 1.4fr) 92px 150px 60px');
     expect(gridTracks('narrow', {})).toBe('minmax(160px, 2fr) 110px minmax(100px, 1.4fr) 140px 52px');
     expect(gridTracks('tiny', {})).toBe('minmax(140px, 1fr) minmax(90px, 1fr) 44px');
-    expect(gridMinWidth('full', {})).toBe(1010);
+    expect(gridMinWidth('full', {})).toBe(1038);
   });
 
   it('a custom width becomes a fixed track in every layout that shows the column', () => {
     const widths = { name: 420, speed: 130 };
-    expect(gridTracks('full', widths)).toBe('420px 150px minmax(150px, 1.6fr) 130px 84px 172px 104px 64px');
+    expect(gridTracks('full', widths)).toBe('420px 150px minmax(150px, 1.6fr) 130px 112px 172px 104px 64px');
     expect(gridTracks('narrow', widths)).toBe('420px 110px minmax(100px, 1.4fr) 140px 52px');
     expect(gridTracks('tiny', widths)).toBe('420px minmax(90px, 1fr) 44px');
     expect(gridMinWidth('tiny', widths)).toBe(420 + 90 + 44);
@@ -63,7 +63,7 @@ describe('column widths', () => {
   it('shows the optional columns only when turned on, and only in the full layout', () => {
     const shown = new Set<ColumnKey>();
     expect(gridTracks('full', {}, shown)).toBe(
-      'minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 104px 84px 96px 172px 112px 104px 64px',
+      'minmax(190px, 2.2fr) 150px minmax(150px, 1.6fr) 96px 104px 112px 96px 172px 112px 104px 64px',
     );
     expect(gridTracks('compact', {}, shown)).toBe(gridTracks('compact', {}));
     expect(gridTracks('full', {}, new Set<ColumnKey>(['size', 'eta', 'avgSpeed', 'duration', 'category']))).toBe(

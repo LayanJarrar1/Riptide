@@ -1,0 +1,400 @@
+{
+ "queries": [
+  {
+   "id": "pdf-attention",
+   "query": "attention is all you need pdf",
+   "category": "academic",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "arxiv",
+     "title": "Attention Is All You Need",
+     "f": "1706.03762.pdf",
+     "ax": "1706.03762",
+     "a": [
+      "Ashish Vaswani"
+     ],
+     "y": 2017,
+     "g": "g1"
+    },
+    {
+     "id": "b",
+     "source": "open-alex",
+     "title": "Attention is All you Need",
+     "d": "10.48550/arxiv.1706.03762",
+     "f": "attention.pdf",
+     "a": [
+      "Ashish Vaswani"
+     ],
+     "y": 2017,
+     "g": "g1",
+     "ax": "1706.03762"
+    },
+    {
+     "id": "c",
+     "source": "crossref",
+     "title": "Attention Is All You Need",
+     "d": "10.48550/ARXIV.1706.03762",
+     "f": "attention2.pdf",
+     "y": 2017,
+     "g": "g1",
+     "ax": "1706.03762"
+    },
+    {
+     "id": "d",
+     "source": "arxiv",
+     "title": "Attention Is Not All You Need: Pure Attention Loses Rank Doubly Exponentially with Depth",
+     "f": "2103.03404.pdf",
+     "ax": "2103.03404",
+     "y": 2021
+    },
+    {
+     "id": "e",
+     "source": "arxiv",
+     "title": "Attention Is Not Explanation",
+     "f": "1902.10186.pdf",
+     "ax": "1902.10186",
+     "y": 2019
+    },
+    {
+     "id": "f",
+     "source": "open-alex",
+     "title": "All You Need Is Love: a history of the song",
+     "f": "love.pdf",
+     "y": 2015
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "pdf-bert",
+   "query": "bert pre-training of deep bidirectional transformers pdf",
+   "category": "academic",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "arxiv",
+     "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+     "f": "1810.04805.pdf",
+     "ax": "1810.04805",
+     "y": 2018,
+     "g": "g1"
+    },
+    {
+     "id": "b",
+     "source": "open-alex",
+     "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+     "f": "bert.pdf",
+     "d": "10.18653/v1/n19-1423",
+     "y": 2019,
+     "g": "g1",
+     "ax": "1810.04805"
+    },
+    {
+     "id": "c",
+     "source": "arxiv",
+     "title": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+     "f": "1910.01108.pdf",
+     "ax": "1910.01108",
+     "y": 2019
+    },
+    {
+     "id": "d",
+     "source": "arxiv",
+     "title": "Pre-training of Deep Bidirectional Transformers for Vision",
+     "f": "9999.00001.pdf",
+     "ax": "9999.00001",
+     "y": 2022
+    },
+    {
+     "id": "e",
+     "source": "arxiv",
+     "title": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+     "f": "1907.11692.pdf",
+     "ax": "1907.11692",
+     "y": 2019
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "pdf-resnet",
+   "query": "\"deep residual learning for image recognition\" -survey",
+   "category": "academic",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "arxiv",
+     "title": "Deep Residual Learning for Image Recognition",
+     "f": "1512.03385.pdf",
+     "ax": "1512.03385",
+     "y": 2015,
+     "g": "g1"
+    },
+    {
+     "id": "b",
+     "source": "crossref",
+     "title": "Deep Residual Learning for Image Recognition",
+     "f": "resnet.pdf",
+     "d": "10.1109/cvpr.2016.90",
+     "y": 2016,
+     "g": "g1",
+     "ax": "1512.03385"
+    },
+    {
+     "id": "c",
+     "source": "arxiv",
+     "title": "Deep Residual Learning for Image Recognition: A Survey",
+     "f": "2105.00001.pdf",
+     "ax": "2105.00001",
+     "y": 2021
+    },
+    {
+     "id": "d",
+     "source": "arxiv",
+     "title": "Deep Residual Learning for Time Series Forecasting",
+     "f": "2106.00002.pdf",
+     "ax": "2106.00002",
+     "y": 2021
+    },
+    {
+     "id": "e",
+     "source": "arxiv",
+     "title": "Residual Learning for Image Recognition in Medical Imaging",
+     "f": "2107.00003.pdf",
+     "ax": "2107.00003",
+     "y": 2021
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "pdf-rustbook",
+   "query": "rust programming language book pdf",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "The Rust Programming Language",
+     "f": "rust-book.pdf",
+     "a": [
+      "Steve Klabnik",
+      "Carol Nichols"
+     ]
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Rust in Action",
+     "f": "rust-in-action.pdf",
+     "a": [
+      "Tim McNamara"
+     ]
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "The Rust Programming Language",
+     "f": "rust-book.epub",
+     "a": [
+      "Steve Klabnik"
+     ]
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Learn Rust the Hard Way",
+     "f": "rust-hard-way.pdf"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Rust Game Guide",
+     "f": "rust-game.pdf"
+    },
+    {
+     "id": "f",
+     "source": "open-library",
+     "title": "The Rust Programming Language book (2nd Edition)",
+     "f": "trpl2.pdf",
+     "a": [
+      "Steve Klabnik"
+     ]
+    }
+   ],
+   "relevant": [
+    "a",
+    "f"
+   ]
+  },
+  {
+   "id": "pdf-pride-epub",
+   "query": "pride and prejudice epub",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "gutenberg",
+     "title": "Pride and Prejudice",
+     "f": "pg1342.epub",
+     "a": [
+      "Austen, Jane"
+     ]
+    },
+    {
+     "id": "b",
+     "source": "gutenberg",
+     "title": "Pride and Prejudice",
+     "f": "pg1342.txt",
+     "a": [
+      "Austen, Jane"
+     ]
+    },
+    {
+     "id": "c",
+     "source": "gutenberg",
+     "title": "Pride and Prejudice",
+     "f": "pg1342.html",
+     "a": [
+      "Austen, Jane"
+     ]
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Pride and Prejudice",
+     "f": "pride.pdf",
+     "a": [
+      "Jane Austen"
+     ]
+    },
+    {
+     "id": "e",
+     "source": "gutenberg",
+     "title": "Sense and Sensibility",
+     "f": "pg161.epub",
+     "a": [
+      "Austen, Jane"
+     ]
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "pdf-python-crash",
+   "query": "python crash course pdf",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "Python Crash Course",
+     "f": "python-crash-course.pdf",
+     "a": [
+      "Eric Matthes"
+     ]
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Python Crash Course",
+     "f": "python-crash-course.epub",
+     "a": [
+      "Eric Matthes"
+     ]
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Python Cookbook",
+     "f": "python-cookbook.pdf"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Python Programming",
+     "f": "python-programming.pdf"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Crash Course in Physics",
+     "f": "crash-physics.pdf"
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "pdf-graphene-2020",
+   "query": "graphene review 2020",
+   "category": "academic",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "open-alex",
+     "title": "Graphene-based materials: a review",
+     "y": 2020,
+     "f": "g1.pdf"
+    },
+    {
+     "id": "b",
+     "source": "open-alex",
+     "title": "Graphene-based materials: a review",
+     "y": 2018,
+     "f": "g2.pdf"
+    },
+    {
+     "id": "c",
+     "source": "open-alex",
+     "title": "Graphene: a review of properties",
+     "y": 2021,
+     "f": "g3.pdf"
+    },
+    {
+     "id": "d",
+     "source": "crossref",
+     "title": "A review of graphene applications in energy storage",
+     "y": 2020,
+     "f": "g4.pdf"
+    },
+    {
+     "id": "e",
+     "source": "open-alex",
+     "title": "Graphene",
+     "y": 2020,
+     "f": "g5.pdf",
+     "s": "A short monograph."
+    }
+   ],
+   "relevant": [
+    "a",
+    "d"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,64 @@
+{
+  "id": "naruto shippuden episode 22",
+  "title": "naruto shippuden episode 22",
+  "_type": "playlist",
+  "entries": [
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "dQw4w9WgXcQ",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "title": "Naruto Shippuden Episode 22 - The Jinchuriki of the Sand",
+      "duration": 1421.0,
+      "channel": "Anime Vault",
+      "uploader": "Anime Vault",
+      "view_count": 120044,
+      "live_status": null,
+      "thumbnails": [
+        { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "height": 94, "width": 168 },
+        { "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hq720.jpg", "height": 404, "width": 720 }
+      ]
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "abcdefghijk",
+      "url": "https://www.youtube.com/watch?v=abcdefghijk",
+      "title": "Naruto Shippuden - Episode 21 (English Dub)",
+      "duration": 1399,
+      "channel": "Dub Station",
+      "thumbnails": [ { "url": "https://i.ytimg.com/vi/abcdefghijk/hq720.jpg", "width": 720, "height": 404 } ]
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "LIVEvideo123",
+      "url": "https://www.youtube.com/watch?v=LIVEvideo123",
+      "title": "Naruto 24/7 live radio",
+      "duration": null,
+      "channel": "Lofi Anime",
+      "live_status": "is_live"
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "noDurat_1-2",
+      "title": "Naruto Shippuden Episode 22 review",
+      "channel": null,
+      "uploader": "Reviewer Rex"
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "evil",
+      "url": "javascript:alert(1)",
+      "title": "Not a link"
+    },
+    {
+      "_type": "url",
+      "ie_key": "Youtube",
+      "id": "x",
+      "title": ""
+    }
+  ]
+}

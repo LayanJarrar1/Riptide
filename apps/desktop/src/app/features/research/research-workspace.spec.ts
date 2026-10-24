@@ -20,8 +20,18 @@ function item(id: string, over: Partial<TurnItem> = {}): TurnItem {
     pmid: null,
     pmcid: null,
     kind: 'file',
+    durationSecs: null,
+    thumbnail: null,
+    publisher: null,
+    version: null,
     rights: { kind: 'unknown', label: '' },
     seen: null,
+    confidence: 'exact',
+    coverage: 1,
+    matchScore: 100,
+    reasons: [],
+    trust: 'unknown',
+    mirror: false,
     score: null,
     why: null,
     wasSeen: false,
@@ -30,7 +40,7 @@ function item(id: string, over: Partial<TurnItem> = {}): TurnItem {
 }
 
 function turn(over: Partial<Turn> = {}): Turn {
-  return { ...emptyTurn('frogs', 'all', false, 1000), id: 't1', ...over };
+  return { ...emptyTurn('frogs', 'documents', false, 1000), id: 't1', ...over };
 }
 
 const ctx: ExportContext = {
@@ -46,7 +56,7 @@ const ctx: ExportContext = {
       'research.source.arxiv': 'arXiv',
       'research.source.gutenberg': 'Gutenberg',
       'research.md.meta': 'Riptide research · {date} · {category}',
-      'research.cat.all': 'All',
+      'research.cat.documents': 'Documents',
       'research.md.results': 'Results',
       'research.md.page': 'Source page',
       'research.md.download': 'Download',
@@ -135,10 +145,60 @@ describe('research history storage', () => {
     expect(t.items[0].pageUrl).toBeNull();
   });
 
+  it('keeps the mode, the reasons, the comparison and the summary of a turn', () => {
+    const reasons = [{ kind: 'matched', constraint: 'episode', value: '22' }, { kind: 'missing', constraint: 'season' }, { kind: 'conflict', constraint: 'year', wanted: '2019', found: '2020' }, { kind: 'title_partial', found: 2, of: 3 }] as const;
+    const t = turn({
+      status: 'done',
+      mode: 'deep-research',
+      queries: ['a b'],
+      comparison: { alsoIn: { a: ['crossref'] }, notes: [{ field: 'year', id: 'a', values: [['open-alex', '2019'], ['crossref', '2020']] }] },
+      summary: { exact: 1, strong: 0, hidden: 5, stop: 'deadline' },
+      items: [item('a', { reasons: [...reasons], confidence: 'strong', trust: 'official', mirror: true, durationSecs: 61, thumbnail: 'https://e.org/t.jpg', publisher: 'P', version: '1.0' })],
+    });
+    const back = parseHistory(serialize([{ id: 'c', title: 't', titled: false, createdAt: 1, updatedAt: 1, turns: [t] }]))[0].turns[0];
+    expect(back.mode).toBe('deep-research');
+    expect(back.queries).toEqual(['a b']);
+    expect(back.summary).toEqual({ exact: 1, strong: 0, hidden: 5, stop: 'deadline' });
+    expect(back.comparison?.alsoIn['a']).toEqual(['crossref']);
+    expect(back.comparison?.notes[0].values).toEqual([['open-alex', '2019'], ['crossref', '2020']]);
+    expect(back.items[0].reasons).toEqual(reasons);
+    expect(back.items[0].confidence).toBe('strong');
+    expect(back.items[0].trust).toBe('official');
+    expect(back.items[0].mirror).toBe(true);
+    expect([back.items[0].durationSecs, back.items[0].thumbnail, back.items[0].publisher, back.items[0].version]).toEqual([61, 'https://e.org/t.jpg', 'P', '1.0']);
+  });
+
+  it('drops unknown reasons and sources from a stored turn, and reads an old turn as a quick search', () => {
+    const raw = {
+      conversations: [
+        {
+          id: 'c',
+          turns: [
+            {
+              id: 't',
+              prompt: 'p',
+              status: 'done',
+              mode: 'nope',
+              comparison: { alsoIn: { a: ['crossref', 'evil'] }, notes: [{ field: 'colour', id: 'a', values: [] }] },
+              items: [{ id: 'a', source: 'arxiv', title: 'T', downloadUrl: 'https://e.org/a', reasons: [{ kind: 'rm_rf' }, { kind: 'matched', constraint: 'shoe', value: 'x' }, { kind: 'missing', constraint: 'season' }] }],
+            },
+          ],
+        },
+      ],
+    };
+    const t = parseHistory(JSON.stringify(raw))[0].turns[0];
+    expect(t.mode).toBe('quick-search');
+    expect(t.comparison?.alsoIn['a']).toEqual(['crossref']);
+    expect(t.comparison?.notes).toEqual([]);
+    expect(t.items[0].reasons).toEqual([{ kind: 'missing', constraint: 'season' }]);
+    expect(t.items[0].confidence).toBe('related');
+  });
+
   it('treats prompts that differ only in case and spacing as the same search', () => {
-    expect(promptKey('  Frogs   of Peru ', 'all', true)).toBe(promptKey('frogs of peru', 'all', true));
-    expect(promptKey('frogs', 'all', true)).not.toBe(promptKey('frogs', 'books', true));
-    expect(promptKey('frogs', 'all', true)).not.toBe(promptKey('frogs', 'all', false));
+    expect(promptKey('  Frogs   of Peru ', 'documents', true)).toBe(promptKey('frogs of peru', 'documents', true));
+    expect(promptKey('frogs', 'documents', true)).not.toBe(promptKey('frogs', 'academic', true));
+    expect(promptKey('frogs', 'documents', true)).not.toBe(promptKey('frogs', 'documents', false));
+    expect(promptKey('frogs', 'documents', true, 'deep-research')).not.toBe(promptKey('frogs', 'documents', true));
   });
 });
 

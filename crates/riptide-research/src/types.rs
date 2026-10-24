@@ -5,34 +5,46 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// What kind of thing the user is looking for. Each [`Source`] serves one or more of these.
+///
+/// The Research page offers exactly the seven [`Category::SEARCH`] categories and the user must
+/// pick one (there is no silent "all"). The remaining variants are the older, finer-grained ids:
+/// they still deserialize (stored history, `video` as an alias of `videos`) and the adapters use
+/// them internally, and [`Category::canonical`] maps them to the seven.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Category {
-    /// Everything the sources offer.
+    /// Everything the sources offer (internal; a search must name a real category).
     All,
-    /// Scholarly papers and preprints.
+    /// Scholarly papers and preprints (legacy id of [`Category::Academic`]).
     Papers,
-    /// Books and audiobooks.
+    /// Books and audiobooks (legacy id; [`Category::Documents`] is the user-facing one).
     Books,
-    /// Music and other audio.
+    /// Music and other audio (legacy; no user-facing category).
     Music,
     /// Films, series, shows and other moving images.
+    #[serde(rename = "videos", alias = "video")]
     Video,
-    /// Open-source and freely licensed games and game assets.
+    /// Open-source and freely licensed games and game assets (legacy).
     Games,
-    /// Software releases.
+    /// Software releases (installers and archives).
     Software,
     /// Photos, illustrations and scientific imagery.
     Images,
-    /// Open datasets.
+    /// Open datasets (legacy; no user-facing category).
     Datasets,
     /// General web results (not files; "Find files on this page" lists the files).
     Web,
+    /// Academic research: papers, preprints, journal articles.
+    Academic,
+    /// Documents and PDFs: public-domain books, scans, open-access full texts.
+    Documents,
+    /// Open-source projects: repositories with an open licence.
+    OpenSource,
 }
 
 impl Category {
-    /// Every category, in tab order.
-    pub const ALL: [Category; 10] = [
+    /// Every category, legacy ones included.
+    pub const ALL: [Category; 13] = [
         Category::All,
         Category::Papers,
         Category::Books,
@@ -43,7 +55,81 @@ impl Category {
         Category::Images,
         Category::Datasets,
         Category::Web,
+        Category::Academic,
+        Category::Documents,
+        Category::OpenSource,
     ];
+
+    /// The seven categories a search can ask for, in the order the page shows them.
+    pub const SEARCH: [Category; 7] = [
+        Category::Video,
+        Category::Software,
+        Category::Documents,
+        Category::Images,
+        Category::Academic,
+        Category::OpenSource,
+        Category::Web,
+    ];
+
+    /// The one of [`Category::SEARCH`] this category stands for, or `None` for `All`, `Music`
+    /// and `Datasets`, which a search may not ask for (the user must choose).
+    pub fn canonical(self) -> Option<Category> {
+        match self {
+            Category::Video
+            | Category::Software
+            | Category::Documents
+            | Category::Images
+            | Category::Academic
+            | Category::OpenSource
+            | Category::Web => Some(self),
+            Category::Papers => Some(Category::Academic),
+            Category::Books => Some(Category::Documents),
+            Category::Games => Some(Category::OpenSource),
+            Category::All | Category::Music | Category::Datasets => None,
+        }
+    }
+
+    /// The sources that really serve this category, most useful first (the order in which a
+    /// mode's source budget is spent). Empty for the legacy ids; use [`Category::canonical`].
+    pub fn sources(self) -> &'static [Source] {
+        match self {
+            Category::Video => &[
+                Source::Youtube,
+                Source::InternetArchive,
+                Source::Commons,
+                Source::Nasa,
+                Source::Blender,
+            ],
+            Category::Software => &[Source::Github, Source::InternetArchive],
+            Category::Documents => &[
+                Source::InternetArchive,
+                Source::Gutenberg,
+                Source::OpenLibrary,
+                Source::EuropePmc,
+            ],
+            Category::Images => &[Source::Commons, Source::Openverse, Source::Nasa],
+            Category::Academic => &[
+                Source::OpenAlex,
+                Source::Crossref,
+                Source::Arxiv,
+                Source::EuropePmc,
+            ],
+            Category::OpenSource => &[Source::Github],
+            Category::Web => &[Source::Web],
+            _ => &[],
+        }
+    }
+
+    /// The category an adapter understands: the user-facing ids map back to the finer ones the
+    /// adapters were written for (`Documents` is `Books` for Gutenberg and Open Library,
+    /// `Academic` is `Papers`).
+    pub fn for_adapter(self) -> Category {
+        match self {
+            Category::Documents => Category::Books,
+            Category::Academic => Category::Papers,
+            other => other,
+        }
+    }
 
     /// Stable id (the same string serde uses).
     pub fn id(self) -> &'static str {
@@ -52,12 +138,15 @@ impl Category {
             Category::Papers => "papers",
             Category::Books => "books",
             Category::Music => "music",
-            Category::Video => "video",
+            Category::Video => "videos",
             Category::Games => "games",
             Category::Software => "software",
             Category::Images => "images",
             Category::Datasets => "datasets",
             Category::Web => "web",
+            Category::Academic => "academic",
+            Category::Documents => "documents",
+            Category::OpenSource => "open-source",
         }
     }
 }
@@ -101,11 +190,14 @@ pub enum Source {
     Nasa,
     /// General web search through a backend the user chose (Brave Search API or SearXNG).
     Web,
+    /// Video pages found with the bundled yt-dlp (`ytsearch`); no key, and nothing is
+    /// downloaded until the user adds a result.
+    Youtube,
 }
 
 impl Source {
     /// Every source, in display order.
-    pub const ALL: [Source; 17] = [
+    pub const ALL: [Source; 18] = [
         Source::OpenAlex,
         Source::Crossref,
         Source::Arxiv,
@@ -123,6 +215,7 @@ impl Source {
         Source::OpenGameArt,
         Source::Nasa,
         Source::Web,
+        Source::Youtube,
     ];
 
     /// Stable id (the same string serde uses).
@@ -145,6 +238,7 @@ impl Source {
             Source::OpenGameArt => "open-game-art",
             Source::Nasa => "nasa",
             Source::Web => "web",
+            Source::Youtube => "youtube",
         }
     }
 
@@ -168,6 +262,7 @@ impl Source {
             Source::OpenGameArt => "OpenGameArt",
             Source::Nasa => "NASA",
             Source::Web => "Web",
+            Source::Youtube => "YouTube",
         }
     }
 
@@ -176,18 +271,21 @@ impl Source {
     pub fn categories(self) -> &'static [Category] {
         use Category::*;
         match self {
-            Source::OpenAlex | Source::Crossref | Source::Arxiv | Source::EuropePmc => &[Papers],
-            Source::InternetArchive => &[Books, Music, Video, Papers],
+            Source::OpenAlex | Source::Crossref | Source::Arxiv => &[Papers, Academic],
+            Source::EuropePmc => &[Papers, Academic, Documents],
+            Source::InternetArchive => &[Books, Music, Video, Papers, Documents, Software],
             Source::Commons => &[Music, Video, Images],
-            Source::Github => &[Software, Games],
+            Source::Github => &[Software, Games, OpenSource],
             Source::DataGov => &[Datasets],
-            Source::Gutenberg | Source::OpenLibrary | Source::LibriVox => &[Books],
+            Source::Gutenberg | Source::OpenLibrary => &[Books, Documents],
+            Source::LibriVox => &[Books],
             Source::Jamendo => &[Music],
             Source::Openverse => &[Music, Images],
             Source::Blender => &[Video],
             Source::OpenGameArt => &[Games, Images, Music],
             Source::Nasa => &[Images, Video],
             Source::Web => &[Web],
+            Source::Youtube => &[Video],
         }
     }
 
@@ -385,6 +483,19 @@ pub struct Hit {
     /// A file, or a web page to look into.
     #[serde(default)]
     pub kind: HitKind,
+    /// Running time in seconds, only when the source reported one.
+    #[serde(default)]
+    pub duration_secs: Option<u64>,
+    /// Thumbnail image address (http/https), only when the source offered one.
+    #[serde(default)]
+    pub thumbnail: Option<String>,
+    /// Publisher, channel or owner, only when the source named one.
+    #[serde(default)]
+    pub publisher: Option<String>,
+    /// Release or edition version, only when the source stated one (a release tag); never
+    /// guessed from the title.
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 impl Hit {
@@ -407,6 +518,10 @@ impl Hit {
             pmid: None,
             pmcid: None,
             kind: HitKind::File,
+            duration_secs: None,
+            thumbnail: None,
+            publisher: None,
+            version: None,
         }
     }
 
@@ -551,6 +666,42 @@ mod tests {
                     "{c:?} has no source"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_seven_categories_map_to_sources_that_serve_them() {
+        for c in Category::SEARCH {
+            assert_eq!(c.canonical(), Some(c));
+            assert!(!c.sources().is_empty(), "{c:?}");
+            for s in c.sources() {
+                assert!(s.serves(c), "{s:?} does not serve {c:?}");
+            }
+        }
+        assert_eq!(Category::Papers.canonical(), Some(Category::Academic));
+        assert_eq!(Category::Books.canonical(), Some(Category::Documents));
+        assert_eq!(Category::All.canonical(), None);
+        assert_eq!(Category::Music.canonical(), None);
+        assert!(Category::Academic
+            .sources()
+            .iter()
+            .all(|s| *s != Source::Github));
+        assert_eq!(Category::Documents.for_adapter(), Category::Books);
+    }
+
+    #[test]
+    fn old_stored_category_ids_still_deserialize() {
+        let c = |s: &str| serde_json::from_str::<Category>(&format!("\"{s}\"")).unwrap();
+        assert_eq!(c("video"), Category::Video);
+        assert_eq!(c("videos"), Category::Video);
+        assert_eq!(c("papers"), Category::Papers);
+        assert_eq!(c("open-source"), Category::OpenSource);
+        assert_eq!(
+            serde_json::to_string(&Category::Video).unwrap(),
+            "\"videos\""
+        );
+        for cat in Category::ALL {
+            assert_eq!(c(cat.id()), cat);
         }
     }
 }

@@ -53,15 +53,16 @@ export interface EmptyStep {
   `,
   styles: `
     :host {
-      display: grid;
-      place-items: center;
+      display: flex;
       block-size: 100%;
       min-block-size: 240px;
       padding: var(--space-8);
       overflow: auto;
     }
 
+    /* margin:auto centres when there is room and, unlike place-items, lets the top be scrolled to when there is not */
     .empty {
+      margin: auto;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -260,6 +261,43 @@ export interface EmptyStep {
 
     .actions:empty {
       display: none;
+    }
+
+    /* short windows: smaller picture and tighter steps (titles only) so the action stays on screen */
+    @media (max-height: 820px) {
+      :host {
+        padding: var(--space-4);
+      }
+
+      .art {
+        block-size: 44px;
+      }
+
+      .heading {
+        margin-block-start: var(--space-2);
+      }
+
+      .body {
+        margin-block-start: var(--space-1);
+      }
+
+      .steps {
+        margin-block-start: var(--space-3);
+        gap: var(--space-2);
+      }
+
+      .step {
+        align-items: center;
+        padding: var(--space-2) var(--space-3);
+      }
+
+      .step-body {
+        display: none;
+      }
+
+      .actions {
+        margin-block-start: var(--space-3);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {

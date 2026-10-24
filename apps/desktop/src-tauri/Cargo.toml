@@ -17,6 +17,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # Test-only: lets a test harness attach to the WebView2 (remote debugging port taken from
 # RIPTIDE_CDP_PORT). Never part of a release build.
 cdp = []
+# Test-only: lets the update end-to-end test (scripts/test-update-e2e.ps1) point the updater at a
+# local feed through RIPTIDE_UPDATE_ENDPOINT. Compiled out of release builds, so a release binary
+# cannot be redirected by its environment (see docs/decisions.md D-updater-e2e and updater.rs).
+update-e2e = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -51,6 +55,8 @@ riptide-fs = { workspace = true }
 riptide-store = { workspace = true }
 chrono = { workspace = true }
 tokio-util = { workspace = true }
+reqwest = { workspace = true }
+base64 = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 # HKCU Native Messaging keys; a safe wrapper over the registry API (no `unsafe` in this crate)
@@ -66,6 +72,10 @@ riptide-torrent = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
 wiremock = "0.6"
+# real signatures for the updater specs (generates a throw-away key pair per test)
+minisign = "0.10"
+semver = "1"
+tauri = { version = "2", features = ["test"] }
 tracing-subscriber = { workspace = true }
 
 [lints]

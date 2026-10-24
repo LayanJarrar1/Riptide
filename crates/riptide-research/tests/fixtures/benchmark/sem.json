@@ -1,0 +1,103 @@
+{
+ "queries": [
+  {
+   "id": "sem-pride",
+   "query": "pride and prejudice",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "semantic",
+   "note": "a parody whose title contains the whole title is a different book",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "gutenberg",
+     "title": "Pride and Prejudice",
+     "f": "pg1342.epub",
+     "a": [
+      "Austen, Jane"
+     ]
+    },
+    {
+     "id": "b",
+     "source": "open-library",
+     "title": "Pride and Prejudice",
+     "f": "pp.pdf",
+     "a": [
+      "Jane Austen"
+     ]
+    },
+    {
+     "id": "c",
+     "source": "gutenberg",
+     "title": "Pride and Prejudice and Zombies",
+     "f": "ppz.epub",
+     "a": [
+      "Grahame-Smith, Seth"
+     ]
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Prejudice and Pride",
+     "f": "pnp.pdf"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Pride",
+     "f": "pride.pdf"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "sem-mercury",
+   "query": "mercury",
+   "category": "images",
+   "mode": "deep-research",
+   "subset": "semantic",
+   "note": "an ambiguous word: every sense counts",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "commons",
+     "title": "Mercury (planet)",
+     "f": "mercury.jpg"
+    },
+    {
+     "id": "b",
+     "source": "commons",
+     "title": "Mercury (element)",
+     "f": "mercury-element.jpg"
+    },
+    {
+     "id": "c",
+     "source": "openverse",
+     "title": "Freddie Mercury",
+     "f": "freddie.jpg"
+    },
+    {
+     "id": "d",
+     "source": "nasa",
+     "title": "MESSENGER image of Mercury",
+     "f": "messenger.jpg"
+    },
+    {
+     "id": "e",
+     "source": "openverse",
+     "title": "A red apple",
+     "f": "apple.jpg"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ]
+  }
+ ]
+}
