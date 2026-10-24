@@ -239,6 +239,10 @@ function Build-Version([string]$Version, [string]$Src, [string]$Target, [string]
 function Initialize-Worktree([string]$Src) {
     if (-not (Test-Path -LiteralPath (Join-Path $Src 'Cargo.toml'))) {
         Invoke-Native 'git worktree add' { git -C $RepoRoot worktree add --detach $Src HEAD }
+    } else {
+        # a worktree left by an earlier run: move it to the current commit (drops its version edit)
+        $head = (& git -C $RepoRoot rev-parse HEAD).Trim()
+        Invoke-Native 'git checkout' { git -C $Src checkout -f --detach $head }
     }
     $nm = Join-Path $Src 'apps\desktop\node_modules'
     if (-not (Test-Path -LiteralPath $nm)) {
