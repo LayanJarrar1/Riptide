@@ -309,3 +309,81 @@ October 2026.
   package still needs a valid signature from the real key.
 - **Not done.** `requireSignedVersion` (binds the announced version to the signature) needs the
   signing step to pass `--app-version`; worth doing before 1.0, tracked here.
+
+## D-research-relevance-1: Research returns what was asked for, decided without the AI
+
+Research mixed irrelevant hits into the list (the neighbouring episode, another version, an
+article about the thing). The fix is a deterministic pipeline in front of the page; the AI stays an
+optional extra that cannot change a verdict.
+
+- **Pipeline.** category (the user picks one) -> mode (budget) -> query understanding -> sources ->
+  de-duplication -> relevance gate -> (optional) AI order within a class -> page.
+- **Seven categories, no silent "all".** Videos, Software & apps, Documents & PDFs, Images,
+  Academic research, Open-source projects, General web. Each maps to the sources that can really
+  serve it (`Category::sources`, priority order): academic = OpenAlex, Crossref, arXiv, Europe PMC;
+  documents = Internet Archive texts, Gutenberg, Open Library, Europe PMC; software = GitHub
+  release assets + Internet Archive software (CC-licensed only); open-source = GitHub repositories
+  with an open licence (source archive of the default branch); images = Commons, Openverse, NASA;
+  videos = YouTube search through yt-dlp, Internet Archive movies, Commons, NASA, Blender; web =
+  the user's own backend. `research_start` refuses `all`, `music` and `datasets`. The old ids still
+  deserialize (`video` is an alias of `videos`; `papers`/`books`/`games` map to
+  `academic`/`documents`/`open-source`), so stored history keeps loading.
+- **Query understanding (`intent`).** NFKC, lower case, Arabic folding (alef variants, taa marbuta,
+  alef maqsura, tashkeel, tatweel), Arabic-Indic digits to ASCII; then quoted phrases, `-word`
+  exclusions, episode (`episode 22`, `ep.22`, `e22`, `S02E05`, `الحلقة ٢٢`, `حلقة 22`), season
+  (`season 2`, `s02`, `الموسم`, `الجزء`, spelled-out ordinals), year (only when it reads as a
+  constraint: `1984 orwell` keeps `1984` as a word), version (`v1.2.3`, `2.0`, `الاصدار 24`), file
+  type (explicit `filetype:`/`.pdf`, or a bare extension as the last word, so `pdf reader` stays a
+  title), language hint, and the remaining words as the title. The same extractors run over a
+  result's title, file name and URL tail.
+- **Classes (`relevance`).** `exact`: every title word is in the title / file name / by-line, in
+  order, makes up at least three quarters of the title (or a verified episode/season/version makes
+  length irrelevant, or the part before `:` / ` - ` / `(` is exactly the words asked for) and every
+  stated constraint is verified. `strong`: as exact, but year or file type is not stated by the
+  result. `related`: the subject matches but a constrained episode/season/version is not stated, or
+  the words are a small or reshuffled part of a longer title. `unrelated`: a *stated* value
+  contradicts the query (episode 21 for "episode 22", file type epub for "pdf", year 2018 for
+  "2020"), a quoted phrase is absent, an excluded word is in the title, or fewer than 60 % of the
+  words match. A result that does not state the constrained value cannot be exact. `unrelated` is
+  never sent. `related` is sent only in deep research, or at the end of a search when no exact or
+  strong result exists, and is always flagged by its class; every item carries the reasons
+  (matched / missing / conflicting constraints) so the page can say why.
+- **Why the AI cannot promote.** A model sees only results that already passed the gate and its
+  scores are confined to the band of the program's class (`exact` 75-100, `strong` 50-74,
+  `related` 1-49): sorting by the score never crosses a class, a "100" for a related result stays
+  below a "1" for a strong one, and an entry for a result that was never shown is dropped. The
+  prompts say the same (the program has already checked every result). It adds order inside a
+  class and a one-line reason, nothing else. IDs and URLs stay validated as in D-research-1.
+- **Never fabricate.** Size, duration, year, version, publisher and thumbnail are only what the
+  source returned; `Hit` gained `durationSecs`, `thumbnail`, `publisher` and `version` (all
+  `None` unless a source provides them: yt-dlp gives duration/channel/thumbnail, GitHub the
+  release tag and the owner).
+- **Modes are small config values (`modes`).** One struct per mode: wire id, system instructions
+  for the optional AI calls, retrieval strategy, per-source cap, query variants, verification rules
+  (when related results are shown, source comparison, contradiction notes, mirror flags, official
+  first), result-schema hints and a budget (max sources, max queries, max AI tokens, deadline,
+  stop after N exact matches, max rounds). *Quick search*: 4 sources, 2 phrasings, 1 round, 20 s,
+  one AI call at most (ranking only). *Deep research*: 8 sources, 4 phrasings, 3 rounds, 45 s,
+  4000 AI tokens, plan + rank, related shown, cross-source comparison and contradiction notes
+  (same item with a different year / version / size), stops at 12 exact matches. *Video search*:
+  videos only. *Source finder*: primary catalogues first, official-looking owners ordered first,
+  mirrors and aggregators (known hosts, "mirror"/"unofficial" wording) flagged. The stop
+  conditions are explicit (`StopReason`: max rounds, enough exact, deadline, token budget, no more
+  queries) and reported in the `summary` event.
+- **De-duplication.** Normalised URL, DOI / arXiv id / PMC id, title + size (a same-size file under
+  the same title is the same file), long titles; dropped duplicates are remembered so deep research
+  can say which other sources have the item.
+- **YouTube search through yt-dlp.** `yt-dlp --flat-playlist -J --no-warnings "ytsearchN:<query>"`
+  from the bundled copy (the one the media downloads use), 40 s limit, 4 MiB output cap, the query
+  as one argument (never a shell string), live and unusable entries dropped. Results are `page`
+  hits (the watch URL, source `youtube`); *Add* hands only the page URL to the existing media flow
+  (`DownloadKind::Media`, best quality), which resolves formats itself. The runner is a trait so
+  tests use a recorded fixture; without yt-dlp the source is reported `needs_setup`. No key and
+  nothing is downloaded or logged beyond the query string the user typed.
+- **Measured, not claimed.** `tests/relevance_benchmark.rs` runs 56 labelled queries (decoys
+  included) offline and asserts Precision@5 >= 0.95 on the exact-intent subset; the numbers are
+  printed by the test. `tests/live_relevance.rs` (ignored, manual) runs seven real queries and
+  prints the same metrics next to the raw source order. Known limits: titles in another language
+  or script than the query are found only when the AI plan translates them; look-alike titles
+  ("Hubble Ultra Deep Field" for "Hubble Deep Field") and reactions/reviews that repeat the title
+  and episode pass the title rules; a title with a subtitle after `:` / ` - ` counts as the title.
