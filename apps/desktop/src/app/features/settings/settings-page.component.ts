@@ -21,6 +21,7 @@ import { ToastService } from '../../ui/toast.service';
 import { CATEGORY_ICONS } from '../downloads/download-row.component';
 import { AiSettingsComponent } from './ai-settings.component';
 import { ResearchSettingsComponent } from './research-settings.component';
+import { UpdateCardComponent } from './update-card.component';
 import { CATEGORY_FOLDERS, joinPath, organizedRoot, Settings, SettingsService, TORRENTS_FOLDER } from './settings.service';
 
 /** What `protocol_status` reports (`src-tauri/src/protocol.rs`). */
@@ -63,7 +64,7 @@ export function isValidProxyUrl(raw: string): boolean {
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, AiSettingsComponent, ResearchSettingsComponent, ButtonComponent, IconComponent, SegmentedControlComponent, SpeedLimitControlComponent],
+  imports: [...FORMAT_PIPES, AiSettingsComponent, ResearchSettingsComponent, UpdateCardComponent, ButtonComponent, IconComponent, SegmentedControlComponent, SpeedLimitControlComponent],
   template: `
     <div class="page">
       <header class="page-head">
@@ -350,7 +351,6 @@ export function isValidProxyUrl(raw: string): boolean {
           </div>
           <div class="about-actions">
             <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="channel()" [disabled]="prerelease()" (valueChange)="setChannel($event)" />
-            <button appButton variant="secondary" icon="retry" type="button" [disabled]="updates.status() === 'checking' || updates.status() === 'installing'" (click)="checkUpdates()">{{ i18n.t(updates.status() === 'checking' ? 'settings.checkingUpdates' : 'settings.checkUpdates') }}</button>
           </div>
         </div>
         <div class="setting">
@@ -362,19 +362,7 @@ export function isValidProxyUrl(raw: string): boolean {
             <button appButton variant="secondary" icon="retry" type="button" [busy]="videoBusy()" [disabled]="!tauriAvailable || videoBusy()" (click)="updateVideo()">{{ i18n.t(videoBusy() ? 'settings.videoUpdating' : 'settings.videoUpdate') }}</button>
           </div>
         </div>
-        @if (updates.available(); as update) {
-          <div class="setting column update-card" role="status">
-            <div class="setting-text">
-              <span class="setting-name">{{ updateTitle(update.version) }}</span>
-              @if (update.notes) {
-                <span class="setting-desc update-notes" dir="auto">{{ update.notes }}</span>
-              }
-            </div>
-            <div>
-              <button appButton variant="primary" type="button" [disabled]="updates.status() === 'installing'" (click)="installUpdate()">{{ i18n.t(updates.status() === 'installing' ? 'settings.updateInstalling' : 'settings.updateRestart') }}</button>
-            </div>
-          </div>
-        }
+        <app-update-card />
         <label class="setting">
           <div class="setting-text">
             <span class="setting-name">{{ i18n.t('settings.autoUpdate') }}</span>
@@ -978,28 +966,9 @@ export class SettingsPageComponent {
     return (event.target as HTMLInputElement).checked;
   }
 
-  protected updateTitle(version: string): string {
-    return this.i18n.t('settings.updateAvailable').replace('{version}', version);
-  }
-
-  protected async checkUpdates(): Promise<void> {
-    try {
-      const update = await this.updates.check(this.channel());
-      if (update === null) {
-        this.toasts.show('success', this.i18n.t('toast.upToDate'));
-      }
-    } catch {
-      this.toasts.show('danger', this.i18n.t('toast.updateCheckFailed'));
-    }
-  }
-
   protected goAbout(event: Event): void {
     event.preventDefault();
     document.getElementById('about')?.scrollIntoView({ block: 'start' });
-  }
-
-  protected installUpdate(): void {
-    void this.updates.installOrToast();
   }
 
   protected reset(): void {
