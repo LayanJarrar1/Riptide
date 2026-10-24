@@ -247,6 +247,10 @@ export class ResearchSession implements OnDestroy {
         this.rankedCount.set(this.ranks.size);
         break;
       }
+      case 'compare':
+      case 'summary':
+        // the comparison and the count of hidden results are for the rebuilt page
+        break;
       case 'ai':
         this.ai.set(e.outcome);
         break;

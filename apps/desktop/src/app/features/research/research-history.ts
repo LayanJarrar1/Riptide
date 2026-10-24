@@ -1,4 +1,4 @@
-import { AiOutcome, CategoryId, CATEGORY_IDS, ResultItem, safeWebUrl, SOURCE_IDS, SourceId, SourceState } from '../../ai/research.models';
+import { AiOutcome, CategoryId, normalizeCategory, MatchClass, MatchReason, ResultItem, safeWebUrl, SOURCE_IDS, SourceId, SourceState, Trust } from '../../ai/research.models';
 import { SourceStatus } from '../../ai/research.session';
 
 /** Where the conversations live (browser storage of this machine only; never sent anywhere). */
@@ -206,6 +206,17 @@ function parseItem(raw: unknown): TurnItem | null {
     pmid: strOrNull(raw['pmid'], 30),
     pmcid: strOrNull(raw['pmcid'], 30),
     kind: raw['kind'] === 'page' ? 'page' : 'file',
+    durationSecs: typeof raw['durationSecs'] === 'number' && raw['durationSecs'] >= 0 ? raw['durationSecs'] : null,
+    thumbnail: safeWebUrl(typeof raw['thumbnail'] === 'string' ? raw['thumbnail'] : null),
+    publisher: strOrNull(raw['publisher'], 120),
+    version: strOrNull(raw['version'], 60),
+    // an entry saved before results were verified was never checked: it is shown as related
+    confidence: raw['confidence'] === 'exact' || raw['confidence'] === 'strong' ? (raw['confidence'] as MatchClass) : 'related',
+    coverage: num(raw['coverage']),
+    matchScore: num(raw['matchScore']),
+    reasons: [] as readonly MatchReason[],
+    trust: raw['trust'] === 'official' || raw['trust'] === 'primary' || raw['trust'] === 'mirror' ? (raw['trust'] as Trust) : 'unknown',
+    mirror: raw['mirror'] === true,
     rights: {
       kind: kind === 'public-domain' || kind === 'cc' || kind === 'open-source' ? kind : 'unknown',
       label: str(rights['label'], 120),
@@ -226,7 +237,8 @@ function parseTurn(raw: unknown): Turn | null {
   if (id === '' || prompt === '') {
     return null;
   }
-  const category = CATEGORY_IDS.includes(raw['category'] as CategoryId) ? (raw['category'] as CategoryId) : 'all';
+  // older history holds the previous ids (`papers`, `video`, `all`...): map them to the seven categories
+  const category = normalizeCategory(raw['category']);
   const status = STATUSES.includes(raw['status'] as TurnStatus) ? (raw['status'] as TurnStatus) : 'cancelled';
   const sources: SourceStatus[] = Array.isArray(raw['sources'])
     ? raw['sources'].flatMap((s: unknown) =>

@@ -2,10 +2,75 @@
 
 import type { AiFail, SeenMatch } from './ai.models';
 
-export type CategoryId = 'all' | 'papers' | 'books' | 'music' | 'video' | 'games' | 'software' | 'images' | 'datasets' | 'web';
+/** What a search looks for. The user must pick one; there is no "all". */
+export type CategoryId = 'videos' | 'software' | 'documents' | 'images' | 'academic' | 'open-source' | 'web';
 
-/** The tabs, in order. */
-export const CATEGORY_IDS: readonly CategoryId[] = ['all', 'papers', 'books', 'music', 'video', 'games', 'software', 'images', 'datasets', 'web'];
+/** The categories, in the order the page offers them. */
+export const CATEGORY_IDS: readonly CategoryId[] = ['videos', 'software', 'documents', 'images', 'academic', 'open-source', 'web'];
+
+/** Ids that older versions stored in the search history. */
+export type LegacyCategoryId = 'all' | 'papers' | 'books' | 'music' | 'video' | 'games' | 'datasets';
+
+/**
+ * The category an id stands for: the current ids as they are, the old ones mapped
+ * (`papers` is `academic`, `books` is `documents`, `video` is `videos`, `games` is `open-source`).
+ * `all`, `music` and `datasets` have no category any more and become `documents`, which is only a
+ * label for an old history entry: running such an entry again searches that category.
+ */
+export function normalizeCategory(raw: unknown): CategoryId {
+  if (typeof raw !== 'string') {
+    return 'documents';
+  }
+  if ((CATEGORY_IDS as readonly string[]).includes(raw)) {
+    return raw as CategoryId;
+  }
+  const legacy: Partial<Record<string, CategoryId>> = { video: 'videos', papers: 'academic', books: 'documents', games: 'open-source' };
+  return legacy[raw] ?? 'documents';
+}
+
+/** How a search runs (budget, strictness, extras). */
+export type SearchMode = 'quick-search' | 'deep-research' | 'video-search' | 'source-finder';
+
+export const MODE_IDS: readonly SearchMode[] = ['quick-search', 'deep-research', 'video-search', 'source-finder'];
+
+/** How well a result matches the query, computed by the program (the AI cannot change it). */
+export type MatchClass = 'exact' | 'strong' | 'related';
+
+/** Where a result comes from (the source finder shows it). */
+export type Trust = 'official' | 'primary' | 'unknown' | 'mirror';
+
+export type ConstraintId = 'episode' | 'season' | 'year' | 'version' | 'file-type';
+
+/** One verified (or failed) fact behind a result's class. */
+export type MatchReason =
+  | { readonly kind: 'title_all_words' }
+  | { readonly kind: 'title_partial'; readonly found: number; readonly of: number }
+  | { readonly kind: 'words_only_in_description' }
+  | { readonly kind: 'loose_title' }
+  | { readonly kind: 'words_out_of_order' }
+  | { readonly kind: 'phrase_matched'; readonly phrase: string }
+  | { readonly kind: 'phrase_only_in_description'; readonly phrase: string }
+  | { readonly kind: 'phrase_missing'; readonly phrase: string }
+  | { readonly kind: 'excluded_word'; readonly word: string }
+  | { readonly kind: 'matched'; readonly constraint: ConstraintId; readonly value: string }
+  | { readonly kind: 'missing'; readonly constraint: ConstraintId }
+  | { readonly kind: 'conflict'; readonly constraint: ConstraintId; readonly wanted: string; readonly found: string };
+
+/** What was understood of the query. */
+export interface QueryIntent {
+  readonly raw: string;
+  readonly normalized: string;
+  readonly phrases: readonly string[];
+  readonly exclusions: readonly string[];
+  readonly titleTerms: readonly string[];
+  readonly episode: number | null;
+  readonly season: number | null;
+  readonly year: number | null;
+  readonly version: string | null;
+  readonly fileType: string | null;
+  readonly language: string | null;
+  readonly script: 'arabic' | 'latin' | 'mixed' | 'other';
+}
 
 export type SourceId =
   | 'open-alex'
@@ -24,7 +89,8 @@ export type SourceId =
   | 'blender'
   | 'open-game-art'
   | 'nasa'
-  | 'web';
+  | 'web'
+  | 'youtube';
 
 export const SOURCE_IDS: readonly SourceId[] = [
   'open-alex',
@@ -44,6 +110,7 @@ export const SOURCE_IDS: readonly SourceId[] = [
   'open-game-art',
   'nasa',
   'web',
+  'youtube',
 ];
 
 export type RightsKind = 'public-domain' | 'cc' | 'open-source' | 'unknown';
@@ -72,12 +139,30 @@ export interface ResearchHit {
   readonly pmid: string | null;
   readonly pmcid: string | null;
   readonly kind: HitKind;
+  /** Running time, only when the source reported it. */
+  readonly durationSecs: number | null;
+  /** Thumbnail address (http/https), only when the source offered one. */
+  readonly thumbnail: string | null;
+  /** Publisher, channel or owner, only when the source named one. */
+  readonly publisher: string | null;
+  /** Release version, only when the source stated one. */
+  readonly version: string | null;
 }
 
-/** A hit plus what the licence classifier and the download index know about it. */
+/** A hit plus what the licence classifier, the relevance check and the download index know about it. */
 export interface WireItem extends ResearchHit {
   readonly rights: Rights;
   readonly seen: SeenMatch | null;
+  /** `related` means: same subject, but not verified to be what was asked for. */
+  readonly confidence: MatchClass;
+  /** Share (0-1) of the title words found in the title, file name or by-line. */
+  readonly coverage: number;
+  /** 0-100, orders results within one `confidence` class. */
+  readonly matchScore: number;
+  readonly reasons: readonly MatchReason[];
+  readonly trust: Trust;
+  /** Looks like a mirror or aggregator copy. */
+  readonly mirror: boolean;
 }
 
 /** A card on the page: the wire item plus the AI's verdict, once it arrives. */
@@ -88,9 +173,20 @@ export interface ResultItem extends WireItem {
 
 export interface Ranked {
   readonly id: string;
+  /** 0-100, already confined to the band of the result's class: sorting by it never crosses a class. */
   readonly score: number;
   readonly why: string;
+  /** The class the program computed for this result. */
+  readonly confidence?: MatchClass;
 }
+
+/** Which other sources returned the same item, and where sources disagree. */
+export interface SourceComparison {
+  readonly alsoIn: Readonly<Record<string, readonly SourceId[]>>;
+  readonly notes: readonly { readonly field: 'year' | 'version' | 'size'; readonly id: string; readonly values: readonly (readonly [SourceId, string])[] }[];
+}
+
+export type StopReason = 'max-rounds' | 'enough-exact' | 'deadline' | 'token-budget' | 'no-more-queries';
 
 export interface AiOutcome {
   readonly requested: boolean;
@@ -110,6 +206,8 @@ export type ResearchEvent =
   | { readonly t: 'hits'; readonly source: SourceId; readonly items: readonly WireItem[] }
   | { readonly t: 'plan'; readonly queries: readonly string[] }
   | { readonly t: 'rank'; readonly items: readonly Ranked[] }
+  | { readonly t: 'compare'; readonly comparison: SourceComparison }
+  | { readonly t: 'summary'; readonly exact: number; readonly strong: number; readonly hidden: number; readonly stop: StopReason | null }
   | { readonly t: 'ai'; readonly outcome: AiOutcome }
   | { readonly t: 'end' };
 
@@ -128,13 +226,21 @@ export interface StartResponse {
   readonly sources: readonly SourceId[];
   readonly unavailable: readonly Unavailable[];
   readonly ai: boolean;
+  readonly mode: SearchMode;
+  readonly category: CategoryId;
+  readonly intent: QueryIntent;
+  /** The phrasings that run first (more may follow). */
+  readonly queries: readonly string[];
 }
 
 export interface SearchRequest {
   readonly topic: string;
   readonly useAi: boolean;
   readonly lang: string;
+  /** Required: the user picks one of the seven categories. */
   readonly category: CategoryId;
+  /** Defaults to quick search. */
+  readonly mode?: SearchMode;
   readonly sources?: readonly SourceId[];
 }
 

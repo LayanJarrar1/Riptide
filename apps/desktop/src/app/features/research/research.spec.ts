@@ -28,11 +28,29 @@ function item(id: string, source: WireItem['source'], over: Partial<WireItem> = 
     pmid: null,
     pmcid: null,
     kind: 'file',
+    durationSecs: null,
+    thumbnail: null,
+    publisher: null,
+    version: null,
     rights: { kind: 'unknown', label: '' },
     seen: null,
+    confidence: 'exact',
+    coverage: 1,
+    matchScore: 100,
+    reasons: [],
+    trust: 'unknown',
+    mirror: false,
     ...over,
   };
 }
+
+/** What a start response carries besides the ids and sources. */
+const START_EXTRA = {
+  mode: 'quick-search',
+  category: 'documents',
+  intent: { raw: 'x', normalized: 'x', phrases: [], exclusions: [], titleTerms: ['x'], episode: null, season: null, year: null, version: null, fileType: null, language: null, script: 'latin' },
+  queries: ['x'],
+} as const;
 
 function status(configured: boolean): AiStatus {
   return {
@@ -63,7 +81,7 @@ function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: ()
         if (opts.failStart) {
           return Promise.reject('boom');
         }
-        return Promise.resolve((opts.start ?? { searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: false }) as T);
+        return Promise.resolve((opts.start ?? { ...START_EXTRA, searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: false }) as T);
       case 'research_add':
         return Promise.resolve({ added: [11], skipped: [] } as T);
       case 'seen_check':
@@ -119,7 +137,7 @@ describe('ResearchSession', () => {
   it('shows each source as soon as it answers, in arrival order, and ignores other searches', async () => {
     const h = setup();
     const s = session(h);
-    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'all' });
+    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'documents' });
     expect(s.busy()).toBe(true);
     expect(s.sources().map((c) => c.state)).toEqual(['searching', 'searching']);
     h.emit(batch(5, { t: 'hits', source: 'gutenberg', items: [item('g1', 'gutenberg')] }, { t: 'source', source: 'gutenberg', state: 'done', found: 1, code: null }));
@@ -139,15 +157,15 @@ describe('ResearchSession', () => {
   it('keeps events that arrive before the start call has answered', async () => {
     const h = setup({ onStart: () => h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] })) });
     const s = session(h);
-    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'papers' });
+    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'academic' });
     expect(s.items().map((i) => i.id)).toEqual(['a1']);
-    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'x', useAi: false, lang: 'en', category: 'papers' } });
+    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'x', useAi: false, lang: 'en', category: 'academic' } });
   });
 
   it('moves ranked results to the top as ranking entries stream in, best first, and keeps the reason', async () => {
-    const h = setup({ start: { searchId: 5, sources: ['arxiv'], unavailable: [], ai: true } });
+    const h = setup({ start: { ...START_EXTRA, searchId: 5, sources: ['arxiv'], unavailable: [], ai: true } });
     const s = session(h);
-    await s.start({ topic: 'x', useAi: true, lang: 'en', category: 'all' });
+    await s.start({ topic: 'x', useAi: true, lang: 'en', category: 'documents' });
     h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a', 'arxiv'), item('b', 'arxiv'), item('c', 'arxiv')] }));
     expect(s.ordered().map((i) => i.id)).toEqual(['a', 'b', 'c']);
     h.emit(batch(5, { t: 'phase', phase: 'ranking' }, { t: 'rank', items: [{ id: 'c', score: 70, why: 'on topic' }] }));
@@ -166,7 +184,7 @@ describe('ResearchSession', () => {
   it('cancel and retry call the backend with the search id', async () => {
     const h = setup();
     const s = session(h);
-    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'all' });
+    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'documents' });
     await s.cancel();
     await s.retry('arxiv');
     expect(h.calls.find((c) => c.cmd === 'research_cancel')?.args).toEqual({ searchId: 5 });
@@ -205,11 +223,12 @@ describe('ResearchPageComponent', () => {
 
   const button = (el: HTMLElement, text: string): HTMLButtonElement | undefined => [...el.querySelectorAll('button')].find((b) => b.textContent?.includes(text));
 
-  it('starts empty with the notice, the policy line and the ten kinds of result', async () => {
+  it('starts empty with the notice, the policy line and the seven categories', async () => {
     setup();
     const { el } = await mount();
-    const kinds = [...el.querySelectorAll('select option')].slice(0, 10).map((o) => o.textContent?.trim());
-    expect(kinds).toEqual(['All', 'Papers', 'Books', 'Music', 'Video', 'Games', 'Software', 'Images', 'Datasets', 'Web']);
+    const kinds = [...el.querySelectorAll('select option')].slice(0, 7).map((o) => o.textContent?.trim());
+    // no "All": the user picks what to look for
+    expect(kinds).toEqual(['Videos', 'Software & apps', 'Documents & PDFs', 'Images', 'Academic research', 'Open-source projects', 'General web']);
     expect(el.textContent).toContain('Only download what you have the right to download.');
     expect(el.textContent).toContain('does not search torrent indexes, piracy or paywall-bypass sites');
     expect(el.textContent).toContain('What do you want to find?');
@@ -245,7 +264,7 @@ describe('ResearchPageComponent', () => {
   });
 
   it('shows Web search as a calm optional note with a link to Settings, not a setup warning', async () => {
-    setup({ start: { searchId: 5, sources: ['arxiv'], unavailable: [{ source: 'web', reason: 'needs_setup' }, { source: 'jamendo', reason: 'needs_setup' }], ai: false } });
+    setup({ start: { ...START_EXTRA, searchId: 5, sources: ['arxiv'], unavailable: [{ source: 'web', reason: 'needs_setup' }, { source: 'jamendo', reason: 'needs_setup' }], ai: false } });
     const { fixture, el } = await mount();
     await ask(fixture, el, 'jazz');
     const web = el.querySelector('.optional-note[data-source="web"]') as HTMLElement;
@@ -270,15 +289,15 @@ describe('ResearchPageComponent', () => {
     expect(shift.defaultPrevented).toBe(false);
     expect(h.calls.some((c) => c.cmd === 'research_start')).toBe(false);
     const select = el.querySelector('select') as HTMLSelectElement;
-    select.value = 'music';
+    select.value = 'videos';
     select.dispatchEvent(new Event('change'));
     await ask(fixture, el, 'jazz');
-    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'jazz', useAi: false, lang: 'en', category: 'music' } });
+    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'jazz', useAi: false, lang: 'en', category: 'videos' } });
     expect((el.querySelector('#research-prompt') as HTMLTextAreaElement).value).toBe('');
   });
 
   it('shows the progress steps from the real events, chips per source, retry and cancel', async () => {
-    const h = setup({ configured: true, start: { searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: true } });
+    const h = setup({ configured: true, start: { ...START_EXTRA, searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: true } });
     const { fixture, el } = await mount();
     await ask(fixture, el, 'frogs');
     const state = (id: string): string => (el.querySelector(`.step:nth-child(${id})`) as HTMLElement).className;
@@ -357,7 +376,7 @@ describe('ResearchPageComponent', () => {
   });
 
   it('a web result has no checkbox, shows only a safe address, opens the grabber and its page', async () => {
-    const h = setup({ start: { searchId: 5, sources: ['web'], unavailable: [], ai: false } });
+    const h = setup({ start: { ...START_EXTRA, searchId: 5, sources: ['web'], unavailable: [], ai: false } });
     const { fixture, el } = await mount();
     await ask(fixture, el, 'files');
     const ui = TestBed.inject(UiState);
@@ -491,7 +510,7 @@ describe('ResearchPageComponent', () => {
   });
 
   it('offers the AI switch, the provider and model, and a keyword fallback when the AI fails', async () => {
-    const h = setup({ configured: true, start: { searchId: 5, sources: ['arxiv'], unavailable: [], ai: true } });
+    const h = setup({ configured: true, start: { ...START_EXTRA, searchId: 5, sources: ['arxiv'], unavailable: [], ai: true } });
     const { fixture, el } = await mount();
     expect(el.querySelector('input[role="switch"]')).not.toBeNull();
     expect(el.querySelector('.provider')?.textContent).toContain('DeepInfra · m');
@@ -502,7 +521,7 @@ describe('ResearchPageComponent', () => {
     h.calls.length = 0;
     button(el, 'Search without AI')?.click();
     await settle(fixture);
-    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'frogs', useAi: false, lang: 'en', category: 'all' } });
+    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'frogs', useAi: false, lang: 'en', category: 'documents' } });
   });
 });
 
@@ -511,7 +530,7 @@ describe('ResearchSession cancel', () => {
     const h = setup();
     TestBed.configureTestingModule({ providers: [ResearchSession] });
     const s = TestBed.inject(ResearchSession);
-    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'all' });
+    await s.start({ topic: 'x', useAi: false, lang: 'en', category: 'documents' });
     h.emit({ searchId: 5, events: [{ t: 'source', source: 'gutenberg', state: 'done', found: 2, code: null }, { t: 'phase', phase: 'cancelled' }] });
     expect(s.sources().map((c) => [c.id, c.state])).toEqual([
       ['arxiv', 'stopped'],

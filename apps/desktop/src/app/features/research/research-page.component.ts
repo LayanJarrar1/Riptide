@@ -369,7 +369,7 @@ export class ResearchPageComponent implements OnInit {
   private readonly composer = viewChild<ResearchComposerComponent>('composer');
 
   protected readonly examples = [1, 2, 3] as const;
-  protected readonly category = signal<CategoryId>('all');
+  protected readonly category = signal<CategoryId>('documents');
   protected readonly useAi = signal(true);
   protected readonly sideOpen = signal(false);
   protected readonly setupOpen = signal(false);

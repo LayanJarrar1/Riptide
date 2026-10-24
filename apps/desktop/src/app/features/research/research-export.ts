@@ -212,6 +212,7 @@ const RIS_TYPE: Partial<Record<SourceId, string>> = {
   github: 'COMP',
   'data-gov': 'DATA',
   blender: 'VIDEO',
+  youtube: 'VIDEO',
 };
 
 /** RIS for the citable results. */

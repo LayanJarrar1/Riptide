@@ -110,7 +110,7 @@ export class AiService {
     return this.invoke<ResearchSettingsView>('research_remove_secret', { name });
   }
 
-  previewSearch(topic: string, category: CategoryId = 'all'): Promise<AiMessage[]> {
+  previewSearch(topic: string, category: CategoryId = 'documents'): Promise<AiMessage[]> {
     return this.invoke<AiMessage[]>('research_preview', { topic, category });
   }
 

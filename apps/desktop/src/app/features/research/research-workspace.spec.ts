@@ -20,8 +20,18 @@ function item(id: string, over: Partial<TurnItem> = {}): TurnItem {
     pmid: null,
     pmcid: null,
     kind: 'file',
+    durationSecs: null,
+    thumbnail: null,
+    publisher: null,
+    version: null,
     rights: { kind: 'unknown', label: '' },
     seen: null,
+    confidence: 'exact',
+    coverage: 1,
+    matchScore: 100,
+    reasons: [],
+    trust: 'unknown',
+    mirror: false,
     score: null,
     why: null,
     wasSeen: false,
@@ -30,7 +40,7 @@ function item(id: string, over: Partial<TurnItem> = {}): TurnItem {
 }
 
 function turn(over: Partial<Turn> = {}): Turn {
-  return { ...emptyTurn('frogs', 'all', false, 1000), id: 't1', ...over };
+  return { ...emptyTurn('frogs', 'documents', false, 1000), id: 't1', ...over };
 }
 
 const ctx: ExportContext = {
@@ -46,7 +56,7 @@ const ctx: ExportContext = {
       'research.source.arxiv': 'arXiv',
       'research.source.gutenberg': 'Gutenberg',
       'research.md.meta': 'Riptide research · {date} · {category}',
-      'research.cat.all': 'All',
+      'research.cat.documents': 'Documents',
       'research.md.results': 'Results',
       'research.md.page': 'Source page',
       'research.md.download': 'Download',
@@ -136,9 +146,9 @@ describe('research history storage', () => {
   });
 
   it('treats prompts that differ only in case and spacing as the same search', () => {
-    expect(promptKey('  Frogs   of Peru ', 'all', true)).toBe(promptKey('frogs of peru', 'all', true));
-    expect(promptKey('frogs', 'all', true)).not.toBe(promptKey('frogs', 'books', true));
-    expect(promptKey('frogs', 'all', true)).not.toBe(promptKey('frogs', 'all', false));
+    expect(promptKey('  Frogs   of Peru ', 'documents', true)).toBe(promptKey('frogs of peru', 'documents', true));
+    expect(promptKey('frogs', 'documents', true)).not.toBe(promptKey('frogs', 'academic', true));
+    expect(promptKey('frogs', 'documents', true)).not.toBe(promptKey('frogs', 'documents', false));
   });
 });
 

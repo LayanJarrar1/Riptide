@@ -205,7 +205,7 @@ export class ResearchComposerComponent {
   protected readonly maxPrompt = MAX_PROMPT;
 
   /** Kind of result to look for. */
-  readonly category = model<CategoryId>('all');
+  readonly category = model<CategoryId>('documents');
   /** Ask the AI to plan and rank (only offered when a provider is set up). */
   readonly useAi = model(true);
   readonly aiReady = input(false);
