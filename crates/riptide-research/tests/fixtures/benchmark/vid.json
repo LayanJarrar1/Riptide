@@ -1,0 +1,204 @@
+{
+ "queries": [
+  {
+   "id": "vid-bbb",
+   "query": "big buck bunny",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "blender",
+     "title": "Big Buck Bunny",
+     "f": "big_buck_bunny_1080p.mp4",
+     "y": 2008,
+     "z": 276134947
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Big Buck Bunny",
+     "f": "BigBuckBunny.mp4",
+     "y": 2008,
+     "z": 220000000
+    },
+    {
+     "id": "c",
+     "source": "commons",
+     "title": "Big Buck Bunny 4K",
+     "f": "Big_Buck_Bunny_4K.webm",
+     "y": 2008
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Big Buck Hunter Pro arcade manual",
+     "f": "bbh.pdf"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Bunny Lake Is Missing (1965)",
+     "f": "bunny-lake.mp4",
+     "y": 1965
+    },
+    {
+     "id": "f",
+     "source": "commons",
+     "title": "Buck Rogers in the 25th Century trailer",
+     "f": "buck.webm"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "id": "vid-apollo11",
+   "query": "apollo 11 landing",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "nasa",
+     "title": "Apollo 11 Landing - The Eagle Has Landed",
+     "f": "apollo11_landing.mp4",
+     "y": 1969
+    },
+    {
+     "id": "b",
+     "source": "nasa",
+     "title": "Apollo 11 Moon Landing Footage",
+     "f": "a11_moon.mp4",
+     "y": 1969
+    },
+    {
+     "id": "c",
+     "source": "nasa",
+     "title": "Apollo 13 Landing in the Pacific",
+     "f": "a13.mp4",
+     "y": 1970
+    },
+    {
+     "id": "d",
+     "source": "nasa",
+     "title": "Apollo 11 Lunar Sample Return",
+     "f": "a11_samples.mp4",
+     "y": 1969
+    },
+    {
+     "id": "e",
+     "source": "nasa",
+     "title": "Space Shuttle Landing STS-1",
+     "f": "sts1.mp4",
+     "y": 1981
+    },
+    {
+     "id": "f",
+     "source": "commons",
+     "title": "Apollo 12 Landing Site",
+     "f": "a12.webm",
+     "y": 1969
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "vid-sintel-2010",
+   "query": "sintel 2010",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "blender",
+     "title": "Sintel",
+     "f": "sintel-2048-stereo.mp4",
+     "y": 2010
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Sintel (2010)",
+     "f": "sintel.mp4",
+     "y": 2010
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Sintel Soundtrack",
+     "f": "sintel-ost.mp3",
+     "y": 2011
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Sinbad (2010)",
+     "f": "sinbad.mp4",
+     "y": 2010
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "vid-elephants-dream",
+   "query": "elephants dream",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "blender",
+     "title": "Elephants Dream",
+     "f": "ed_1024.mp4",
+     "y": 2006
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "Elephants Dream (2006)",
+     "f": "elephantsdream.mp4",
+     "y": 2006
+    },
+    {
+     "id": "c",
+     "source": "commons",
+     "title": "Elephants Dream",
+     "f": "Elephants_Dream.webm",
+     "y": 2006
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Elephant Walk (1954)",
+     "f": "elephant-walk.mp4",
+     "y": 1954
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Dream of the Elephants",
+     "f": "dream-elephants.mp4"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b",
+    "c"
+   ]
+  }
+ ]
+}

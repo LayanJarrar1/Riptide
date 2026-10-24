@@ -6,9 +6,9 @@
 //!
 //! | Class | Meaning |
 //! |---|---|
-//! | `Exact` | every title word is in the title, every stated constraint is verified, nothing is loose |
-//! | `Strong` | the title matches and nothing contradicts, but a soft constraint (year, file type) is not stated or the title is loose |
-//! | `Related` | most words match, but a constrained episode / season / version is not stated, or the match is partial |
+//! | `Exact` | every title word is in the title / file name / by-line, in order, and a real part of the title; every stated constraint is verified |
+//! | `Strong` | as `Exact`, but a soft constraint (year, file type) is not stated by the result |
+//! | `Related` | most words match, but a constrained episode / season / version is not stated, the words are a small or reshuffled part of a longer title, or the match is partial |
 //! | `Unrelated` | a stated value contradicts the query (episode 21 for "episode 22"), a quoted phrase or an excluded word decides it, or too few words match |
 //!
 //! `Unrelated` is never returned. `Related` is returned only when the mode allows it or when
@@ -348,8 +348,8 @@ const RELEASE_NOISE: &[&str] = &[
     "32bit",
 ];
 
-/// Words of a hit title that say something about the thing itself: no filler, no number that is
-/// one of the asked values, no file-type or quality words.
+/// How many distinct words of a hit title say something about the thing itself: no filler, no
+/// number (version parts, episode numbers, years), no file-type, quality or platform words.
 fn content_words(title_words: &[String], intent: &QueryIntent) -> usize {
     let asked_numbers: Vec<String> = [intent.episode, intent.season]
         .into_iter()
@@ -357,14 +357,17 @@ fn content_words(title_words: &[String], intent: &QueryIntent) -> usize {
         .map(|n| n.to_string())
         .chain(intent.year.map(|y| y.to_string()))
         .collect();
-    title_words
+    let distinct: HashSet<String> = title_words
         .iter()
         .filter(|w| !is_filler(w) && !RELEASE_NOISE.contains(&w.as_str()))
         .filter(|w| !asked_numbers.contains(w))
         // numbers are version parts, years, episode numbers: not what the thing is called
         .filter(|w| !w.chars().all(|c| c.is_ascii_digit()) || intent.title_terms.contains(w))
         .filter(|w| !is_file_type(w) || intent.title_terms.contains(w))
-        .count()
+        // a repeated word ("owner/owner-tool tool") is one word
+        .map(|w| stem(w))
+        .collect();
+    distinct.len()
 }
 
 /// Judges one result against the query.
@@ -386,9 +389,17 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
     ));
 
     let title_words = tokens(&title_n);
+    let byline = tokens(&normalize(&format!(
+        "{} {}",
+        hit.authors.join(" "),
+        hit.publisher.as_deref().unwrap_or("")
+    )));
+    // title, file name, URL path and the by-line (authors, publisher) are what a result *is*;
+    // the summary only supports
     let mut primary_words = title_words.clone();
     primary_words.extend(tokens(&name_n));
     primary_words.extend(tokens(&tail_n));
+    primary_words.extend(byline.iter().cloned());
     let desc_words = tokens(&desc_n);
     let mut all_words = primary_words.clone();
     all_words.extend(desc_words.iter().cloned());
@@ -397,13 +408,8 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
     let mut unrelated = false;
 
     // ---- exclusions (title, file name, authors, publisher: not the long summary)
-    let byline = tokens(&normalize(&format!(
-        "{} {}",
-        hit.authors.join(" "),
-        hit.publisher.as_deref().unwrap_or("")
-    )));
     for word in &intent.exclusions {
-        if position(&primary_words, word).is_some() || position(&byline, word).is_some() {
+        if position(&primary_words, word).is_some() {
             reasons.push(Reason::ExcludedWord { word: word.clone() });
             unrelated = true;
         }
@@ -475,10 +481,17 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
     };
     let in_order = |words: &[String]| -> bool {
         let pos: Vec<usize> = terms.iter().filter_map(|t| position(words, t)).collect();
-        pos.len() == terms.len() && pos.windows(2).all(|w| w[0] <= w[1])
+        !pos.is_empty() && pos.windows(2).all(|w| w[0] <= w[1])
     };
-    let tight_share = share(&title_words).max(share(&name_words)).min(1.0);
-    let ordered = in_order(&title_words) || in_order(&name_words);
+    // "owner/name" (a repository): the owner is the publisher, not part of what the thing is called
+    let core_words = match hit.title.split_once('/') {
+        Some((owner, rest)) if !owner.trim().contains(' ') && !rest.trim().is_empty() => {
+            tokens(&normalize(rest))
+        }
+        _ => title_words.clone(),
+    };
+    let tight_share = share(&core_words).max(share(&name_words)).min(1.0);
+    let ordered = in_order(&core_words) || in_order(&name_words);
 
     // ---- constraints
     let name_facts = Facts::of(&format!("{} {} {}", hit.title, name_n, tail));
@@ -586,26 +599,22 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
     let class = if unrelated {
         MatchClass::Unrelated
     } else {
-        let strong_floor = if terms.len() >= 5 { 0.8 } else { 1.0 };
-        // a verified episode / season / version is strong evidence on its own, so a title that
-        // also carries an episode name or release tags may be longer
-        let loose = !terms.is_empty() && tight_share < if identifying_matched { 0.25 } else { 0.5 };
-        let tight = !loose && (terms.len() < 2 || ordered);
+        // a verified episode / season / version is strong evidence of identity, so a title that
+        // also carries an episode name or release tags may be as long as it likes
+        let loose = !terms.is_empty() && !identifying_matched && tight_share < 0.5;
+        let scrambled = terms.len() >= 2 && !ordered && words_ok;
         if loose {
             reasons.push(Reason::LooseTitle);
-        } else if terms.len() >= 2 && !ordered && words_ok {
+        } else if scrambled {
             reasons.push(Reason::WordsOutOfOrder);
         }
-        if identifying_missing || phrase_only_desc || cov_primary < strong_floor - 1e-6 {
-            MatchClass::Related
-        } else if words_ok && !soft_missing && tight && !terms.is_empty() {
-            MatchClass::Exact
-        } else if words_ok
-            && !soft_missing
-            && tight
-            && terms.is_empty()
-            && !intent.phrases.is_empty()
+        let verified_title =
+            words_ok && !loose && !scrambled && (!terms.is_empty() || !intent.phrases.is_empty());
+        if identifying_missing || phrase_only_desc || cov_primary < 1.0 - 1e-6 || loose || scrambled
         {
+            // the asked words are a small or reshuffled part of the title: same subject at best
+            MatchClass::Related
+        } else if verified_title && !soft_missing {
             MatchClass::Exact
         } else {
             MatchClass::Strong
@@ -614,7 +623,6 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
 
     // ---- trust
     let (mirror, trust) = trust_of(hit, intent, &all_words);
-    // (looseness is decided with the class, below its inputs)
 
     let score = {
         let base =
@@ -1035,9 +1043,9 @@ mod tests {
             "A long essay about the attack of the mighty colossal Titan figure in modern popular anime culture",
         );
         assert_eq!(class(q, &exact), MatchClass::Exact);
-        // all the words, wrong order: a different thing, but not provably so
-        assert_eq!(class(q, &reordered), MatchClass::Strong);
-        assert_eq!(class(q, &loose), MatchClass::Strong);
+        // all the words, wrong order or lost in a long title: the same subject at best
+        assert_eq!(class(q, &reordered), MatchClass::Related);
+        assert_eq!(class(q, &loose), MatchClass::Related);
     }
 
     #[test]

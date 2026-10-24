@@ -205,8 +205,34 @@ fn re_season() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     re(
         &R,
-        r"\b(?:seasons?|الموسم|موسم)\s*[.#:]?\s*(\d{1,2})(?:\s*[-~]\s*(\d{1,2}))?\b",
+        r"\b(?:seasons?|الموسم|موسم|الجزء|جزء)\s*[.#:]?\s*(\d{1,2})(?:\s*[-~]\s*(\d{1,2}))?\b",
     )
+}
+
+fn re_season_word() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    // "season two", Arabic "الموسم الثاني" / "الجزء الثالث" (ordinals, folded)
+    re(
+        &R,
+        r"\b(?:seasons?|الموسم|موسم|الجزء|جزء)\s+(one|two|three|four|five|six|seven|eight|nine|ten|الاول|الاولى|الثاني|الثانيه|الثالث|الثالثه|الرابع|الرابعه|الخامس|الخامسه|السادس|السادسه|السابع|السابعه|الثامن|الثامنه|التاسع|التاسعه|العاشر|العاشره)\b",
+    )
+}
+
+/// The number a season word stands for.
+fn word_number(w: &str) -> Option<u32> {
+    Some(match w {
+        "one" | "الاول" | "الاولى" => 1,
+        "two" | "الثاني" | "الثانيه" => 2,
+        "three" | "الثالث" | "الثالثه" => 3,
+        "four" | "الرابع" | "الرابعه" => 4,
+        "five" | "الخامس" | "الخامسه" => 5,
+        "six" | "السادس" | "السادسه" => 6,
+        "seven" | "السابع" | "السابعه" => 7,
+        "eight" | "الثامن" | "الثامنه" => 8,
+        "nine" | "التاسع" | "التاسعه" => 9,
+        "ten" | "العاشر" | "العاشره" => 10,
+        _ => return None,
+    })
 }
 
 fn re_short_season() -> &'static Regex {
@@ -401,6 +427,11 @@ fn parse(query: &str) -> QueryIntent {
             if let Some(r) = m.get(0).map(|w| w.range()) {
                 blank(&mut rest, r);
             }
+        } else if let Some(m) = re_season_word().captures(&rest) {
+            intent.season = m.get(1).and_then(|w| word_number(w.as_str()));
+            if let Some(r) = m.get(0).map(|w| w.range()) {
+                blank(&mut rest, r);
+            }
         } else if let Some(m) = re_short_season().captures(&rest) {
             let digits = m.get(1).map_or("", |d| d.as_str());
             // `s3` alone is too often something else (S3 storage); `s03` or next to an episode
@@ -550,6 +581,13 @@ impl Facts {
                 m.get(2).and_then(|s| parse_u32(s.as_str())),
             );
         }
+        for m in re_season_word().captures_iter(&n) {
+            push_range(
+                &mut facts.seasons,
+                m.get(1).and_then(|w| word_number(w.as_str())),
+                None,
+            );
+        }
         for m in re_short_season().captures_iter(&n) {
             let d = m.get(1).map_or("", |d| d.as_str());
             if d.len() == 2 {
@@ -642,6 +680,18 @@ mod tests {
         assert_eq!(i.title_terms, ["قيامه", "عثمان"]);
         let i = p("الحلقه ٥ من مسلسل");
         assert_eq!(i.episode, Some(5));
+        // Arabic series often number seasons as "parts"
+        let i = p("باب الحارة الجزء 3 الحلقة 5");
+        assert_eq!((i.season, i.episode), (Some(3), Some(5)));
+        assert_eq!(i.title_terms, ["باب", "الحاره"]);
+        // spelled-out parts and seasons
+        assert_eq!(p("باب الحارة الجزء الثالث").season, Some(3));
+        assert_eq!(p("قيامة عثمان الموسم الثانية").season, Some(2));
+        assert_eq!(p("the show season two episode 3").season, Some(2));
+        assert_eq!(
+            Facts::of("باب الحارة - الجزء الثاني - الحلقة 5").seasons,
+            [2]
+        );
     }
 
     #[test]

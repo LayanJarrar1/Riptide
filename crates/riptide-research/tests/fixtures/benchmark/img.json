@@ -1,0 +1,120 @@
+{
+ "queries": [
+  {
+   "id": "img-fuji-jpg",
+   "query": "mount fuji sunrise jpg",
+   "category": "images",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "commons",
+     "title": "Mount Fuji at sunrise",
+     "f": "Mount_Fuji_at_sunrise.jpg"
+    },
+    {
+     "id": "b",
+     "source": "openverse",
+     "title": "Mount Fuji sunrise from Lake Kawaguchi",
+     "f": "fuji-kawaguchi.jpg"
+    },
+    {
+     "id": "c",
+     "source": "commons",
+     "title": "Mount Fuji sunrise",
+     "f": "Mount_Fuji_sunrise.png"
+    },
+    {
+     "id": "d",
+     "source": "commons",
+     "title": "Mount Fuji sunrise map",
+     "f": "Fuji_map.svg"
+    },
+    {
+     "id": "e",
+     "source": "openverse",
+     "title": "Mount Rainier at sunrise",
+     "f": "rainier-sunrise.jpg"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "img-hubble-hdf",
+   "query": "hubble deep field",
+   "category": "images",
+   "mode": "quick-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "nasa",
+     "title": "Hubble Deep Field",
+     "f": "hubble_deep_field.jpg",
+     "y": 1996
+    },
+    {
+     "id": "b",
+     "source": "commons",
+     "title": "Hubble Deep Field (1995)",
+     "f": "HDF_1995.jpg",
+     "y": 1996
+    },
+    {
+     "id": "c",
+     "source": "nasa",
+     "title": "Hubble Space Telescope servicing mission",
+     "f": "hst_sm4.jpg"
+    },
+    {
+     "id": "d",
+     "source": "nasa",
+     "title": "Deep field of galaxies in Fornax",
+     "f": "fornax.jpg"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "img-hubble-hdf-semantic",
+   "query": "hubble deep field",
+   "category": "images",
+   "mode": "quick-search",
+   "subset": "semantic",
+   "note": "Ultra and Extreme Deep Field are different images whose titles contain every word asked for",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "nasa",
+     "title": "Hubble Deep Field",
+     "f": "hubble_deep_field.jpg",
+     "y": 1996
+    },
+    {
+     "id": "b",
+     "source": "nasa",
+     "title": "Hubble Ultra Deep Field",
+     "f": "hudf.jpg",
+     "y": 2004
+    },
+    {
+     "id": "c",
+     "source": "nasa",
+     "title": "Hubble Extreme Deep Field",
+     "f": "xdf.jpg",
+     "y": 2012
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  }
+ ]
+}

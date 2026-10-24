@@ -1,0 +1,309 @@
+{
+ "queries": [
+  {
+   "id": "multi-aot-ar",
+   "query": "هجوم العمالقة الحلقة 5",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "multilingual",
+   "note": "b is the same episode under its Japanese title: only an AI translation step can find it",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "هجوم العمالقة الحلقة 5 مترجم",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1430
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Shingeki no Kyojin Episode 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1420
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "هجوم العمالقة الحلقة 6",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1425
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "هجوم العمالقة الحلقة 15",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1422
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "multi-spirited-2001",
+   "query": "spirited away 2001",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "multilingual",
+   "note": "e is a poster, not the film, but shares title and year",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "Spirited Away (2001)",
+     "y": 2001,
+     "f": "spirited-away.mp4",
+     "z": 1800000000
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "千と千尋の神隠し Spirited Away",
+     "y": 2001,
+     "f": "sen-to-chihiro.mp4",
+     "z": 1700000000
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Spirited (2022)",
+     "y": 2022,
+     "f": "spirited.mp4"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "Away We Go (2009)",
+     "y": 2009,
+     "f": "away-we-go.mp4"
+    },
+    {
+     "id": "e",
+     "source": "commons",
+     "title": "Spirited Away poster",
+     "y": 2001,
+     "f": "Spirited_Away_poster.jpg"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "multi-kalila",
+   "query": "كليلة ودمنة pdf",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "multilingual",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "كليلة ودمنة",
+     "f": "kalila-wa-dimna.pdf",
+     "a": [
+      "ابن المقفع"
+     ]
+    },
+    {
+     "id": "b",
+     "source": "open-library",
+     "title": "كتاب كليلة ودمنة",
+     "f": "kalila2.pdf",
+     "a": [
+      "ابن المقفع"
+     ]
+    },
+    {
+     "id": "c",
+     "source": "gutenberg",
+     "title": "كليلة ودمنة",
+     "f": "pg-kalila.epub",
+     "a": [
+      "ابن المقفع"
+     ]
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "ألف ليلة وليلة",
+     "f": "alf-layla.pdf"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "الأدب الصغير",
+     "f": "adab.pdf",
+     "a": [
+      "ابن المقفع"
+     ]
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "multi-alf-layla",
+   "query": "الف ليلة وليلة",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "multilingual",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "internet-archive",
+     "title": "ألف ليلة وليلة",
+     "f": "alf-layla.pdf"
+    },
+    {
+     "id": "b",
+     "source": "open-library",
+     "title": "الف ليله وليله",
+     "f": "alf2.pdf"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "ليلة القدر",
+     "f": "qadr.pdf"
+    },
+    {
+     "id": "d",
+     "source": "internet-archive",
+     "title": "ألف باء",
+     "f": "alif-ba.pdf"
+    },
+    {
+     "id": "e",
+     "source": "gutenberg",
+     "title": "كليلة ودمنة",
+     "f": "kalila.epub"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "multi-miserables",
+   "query": "les misérables victor hugo",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "multilingual",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "gutenberg",
+     "title": "Les Misérables",
+     "a": [
+      "Hugo, Victor"
+     ],
+     "f": "pg135.epub"
+    },
+    {
+     "id": "b",
+     "source": "open-library",
+     "title": "Les Misérables",
+     "a": [
+      "Victor Hugo"
+     ],
+     "f": "lesmiserables.pdf"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Les Misérables (théâtre)",
+     "a": [
+      "Jean Blanc"
+     ],
+     "f": "theatre.pdf"
+    },
+    {
+     "id": "d",
+     "source": "gutenberg",
+     "title": "Notre-Dame de Paris",
+     "a": [
+      "Hugo, Victor"
+     ],
+     "f": "pg2610.epub"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "Victor Hugo: a biography",
+     "a": [
+      "Alan Smith"
+     ],
+     "f": "hugo-bio.pdf"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "multi-quijote",
+   "query": "don quijote de la mancha",
+   "category": "documents",
+   "mode": "quick-search",
+   "subset": "multilingual",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "gutenberg",
+     "title": "Don Quijote de la Mancha",
+     "a": [
+      "Cervantes Saavedra, Miguel de"
+     ],
+     "f": "pg2000.epub"
+    },
+    {
+     "id": "b",
+     "source": "internet-archive",
+     "title": "El ingenioso hidalgo Don Quijote de la Mancha",
+     "a": [
+      "Miguel de Cervantes"
+     ],
+     "f": "quijote.pdf"
+    },
+    {
+     "id": "c",
+     "source": "internet-archive",
+     "title": "Dulcinea de la Mancha",
+     "f": "dulcinea.pdf"
+    },
+    {
+     "id": "d",
+     "source": "gutenberg",
+     "title": "Don Juan",
+     "a": [
+      "Byron, George Gordon"
+     ],
+     "f": "pg21700.epub"
+    },
+    {
+     "id": "e",
+     "source": "internet-archive",
+     "title": "La Mancha travel guide",
+     "f": "guide.pdf"
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  }
+ ]
+}

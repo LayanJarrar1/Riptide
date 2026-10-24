@@ -22,6 +22,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 pub mod assist;
+pub mod bench;
 pub mod error;
 pub mod http;
 pub mod intent;

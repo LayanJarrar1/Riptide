@@ -1,0 +1,772 @@
+{
+ "queries": [
+  {
+   "id": "ep-naruto-22",
+   "query": "naruto shippuden episode 22",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episode 22 - The Jinchuriki of the Sand",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1421
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Naruto Shippuden - Episode 21 (English Dub)",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1399
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episode 23 English Subbed HD",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1410
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episode 220 - The Death of Pain?",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1405
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Naruto Classic Episode 22 - Hero or Zero",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1380
+    },
+    {
+     "id": "f",
+     "source": "internet-archive",
+     "title": "Naruto Shippuden S01E22",
+     "f": "Naruto.Shippuden.S01E22.1080p.mkv",
+     "z": 412345678
+    },
+    {
+     "id": "g",
+     "source": "internet-archive",
+     "title": "Naruto Shippuden complete series",
+     "s": "All episodes of the series in one collection."
+    },
+    {
+     "id": "h",
+     "source": "youtube",
+     "title": "Naruto Shippuden Episode 2 - Kakashi",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1390
+    }
+   ],
+   "relevant": [
+    "a",
+    "f"
+   ]
+  },
+  {
+   "id": "ep-aot-s04e28",
+   "query": "attack on titan s04e28",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Attack on Titan Season 4 Episode 28 - Sneak Attack",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1440
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Attack on Titan S04E27 - Declaration of War",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1430
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Attack on Titan S03E28 - Ride the Wind",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1420
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Attack on Titan Season 4 Episode 29 - Final Chapters",
+     "pg": true,
+     "p": "Channel",
+     "dur": 3500
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Attack on Titan Season 4 Episode 2 - Judgment",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1410
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "Attack on Titan season 4 ep 28 english sub",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1438
+    },
+    {
+     "id": "g",
+     "source": "youtube",
+     "title": "Attack on Titan Opening 4 (Season 4)",
+     "pg": true,
+     "p": "Channel",
+     "dur": 92
+    }
+   ],
+   "relevant": [
+    "a",
+    "f"
+   ]
+  },
+  {
+   "id": "ep-onepiece-1000",
+   "query": "one piece episode 1000",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "One Piece Episode 1000 - Overwhelming Strength",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1420
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "One Piece Episode 100 - Alabasta",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1400
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "One Piece Episode 1001 - Luffy vs Kaido",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1410
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "One Piece Episode 999 - Wano",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1405
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "One Piece Film Red - Official Trailer",
+     "pg": true,
+     "p": "Channel",
+     "dur": 150
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "One Piece Episode 10 - Zoro",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1390
+    }
+   ],
+   "relevant": [
+    "a"
+   ]
+  },
+  {
+   "id": "ep-breakingbad-s05e14",
+   "query": "breaking bad season 5 episode 14",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Breaking Bad Season 5 Episode 14 - Ozymandias",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2800
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Breaking Bad S05E13 - To'hajiilee",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2790
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Breaking Bad Season 4 Episode 14 - Fiction",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2700
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Breaking Bad Season 5 Episode 15 - Granite State",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2810
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Breaking Bad Season 5 Official Trailer",
+     "pg": true,
+     "p": "Channel",
+     "dur": 120
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "Breaking Bad S05E14 Ozymandias full episode HD",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2805
+    },
+    {
+     "id": "g",
+     "source": "youtube",
+     "title": "Better Call Saul Season 5 Episode 14",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2700
+    }
+   ],
+   "relevant": [
+    "a",
+    "f"
+   ]
+  },
+  {
+   "id": "ep-friends-s03e07",
+   "query": "friends s03e07",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Friends S03E07 - The One with the Race Car Bed",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1320
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Friends S03E17 - The One Without the Ski Trip",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1310
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Friends S07E03 - The One with Phoebe's Cookies",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1305
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Friends S03E06 - The One with Frank Jr.",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1300
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Friends Season 3 Episode 7 full episode",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1322
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "Friends Season 3 Episode 70 compilation",
+     "pg": true,
+     "p": "Channel",
+     "dur": 3300
+    }
+   ],
+   "relevant": [
+    "a",
+    "e"
+   ]
+  },
+  {
+   "id": "ep-office-s02e01",
+   "query": "the office season 2 episode 1",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "The Office Season 2 Episode 1 - The Dundies",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1320
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "The Office Season 2 Episode 10 - Christmas Party",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1310
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "The Office Season 1 Episode 1 - Pilot",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1290
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "The Office Season 2 Episode 11 - Booze Cruise",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1300
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Office Space (1999) full movie",
+     "pg": true,
+     "p": "Channel",
+     "dur": 5300
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "The Office S02E01 The Dundies HD",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1318
+    }
+   ],
+   "relevant": [
+    "a",
+    "f"
+   ]
+  },
+  {
+   "id": "ep-qiyamat-22",
+   "query": "قيامة عثمان الحلقة 22",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "مسلسل قيامة عثمان - الحلقة 22 - مترجمة",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7200
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 21",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7100
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 23 كاملة",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7150
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة ٢٢ مدبلجة بالعربية",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7220
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 122",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7000
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "قيامة عثمان الحلقة 2",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7000
+    },
+    {
+     "id": "g",
+     "source": "youtube",
+     "title": "مسلسل صلاح الدين الحلقة 22",
+     "pg": true,
+     "p": "Channel",
+     "dur": 6900
+    }
+   ],
+   "relevant": [
+    "a",
+    "d"
+   ]
+  },
+  {
+   "id": "ep-babalhara-s3e5",
+   "query": "باب الحارة الجزء 3 الحلقة 5",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "باب الحارة الجزء 3 الحلقة 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2700
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "باب الحارة - الجزء الثالث - الحلقة 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2710
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "باب الحارة الجزء 3 الحلقة 15",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2690
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "باب الحارة الجزء 4 الحلقة 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2700
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "باب الحارة الجزء الثاني الحلقة 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2705
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "باب الحارة الجزء 3 الحلقة 6",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2695
+    },
+    {
+     "id": "g",
+     "source": "youtube",
+     "title": "حارة الضبع الجزء 3 الحلقة 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 2600
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "ep-naruto-ar-22",
+   "query": "ناروتو شيبودن الحلقة ٢٢",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "ناروتو شيبودن الحلقة 22 مترجمة",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1400
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "ناروتو شيبودن الحلقة 21",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1390
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "ناروتو شيبودن الحلقة 23",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1395
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "ناروتو شيبودن - حلقة ٢٢ - دبلجة عربية",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1410
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "ناروتو كلاسيك الحلقة 22",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1380
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "ناروتو شيبودن الحلقة 2",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1385
+    }
+   ],
+   "relevant": [
+    "a",
+    "d"
+   ]
+  },
+  {
+   "id": "ep-grendizer-15",
+   "query": "جريندايزر الحلقة 15",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "جريندايزر الحلقة 15 كرتون سبيستون",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1300
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "جريندايزر الحلقة 14",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1290
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "جريندايزر الحلقة 16",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1295
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "جريندايزر الحلقة 5",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1292
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "جريندايزر - الأغنية الأصلية",
+     "pg": true,
+     "p": "Channel",
+     "dur": 140
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "جريندايزر الحلقة ١٥ كاملة",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1301
+    }
+   ],
+   "relevant": [
+    "a",
+    "f"
+   ]
+  },
+  {
+   "id": "ep-aot-mixed-5",
+   "query": "attack on titan الحلقة 5",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "Attack on Titan الحلقة 5 مترجمة",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1430
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "Attack on Titan Episode 5 - First Battle",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1420
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "Attack on Titan الحلقة 15",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1425
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "Attack on Titan Episode 6 - The World the Girl Saw",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1422
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "Attack on Titan Episode 50",
+     "pg": true,
+     "p": "Channel",
+     "dur": 1440
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "id": "ep-qiyamat-s2e7",
+   "query": "قيامة عثمان الموسم 2 الحلقة 7",
+   "category": "videos",
+   "mode": "video-search",
+   "subset": "exact",
+   "candidates": [
+    {
+     "id": "a",
+     "source": "youtube",
+     "title": "قيامة عثمان الموسم الثاني الحلقة 7",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7000
+    },
+    {
+     "id": "b",
+     "source": "youtube",
+     "title": "قيامة عثمان الموسم 2 الحلقة 7",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7010
+    },
+    {
+     "id": "c",
+     "source": "youtube",
+     "title": "قيامة عثمان الموسم 3 الحلقة 7",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7020
+    },
+    {
+     "id": "d",
+     "source": "youtube",
+     "title": "قيامة عثمان الموسم 2 الحلقة 8",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7030
+    },
+    {
+     "id": "e",
+     "source": "youtube",
+     "title": "قيامة عثمان الموسم 1 الحلقة 7",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7040
+    },
+    {
+     "id": "f",
+     "source": "youtube",
+     "title": "قيامة عثمان الموسم 2 الحلقة 17",
+     "pg": true,
+     "p": "Channel",
+     "dur": 7050
+    }
+   ],
+   "relevant": [
+    "a",
+    "b"
+   ]
+  }
+ ]
+}
