@@ -34,14 +34,12 @@ let uid = 0;
       [attr.aria-expanded]="open()"
       [attr.aria-controls]="open() ? listId : null"
       [attr.aria-label]="triggerLabel()"
+      [attr.title]="label()"
       (click)="toggle()"
       (keydown)="onTriggerKey($event)"
     >
       <app-icon [name]="selected()?.icon ?? placeholderIcon()" [size]="15" />
-      <span class="trigger-text">
-        <span class="trigger-label">{{ label() }}</span>
-        <span class="trigger-value">{{ selected()?.label ?? placeholder() }}</span>
-      </span>
+      <span class="trigger-value">{{ selected()?.label ?? placeholder() }}</span>
       <app-icon class="caret" name="chevronDown" [size]="14" />
     </button>
 
@@ -129,18 +127,6 @@ let uid = 0;
 
     .trigger.is-empty > app-icon:first-child {
       color: var(--color-text-muted);
-    }
-
-    .trigger-text {
-      display: inline-flex;
-      align-items: baseline;
-      gap: var(--space-2);
-      min-inline-size: 0;
-    }
-
-    .trigger-label {
-      color: var(--color-text-muted);
-      font-size: var(--text-xs);
     }
 
     .trigger-value {

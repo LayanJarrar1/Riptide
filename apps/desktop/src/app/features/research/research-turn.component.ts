@@ -17,7 +17,7 @@ import { UiState } from '../shell/ui-state.service';
 import { exportName, ExportContext, isCitable, responseText, summaryLines, toBibtex, toMarkdown, toRis } from './research-export';
 import { Turn, TurnItem } from './research-history';
 import { ResearchCardComponent } from './research-result-card.component';
-import { deriveSteps } from './research-turn';
+import { deriveSteps, isAddable } from './research-turn';
 
 /** Cards shown per group before "Show more"; a turn keeps at most 60. */
 const FIRST_PAGE = 20;
@@ -36,11 +36,6 @@ interface Group {
   readonly count: number;
   readonly shown: readonly TurnItem[];
   readonly more: number;
-}
-
-/** A result a user can add to the downloads: a file, or a YouTube page (downloaded as media). */
-export function isAddable(i: TurnItem): boolean {
-  return i.kind === 'file' || i.source === 'youtube';
 }
 
 /**
@@ -62,39 +57,6 @@ export function isAddable(i: TurnItem): boolean {
       </div>
 
       <div class="assistant">
-        <ol class="steps" [attr.aria-label]="i18n.t('research.steps')" aria-live="polite">
-          @for (s of steps(); track s.id) {
-            <li class="step" [class]="'is-' + s.state">
-              <span class="mark" aria-hidden="true">
-                @switch (s.state) {
-                  @case ('done') {
-                    <app-icon name="check" [size]="12" />
-                  }
-                  @case ('failed') {
-                    <app-icon name="alert" [size]="12" />
-                  }
-                  @case ('active') {
-                    <span class="spin"></span>
-                  }
-                  @case ('skipped') {
-                    <span class="dash"></span>
-                  }
-                  @case ('stopped') {
-                    <app-icon name="stop" [size]="10" />
-                  }
-                  @default {
-                    <span class="dot"></span>
-                  }
-                }
-              </span>
-              <span class="label">{{ stepLabel(s.id, s.state) }}</span>
-              @if (s.count !== null && s.state !== 'skipped') {
-                <span class="count num">{{ fmt.int(s.count) }}</span>
-              }
-              <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
-            </li>
-          }
-        </ol>
 
         @if (running() && live()) {
           <button appButton size="sm" variant="secondary" icon="stop" type="button" class="stop" (click)="stopSearch.emit()">{{ i18n.t('research.cancel') }}</button>
@@ -127,15 +89,53 @@ export function isAddable(i: TurnItem): boolean {
           </p>
         }
 
-        @if (searched().length > 0) {
-          <p class="plan">
-            <app-icon name="sparkles" [size]="14" />
-            <span>{{ i18n.t('research.queries') }}:</span>
-            @for (q of searched(); track q) {
-              <span class="query" dir="auto">{{ q }}</span>
+        <details class="info" [open]="running()">
+          <summary>{{ i18n.t('research.steps') }}</summary>
+          <ol class="steps" [attr.aria-label]="i18n.t('research.steps')" aria-live="polite">
+            @for (s of steps(); track s.id) {
+              <li class="step" [class]="'is-' + s.state">
+                <span class="mark" aria-hidden="true">
+                  @switch (s.state) {
+                    @case ('done') {
+                      <app-icon name="check" [size]="12" />
+                    }
+                    @case ('failed') {
+                      <app-icon name="alert" [size]="12" />
+                    }
+                    @case ('active') {
+                      <span class="spin"></span>
+                    }
+                    @case ('skipped') {
+                      <span class="dash"></span>
+                    }
+                    @case ('stopped') {
+                      <app-icon name="stop" [size]="10" />
+                    }
+                    @default {
+                      <span class="dot"></span>
+                    }
+                  }
+                </span>
+                <span class="label">{{ stepLabel(s.id, s.state) }}</span>
+                @if (s.count !== null && s.state !== 'skipped') {
+                  <span class="count num">{{ fmt.int(s.count) }}</span>
+                }
+                <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
+              </li>
             }
-          </p>
-        }
+          </ol>
+          @if (searched().length > 0) {
+            <p class="plan">
+              <app-icon name="sparkles" [size]="14" />
+              <span>{{ i18n.t('research.queries') }}:</span>
+              @for (q of searched(); track q) {
+                <span class="query" dir="auto">{{ q }}</span>
+              }
+            </p>
+          }
+        </details>
+
+
 
         @if (t.ai?.failed && t.ai?.failMessage; as msg) {
           <div class="warn" role="alert">
@@ -178,7 +178,7 @@ export function isAddable(i: TurnItem): boolean {
           <p class="note hidden-note">
             <app-icon name="info" [size]="14" />
             <span>{{ i18n.plural('research.hidden', t.summary.hidden).replace('{n}', fmt.int(t.summary.hidden)) }}</span>
-            @if (t.mode === 'quick-search') {
+            @if (t.mode === 'quick-search' && !noExact()) {
               <button appButton size="sm" variant="ghost" type="button" (click)="deeper()">{{ i18n.t('research.tryDeep') }}</button>
             }
           </p>
@@ -345,6 +345,20 @@ export function isAddable(i: TurnItem): boolean {
       flex-direction: column;
       gap: var(--space-3);
       min-inline-size: 0;
+    }
+
+    .info summary {
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+    }
+
+    .info[open] summary {
+      margin-block-end: var(--space-2);
+    }
+
+    .info > .plan {
+      margin-block-start: var(--space-2);
     }
 
     .steps {

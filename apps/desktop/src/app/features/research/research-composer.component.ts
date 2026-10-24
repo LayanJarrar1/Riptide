@@ -21,14 +21,14 @@ import { PickerOption, ResearchPickerComponent } from './research-picker.compone
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ButtonComponent, IconComponent, MenuComponent, ResearchPickerComponent],
   template: `
-    <form class="composer" (submit)="submit($event)">
+    <form class="composer" [class.is-compact]="compact()" (submit)="submit($event)">
       <label class="sr-only" for="research-prompt">{{ i18n.t('research.title') }}</label>
       <textarea
         #field
         id="research-prompt"
         class="field"
         dir="auto"
-        rows="2"
+        [attr.rows]="compact() ? 1 : 2"
         [attr.maxlength]="maxPrompt"
         [placeholder]="i18n.t('research.placeholder')"
         [value]="text()"
@@ -126,6 +126,15 @@ import { PickerOption, ResearchPickerComponent } from './research-picker.compone
       line-height: var(--leading-normal);
       resize: none;
       outline: none;
+    }
+
+    .is-compact {
+      padding-block: var(--space-2);
+    }
+
+    .is-compact .field {
+      min-block-size: 28px;
+      font-size: var(--text-md);
     }
 
     .field::placeholder {
@@ -251,6 +260,8 @@ export class ResearchComposerComponent {
   readonly note = input<string | null>(null);
   /** The pickers open above the box when it sits at the bottom of the page. */
   readonly placement = input<'up' | 'down'>('up');
+  /** One line tall, for the box pinned under a conversation. */
+  readonly compact = input(false);
 
   readonly send = output<string>();
   readonly stop = output<void>();

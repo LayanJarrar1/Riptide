@@ -119,7 +119,7 @@ const VARIANT_ICON: Readonly<Record<CardVariant, IconName>> = {
           }
         </div>
         @if (byline(); as b) {
-          <p class="by" dir="auto">{{ b }}</p>
+          <p class="by"><bdi>{{ b }}</bdi></p>
         }
         @if (variant() === 'web' && it.kind === 'page') {
           <p class="url" dir="ltr">{{ pageText() }}</p>
@@ -263,6 +263,7 @@ const VARIANT_ICON: Readonly<Record<CardVariant, IconName>> = {
     }
 
     .title {
+      margin: 0;
       font-size: var(--text-md);
       font-weight: var(--weight-semibold);
       line-height: var(--leading-snug, 1.35);

@@ -289,8 +289,8 @@ describe('ResearchPageComponent', () => {
     type(el, 'jazz');
     fixture.detectChanges();
     expect(sendButton(el).disabled).toBe(true);
-    expect(el.querySelector('#research-need')?.textContent).toContain('Choose a category to search');
-    expect(el.querySelector('.send-wrap')?.getAttribute('title')).toBe('Choose a category to search');
+    expect(el.querySelector('#research-need')?.textContent).toContain('Choose a category first');
+    expect(el.querySelector('.send-wrap')?.getAttribute('title')).toBe('Choose a category first');
     // Enter does not search either
     el.querySelector('#research-prompt')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     await settle(fixture);

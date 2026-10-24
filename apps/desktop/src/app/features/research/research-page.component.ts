@@ -102,7 +102,7 @@ interface LiveRef {
                       <span class="ripple r1" aria-hidden="true"></span>
                       <span class="ripple r2" aria-hidden="true"></span>
                     }
-                    <img class="mark" src="brand-mark.svg" alt="" width="72" height="72" />
+                    <img class="mark" src="brand-mark.svg" alt="" width="64" height="64" />
                   </div>
                   <h2 class="hello-title">{{ i18n.t('research.hello') }}</h2>
                   <p class="muted">{{ i18n.t('research.hello.sub') }}</p>
@@ -136,6 +136,7 @@ interface LiveRef {
                   [busy]="session.busy()"
                   [note]="noteText()"
                   [placement]="empty() ? 'down' : 'up'"
+                  [compact]="!empty()"
                   (send)="send($event)"
                   (stop)="cancel()"
                   (pickMode)="pickMode($event)"
@@ -144,7 +145,7 @@ interface LiveRef {
                   (setupAi)="setupOpen.set(true)"
                 />
                 @if (!empty()) {
-                  <p class="policy">{{ i18n.t('research.footer') }}</p>
+                  <p class="policy is-line" [attr.title]="i18n.t('research.footer')">{{ i18n.t('research.footer') }}</p>
                 }
               </div>
             </div>
@@ -343,19 +344,29 @@ interface LiveRef {
       background: transparent;
     }
 
-    .stage.is-empty .dock .column,
+    .stage.is-empty .dock .column {
+      max-inline-size: 840px;
+    }
+
     .stage.is-empty .cats {
-      max-inline-size: 760px;
+      max-inline-size: 880px;
     }
 
     .policy {
+      margin: 0;
       color: var(--color-text-muted);
       font-size: var(--text-xs);
       line-height: var(--leading-normal);
     }
 
+    .policy.is-line {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .hello {
-      padding-block-start: var(--space-4);
+      padding-block-start: var(--space-2);
       text-align: center;
       display: flex;
       flex-direction: column;
@@ -367,16 +378,16 @@ interface LiveRef {
       position: relative;
       display: grid;
       place-items: center;
-      inline-size: 72px;
-      block-size: 72px;
-      margin-block-end: var(--space-3);
+      inline-size: 64px;
+      block-size: 64px;
+      margin-block-end: var(--space-2);
     }
 
     .mark {
       position: relative;
       display: block;
-      inline-size: 72px;
-      block-size: 72px;
+      inline-size: 64px;
+      block-size: 64px;
     }
 
     /* the logo is shown exactly as the brand kit draws it; only its position and opacity move */
@@ -416,13 +427,13 @@ interface LiveRef {
 
     @keyframes ripple {
       from {
-        opacity: 0.55;
-        transform: scale(0.9);
+        opacity: 0.5;
+        transform: scale(0.95);
       }
 
       to {
         opacity: 0;
-        transform: scale(2.1);
+        transform: scale(1.7);
       }
     }
 
@@ -444,6 +455,7 @@ interface LiveRef {
     }
 
     .hello-title {
+      margin: 0;
       font-size: var(--text-2xl);
       font-weight: var(--weight-semibold);
       letter-spacing: var(--tracking-tight);
@@ -463,6 +475,7 @@ interface LiveRef {
     }
 
     .cats-title {
+      margin: 0;
       color: var(--color-text-secondary);
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
@@ -470,7 +483,7 @@ interface LiveRef {
 
     .cat-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: var(--space-2);
     }
 
@@ -479,7 +492,7 @@ interface LiveRef {
       display: flex;
       align-items: flex-start;
       gap: var(--space-3);
-      padding: var(--space-3);
+      padding: var(--space-2) var(--space-3);
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
       background: var(--color-surface-1, var(--color-surface-2));

@@ -11,6 +11,11 @@ export interface Step {
   readonly count: number | null;
 }
 
+/** A result a user can add to the downloads: a file, or a YouTube page (the engine downloads it as media). */
+export function isAddable(i: TurnItem): boolean {
+  return i.kind === 'file' || i.source === 'youtube';
+}
+
 /** How many sources have not answered yet. */
 function pendingSources(t: Turn): number {
   return t.sources.filter((s) => s.state === 'searching').length;
@@ -116,7 +121,7 @@ export function summarize(t: Turn): Summary {
   for (const i of t.items) {
     counts.set(i.source, (counts.get(i.source) ?? 0) + 1);
   }
-  const files = t.items.filter((i) => i.kind === 'file');
+  const files = t.items.filter(isAddable);
   const ranked = t.items.some((i) => i.score !== null);
   const pool = files.length > 0 ? files : t.items;
   return {
