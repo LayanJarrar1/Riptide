@@ -43,8 +43,8 @@ The full list, the upgrade note and the known limits are in the [changelog](CHAN
 
 | | File | Notes |
 |---|---|---|
-| **Installer** | [`Riptide_0.1.0-alpha.5_x64-setup.exe`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.5/Riptide_0.1.0-alpha.5_x64-setup.exe) | Per-user install, no admin prompt |
-| **Portable** | [`Riptide-0.1.0-alpha.5-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.5/Riptide-0.1.0-alpha.5-portable.zip) | Unzip anywhere; data stays next to the app |
+| **Installer** | [`Riptide_0.1.0-beta.1_x64-setup.exe`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe) | Per-user install, no admin prompt |
+| **Portable** | [`Riptide-0.1.0-beta.1-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip) | Unzip anywhere; data stays next to the app |
 
 Windows 10 or 11, 64-bit. Checksums and older versions are on the [Releases page](https://github.com/LayanJarrar1/Riptide/releases).
 Updating from alpha 4 works in place, but the database moves to a new format that alpha 4 cannot open: back up `%LOCALAPPDATA%\Riptide\riptide.sqlite` first if you may want to go back.
@@ -228,8 +228,8 @@ More: [User guide](guide/en.md) · [Architecture](ARCHITECTURE.md) · [Contribut
 - **محدَّث دائمًا:** يُشعرك حين يتوفر إصدار جديد، وبنقرة واحدة يثبّته (فحص واحد في اليوم، ويمكن إيقافه).
 
 **التحميل:**
-[المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.5/Riptide_0.1.0-alpha.5_x64-setup.exe) ·
-[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-alpha.5/Riptide-0.1.0-alpha.5-portable.zip) ·
+[المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe) ·
+[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip) ·
 [دليل الاستخدام](guide/ar.md)
 
 **تثبيت الإضافة في كروم أو إيدج:** ١) في ريبتايد: **الإعدادات ← التكامل ← فتح مجلد الإضافة**. ٢) في المتصفح افتح `chrome://extensions` وفعّل **وضع المطوّر**. ٣) اضغط **تحميل إضافة غير مضغوطة** واختر المجلد.
