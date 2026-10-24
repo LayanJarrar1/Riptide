@@ -46,7 +46,9 @@ desktop.ini
 # ---------------------------------------------------------------------------
 /ROADMAP.md
 /CLAUDE.md
-/docs/
+/docs/*
+# the one design-decision log the changelog, audit config and notices point to
+!/docs/decisions.md
 /.claude/
 /graphify-out/
 
