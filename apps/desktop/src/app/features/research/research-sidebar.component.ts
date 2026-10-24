@@ -24,8 +24,24 @@ type Confirm = { readonly kind: 'one'; readonly id: string; readonly title: stri
       @if (conversations().length === 0) {
         <p class="empty">{{ i18n.t('research.history.empty') }}</p>
       } @else {
+        <div class="search">
+          <app-icon name="search" [size]="14" />
+          <input
+            class="search-input"
+            type="search"
+            dir="auto"
+            [attr.aria-label]="i18n.t('research.history.search')"
+            [placeholder]="i18n.t('research.history.search')"
+            [value]="query()"
+            (input)="query.set(text($event))"
+            (keydown.escape)="query.set('')"
+          />
+        </div>
+        @if (shown().length === 0) {
+          <p class="empty" role="status">{{ i18n.t('research.history.noMatch') }}</p>
+        }
         <ul class="list">
-          @for (c of conversations(); track c.id) {
+          @for (c of shown(); track c.id) {
             <li class="row" [class.is-active]="c.id === activeId()">
               @if (editing() === c.id) {
                 <input
@@ -81,6 +97,34 @@ type Confirm = { readonly kind: 'one'; readonly id: string; readonly title: stri
 
     .new {
       inline-size: 100%;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      block-size: 32px;
+      padding-inline: var(--space-3);
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      color: var(--color-text-muted);
+    }
+
+    .search:focus-within {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px var(--color-accent-ring);
+    }
+
+    .search-input {
+      flex: 1;
+      min-inline-size: 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-text);
+      font: inherit;
+      font-size: var(--text-sm);
+      outline: none;
     }
 
     .empty {
@@ -219,6 +263,15 @@ export class ResearchSidebarComponent {
   readonly deleted = output<string>();
   readonly cleared = output<void>();
 
+  protected readonly query = signal('');
+  /** The conversations whose title or any prompt contains the search text. */
+  protected readonly shown = computed(() => {
+    const q = this.query().trim().toLocaleLowerCase();
+    if (q.length === 0) {
+      return this.conversations();
+    }
+    return this.conversations().filter((c) => c.title.toLocaleLowerCase().includes(q) || c.turns.some((t) => t.prompt.toLocaleLowerCase().includes(q)));
+  });
   protected readonly editing = signal<string | null>(null);
   protected readonly confirm = signal<Confirm | null>(null);
 
@@ -227,6 +280,10 @@ export class ResearchSidebarComponent {
     const c = this.confirm();
     return c?.kind === 'one' ? this.i18n.t('research.deleteBody').replace('{title}', c.title) : this.i18n.t('research.clearAllBody');
   });
+
+  protected text(event: Event): string {
+    return (event.target as HTMLInputElement).value;
+  }
 
   protected startEdit(id: string): void {
     this.editing.set(id);
