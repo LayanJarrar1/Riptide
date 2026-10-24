@@ -2,10 +2,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { AiStatus } from '../../ai/ai.models';
 import { ResearchBatch, ResearchEvent, StartResponse, WireItem } from '../../ai/research.models';
-import { ResearchSession } from '../../ai/research.session';
+import { RESEARCH_EVENT, ResearchSession } from '../../ai/research.session';
+import { loadTable } from '../../i18n/i18n.service';
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../../core/preferences';
 import { InvokeFn, ListenFn, TAURI_AVAILABLE, TAURI_INVOKE, TAURI_LISTEN } from '../../tauri/tauri-bridge';
 import { UiState } from '../shell/ui-state.service';
+import { HISTORY_KEY } from './research-history';
 import { ResearchPageComponent } from './research-page.component';
 
 function item(id: string, source: WireItem['source'], over: Partial<WireItem> = {}): WireItem {
@@ -47,9 +49,10 @@ interface Harness {
   emit(batch: ResearchBatch): void;
 }
 
-function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: () => void } = {}): Harness {
+function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: () => void; failStart?: boolean } = {}): Harness {
   const calls: Harness['calls'] = [];
-  let handler: ((b: ResearchBatch) => void) | null = null;
+  // one handler per event name: other services listen to their own events through the same fake
+  const handlers = new Map<string, (payload: never) => void>();
   const invoke: InvokeFn = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => {
     calls.push({ cmd, args });
     switch (cmd) {
@@ -57,6 +60,9 @@ function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: ()
         return Promise.resolve(status(opts.configured ?? false) as T);
       case 'research_start':
         opts.onStart?.();
+        if (opts.failStart) {
+          return Promise.reject('boom');
+        }
         return Promise.resolve((opts.start ?? { searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: false }) as T);
       case 'research_add':
         return Promise.resolve({ added: [11], skipped: [] } as T);
@@ -68,10 +74,10 @@ function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: ()
         return Promise.resolve(undefined as T);
     }
   };
-  const listen: ListenFn = <T>(_event: string, h: (payload: T) => void): Promise<() => void> => {
-    handler = h as unknown as (b: ResearchBatch) => void;
+  const listen: ListenFn = <T>(event: string, h: (payload: T) => void): Promise<() => void> => {
+    handlers.set(event, h);
     return Promise.resolve(() => {
-      handler = null;
+      handlers.delete(event);
     });
   };
   TestBed.configureTestingModule({
@@ -83,12 +89,20 @@ function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: ()
       { provide: TAURI_LISTEN, useValue: listen },
     ],
   });
-  return { calls, emit: (b) => handler?.(b) };
+  return { calls, emit: (b) => (handlers.get(RESEARCH_EVENT) as ((b: ResearchBatch) => void) | undefined)?.(b) };
 }
 
 async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
   for (let i = 0; i < 4; i++) {
     await fixture.whenStable();
+    fixture.detectChanges();
+  }
+}
+
+/** Like `settle`, but does not wait for timers (a toast's auto-dismiss would hold `whenStable` for seconds). */
+async function flush(fixture: ComponentFixture<unknown>): Promise<void> {
+  for (let i = 0; i < 4; i++) {
+    await new Promise<void>((r) => setTimeout(r, 0));
     fixture.detectChanges();
   }
 }
@@ -162,95 +176,160 @@ describe('ResearchSession', () => {
 });
 
 describe('ResearchPageComponent', () => {
-  async function open(h: Harness, topic = 'frogs'): Promise<{ fixture: ComponentFixture<ResearchPageComponent>; el: HTMLElement }> {
+  beforeAll(async () => {
+    await loadTable('en');
+  });
+
+  type Fx = ComponentFixture<ResearchPageComponent>;
+
+  async function mount(): Promise<{ fixture: Fx; el: HTMLElement }> {
     const fixture = TestBed.createComponent(ResearchPageComponent);
     fixture.detectChanges();
     await settle(fixture);
-    const el = fixture.nativeElement as HTMLElement;
-    const input = el.querySelector<HTMLInputElement>('input[name="topic"]') as HTMLInputElement;
-    input.value = topic;
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
-    await settle(fixture);
-    void h;
-    return { fixture, el };
+    return { fixture, el: fixture.nativeElement as HTMLElement };
   }
 
-  it('shows the ten tabs, the standing notice and the policy line, and searches the chosen tab', async () => {
-    const h = setup();
-    const fixture = TestBed.createComponent(ResearchPageComponent);
+  function type(el: HTMLElement, text: string): HTMLTextAreaElement {
+    const field = el.querySelector<HTMLTextAreaElement>('#research-prompt') as HTMLTextAreaElement;
+    field.value = text;
+    field.dispatchEvent(new Event('input'));
+    return field;
+  }
+
+  async function ask(fixture: Fx, el: HTMLElement, text: string): Promise<void> {
+    const field = type(el, text);
     fixture.detectChanges();
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     await settle(fixture);
-    const el = fixture.nativeElement as HTMLElement;
-    const tabs = [...el.querySelectorAll('[role="tab"]')].map((t) => t.textContent?.trim());
-    expect(tabs).toEqual(['All', 'Papers', 'Books', 'Music', 'Video', 'Games', 'Software', 'Images', 'Datasets', 'Web']);
+  }
+
+  const button = (el: HTMLElement, text: string): HTMLButtonElement | undefined => [...el.querySelectorAll('button')].find((b) => b.textContent?.includes(text));
+
+  it('starts empty with the notice, the policy line and the ten kinds of result', async () => {
+    setup();
+    const { el } = await mount();
+    const kinds = [...el.querySelectorAll('select option')].slice(0, 10).map((o) => o.textContent?.trim());
+    expect(kinds).toEqual(['All', 'Papers', 'Books', 'Music', 'Video', 'Games', 'Software', 'Images', 'Datasets', 'Web']);
     expect(el.textContent).toContain('Only download what you have the right to download.');
     expect(el.textContent).toContain('does not search torrent indexes, piracy or paywall-bypass sites');
+    expect(el.textContent).toContain('What do you want to find?');
     expect(el.querySelector('input[role="switch"]')).toBeNull();
-    (el.querySelector('#rtab-music') as HTMLButtonElement).click();
-    fixture.detectChanges();
-    const input = el.querySelector<HTMLInputElement>('input[name="topic"]') as HTMLInputElement;
-    input.value = 'jazz';
-    input.dispatchEvent(new Event('input'));
-    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
-    await settle(fixture);
-    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'jazz', useAi: false, lang: 'en', category: 'music' } });
+    expect(el.querySelectorAll('app-research-turn').length).toBe(0);
   });
 
-  it('renders partial results per source with chips, licence badges, and escapes hostile text', async () => {
+  it('Enter sends, Shift+Enter does not, and only the prompt travels to the backend', async () => {
     const h = setup();
-    const { fixture, el } = await open(h);
+    const { fixture, el } = await mount();
+    const field = type(el, 'jazz');
+    const shift = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, cancelable: true });
+    field.dispatchEvent(shift);
+    await settle(fixture);
+    expect(shift.defaultPrevented).toBe(false);
+    expect(h.calls.some((c) => c.cmd === 'research_start')).toBe(false);
+    const select = el.querySelector('select') as HTMLSelectElement;
+    select.value = 'music';
+    select.dispatchEvent(new Event('change'));
+    await ask(fixture, el, 'jazz');
+    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'jazz', useAi: false, lang: 'en', category: 'music' } });
+    expect((el.querySelector('#research-prompt') as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('shows the progress steps from the real events, chips per source, retry and cancel', async () => {
+    const h = setup({ configured: true, start: { searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: true } });
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    const state = (id: string): string => (el.querySelector(`.step:nth-child(${id})`) as HTMLElement).className;
+    // nothing has been reported yet: understanding and searching are in progress
+    expect(state('1')).toContain('is-active');
+    expect(state('2')).toContain('is-active');
+    expect(state('3')).toContain('is-pending');
+    h.emit(batch(5, { t: 'plan', queries: ['frog habitats'] }, { t: 'hits', source: 'gutenberg', items: [item('g1', 'gutenberg'), item('g2', 'gutenberg')] }, { t: 'source', source: 'gutenberg', state: 'done', found: 2, code: null }, { t: 'source', source: 'arxiv', state: 'failed', found: 0, code: 'timeout' }));
+    await settle(fixture);
+    expect(state('1')).toContain('is-done');
+    expect(el.textContent).toContain('frog habitats');
+    expect(state('2')).toContain('is-done');
+    expect(el.querySelector('.chip-retry')).not.toBeNull();
+    (el.querySelector('.chip-retry') as HTMLButtonElement).click();
+    expect(h.calls.find((c) => c.cmd === 'research_retry_source')?.args).toEqual({ searchId: 5, source: 'arxiv' });
+    h.emit(batch(5, { t: 'phase', phase: 'ranking' }, { t: 'rank', items: [{ id: 'g2', score: 88, why: 'Covers frog habitats' }] }));
+    await settle(fixture);
+    expect(state('3')).toContain('is-active');
+    expect(el.querySelectorAll('app-research-card')[0].textContent).toContain('Covers frog habitats');
+    expect(el.querySelectorAll('app-research-card')[0].textContent).toContain('Match 88%');
+    (el.querySelector('.stop') as HTMLButtonElement).click();
+    expect(h.calls.some((c) => c.cmd === 'research_cancel')).toBe(true);
+    h.emit(batch(5, { t: 'phase', phase: 'done' }, { t: 'ai', outcome: { requested: true, used: true, error: null, tokens: 10, dropped: 0 } }, { t: 'end' }));
+    await settle(fixture);
+    expect(state('3')).toContain('is-done');
+    expect(state('5')).toContain('is-done');
+    // the summary is composed from the results
+    expect(el.querySelector('.answer')?.textContent).toContain('Found 2 results from Project Gutenberg (2).');
+    expect(el.querySelector('.answer')?.textContent).toContain('Covers frog habitats');
+  });
+
+  it('skips the AI steps in keyword mode and never invents them', async () => {
+    const h = setup();
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] }, { t: 'source', source: 'arxiv', state: 'done', found: 1, code: null }, { t: 'source', source: 'gutenberg', state: 'done', found: 0, code: null }, { t: 'phase', phase: 'done' }, { t: 'end' }));
+    await settle(fixture);
+    const steps = [...el.querySelectorAll('.step')].map((s) => s.className);
+    expect(steps[0]).toContain('is-skipped');
+    expect(steps[2]).toContain('is-skipped');
+    expect(steps[1]).toContain('is-done');
+  });
+
+  it('renders cards with licence, size, year and a badge for what was downloaded, and escapes hostile text', async () => {
+    const h = setup();
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
     h.emit(
-      batch(
-        5,
-        {
-          t: 'hits',
-          source: 'gutenberg',
-          items: [item('g1', 'gutenberg', { title: '<img src=x onerror="window.pwned=1"> Frogs', rights: { kind: 'public-domain', label: 'Public domain' }, license: 'Public domain', size: 2048 })],
-        },
-        { t: 'source', source: 'gutenberg', state: 'done', found: 1, code: null },
-      ),
+      batch(5, {
+        t: 'hits',
+        source: 'gutenberg',
+        items: [
+          item('g1', 'gutenberg', {
+            title: '<img src=x onerror="window.pwned=1"> Frogs',
+            rights: { kind: 'public-domain', label: 'Public domain' },
+            size: 2048,
+            year: 1901,
+            filename: 'frogs.pdf',
+            summary: 'About <b>frogs</b>',
+            seen: { downloadId: 1, title: 'Frogs', filename: 'frogs.pdf', dir: 'C:\\Users\\bob', path: 'C:\\Users\\bob\\frogs.pdf', completedAt: 1, stale: false, matchedBy: 'url' },
+          }),
+        ],
+      }),
     );
     await settle(fixture);
-    expect(el.querySelectorAll('li.card').length).toBe(1);
-    expect(el.querySelector('li.card img')).toBeNull();
+    const card = el.querySelector('app-research-card') as HTMLElement;
+    expect(card.querySelector('img')).toBeNull();
+    expect(card.querySelector('b')).toBeNull();
     expect((window as unknown as { pwned?: number }).pwned).toBeUndefined();
-    expect(el.querySelector('li.card')?.textContent).toContain('<img src=x onerror="window.pwned=1"> Frogs');
-    expect(el.querySelector('.badge.rights-public-domain')?.textContent).toContain('Public domain');
-    const chips = [...el.querySelectorAll('.chip')].map((c) => c.textContent?.replace(/\s+/g, ' ').trim());
-    expect(chips.some((c) => c?.includes('Project Gutenberg') && c.includes('1 results'))).toBe(true);
-    expect(chips.some((c) => c?.includes('arXiv') && c.includes('searching'))).toBe(true);
-    // the page is busy: Cancel is on screen
-    const cancel = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Cancel'));
-    expect(cancel).toBeDefined();
-    cancel?.click();
-    expect(h.calls.some((c) => c.cmd === 'research_cancel')).toBe(true);
-    // a failed source can be retried on its own
-    h.emit(batch(5, { t: 'source', source: 'arxiv', state: 'failed', found: 0, code: 'timeout' }));
-    await settle(fixture);
-    const retry = el.querySelector<HTMLButtonElement>('.chip-retry');
-    expect(retry).not.toBeNull();
-    retry?.click();
-    expect(h.calls.find((c) => c.cmd === 'research_retry_source')?.args).toEqual({ searchId: 5, source: 'arxiv' });
+    expect(card.textContent).toContain('<img src=x onerror="window.pwned=1"> Frogs');
+    expect(card.textContent).toContain('PDF');
+    expect(card.textContent).toContain('1901');
+    expect(card.querySelector('.badge.rights-public-domain')).not.toBeNull();
+    expect(card.querySelector('.badge.seen')).not.toBeNull();
+    expect(card.querySelector('a')).toBeNull();
   });
 
-  it('a web result has no checkbox, shows only a safe address and opens the grabber on its page', async () => {
+  it('a web result has no checkbox, shows only a safe address, opens the grabber and its page', async () => {
     const h = setup({ start: { searchId: 5, sources: ['web'], unavailable: [], ai: false } });
-    const { fixture, el } = await open(h);
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'files');
     const ui = TestBed.inject(UiState);
     h.emit(
       batch(5, {
         t: 'hits',
         source: 'web',
         items: [
-          item('w1', 'web', { kind: 'page', downloadUrl: 'https://files.example.org/downloads/?utm=1', summary: 'A page of files' }),
+          item('w1', 'web', { kind: 'page', downloadUrl: 'https://files.example.org/downloads/?utm=1', pageUrl: 'https://files.example.org/', summary: 'A page of files' }),
           item('w2', 'web', { kind: 'page', downloadUrl: 'javascript:alert(1)' }),
         ],
       }),
     );
     await settle(fixture);
-    const cards = [...el.querySelectorAll('li.card')];
+    const cards = [...el.querySelectorAll('app-research-card')];
     expect(cards.length).toBe(2);
     expect(cards[0].querySelector('input[type="checkbox"]')).toBeNull();
     expect(cards[0].querySelector('.url')?.textContent).toContain('files.example.org/downloads/');
@@ -262,37 +341,115 @@ describe('ResearchPageComponent', () => {
     find(cards[0])?.click();
     expect(ui.grabberOpen()).toBe(true);
     expect(ui.grabberPreset()).toBe('https://files.example.org/downloads/?utm=1');
-    // there is nothing to link: no anchors anywhere in the results
-    expect(el.querySelector('li.card a')).toBeNull();
+    // only the page with a safe address can be opened, and only through the app
+    expect([...cards[1].querySelectorAll('button')].some((b) => b.textContent?.includes('Open source page'))).toBe(false);
+    [...cards[0].querySelectorAll('button')].find((b) => b.textContent?.includes('Open source page'))?.click();
+    expect(h.calls.find((c) => c.cmd === 'open_web_url')?.args).toEqual({ url: 'https://files.example.org/' });
   });
 
-  it('adds the selected files only', async () => {
+  it('adds the selected files only, and one card downloads on its own', async () => {
     const h = setup();
-    const { fixture, el } = await open(h);
-    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv'), item('p1', 'web', { kind: 'page' })] }));
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv'), item('p1', 'web', { kind: 'page' })] }, { t: 'phase', phase: 'done' }));
     await settle(fixture);
-    [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('Select all'))?.click();
+    button(el, 'Select all')?.click();
     fixture.detectChanges();
-    const add = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Add selected to Riptide (1)')) as HTMLButtonElement;
-    add.click();
-    await settle(fixture);
+    button(el, 'Add selected to Riptide (1)')?.click();
+    await flush(fixture);
+    expect(h.calls.find((c) => c.cmd === 'research_add')?.args).toEqual({ request: { ids: ['a1'], queueId: null, category: null, startPaused: false, allowDuplicates: true } });
+    h.calls.length = 0;
+    const card = el.querySelector('app-research-card') as HTMLElement;
+    [...card.querySelectorAll('button')].find((b) => b.textContent?.includes('Download'))?.click();
+    await flush(fixture);
     expect(h.calls.find((c) => c.cmd === 'research_add')?.args).toEqual({ request: { ids: ['a1'], queueId: null, category: null, startPaused: false, allowDuplicates: true } });
   });
 
-  it('shows the AI plan and the reason lines as they stream in', async () => {
+  it('keeps conversations: rename, delete and clear all, stored without local paths', async () => {
+    const h = setup();
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    h.emit(
+      batch(
+        5,
+        {
+          t: 'hits',
+          source: 'arxiv',
+          items: [item('a1', 'arxiv', { seen: { downloadId: 1, title: 'Frogs', filename: 'f.bin', dir: 'C:\\Users\\bob', path: 'C:\\Users\\bob\\f.bin', completedAt: 1, stale: false, matchedBy: 'url' } })],
+        },
+        { t: 'phase', phase: 'done' },
+      ),
+    );
+    await settle(fixture);
+    const stored = TestBed.inject(PREFERENCE_STORE).get(HISTORY_KEY) ?? '';
+    expect(stored).toContain('frogs');
+    expect(stored).not.toContain('bob');
+    expect(stored).not.toContain('C:\\\\Users');
+    expect(el.querySelector('app-research-sidebar .name')?.textContent).toContain('frogs');
+    // rename
+    (el.querySelector('app-research-sidebar .tool') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const input = el.querySelector<HTMLInputElement>('app-research-sidebar .rename') as HTMLInputElement;
+    input.value = 'Amphibians';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    input.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(el.querySelector('app-research-sidebar .name')?.textContent).toContain('Amphibians');
+    // a second conversation, then open the first again: its turn is back
+    button(el, 'New research')?.click();
+    await settle(fixture);
+    expect(el.querySelectorAll('app-research-turn').length).toBe(0);
+    (el.querySelector('app-research-sidebar .open') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(el.querySelectorAll('app-research-turn').length).toBe(1);
+    // delete asks first
+    (el.querySelectorAll('app-research-sidebar .tool')[1] as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('app-research-sidebar .row').length).toBe(1);
+    const confirm = [...el.querySelectorAll<HTMLButtonElement>('app-research-sidebar dialog button')].find((b) => b.textContent?.trim() === 'Delete');
+    confirm?.click();
+    await settle(fixture);
+    expect(el.querySelectorAll('app-research-sidebar .row').length).toBe(0);
+    expect(TestBed.inject(PREFERENCE_STORE).get(HISTORY_KEY)).not.toContain('frogs');
+  });
+
+  it('reuses the results of an identical prompt instead of searching and sending again', async () => {
+    const h = setup();
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] }, { t: 'phase', phase: 'done' }, { t: 'end' }));
+    await settle(fixture);
+    await ask(fixture, el, '  Frogs ');
+    expect(h.calls.filter((c) => c.cmd === 'research_start').length).toBe(1);
+    expect(el.querySelectorAll('app-research-turn').length).toBe(2);
+    expect(el.textContent).toContain('Nothing was searched or sent again.');
+  });
+
+  it('recovers from a failed search with Try again', async () => {
+    const h = setup({ failStart: true });
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    expect(el.querySelector('.warn.is-error')?.textContent).toContain('boom');
+    h.calls.length = 0;
+    button(el, 'Try again')?.click();
+    await settle(fixture);
+    expect(h.calls.filter((c) => c.cmd === 'research_start').length).toBe(1);
+    expect(el.querySelectorAll('app-research-turn').length).toBe(2);
+  });
+
+  it('offers the AI switch, the provider and model, and a keyword fallback when the AI fails', async () => {
     const h = setup({ configured: true, start: { searchId: 5, sources: ['arxiv'], unavailable: [], ai: true } });
-    const { fixture, el } = await open(h);
+    const { fixture, el } = await mount();
     expect(el.querySelector('input[role="switch"]')).not.toBeNull();
-    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a', 'arxiv'), item('b', 'arxiv')] }));
+    expect(el.querySelector('.provider')?.textContent).toContain('DeepInfra · m');
+    await ask(fixture, el, 'frogs');
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] }, { t: 'phase', phase: 'done' }, { t: 'ai', outcome: { requested: true, used: false, error: { code: 'network', message: 'down' }, tokens: 0, dropped: 0 } }));
     await settle(fixture);
-    expect(el.textContent).toContain('AI is planning extra searches');
-    h.emit(batch(5, { t: 'plan', queries: ['frog habitats'] }, { t: 'phase', phase: 'ranking' }, { t: 'rank', items: [{ id: 'b', score: 88, why: 'Covers frog habitats' }] }));
+    expect(el.querySelector('.warn[role="alert"]')?.textContent).toContain('The AI step failed');
+    h.calls.length = 0;
+    button(el, 'Search without AI')?.click();
     await settle(fixture);
-    expect(el.textContent).toContain('frog habitats');
-    expect(el.textContent).toContain('AI is ranking the results');
-    const cards = [...el.querySelectorAll('li.card')];
-    expect(cards[0].textContent).toContain('Covers frog habitats');
-    expect(cards[0].textContent).toContain('Match 88%');
+    expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'frogs', useAi: false, lang: 'en', category: 'all' } });
   });
 });
 

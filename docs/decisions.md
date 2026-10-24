@@ -184,3 +184,25 @@ fixed release exists, and each is listed in `.cargo/audit.toml` with the same re
 The remaining `cargo audit` warnings are unmaintained or unsound crates that only build for Linux
 (`proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive`, `glib`); the Windows build does not
 contain them. They stay visible as warnings. Revisit this entry when `.cargo/audit.toml` expires.
+
+## D-research-ws-1: AI Research as a conversation workspace
+
+*Status: accepted.* The AI Research screen becomes a conversation: one prompt per turn, each turn
+showing its own results, and earlier turns stay on screen.
+
+- **Astryx is not used.** Astryx (facebook/astryx) needs React 19. Installing it would mean moving
+  the app off Angular, which is the team's stack (D2), so it is not installed and the app is not
+  migrated. Its patterns (a clean layout, accessible inputs, menus, overlays) are reproduced in
+  Angular with the existing `ui/` components and the design tokens.
+- **Conversations live only in `localStorage`**, through `PREFERENCE_STORE`. They are capped at 30
+  conversations, 40 turns each and 60 results per turn, are stored without local paths, and are
+  never committed to the repository or sent anywhere.
+- **No history goes to the model.** Each turn sends only its own prompt to the backend. There is no
+  chat endpoint and no LLM output is fabricated: what a turn shows is what the search and the
+  (optional) ranking returned for that prompt.
+- **The backend result cache is no longer cleared per search**, so results of earlier turns can
+  still be added with `research_add`. It stays bounded by `CACHE_MAX` (it clears itself when full).
+  Only ids the backend itself fetched during this app run are addable; a turn restored from storage
+  after a restart has no cache entries, so it cannot be added until searched again.
+- **`open_web_url` opens only `http`/`https`.** The command validates the URL (scheme, at most 2048
+  bytes, no control characters) and opens it in the default browser, on a user click.

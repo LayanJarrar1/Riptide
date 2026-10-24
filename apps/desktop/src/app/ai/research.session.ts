@@ -64,6 +64,7 @@ export class ResearchSession implements OnDestroy {
   });
 
   private searchId: number | null = null;
+  private readonly watchers = new Set<() => void>();
   private unlisten: (() => void) | null = null;
   /** Batches that arrived before `research_start` answered with its id. */
   private early: ResearchBatch[] = [];
@@ -71,7 +72,20 @@ export class ResearchSession implements OnDestroy {
   /** Bumped by every start, so a late answer of an older search is ignored. */
   private generation = 0;
 
+  /** Calls `fn` after every change to the search (a start, a batch of events, a retry). Returns the way to stop. */
+  watch(fn: () => void): () => void {
+    this.watchers.add(fn);
+    return () => this.watchers.delete(fn);
+  }
+
+  private notify(): void {
+    for (const fn of this.watchers) {
+      fn();
+    }
+  }
+
   ngOnDestroy(): void {
+    this.watchers.clear();
     this.unlisten?.();
     this.unlisten = null;
     if (this.searchId !== null && this.busy()) {
@@ -127,6 +141,7 @@ export class ResearchSession implements OnDestroy {
         this.applyBatch(b);
       }
     }
+    this.notify();
     return res;
   }
 
@@ -143,10 +158,12 @@ export class ResearchSession implements OnDestroy {
       return;
     }
     this.patchSource(source, { state: 'searching', code: null });
+    this.notify();
     try {
       await this.invoke('research_retry_source', { searchId: this.searchId, source });
     } catch (e: unknown) {
       this.patchSource(source, { state: 'failed', code: 'network' });
+      this.notify();
       throw e;
     }
   }
@@ -170,12 +187,14 @@ export class ResearchSession implements OnDestroy {
   /** Marks items as downloaded / not (after "Add" the cards' badges are refreshed). */
   replaceSeen(update: (item: ResultItem) => ResultItem): void {
     this.items.update((list) => list.map(update));
+    this.notify();
   }
 
   applyBatch(batch: ResearchBatch): void {
     for (const e of batch.events) {
       this.apply(e);
     }
+    this.notify();
   }
 
   private patchSource(id: SourceId, patch: Partial<SourceStatus>): void {

@@ -14,7 +14,8 @@
 //! | `batch_expand` | `pattern` | the URLs of a pattern like `file[001-120].zip`, or a typed `BatchError` |
 //! | `batch_import` | `text` | `UrlList` (URLs of a pasted/loaded list, plus what was ignored) |
 //! | `add_batch` | `urls`, `options: BatchOptions` | `BatchOutcome` (added ids, skipped duplicates) |
-//! | `pick_text_file` / `save_text_file` | – / `name`, `text` | the chosen file's text or `null` / whether it was saved |
+//! | `pick_text_file` / `save_text_file` | – / `name`, `text`, `kind?` (`txt` default, `md`, `bib`, `ris`) | the chosen file's text or `null` / whether it was saved |
+//! | `open_web_url` | `url` (http/https, ≤ 2048 bytes, no control characters) | – (opens the default browser) |
 //! | `pause_download` / `resume_download` / `cancel_download` | `id` | – |
 //! | `restart_download` | `id` | – (starts over from byte zero) |
 //! | `remove_download` | `id`, `deleteFile` | – |
@@ -199,16 +200,59 @@ pub async fn pick_text_file(app: tauri::AppHandle) -> CmdResult<Option<String>> 
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
-/// Native "save" dialog; writes `text` to the chosen file. `false` when the user cancels.
+/// Dialog filter name and extensions for a `save_text_file` kind; unknown kinds mean `txt`.
+fn save_filter(kind: Option<&str>) -> (&'static str, &'static [&'static str]) {
+    match kind {
+        Some("md") => ("Markdown", &["md"]),
+        Some("bib") => ("BibTeX", &["bib"]),
+        Some("ris") => ("RIS", &["ris"]),
+        _ => ("Text", &["txt"]),
+    }
+}
+
+/// Longest URL `open_web_url` accepts.
+const MAX_WEB_URL_LEN: usize = 2048;
+
+/// Validates a URL that is about to be opened in the browser: http(s) only, no control
+/// characters, at most [`MAX_WEB_URL_LEN`] bytes. Returns the URL unchanged when it passes.
+fn checked_web_url(url: &str) -> Result<String, String> {
+    if url.len() > MAX_WEB_URL_LEN {
+        return Err("the link is too long".into());
+    }
+    if url.chars().any(char::is_control) {
+        return Err("the link contains control characters".into());
+    }
+    if !riptide_core::batch::is_http_url(url) {
+        return Err("only http and https links can be opened".into());
+    }
+    Ok(url.to_owned())
+}
+
+/// Opens an http(s) link in the default browser (after validation; see [`checked_web_url`]).
 #[tauri::command]
-pub async fn save_text_file(app: tauri::AppHandle, name: String, text: String) -> CmdResult<bool> {
+pub fn open_web_url(app: tauri::AppHandle, url: String) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = checked_web_url(&url)?;
+    app.opener().open_url(url, None::<&str>).map_err(err)
+}
+
+/// Native "save" dialog; writes `text` to the chosen file. `false` when the user cancels.
+/// `kind` picks the dialog filter: `txt` (default), `md`, `bib` or `ris`.
+#[tauri::command]
+pub async fn save_text_file(
+    app: tauri::AppHandle,
+    name: String,
+    text: String,
+    kind: Option<String>,
+) -> CmdResult<bool> {
     use tauri_plugin_dialog::DialogExt;
     let suggested = riptide_core::sanitize_filename(&name);
+    let (filter_name, extensions) = save_filter(kind.as_deref());
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
             .set_file_name(suggested)
-            .add_filter("Text", &["txt"])
+            .add_filter(filter_name, extensions)
             .blocking_save_file()
     })
     .await
@@ -370,6 +414,37 @@ pub async fn unregister_browser_host() -> CmdResult<IntegrationStatus> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn web_urls_accept_only_http_and_https() {
+        assert_eq!(
+            checked_web_url("https://example.org/a?b=1").as_deref(),
+            Ok("https://example.org/a?b=1")
+        );
+        assert!(checked_web_url("http://example.org").is_ok());
+        for bad in [
+            "",
+            "javascript:alert(1)",
+            "file:///C:/Windows/win.ini",
+            "data:text/html,<b>x</b>",
+            "https://exa\u{0}mple.org",
+            "https://example.org/\r\nx",
+            "ftp://example.org",
+        ] {
+            assert!(checked_web_url(bad).is_err(), "{bad:?} must be rejected");
+        }
+        let long = format!("https://example.org/{}", "a".repeat(MAX_WEB_URL_LEN));
+        assert!(checked_web_url(&long).is_err());
+    }
+
+    #[test]
+    fn save_filters_fall_back_to_text() {
+        assert_eq!(save_filter(None).1, &["txt"]);
+        assert_eq!(save_filter(Some("md")).1, &["md"]);
+        assert_eq!(save_filter(Some("bib")).1, &["bib"]);
+        assert_eq!(save_filter(Some("ris")).1, &["ris"]);
+        assert_eq!(save_filter(Some("exe")).1, &["txt"]);
+    }
 
     #[test]
     fn app_info_reports_name_and_version() {
