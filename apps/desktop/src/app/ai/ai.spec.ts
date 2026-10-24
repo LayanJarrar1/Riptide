@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { loadTable } from '../i18n/i18n.service';
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 import { AiSettingsComponent } from '../features/settings/ai-settings.component';
 import { ResearchSettingsComponent } from '../features/settings/research-settings.component';
@@ -7,6 +8,11 @@ import { InvokeFn, TAURI_AVAILABLE, TAURI_INVOKE } from '../tauri/tauri-bridge';
 import { AiSettings, AiStatus } from './ai.models';
 import { AiService } from './ai.service';
 import { SeenNoticeComponent } from './seen-notice.component';
+
+// the translated sentences these specs check must not depend on which spec ran before
+beforeAll(async () => {
+  await loadTable('en');
+});
 
 const SECRET = 'sk-SECRET-1234567890-wxyz';
 
