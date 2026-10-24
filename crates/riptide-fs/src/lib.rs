@@ -17,6 +17,15 @@
 //! * **A move never loses the original.** Same volume: one rename. Across volumes: the item is
 //!   copied in full (files through a temporary name), and only then is the source removed.
 //! * **Delete** means the Recycle Bin ([`delete_to_trash`]); there is no permanent delete here.
+//!
+//! # Known limits
+//!
+//! * There is no allowed-roots restriction, by design: this is a file manager, and the user may
+//!   browse and change any folder their account can. The trust boundary is the Tauri command
+//!   layer, which only the app's own webview can call.
+//! * Checks and actions are not atomic (time-of-check to time-of-use). Between "the name is
+//!   free" and the rename, another process can create that name; [`rename`] and a same-volume
+//!   move then rely on what the OS does with the race (a file may be replaced, a folder not).
 
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
@@ -247,6 +256,9 @@ pub fn rename(path: &Path, new_name: &str) -> Result<Entry> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
+    // the item being renamed gets the same scrutiny as a typed name (`file.txt:stream` is an
+    // NTFS alternate data stream, not a file name)
+    validate_name(&old_name)?;
     if path.symlink_metadata().is_err() {
         return Err(Error::NotFound(old_name));
     }
@@ -258,6 +270,7 @@ pub fn rename(path: &Path, new_name: &str) -> Result<Entry> {
     if !case_only && target.symlink_metadata().is_ok() {
         return Err(Error::Exists(new_name.to_owned()));
     }
+    // Known limit: another process can create `target` between the check above and this rename.
     std::fs::rename(&path, &target)?;
     Ok(entry_of(&target)?)
 }

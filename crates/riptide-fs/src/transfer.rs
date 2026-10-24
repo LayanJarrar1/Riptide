@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{check_path, path_string, Error, Result, PROPERTIES_LIMIT};
+use crate::{check_path, path_string, validate_name, Error, Result, PROPERTIES_LIMIT};
 
 /// Copy or move.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -138,15 +138,79 @@ fn sources_in(sources: &[PathBuf], dest: &Path) -> Result<Vec<Source>> {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .ok_or_else(|| Error::BadPath(path_string(&path)))?;
+        // the name is checked like a typed one: no `:` (an NTFS alternate data stream such as
+        // `file.txt:stream`), no bidi controls, no device names
+        validate_name(&name)?;
         if path.symlink_metadata().is_err() {
             return Err(Error::NotFound(name));
         }
-        if dest.starts_with(&path) {
+        if is_inside(dest, &path) {
             return Err(Error::IntoItself);
         }
         out.push(Source { path, name });
     }
     Ok(out)
+}
+
+/// Whether two paths name the same item by spelling: case-insensitive on Windows (NTFS is, by
+/// default), exact elsewhere.
+pub(crate) fn same_path(a: &Path, b: &Path) -> bool {
+    same_path_with(a, b, cfg!(windows))
+}
+
+fn same_path_with(a: &Path, b: &Path, ignore_case: bool) -> bool {
+    if !ignore_case {
+        return a == b;
+    }
+    fold(a) == fold(b)
+}
+
+/// The path with every component lower-cased, for case-insensitive comparison.
+fn fold(p: &Path) -> PathBuf {
+    p.components()
+        .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+        .collect()
+}
+
+/// Canonicalizes the deepest existing ancestor of `path` (so links and junctions are resolved)
+/// and appends the part that does not exist yet.
+fn resolve_lenient(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut cur = path;
+    loop {
+        if let Ok(real) = cur.canonicalize() {
+            let mut out = real;
+            out.extend(rest.iter().rev());
+            return out;
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_os_string());
+                cur = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// Whether `inner` is `outer` or lies below it, after resolving links and junctions in the
+/// existing parts of both. `outer` itself is not resolved at its last component: a link that is
+/// moved or copied is the link, not what it points to.
+fn is_inside(inner: &Path, outer: &Path) -> bool {
+    is_inside_with(inner, outer, cfg!(windows))
+}
+
+fn is_inside_with(inner: &Path, outer: &Path, ignore_case: bool) -> bool {
+    let inner = resolve_lenient(inner);
+    let outer = match (outer.parent(), outer.file_name()) {
+        (Some(parent), Some(name)) => resolve_lenient(parent).join(name),
+        _ => resolve_lenient(outer),
+    };
+    if ignore_case {
+        fold(&inner).starts_with(fold(&outer))
+    } else {
+        inner.starts_with(&outer)
+    }
 }
 
 fn checked_dest(dest: &Path) -> Result<PathBuf> {
@@ -169,7 +233,7 @@ pub fn plan(sources: &[PathBuf], dest: &Path, kind: TransferKind) -> Result<Plan
         unchanged: Vec::new(),
     };
     for s in &sources {
-        if kind == TransferKind::Move && s.path.parent() == Some(dest.as_path()) {
+        if kind == TransferKind::Move && s.path.parent().is_some_and(|p| same_path(p, &dest)) {
             plan.unchanged.push(path_string(&s.path));
             continue;
         }
@@ -213,6 +277,7 @@ pub fn transfer(
         },
         on_progress,
         cancel,
+        skipped_links: 0,
     };
     let mut report = TransferReport::default();
     for s in &sources {
@@ -221,7 +286,7 @@ pub fn transfer(
             break;
         }
         let from = path_string(&s.path);
-        if kind == TransferKind::Move && s.path.parent() == Some(dest.as_path()) {
+        if kind == TransferKind::Move && s.path.parent().is_some_and(|p| same_path(p, &dest)) {
             report.skipped.push(from);
             continue;
         }
@@ -237,7 +302,7 @@ pub fn transfer(
                         riptide_core::unique_path(&dest, &s.name, |p| p.symlink_metadata().is_ok());
                 }
                 // copying an item onto itself can only mean "make a copy"
-                ConflictChoice::Replace if target == s.path => {
+                ConflictChoice::Replace if same_path(&target, &s.path) => {
                     target =
                         riptide_core::unique_path(&dest, &s.name, |p| p.symlink_metadata().is_ok());
                 }
@@ -281,11 +346,15 @@ struct Ctx<'a> {
     progress: Progress,
     on_progress: &'a mut dyn FnMut(&Progress),
     cancel: &'a AtomicBool,
+    /// Links inside copied folders that were left out (they are never followed or copied).
+    skipped_links: u64,
 }
 
 /// A rename on the same volume; elsewhere a full copy, then the source is removed.
 fn move_item(src: &Path, target: &Path, ctx: &mut Ctx<'_>) -> Result<()> {
     let bytes = tree_size(src).1;
+    // Known limit: the caller saw `target` free, but another process could create it before this
+    // rename; there is no atomic "rename unless exists" in std.
     match std::fs::rename(src, target) {
         Ok(()) => {
             ctx.progress.done_bytes += bytes;
@@ -295,8 +364,20 @@ fn move_item(src: &Path, target: &Path, ctx: &mut Ctx<'_>) -> Result<()> {
         Err(e) if !crosses_volumes(&e) => return Err(e.into()),
         Err(_) => {}
     }
+    let links_before = ctx.skipped_links;
     copy_item(src, target, ctx)?;
-    // the copy is complete: only now does the original go
+    remove_moved_source(src, ctx.skipped_links > links_before)
+}
+
+/// Removes the source of a cross-volume move once its copy is complete. Links inside it were not
+/// copied, so a source that held any is kept rather than deleted with them.
+fn remove_moved_source(src: &Path, had_links: bool) -> Result<()> {
+    if had_links {
+        return Err(Error::Io(std::io::Error::other(
+            "contains links that were not moved: everything else was copied and the original \
+             was kept",
+        )));
+    }
     let removed = if src.symlink_metadata()?.is_dir() {
         std::fs::remove_dir_all(src)
     } else {
@@ -334,6 +415,7 @@ fn copy_tree(src: &Path, target: &Path, ctx: &mut Ctx<'_>) -> Result<()> {
             let item = item?;
             // links inside a folder are left out rather than followed
             if item.file_type()?.is_symlink() {
+                ctx.skipped_links += 1;
                 continue;
             }
             copy_tree(&item.path(), &target.join(item.file_name()), ctx)?;
@@ -611,6 +693,104 @@ mod tests {
             ),
             Err(Error::IntoItself)
         ));
+    }
+
+    #[test]
+    fn into_itself_is_judged_on_resolved_paths_and_case() {
+        let t = setup();
+        let album = t.root.join("src/album");
+        // a destination that does not exist yet, below the source
+        let deep = album.join("disc 2").join("new").join("deeper");
+        assert!(is_inside_with(&deep, &album, false));
+        assert!(!is_inside_with(&t.root.join("dest"), &album, false));
+        // a sibling that merely shares the prefix is not inside
+        std::fs::create_dir(t.root.join("src/album2")).unwrap();
+        assert!(!is_inside_with(&t.root.join("src/album2"), &album, false));
+        // case differences only count when asked for
+        let shouting = t.root.join("SRC").join("ALBUM").join("disc 2");
+        assert!(is_inside_with(&shouting, &album, true));
+        assert!(same_path_with(&album, &t.root.join("SRC/Album"), true));
+        assert!(!same_path_with(&album, &t.root.join("src/other"), true));
+        assert!(!same_path_with(&album, &t.root.join("SRC/Album"), false));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_into_the_source_tree_counts_as_into_itself() {
+        let t = setup();
+        let link = t.root.join("dest/jump");
+        std::os::unix::fs::symlink(t.root.join("src/album"), &link).unwrap();
+        assert!(matches!(
+            plan(&[t.root.join("src/album")], &link, TransferKind::Copy),
+            Err(Error::IntoItself)
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_junction_into_the_source_tree_counts_as_into_itself() {
+        let t = setup();
+        let link = t.root.join("dest/jump");
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&link)
+            .arg(t.root.join("src/album"))
+            .output()
+            .unwrap();
+        if !made.status.success() {
+            return;
+        }
+        assert!(matches!(
+            plan(&[t.root.join("src/album")], &link, TransferKind::Copy),
+            Err(Error::IntoItself)
+        ));
+    }
+
+    #[test]
+    fn sources_with_stream_or_unsafe_names_are_refused() {
+        let t = setup();
+        for name in ["a.txt:stream", "x\u{202e}txt.exe"] {
+            let r = plan(
+                &[t.root.join("src").join(name)],
+                &t.root.join("dest"),
+                TransferKind::Copy,
+            );
+            assert!(matches!(r, Err(Error::BadName(_))), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn a_move_never_deletes_a_source_whose_links_were_not_copied() {
+        let t = setup();
+        let src = t.root.join("src/album");
+        assert!(remove_moved_source(&src, true).is_err());
+        assert!(src.join("01.mp3").exists());
+        remove_moved_source(&src, false).unwrap();
+        assert!(!src.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copying_a_folder_counts_the_links_it_leaves_out() {
+        let t = setup();
+        std::os::unix::fs::symlink("a.txt", t.root.join("src/album/ln")).unwrap();
+        let mut ctx = Ctx {
+            progress: Progress {
+                done_bytes: 0,
+                total_bytes: 0,
+                current: String::new(),
+            },
+            on_progress: &mut |_| {},
+            cancel: &AtomicBool::new(false),
+            skipped_links: 0,
+        };
+        copy_item(
+            &t.root.join("src/album"),
+            &t.root.join("dest/album"),
+            &mut ctx,
+        )
+        .unwrap();
+        assert_eq!(ctx.skipped_links, 1);
     }
 
     #[test]
