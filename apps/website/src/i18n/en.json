@@ -444,12 +444,8 @@
       "title": "What's new in",
       "notes": "Full release notes",
       "items": [
-        "Research as a conversation: saved conversations, a summary built from the real results, and citations export (BibTeX, RIS)",
-        "A file manager with two panes, drag and drop, the Recycle Bin and folder colours",
         "A downloads list with resizable columns, duration and average speed, and a list that stays smooth with tens of thousands of items",
         "Category folders for new installations and a smaller, calmer Add dialog",
-        "BitTorrent: magnet links and .torrent files, with a file choice",
-        "Optional AI for research, off until you set it up",
         "Updates arrive through the beta channel"
       ]
     },
