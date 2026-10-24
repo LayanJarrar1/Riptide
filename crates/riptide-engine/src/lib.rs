@@ -134,6 +134,16 @@ pub enum Error {
     /// Disk.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    /// The target volume has less free space than the download still needs. The wording keeps
+    /// the words "disk" and "space": the UI classifies a failure by them and shows its own
+    /// localised "disk full" text for it.
+    #[error("not enough free disk space: {needed} bytes are needed on the target drive; free some space, then retry")]
+    DiskFull {
+        /// Bytes still to write, plus a safety margin.
+        needed: u64,
+        /// Bytes free on the volume when the check ran.
+        available: u64,
+    },
     /// A background task died.
     #[error("internal: {0}")]
     Internal(String),
@@ -201,10 +211,22 @@ pub struct EngineSettings {
     /// Settings -> Torrents: seeding rules, upload cap, DHT, port.
     #[serde(default)]
     pub torrent: TorrentOptions,
+    /// Put a download that failed on a network error (no connection, timeout, reset, DNS) back
+    /// in the queue after 1, 5 and 15 minutes, at most three times. Not for HTTP errors, disk
+    /// errors, checksum mismatches or a changed file. Any action of the user starts the count
+    /// over. On by default.
+    #[serde(default = "default_true")]
+    pub auto_retry: bool,
 }
 
 fn default_true() -> bool {
     true
+}
+
+/// A folder setting that can be used as it is: not blank, absolute.
+fn is_usable_dir(dir: &str) -> bool {
+    let dir = dir.trim();
+    !dir.is_empty() && Path::new(dir).is_absolute()
 }
 
 /// How the engine reaches the network.
@@ -385,6 +407,7 @@ impl Default for EngineSettings {
             mark_of_the_web: true,
             allow_private_redirects: false,
             torrent: TorrentOptions::default(),
+            auto_retry: true,
         }
     }
 }
@@ -482,6 +505,119 @@ const ALL_FLAGS: [&str; 6] = [
     FLAG_MEDIA_COOKIES,
     FLAG_MEDIA_CLIENT,
 ];
+
+/// Crash recovery: puts every record a previous run left in an active state back in the queue,
+/// along legal arrows. Also used by [`Engine::revive`].
+fn requeue_active(s: &mut Store) -> riptide_store::Result<()> {
+    for d in s.list_downloads()? {
+        // a torrent is brought back by `enable_torrents`, from the torrent engine state
+        if d.kind == DownloadKind::Torrent {
+            continue;
+        }
+        match d.state {
+            DownloadState::Probing | DownloadState::Downloading => {
+                // a span still open here was cut by a crash: keep the checkpointed time
+                s.abandon_active_span(d.id)?;
+                s.set_state(d.id, DownloadState::Paused, None)?;
+                s.set_state(d.id, DownloadState::Queued, None)?;
+            }
+            DownloadState::Verifying => {
+                s.set_state(
+                    d.id,
+                    DownloadState::Failed { retryable: true },
+                    Some("interrupted while verifying"),
+                )?;
+                s.set_state(d.id, DownloadState::Queued, None)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Extra room demanded on top of what a download still has to write.
+const DISK_MARGIN: u64 = 64 * 1024 * 1024;
+
+/// `Err(DiskFull)` when the volume cannot hold what is left of a download of known `size` of
+/// which `written` bytes are already on disk. An unknown size or an unreadable free-space figure
+/// never blocks a download.
+fn check_free_space(size: Option<u64>, written: u64, free: std::io::Result<u64>) -> Result<()> {
+    let Some(size) = size else { return Ok(()) };
+    let needed = size.saturating_sub(written).saturating_add(DISK_MARGIN);
+    match free {
+        Ok(available) if available < needed => Err(Error::DiskFull { needed, available }),
+        _ => Ok(()),
+    }
+}
+
+/// Free-space query; replaced in tests.
+type FreeSpaceFn = Arc<dyn Fn(&Path) -> std::io::Result<u64> + Send + Sync>;
+
+/// Consecutive failed progress writes after which a download is stopped.
+const MAX_CHECKPOINT_FAILURES: u32 = 5;
+
+/// Counts consecutive failed checkpoint writes.
+#[derive(Debug, Default)]
+struct CheckpointFailures(u32);
+
+impl CheckpointFailures {
+    /// Records one write; `true` exactly when this failure is the
+    /// [`MAX_CHECKPOINT_FAILURES`]-th in a row.
+    fn record(&mut self, ok: bool) -> bool {
+        if ok {
+            self.0 = 0;
+            false
+        } else {
+            self.0 += 1;
+            self.0 == MAX_CHECKPOINT_FAILURES
+        }
+    }
+}
+
+/// Shown when the database refuses progress writes. Keeps "disk" and "space" so the UI files
+/// it under its localised disk problem.
+const DB_WRITE_FAILED: &str = "the database could not be written (the disk may be full or the file locked), so the download was stopped; free some disk space, then retry";
+
+/// Waits before the automatic retries of a download that failed on the network.
+const AUTO_RETRY_DELAYS: [std::time::Duration; 3] = [
+    std::time::Duration::from_secs(60),
+    std::time::Duration::from_secs(5 * 60),
+    std::time::Duration::from_secs(15 * 60),
+];
+
+/// Automatic-retry bookkeeping of one download (in memory only).
+#[derive(Default)]
+struct AutoRetry {
+    /// Retries scheduled so far.
+    attempts: u32,
+    /// The pending timer.
+    timer: Option<JoinHandle<()>>,
+}
+
+/// A failure that waiting and trying again can plausibly cure: the network was down (connect,
+/// timeout, reset, DNS), not the server's answer, the disk, the checksum or a changed file.
+fn is_network_failure(e: &Error) -> bool {
+    fn net(n: &riptide_net::Error) -> bool {
+        match n {
+            riptide_net::Error::RetriesExhausted { last, .. } => net(last),
+            riptide_net::Error::Request(_) | riptide_net::Error::Io(_) => n.is_retryable(),
+            _ => false,
+        }
+    }
+    matches!(e, Error::Net(n) if net(n))
+}
+
+/// A checksum mismatch, also when it travels inside another error.
+fn is_checksum_mismatch(e: &Error) -> bool {
+    fn net(n: &riptide_net::Error) -> bool {
+        match n {
+            riptide_net::Error::ChecksumMismatch { .. } => true,
+            riptide_net::Error::RetriesExhausted { last, .. } => net(last),
+            _ => false,
+        }
+    }
+    matches!(e, Error::Net(n) if net(n))
+}
 
 /// Remembers which way of running yt-dlp worked for a record.
 fn store_attempt(
@@ -624,6 +760,12 @@ struct Inner {
     /// Serialises the choice of an on-disk file name, so two downloads that start at the same
     /// moment can never settle on the same name (and share one part file).
     name_lock: tokio::sync::Mutex<()>,
+    /// How much room the target volume has; the OS answer unless a test replaced it.
+    free_space_fn: RwLock<FreeSpaceFn>,
+    /// Automatic retries after network failures, per download.
+    auto_retries: Mutex<HashMap<DownloadId, AutoRetry>>,
+    /// Waits of the automatic retries ([`AUTO_RETRY_DELAYS`] unless a test shortened them).
+    retry_delays: RwLock<Vec<std::time::Duration>>,
 }
 
 /// The runtime. Cheap to clone; all clones share one state.
@@ -674,6 +816,23 @@ struct Prepared {
     auto_dir: bool,
     auto_category: bool,
     explicit_name: bool,
+}
+
+/// What survives a move to another origin: only `Referer` and `User-Agent`. Cookies, credentials
+/// and every other header (`Authorization`, API keys, ...) belong to the origin they were
+/// captured for.
+fn without_origin_bound(old: Secrets) -> Secrets {
+    Secrets {
+        cookies: None,
+        auth: None,
+        headers: old
+            .headers
+            .into_iter()
+            .filter(|(k, _)| {
+                k.eq_ignore_ascii_case("referer") || k.eq_ignore_ascii_case("user-agent")
+            })
+            .collect(),
+    }
 }
 
 /// Validates `request` and builds the record [`Engine::add`] inserts.
@@ -930,7 +1089,7 @@ impl Engine {
                 loaded.organize = true;
             }
             let mut loaded = loaded.sanitized();
-            if loaded.default_dir.is_empty() {
+            if !is_usable_dir(&loaded.default_dir) {
                 loaded.default_dir = default_dir.to_string_lossy().into_owned();
             }
             if first_run && organize_new_install {
@@ -947,33 +1106,7 @@ impl Engine {
         }
 
         // crash recovery: anything still "active" belongs back in the queue
-        db(&store, |s| {
-            for d in s.list_downloads()? {
-                // a torrent is brought back by `enable_torrents`, from the torrent engine state
-                if d.kind == DownloadKind::Torrent {
-                    continue;
-                }
-                match d.state {
-                    DownloadState::Probing | DownloadState::Downloading => {
-                        // a span still open here was cut by a crash: keep the checkpointed time
-                        s.abandon_active_span(d.id)?;
-                        s.set_state(d.id, DownloadState::Paused, None)?;
-                        s.set_state(d.id, DownloadState::Queued, None)?;
-                    }
-                    DownloadState::Verifying => {
-                        s.set_state(
-                            d.id,
-                            DownloadState::Failed { retryable: true },
-                            Some("interrupted while verifying"),
-                        )?;
-                        s.set_state(d.id, DownloadState::Queued, None)?;
-                    }
-                    _ => {}
-                }
-            }
-            Ok(())
-        })
-        .await?;
+        db(&store, requeue_active).await?;
 
         let learned: HashMap<String, u32> = db(&store, |s| {
             Ok(s.settings()?
@@ -1029,6 +1162,9 @@ impl Engine {
                 .filter(|p| !p.as_os_str().is_empty())
                 .unwrap_or_else(|| PathBuf::from(".")),
             name_lock: tokio::sync::Mutex::new(()),
+            free_space_fn: RwLock::new(Arc::new(|p: &Path| free_space(p))),
+            auto_retries: Mutex::new(HashMap::new()),
+            retry_delays: RwLock::new(AUTO_RETRY_DELAYS.to_vec()),
         });
         let engine = Engine { inner };
         tokio::spawn(engine.clone().scheduler());
@@ -1110,8 +1246,14 @@ impl Engine {
     /// global speed limit applies to them within a second; a new proxy or user agent applies
     /// to connections opened after this call. An invalid manual proxy URL is refused.
     pub async fn set_settings(&self, settings: EngineSettings) -> Result<()> {
-        let settings = settings.sanitized();
+        let mut settings = settings.sanitized();
         let previous = self.settings();
+        // the default folder is an absolute path or it stays what it was: an empty or relative
+        // value would put files wherever the process happens to run
+        settings.default_dir = settings.default_dir.trim().to_owned();
+        if !is_usable_dir(&settings.default_dir) {
+            settings.default_dir = previous.default_dir.clone();
+        }
         let new_client =
             if previous.proxy != settings.proxy || previous.user_agent != settings.user_agent {
                 settings.proxy.choice()?;
@@ -1394,6 +1536,7 @@ impl Engine {
     /// Pauses a queued or running download. For a running one it returns once the transfer
     /// has stopped and the record is `Paused`, so a `resume` right after is never ignored.
     pub async fn pause(&self, id: DownloadId) -> Result<()> {
+        self.clear_auto_retry(id);
         if self.is_torrent(id).await? {
             return self.torrent_pause(id).await;
         }
@@ -1409,6 +1552,12 @@ impl Engine {
 
     /// Resumes a paused download or retries a failed one.
     pub async fn resume(&self, id: DownloadId) -> Result<()> {
+        self.clear_auto_retry(id);
+        self.resume_now(id).await
+    }
+
+    /// [`Engine::resume`] without the user-action bookkeeping (the automatic retry uses it).
+    async fn resume_now(&self, id: DownloadId) -> Result<()> {
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
         if d.kind == DownloadKind::Torrent {
             return self.torrent_resume(id).await;
@@ -1425,6 +1574,7 @@ impl Engine {
 
     /// Cancels a download; the row stays, the part file is deleted.
     pub async fn cancel(&self, id: DownloadId) -> Result<()> {
+        self.clear_auto_retry(id);
         if let Some(d) = self
             .get(id)
             .await?
@@ -1446,6 +1596,7 @@ impl Engine {
     /// Removes a download from the list, stopping it first; `delete_file` also removes the
     /// finished file. The part file always goes.
     pub async fn remove(&self, id: DownloadId, delete_file: bool) -> Result<()> {
+        self.clear_auto_retry(id);
         self.stop_and_wait(id, StopReason::Remove).await?;
         let d = self.get(id).await?.ok_or(Error::NotFound(id))?;
         if d.kind == DownloadKind::Torrent {
@@ -1508,6 +1659,7 @@ impl Engine {
     /// state does not change (it was `Paused` or `Queued`) or the record is reborn from a
     /// terminal state, [`Event::Added`] is emitted again so listeners re-read the record.
     pub async fn restart(&self, id: DownloadId) -> Result<()> {
+        self.clear_auto_retry(id);
         if self.is_torrent(id).await? {
             // "start over" for a torrent is a full re-check: pieces that verify are kept
             return self.verify_torrent(id).await;
@@ -1601,7 +1753,9 @@ impl Engine {
     /// a paused one stays paused. The record keeps its validator (`ETag` / `Last-Modified`), so
     /// the resume still goes through `If-Range` and restarts from zero if the new URL serves a
     /// different file (never splice two versions). New `secrets` replace the stored ones (the stored
-    /// `User-Agent` header is carried over when the new set has none); `referrer` replaces the
+    /// `User-Agent` header is carried over when the new set has none). When the new URL has a
+    /// different origin (scheme, host or port) than the old one, the stored cookies, credentials
+    /// and custom headers are dropped (only `Referer` and `User-Agent` stay); `referrer` replaces the
     /// stored `Referer` header. Emits [`Event::Added`] (or the state change) so listeners
     /// re-read the record.
     ///
@@ -1617,6 +1771,7 @@ impl Engine {
         secrets: Option<Secrets>,
     ) -> Result<()> {
         let parsed = riptide_net::parse_http_url(url)?;
+        self.clear_auto_retry(id);
         let (clean_url, url_auth) = riptide_net::split_userinfo(&parsed);
         let before = self.get(id).await?.ok_or(Error::NotFound(id))?;
         if matches!(
@@ -1639,9 +1794,18 @@ impl Engine {
         fresh.final_url = None;
         fresh.error = None;
         let referrer = referrer.map(str::to_string);
+        // stored credentials were captured for the old address; they never follow the record to
+        // another origin (hard rule 4). An unparseable old URL counts as another origin.
+        let cross_origin = Url::parse(&before.url).map_or(true, |old| {
+            riptide_net::Origin::of(&old) != riptide_net::Origin::of(&parsed)
+        });
         db(&self.inner.store, move |s| {
-            let changed = secrets.is_some() || referrer.is_some() || url_auth.is_some();
-            let old = s.secrets(id)?.unwrap_or_default();
+            let changed =
+                secrets.is_some() || referrer.is_some() || url_auth.is_some() || cross_origin;
+            let mut old = s.secrets(id)?.unwrap_or_default();
+            if cross_origin {
+                old = without_origin_bound(old);
+            }
             let mut next = match secrets {
                 Some(mut new) => {
                     let has_ua = new
@@ -1750,6 +1914,17 @@ impl Engine {
     /// `open`), then returns. Call before the process exits.
     pub async fn shutdown(&self) {
         self.inner.shutting_down.store(true, Ordering::SeqCst);
+        let timers: Vec<AutoRetry> = self
+            .inner
+            .auto_retries
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .drain()
+            .map(|(_, r)| r)
+            .collect();
+        for t in timers.into_iter().filter_map(|r| r.timer) {
+            t.abort();
+        }
         // downloads stay "downloading" in the database across a quit; their time stops here
         let _ = db(&self.inner.store, |s| s.close_active_spans()).await;
         self.shutdown_torrents().await;
@@ -1768,6 +1943,26 @@ impl Engine {
         for r in running {
             let _ = r.task.await;
         }
+    }
+
+    /// Brings an engine back to life after [`Engine::shutdown`] that was not followed by the end
+    /// of the process (an update installer that failed to start): the records the shutdown left
+    /// active are queued again, exactly as after a crash, and the scheduler and the schedule
+    /// timer run again. The caller restarts the torrent engine ([`Engine::enable_torrents`]) if
+    /// it needs it. Does nothing on an engine that is not shut down.
+    pub async fn revive(&self) -> Result<()> {
+        if !self.inner.shutting_down.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        // the old scheduler and timer tasks were woken by `shutdown`; give them time to see the
+        // flag and end, so the new ones are the only ones
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        db(&self.inner.store, requeue_active).await?;
+        self.inner.shutting_down.store(false, Ordering::SeqCst);
+        tokio::spawn(self.clone().scheduler());
+        tokio::spawn(self.clone().schedule_timer());
+        self.inner.wake.notify_one();
+        Ok(())
     }
 
     async fn is_torrent(&self, id: DownloadId) -> Result<bool> {
@@ -1852,6 +2047,118 @@ impl Engine {
         self.inner
             .test_crash_after_rename
             .store(on, Ordering::SeqCst);
+    }
+
+    /// Test hook: replace the free-space query (bytes free on the volume of a folder).
+    #[doc(hidden)]
+    pub fn set_test_free_space(
+        &self,
+        f: impl Fn(&Path) -> std::io::Result<u64> + Send + Sync + 'static,
+    ) {
+        if let Ok(mut slot) = self.inner.free_space_fn.write() {
+            *slot = Arc::new(f);
+        }
+    }
+
+    /// Test hook: replace the waits of the automatic retries.
+    #[doc(hidden)]
+    pub fn set_test_retry_delays(&self, delays: Vec<std::time::Duration>) {
+        if let Ok(mut d) = self.inner.retry_delays.write() {
+            *d = delays;
+        }
+    }
+
+    /// Forgets the automatic-retry count and cancels the pending timer of `id`. Every action
+    /// of the user calls it, so a manual start always begins a fresh count.
+    fn clear_auto_retry(&self, id: DownloadId) {
+        let removed = self
+            .inner
+            .auto_retries
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&id);
+        if let Some(timer) = removed.and_then(|r| r.timer) {
+            timer.abort();
+        }
+    }
+
+    /// After a network failure, before the `Failed` state is written: counts one automatic retry
+    /// and returns how long to wait, or `None` when the setting is off, the engine is stopping
+    /// or the three attempts are used up. [`Engine::arm_auto_retry`] starts the timer once the
+    /// state is saved; a user action in between ([`Engine::clear_auto_retry`]) cancels it.
+    fn reserve_auto_retry(&self, id: DownloadId) -> Option<std::time::Duration> {
+        if !self.settings().auto_retry || self.inner.shutting_down.load(Ordering::SeqCst) {
+            return None;
+        }
+        let delays = self
+            .inner
+            .retry_delays
+            .read()
+            .map(|d| d.clone())
+            .unwrap_or_default();
+        let mut map = self
+            .inner
+            .auto_retries
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let entry = map.entry(id).or_default();
+        let delay = delays.get(entry.attempts as usize).copied();
+        if delay.is_some() {
+            entry.attempts += 1;
+        }
+        delay
+    }
+
+    /// Starts the timer reserved by [`Engine::reserve_auto_retry`]; does nothing if the user
+    /// acted on the download since (its entry is gone).
+    fn arm_auto_retry(&self, id: DownloadId, delay: std::time::Duration) {
+        let mut map = self
+            .inner
+            .auto_retries
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let Some(entry) = map.get_mut(&id) else {
+            return;
+        };
+        tracing::info!(
+            id = id.0,
+            attempt = entry.attempts,
+            ?delay,
+            "retry scheduled"
+        );
+        let engine = self.clone();
+        let timer = tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            engine.auto_retry_now(id).await;
+        });
+        if let Some(old) = entry.timer.replace(timer) {
+            old.abort();
+        }
+    }
+
+    /// The timer fired: queue the download again if it is still sitting in `Failed`.
+    async fn auto_retry_now(&self, id: DownloadId) {
+        if !self.settings().auto_retry || self.inner.shutting_down.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Some(entry) = self
+            .inner
+            .auto_retries
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get_mut(&id)
+        {
+            entry.timer = None;
+        }
+        let failed = matches!(
+            self.get(id).await,
+            Ok(Some(d)) if matches!(d.state, DownloadState::Failed { .. })
+        );
+        if failed {
+            if let Err(e) = self.resume_now(id).await {
+                tracing::warn!(id = id.0, error = %e, "automatic retry could not queue the download");
+            }
+        }
     }
 
     /// Test hook: shorten the stop wait and/or make a stopping task hang for `delay_ms`.
@@ -2033,9 +2340,26 @@ impl Engine {
                 _ => false,
             };
             tracing::warn!(id = id.0, error = %e, retryable, "download failed");
-            let _ = self
+            if is_checksum_mismatch(&e) {
+                // the bytes on disk are wrong: a retry must download them again, not verify
+                // the same file forever
+                self.discard_partial_data(id).await;
+            }
+            let retry_in = (is_network_failure(&e) && !stop.is_cancelled())
+                .then(|| self.reserve_auto_retry(id))
+                .flatten();
+            let saved = self
                 .transition(id, DownloadState::Failed { retryable }, Some(e.to_string()))
-                .await;
+                .await
+                .is_ok();
+            match retry_in {
+                Some(delay) if saved => self.arm_auto_retry(id, delay),
+                Some(_) => self.clear_auto_retry(id),
+                None => {}
+            }
+        } else {
+            // finished or stopped: the next failure starts a fresh count
+            self.clear_auto_retry(id);
         }
         {
             let mut map = self.inner.running.lock().unwrap_or_else(|p| p.into_inner());
@@ -2048,6 +2372,19 @@ impl Engine {
             }
         }
         self.inner.wake.notify_one();
+    }
+
+    /// Deletes the part file and the segment table of `id`, so the next start begins at zero.
+    /// The segments go first (a crash in between leaves a stale file that the next start
+    /// truncates, never segments that claim bytes a deleted file had).
+    async fn discard_partial_data(&self, id: DownloadId) {
+        let Ok(Some(d)) = self.get(id).await else {
+            return;
+        };
+        if let Err(e) = db(&self.inner.store, move |s| s.replace_segments(id, &[])).await {
+            tracing::warn!(id = id.0, error = %e, "could not clear the segments of a bad download");
+        }
+        delete_partials(&d);
     }
 
     async fn run_download_inner(
@@ -2145,6 +2482,17 @@ impl Engine {
             content_type: record.content_type.clone(),
         });
 
+        // fail fast, with a message the UI can show, instead of filling the disk halfway: the
+        // part file is preallocated sparse, so a full volume would only show up as write errors
+        let written: u64 = segments.iter().map(|s| s.written).sum();
+        let free_fn = self
+            .inner
+            .free_space_fn
+            .read()
+            .map(|f| Arc::clone(&f))
+            .unwrap_or_else(|p| Arc::clone(&p.into_inner()));
+        check_free_space(record.size, written, free_fn(&record.dir))?;
+
         self.transition(id, DownloadState::Downloading, None)
             .await?;
         let final_path = record.final_path();
@@ -2176,7 +2524,11 @@ impl Engine {
         let (tx, mut rx) = mpsc::channel::<TransferEvent>(512);
         let forward_engine = self.clone();
         let forward_store = Arc::clone(store);
+        let forward_stop = stop.clone();
+        let db_failed = Arc::new(AtomicBool::new(false));
+        let forward_db_failed = Arc::clone(&db_failed);
         let forwarder = tokio::spawn(async move {
+            let mut failures = CheckpointFailures::default();
             while let Some(ev) = rx.recv().await {
                 match ev {
                     TransferEvent::Progress {
@@ -2208,16 +2560,27 @@ impl Engine {
                         });
                     }
                     TransferEvent::Checkpoint { segments } => {
-                        let _ = db(&forward_store, move |s| {
+                        let saved = db(&forward_store, move |s| {
                             s.replace_segments(id, &segments)?;
                             s.checkpoint_active(id)
                         })
                         .await;
+                        if let Err(e) = &saved {
+                            tracing::warn!(id = id.0, error = %e, "progress could not be saved");
+                        }
+                        if failures.record(saved.is_ok()) {
+                            // progress is no longer durable: stop instead of downloading on
+                            forward_db_failed.store(true, Ordering::SeqCst);
+                            forward_stop.cancel();
+                        }
                     }
                     TransferEvent::Verifying => {
-                        let _ = forward_engine
+                        if let Err(e) = forward_engine
                             .transition(id, DownloadState::Verifying, None)
-                            .await;
+                            .await
+                        {
+                            tracing::warn!(id = id.0, error = %e, "could not record the verifying state");
+                        }
                     }
                     TransferEvent::Restarted { reason } => {
                         tracing::info!(id = id.0, %reason, "restarted")
@@ -2239,6 +2602,20 @@ impl Engine {
         let result = transfer(client, ctx, plan, cfg, tx, stop.clone(), limiter).await;
         let _ = forwarder.await;
 
+        if db_failed.load(Ordering::SeqCst) && !matches!(result, Ok(Outcome::Completed { .. })) {
+            // the transfer stopped because progress could not be written: say so
+            tracing::error!(
+                id = id.0,
+                "database writes failed repeatedly; download stopped"
+            );
+            self.transition(
+                id,
+                DownloadState::Failed { retryable: true },
+                Some(DB_WRITE_FAILED.into()),
+            )
+            .await?;
+            return Ok(());
+        }
         match result {
             Ok(Outcome::Completed { path, .. }) => {
                 let current = self
@@ -2513,5 +2890,225 @@ impl Engine {
             }
             MediaOutcome::Stopped => self.stopped(id, reason, Vec::new()).await,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn five_failed_checkpoint_writes_in_a_row_trip_the_guard_once() {
+        let mut f = CheckpointFailures::default();
+        for _ in 0..MAX_CHECKPOINT_FAILURES - 1 {
+            assert!(!f.record(false));
+        }
+        // a success in between starts the count over
+        assert!(!f.record(true));
+        for _ in 0..MAX_CHECKPOINT_FAILURES - 1 {
+            assert!(!f.record(false));
+        }
+        assert!(f.record(false), "the fifth in a row trips");
+        assert!(!f.record(false), "and only once");
+    }
+
+    #[test]
+    fn free_space_is_checked_against_what_is_left_plus_the_margin() {
+        let ok = |free: u64| check_free_space(Some(100 * 1024 * 1024), 0, Ok(free));
+        assert!(ok(164 * 1024 * 1024).is_ok());
+        assert!(matches!(
+            ok(164 * 1024 * 1024 - 1),
+            Err(Error::DiskFull { .. })
+        ));
+        // bytes already written do not need room again
+        assert!(
+            check_free_space(Some(100 * 1024 * 1024), 100 * 1024 * 1024, Ok(DISK_MARGIN)).is_ok()
+        );
+        // unknown size or an unreadable figure never blocks
+        assert!(check_free_space(None, 0, Ok(0)).is_ok());
+        let err = std::io::Error::other("no answer");
+        assert!(check_free_space(Some(u64::MAX), 0, Err(err)).is_ok());
+        // the text keeps the words the UI classifies by, and none of the others
+        let msg = Error::DiskFull {
+            needed: 1,
+            available: 0,
+        }
+        .to_string()
+        .to_lowercase();
+        assert!(msg.contains("disk") && msg.contains("space"));
+        for other in [
+            "checksum",
+            "expired",
+            "not found",
+            "403",
+            "declared",
+            "content-length",
+        ] {
+            assert!(!msg.contains(other));
+        }
+    }
+
+    #[test]
+    fn only_referer_and_user_agent_cross_an_origin() {
+        let old = Secrets {
+            cookies: Some("SID=1".into()),
+            headers: vec![
+                ("authorization".into(), "Bearer x".into()),
+                ("REFERER".into(), "https://a.test/".into()),
+                ("User-Agent".into(), "UA".into()),
+                ("X-Api-Key".into(), "k".into()),
+            ],
+            auth: Some(riptide_core::Credentials {
+                username: "u".into(),
+                password: "p".into(),
+            }),
+        };
+        let kept = without_origin_bound(old);
+        assert!(kept.cookies.is_none() && kept.auth.is_none());
+        let names: Vec<_> = kept.headers.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(names, ["REFERER", "User-Agent"]);
+    }
+
+    #[test]
+    fn network_failures_are_told_apart_from_the_rest() {
+        let status = |code| Error::Net(riptide_net::Error::status(code, None));
+        assert!(!is_network_failure(&status(404)));
+        assert!(!is_network_failure(&status(503)));
+        let io = |kind| Error::Net(riptide_net::Error::Io(std::io::Error::from(kind)));
+        assert!(is_network_failure(&io(std::io::ErrorKind::ConnectionReset)));
+        assert!(!is_network_failure(&io(
+            std::io::ErrorKind::PermissionDenied
+        )));
+        let exhausted = |last| {
+            Error::Net(riptide_net::Error::RetriesExhausted {
+                attempts: 5,
+                last: Box::new(last),
+            })
+        };
+        assert!(is_network_failure(&exhausted(riptide_net::Error::Io(
+            std::io::Error::from(std::io::ErrorKind::TimedOut)
+        ))));
+        assert!(!is_network_failure(&exhausted(
+            riptide_net::Error::ValidatorChanged
+        )));
+        assert!(!is_network_failure(&Error::Io(std::io::Error::from(
+            std::io::ErrorKind::TimedOut
+        ))));
+        assert!(!is_network_failure(&Error::DiskFull {
+            needed: 1,
+            available: 0
+        }));
+        let mismatch = riptide_net::Error::ChecksumMismatch {
+            algo: riptide_core::ChecksumAlgo::Sha256,
+            expected: "a".into(),
+            actual: "b".into(),
+        };
+        assert!(is_checksum_mismatch(&Error::Net(mismatch)));
+        assert!(!is_checksum_mismatch(&status(404)));
+    }
+
+    /// An engine over a temp folder with one record parked in `Failed`, ready for the retry
+    /// machinery (nothing runs: the record is never queued unless a timer does it).
+    async fn engine_with_failed_record() -> (Engine, DownloadId, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::open(EngineConfig {
+            db_path: dir.path().join("t.sqlite"),
+            default_dir: dir.path().join("dl"),
+            organize_new_install: false,
+        })
+        .await
+        .unwrap();
+        let mut request = DownloadRequest::new("http://127.0.0.1:9/f.bin");
+        request.start_paused = true;
+        let id = engine.add(request).await.unwrap();
+        // Paused -> Queued -> Probing -> Failed, written straight to the store
+        for to in [
+            DownloadState::Queued,
+            DownloadState::Probing,
+            DownloadState::Failed { retryable: true },
+        ] {
+            engine.transition(id, to, Some("x".into())).await.unwrap();
+        }
+        (engine, id, dir)
+    }
+
+    async fn state_of(e: &Engine, id: DownloadId) -> DownloadState {
+        e.get(id).await.unwrap().unwrap().state
+    }
+
+    #[tokio::test]
+    async fn at_most_three_retries_and_a_user_action_starts_the_count_over() {
+        let (engine, id, _dir) = engine_with_failed_record().await;
+        let got: Vec<_> = (0..5).map(|_| engine.reserve_auto_retry(id)).collect();
+        assert_eq!(got[..3], AUTO_RETRY_DELAYS.map(Some));
+        assert_eq!(got[3..], [None, None]);
+        engine.clear_auto_retry(id);
+        assert_eq!(engine.reserve_auto_retry(id), Some(AUTO_RETRY_DELAYS[0]));
+
+        // off: never
+        engine.clear_auto_retry(id);
+        engine
+            .set_settings(EngineSettings {
+                auto_retry: false,
+                ..engine.settings()
+            })
+            .await
+            .unwrap();
+        assert_eq!(engine.reserve_auto_retry(id), None);
+        engine.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn the_timer_requeues_a_failed_download_and_a_user_action_cancels_it() {
+        let ms = std::time::Duration::from_millis;
+        let (engine, id, _dir) = engine_with_failed_record().await;
+        engine.set_test_retry_delays(vec![ms(80); 3]);
+
+        // pause (or any user action) between the failure and the timer: nothing happens
+        let delay = engine.reserve_auto_retry(id).unwrap();
+        engine.arm_auto_retry(id, delay);
+        engine.pause(id).await.unwrap();
+        tokio::time::sleep(ms(400)).await;
+        assert!(matches!(
+            state_of(&engine, id).await,
+            DownloadState::Failed { .. }
+        ));
+
+        // a user action before the timer is even armed cancels it too
+        let delay = engine.reserve_auto_retry(id).unwrap();
+        engine.clear_auto_retry(id);
+        engine.arm_auto_retry(id, delay);
+        tokio::time::sleep(ms(400)).await;
+        assert!(matches!(
+            state_of(&engine, id).await,
+            DownloadState::Failed { .. }
+        ));
+
+        // left alone, the timer queues it again
+        let mut rx = engine.subscribe();
+        let delay = engine.reserve_auto_retry(id).unwrap();
+        engine.arm_auto_retry(id, delay);
+        let queued = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if let Ok(Event::StateChanged {
+                    to: DownloadState::Queued,
+                    ..
+                }) = rx.recv().await
+                {
+                    break;
+                }
+            }
+        })
+        .await;
+        assert!(queued.is_ok(), "the retry never queued the download");
+
+        // remove cancels a pending timer
+        let (other, id2, _dir2) = engine_with_failed_record().await;
+        let delay = other.reserve_auto_retry(id2).unwrap();
+        other.arm_auto_retry(id2, delay.max(ms(300)));
+        other.remove(id2, false).await.unwrap();
+        assert!(other.inner.auto_retries.lock().unwrap().is_empty());
+        engine.shutdown().await;
+        other.shutdown().await;
     }
 }

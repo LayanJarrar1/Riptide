@@ -205,11 +205,12 @@ async fn corrupt_bytes_with_a_checksum_end_failed_and_leave_no_final_file() {
         let rec = engine.get(id).await.unwrap().unwrap();
         assert!(matches!(rec.state, DownloadState::Failed { .. }));
         assert!(!w.downloads().join(format!("corrupt{flips}.bin")).exists());
-        // the part file stays for inspection (documented), but it is never the final name
-        assert!(w
+        // the bad bytes are discarded, so a Retry downloads again instead of re-verifying them
+        assert!(!w
             .downloads()
             .join(format!("corrupt{flips}.bin.rtpart"))
             .exists());
+        assert!(engine.segments(id).await.unwrap().is_empty());
     }
     // the same bytes without corruption pass the same checksum
     let clean = w.dir.path().join("clean");

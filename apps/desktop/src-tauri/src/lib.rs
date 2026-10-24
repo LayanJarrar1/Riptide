@@ -136,20 +136,176 @@ fn engine_config() -> Result<EngineConfig, riptide_log::Error> {
     })
 }
 
+/// Everything the app does once Tauri is up: the engine, the window, the tray, the servers.
+fn startup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // the engine first: when it cannot open (a database from a newer version, a locked or
+    // unwritable data folder) there is no half-built window to explain, only the message
+    let paths = riptide_log::Paths::resolve()?;
+    let config = engine_config()?;
+    let engine = tauri::async_runtime::block_on(Engine::open(config))?;
+    // the window: portable mode gives it a profile folder next to the app
+    webview::create_main_window(app, &paths)?;
+    app.manage(engine.clone());
+    // video support: the bundled (or updated) yt-dlp and ffmpeg
+    let data_dir = riptide_log::Paths::resolve()?.data_dir;
+    let tools = media::resolve(&data_dir);
+    match &tools {
+        Some(t) => {
+            tracing::info!(yt_dlp = %t.exe().display(), ffmpeg = t.ffmpeg().is_some(), "video support found")
+        }
+        None => tracing::warn!("video support not installed (no yt-dlp)"),
+    }
+    engine.set_media_tools(tools);
+    // AI (off until configured), research and the download index
+    app.manage(ai::service_for(&media::DataDir(data_dir.clone())));
+    app.manage(research::ResearchState::default());
+    app.manage(media::DataDir(data_dir));
+
+    // launched by a magnet link or a .torrent file: the webview asks for it once it is up
+    if let Some(target) = protocol::open_target(&std::env::args().collect::<Vec<_>>()) {
+        app.state::<protocol::PendingOpen>().set(target);
+    }
+
+    // torrents already in the list continue; with none, no port is opened (privacy)
+    let torrent_engine = engine.clone();
+    tauri::async_runtime::spawn(async move {
+        torrent::start_if_needed(&torrent_engine).await;
+    });
+
+    // tray, notifications, clipboard monitor; started by Windows → stay in the tray
+    if let Err(e) = tray::install(app.handle(), engine.clone()) {
+        tracing::warn!(error = %e, "no tray icon");
+    }
+    notify::install(app.handle(), engine.clone());
+    clipboard::install(app.handle());
+    if shell::started_minimized(std::env::args()) {
+        if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+            let _ = window.hide();
+        }
+    }
+
+    // browser host / CLI → engine over the per-user pipe; an add brings the window up
+    let handle = app.handle().clone();
+    let ipc_engine = engine.clone();
+    tauri::async_runtime::spawn(async move {
+        let endpoint = match riptide_ipc::default_endpoint() {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::error!(error = %e, "no IPC endpoint; the browser cannot reach the app");
+                return;
+            }
+        };
+        let on_added = move || show_main_window(&handle);
+        if let Err(e) = ipc_server::serve(&endpoint, ipc_engine, on_added).await {
+            tracing::error!(error = %e, "IPC endpoint stopped");
+        }
+    });
+
+    // register the browser host (idempotent; skipped once the user turned it off)
+    tauri::async_runtime::spawn_blocking(|| {
+        if let (Some(mut registry), Ok(layout)) = (
+            integration::platform_registry(),
+            integration::Layout::for_this_app(),
+        ) {
+            integration::register_on_start(&layout, registry.as_mut());
+        }
+    });
+
+    // engine → webview: one Tauri event per engine event, dropped if the webview lags
+    let handle = app.handle().clone();
+    let mut rx = engine.subscribe();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    // a queue with a post-queue action finished: the countdown dialog
+                    // must be seen, even when the window sits in the tray
+                    if matches!(
+                        &event,
+                        riptide_core::Event::QueueFinished {
+                            action: Some(_),
+                            ..
+                        }
+                    ) {
+                        show_main_window(&handle);
+                    }
+                    if let Err(e) = handle.emit(EVENT_NAME, &event) {
+                        tracing::debug!(error = %e, "event not delivered to the webview");
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!(dropped = n, "webview fell behind on engine events");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+    Ok(())
+}
+
+/// The text of the box shown when the app cannot start: English and Arabic together (the
+/// engine is not up, so the language setting may be unreadable), the cause, and where the log
+/// is.
+pub fn startup_failure_message(error: &(dyn std::error::Error + 'static), logs: &str) -> String {
+    let newer = matches!(
+        error.downcast_ref::<riptide_engine::Error>(),
+        Some(riptide_engine::Error::Store(
+            riptide_store::Error::TooNew { .. }
+        ))
+    );
+    let (hint_en, hint_ar) = if newer {
+        (
+            "The data was written by a newer version of Riptide. Install that version again.",
+            "البيانات كُتبت بإصدار أحدث من Riptide. ثبّت ذلك الإصدار من جديد.",
+        )
+    } else {
+        (
+            "Check that the data folder is writable and that Riptide is not already running.",
+            "تأكد أن مجلد البيانات قابل للكتابة وأن Riptide ليس قيد التشغيل.",
+        )
+    };
+    format!(
+        "Riptide could not start.\n{hint_en}\n\n{error}\n\nLogs: {logs}\n\n\
+         تعذّر تشغيل Riptide.\n{hint_ar}\n\nالسجلات: {logs}"
+    )
+}
+
+/// Logs a startup failure, shows it in a native message box and exits with code 1. The box
+/// opens from its own thread so the event loop keeps running while it is up.
+fn report_startup_failure(app: &tauri::AppHandle, error: &(dyn std::error::Error + 'static)) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+
+    tracing::error!(error = %error, "the app could not start");
+    let logs = riptide_log::Paths::resolve()
+        .map(|p| p.logs_dir.display().to_string())
+        .unwrap_or_default();
+    let text = startup_failure_message(error, &logs);
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        handle
+            .dialog()
+            .message(text)
+            .title("Riptide")
+            .kind(MessageDialogKind::Error)
+            .blocking_show();
+        handle.exit(1);
+    });
+}
+
 /// Builds and runs the Tauri application; returns when the last window closes.
 ///
-/// # Panics
+/// # Exits
 ///
-/// Panics if the runtime cannot start (missing WebView2, unreadable configuration, a database
-/// that cannot be opened). There is no useful way to continue without a window or without the
-/// store, so this is the one place a panic is intended.
+/// A startup failure (a database that cannot be opened, a window that cannot be created) is
+/// shown in a message box and ends the process with code 1; a Tauri runtime failure (missing
+/// WebView2, unreadable configuration) is logged and ends it with code 1 too.
 pub fn run() {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         build = BUILD_LABEL,
         "starting Riptide desktop"
     );
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         // first: a second launch hands over to the running instance and exits before it opens
         // the database (its crash recovery would otherwise re-queue the live transfers)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -172,105 +328,12 @@ pub fn run() {
         .manage(protocol::PendingOpen::default())
         .manage(std::sync::Arc::new(crawl::Crawls::default()))
         .manage(std::sync::Arc::new(files::FileOps::default()))
-        .setup(move |app| {
-            // the window first: portable mode gives it a profile folder next to the app
-            let paths = riptide_log::Paths::resolve()?;
-            webview::create_main_window(app, &paths)?;
-            let config = engine_config()?;
-            let engine = tauri::async_runtime::block_on(Engine::open(config))?;
-            app.manage(engine.clone());
-            // video support: the bundled (or updated) yt-dlp and ffmpeg
-            let data_dir = riptide_log::Paths::resolve()?.data_dir;
-            let tools = media::resolve(&data_dir);
-            match &tools {
-                Some(t) => tracing::info!(yt_dlp = %t.exe().display(), ffmpeg = t.ffmpeg().is_some(), "video support found"),
-                None => tracing::warn!("video support not installed (no yt-dlp)"),
+        .setup(|app| {
+            // a failure here would otherwise end the process silently (there is no console in a
+            // release build): say what happened, then exit with an error code
+            if let Err(e) = startup(app) {
+                report_startup_failure(app.handle(), e.as_ref());
             }
-            engine.set_media_tools(tools);
-            // AI (off until configured), research and the download index
-            app.manage(ai::service_for(&media::DataDir(data_dir.clone())));
-            app.manage(research::ResearchState::default());
-            app.manage(media::DataDir(data_dir));
-
-            // launched by a magnet link or a .torrent file: the webview asks for it once it is up
-            if let Some(target) = protocol::open_target(&std::env::args().collect::<Vec<_>>()) {
-                app.state::<protocol::PendingOpen>().set(target);
-            }
-
-            // torrents already in the list continue; with none, no port is opened (privacy)
-            let torrent_engine = engine.clone();
-            tauri::async_runtime::spawn(async move {
-                torrent::start_if_needed(&torrent_engine).await;
-            });
-
-            // tray, notifications, clipboard monitor; started by Windows → stay in the tray
-            if let Err(e) = tray::install(app.handle(), engine.clone()) {
-                tracing::warn!(error = %e, "no tray icon");
-            }
-            notify::install(app.handle(), engine.clone());
-            clipboard::install(app.handle());
-            if shell::started_minimized(std::env::args()) {
-                if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-                    let _ = window.hide();
-                }
-            }
-
-            // browser host / CLI → engine over the per-user pipe; an add brings the window up
-            let handle = app.handle().clone();
-            let ipc_engine = engine.clone();
-            tauri::async_runtime::spawn(async move {
-                let endpoint = match riptide_ipc::default_endpoint() {
-                    Ok(e) => e,
-                    Err(e) => {
-                        tracing::error!(error = %e, "no IPC endpoint; the browser cannot reach the app");
-                        return;
-                    }
-                };
-                let on_added = move || show_main_window(&handle);
-                if let Err(e) = ipc_server::serve(&endpoint, ipc_engine, on_added).await {
-                    tracing::error!(error = %e, "IPC endpoint stopped");
-                }
-            });
-
-            // register the browser host (idempotent; skipped once the user turned it off)
-            tauri::async_runtime::spawn_blocking(|| {
-                if let (Some(mut registry), Ok(layout)) = (
-                    integration::platform_registry(),
-                    integration::Layout::for_this_app(),
-                ) {
-                    integration::register_on_start(&layout, registry.as_mut());
-                }
-            });
-
-            // engine → webview: one Tauri event per engine event, dropped if the webview lags
-            let handle = app.handle().clone();
-            let mut rx = engine.subscribe();
-            tauri::async_runtime::spawn(async move {
-                loop {
-                    match rx.recv().await {
-                        Ok(event) => {
-                            // a queue with a post-queue action finished: the countdown dialog
-                            // must be seen, even when the window sits in the tray
-                            if matches!(
-                                &event,
-                                riptide_core::Event::QueueFinished {
-                                    action: Some(_),
-                                    ..
-                                }
-                            ) {
-                                show_main_window(&handle);
-                            }
-                            if let Err(e) = handle.emit(EVENT_NAME, &event) {
-                                tracing::debug!(error = %e, "event not delivered to the webview");
-                            }
-                        }
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                            tracing::warn!(dropped = n, "webview fell behind on engine events");
-                        }
-                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                    }
-                }
-            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -400,8 +463,14 @@ pub fn run() {
             shell::autostart_enabled,
             shell::set_autostart,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running the Riptide desktop application");
+        .run(tauri::generate_context!());
+    if let Err(e) = result {
+        // Tauri itself failed (no WebView2, unreadable configuration): no window and no dialog
+        // plugin to tell the user, so the log and the exit code are all there is
+        tracing::error!(error = %e, "the Riptide desktop application stopped with an error");
+        eprintln!("riptide: {e}");
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]
@@ -458,6 +527,24 @@ mod tests {
             "info",
             "empty value"
         );
+    }
+
+    #[test]
+    fn the_startup_box_has_both_languages_the_cause_and_the_log_folder() {
+        let too_new = riptide_engine::Error::Store(riptide_store::Error::TooNew {
+            found: 9,
+            supported: 3,
+        });
+        let text = startup_failure_message(&too_new, "C:\\Riptide\\logs");
+        assert!(text.contains("could not start") && text.contains("newer version"));
+        assert!(text.contains("تعذّر تشغيل") && text.contains("أحدث"));
+        assert!(text.contains("database schema version 9"));
+        assert_eq!(text.matches("C:\\Riptide\\logs").count(), 2);
+
+        let locked = std::io::Error::other("the file is locked");
+        let text = startup_failure_message(&locked, "L");
+        assert!(text.contains("the file is locked") && text.contains("writable"));
+        assert!(text.contains("قابل للكتابة") && !text.contains("newer version"));
     }
 
     #[test]

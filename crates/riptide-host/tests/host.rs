@@ -341,3 +341,33 @@ async fn the_host_connects_once_the_app_comes_up() {
     assert_eq!(host.exit_code().await, 0);
     let _ = stop.send(());
 }
+
+#[tokio::test]
+async fn an_unsafe_refresh_is_refused_before_it_reaches_the_app() {
+    let (endpoint, seen, stop) = start_app("host-bad-refresh");
+    let data = tempfile::tempdir().unwrap();
+    let mut host = Host::spawn(&[CHROME_ORIGIN], &endpoint, data.path());
+    for (id, url) in [
+        (1, "file:///etc/passwd".to_string()),
+        (2, "https://example.test/\u{7}x".to_string()),
+        (3, format!("https://example.test/{}", "a".repeat(9000))),
+    ] {
+        let r = host
+            .ask(json!({"id": id, "type": "refresh", "download_id": 1, "url": url}))
+            .await;
+        assert_eq!(r.id, id);
+        assert_eq!(error_of(&r).0, ErrorCode::BadRequest);
+    }
+    assert!(seen.lock().unwrap().is_empty(), "nothing was forwarded");
+    // a good one still goes through
+    let r = host
+        .ask(json!({
+            "id": 4, "type": "refresh", "download_id": 1, "url": "https://example.test/new",
+            "secrets": {"cookies": "a=b", "headers": [["Authorization", "x"]]}
+        }))
+        .await;
+    assert_eq!(r.body, ResponseBody::Ok);
+    assert_eq!(*seen.lock().unwrap(), ["refresh"]);
+    let _ = host.exit_code().await;
+    let _ = stop.send(());
+}

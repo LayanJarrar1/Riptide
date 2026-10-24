@@ -4863,6 +4863,7 @@ dependencies = [
  "riptide-media",
  "riptide-net",
  "riptide-research",
+ "riptide-store",
  "riptide-torrent",
  "serde",
  "serde_json",

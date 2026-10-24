@@ -13,7 +13,11 @@
 //!   (`cookie_origin`, a host-only field that is never forwarded) and that origin is the
 //!   origin of the page URL; otherwise they are dropped. Extra headers and credentials never
 //!   travel with a media request;
-//! * `dir` is refused: the browser never picks a folder.
+//! * `dir` is refused: the browser never picks a folder;
+//! * `refresh` (a fresh link for an expired download) is held to the bar of a plain `add`:
+//!   `http(s)` only, length and control-character limits, cookies only (no headers, no
+//!   credentials), and cookies are dropped when the sender names another origin than the new
+//!   URL's.
 
 use riptide_core::{DownloadKind, MediaSelection, Secrets};
 use riptide_ipc::{ErrorCode, Request, RequestBody, Response};
@@ -175,6 +179,47 @@ pub fn check_media(request: &mut Request, frame: &Value) -> Result<(), Response>
                 cookies: Some(c),
                 ..Secrets::default()
             });
+            Ok(())
+        }
+        RequestBody::Refresh {
+            url,
+            referrer,
+            secrets,
+            ..
+        } => {
+            if url.len() > MAX_FILE_URL_LEN {
+                return Err(refuse(id, "url is too long"));
+            }
+            if url.chars().any(char::is_control) {
+                return Err(refuse(id, "url contains control characters"));
+            }
+            let page = Url::parse(url).map_err(|_| refuse(id, "url is not valid"))?;
+            if !matches!(page.scheme(), "http" | "https") || page.host_str().is_none() {
+                return Err(refuse(id, "only http and https urls are accepted"));
+            }
+            if let Some(r) = referrer.as_deref() {
+                let ok = text_ok(r, MAX_FILE_URL_LEN)
+                    && Url::parse(r).is_ok_and(|u| matches!(u.scheme(), "http" | "https"));
+                if !ok {
+                    return Err(refuse(id, "referrer is not a valid http(s) url"));
+                }
+            }
+            // `cookie_origin` is optional here (as for a plain `add`), but a sender that names
+            // an origin other than the new URL's gets its cookies dropped.
+            let foreign = frame
+                .get("cookie_origin")
+                .and_then(Value::as_str)
+                .is_some_and(|o| http_url(o).map_or(true, |o| o.origin() != page.origin()));
+            *secrets = secrets
+                .take()
+                .and_then(|s| s.cookies)
+                .filter(|c| {
+                    !foreign && !c.is_empty() && c.len() <= MAX_COOKIE_LEN && text_ok(c, usize::MAX)
+                })
+                .map(|c| Secrets {
+                    cookies: Some(c),
+                    ..Secrets::default()
+                });
             Ok(())
         }
         _ => Ok(()),
@@ -389,6 +434,77 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(cookies_of(&cross), None);
+    }
+
+    fn refresh(extra: Value) -> Value {
+        let mut frame = json!({
+            "id": 8, "type": "refresh", "download_id": 1, "url": "https://example.test/new"
+        });
+        for (k, v) in extra.as_object().unwrap() {
+            frame[k] = v.clone();
+        }
+        frame
+    }
+
+    fn refresh_secrets(r: Request) -> Option<Secrets> {
+        match r.body {
+            RequestBody::Refresh { secrets, .. } => secrets,
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn refresh_urls_are_held_to_the_rules_of_add() {
+        run(refresh(json!({}))).unwrap();
+        let too_long = format!("https://example.com/{}", "a".repeat(MAX_FILE_URL_LEN));
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "ftp://x/y",
+            "not a url",
+            "https://example.com/\u{7}",
+            too_long.as_str(),
+        ] {
+            let e = run(refresh(json!({"url": bad}))).unwrap_err();
+            assert_eq!(e.id, 8);
+            message(&e);
+        }
+        message(&run(refresh(json!({"referrer": "javascript:1"}))).unwrap_err());
+        message(&run(refresh(json!({"referrer": "https://a/\u{0}"}))).unwrap_err());
+    }
+
+    #[test]
+    fn refresh_carries_cookies_only_and_only_for_the_new_origin() {
+        let secrets = json!({
+            "cookies": "SID=1",
+            "headers": [["Authorization", "Bearer x"]],
+            "auth": {"username": "u", "password": "p"}
+        });
+        let s = refresh_secrets(run(refresh(json!({"secrets": secrets}))).unwrap()).unwrap();
+        assert_eq!(s.cookies.as_deref(), Some("SID=1"));
+        assert!(s.headers.is_empty() && s.auth.is_none());
+        let same = run(refresh(
+            json!({"secrets": secrets, "cookie_origin": "https://example.test"}),
+        ))
+        .unwrap();
+        assert!(refresh_secrets(same).is_some());
+        for origin in ["https://evil.example", "http://example.test", "garbage"] {
+            let r = run(refresh(
+                json!({"secrets": secrets, "cookie_origin": origin}),
+            ))
+            .unwrap();
+            assert!(refresh_secrets(r).is_none(), "{origin}");
+        }
+        // headers and credentials alone leave nothing behind; oversized or control-character
+        // cookies are dropped
+        let only =
+            json!({"headers": [["Cookie", "x=1"]], "auth": {"username": "u", "password": "p"}});
+        assert!(refresh_secrets(run(refresh(json!({"secrets": only}))).unwrap()).is_none());
+        let big = "a=".to_string() + &"b".repeat(MAX_COOKIE_LEN);
+        let r = run(refresh(json!({"secrets": {"cookies": big}}))).unwrap();
+        assert!(refresh_secrets(r).is_none());
+        let r = run(refresh(json!({"secrets": {"cookies": "a=1\r\nX: y"}}))).unwrap();
+        assert!(refresh_secrets(r).is_none());
     }
 
     #[test]

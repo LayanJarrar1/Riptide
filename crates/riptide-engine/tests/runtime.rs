@@ -798,9 +798,10 @@ async fn checksum_mismatch_fails_permanently_and_never_touches_a_good_file() {
         "a failed verification never produces the final file"
     );
     assert!(
-        riptide_net::part_path_for(&record.final_path()).exists(),
-        "the part file stays for inspection"
+        !riptide_net::part_path_for(&record.final_path()).exists(),
+        "the bad part file is discarded, so Retry downloads again instead of re-verifying it"
     );
+    assert!(engine.segments(id).await.unwrap().is_empty());
     engine.shutdown().await;
 }
 
@@ -979,6 +980,63 @@ async fn settings_saved_before_organising_existed_keep_files_where_they_went() {
     assert_eq!(
         engine.settings().organized_root(),
         w.dir.path().join("downloads").join("Riptide")
+    );
+    engine.shutdown().await;
+}
+
+/// Hard rule 4: credentials stored for one origin never follow a refreshed link to another.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn refresh_url_drops_secrets_when_the_origin_changes_and_keeps_them_otherwise() {
+    use riptide_core::{Credentials, Secrets};
+
+    let w = World::new().await;
+    let engine = w.engine().await;
+    let mut request = w.request("/ok?size=1024");
+    request.start_paused = true;
+    request.secrets = Some(Secrets {
+        cookies: Some("SID=secret".into()),
+        headers: vec![
+            ("Authorization".into(), "Bearer token".into()),
+            ("Referer".into(), "https://example.test/page".into()),
+            ("User-Agent".into(), "TestAgent/1".into()),
+        ],
+        auth: Some(Credentials {
+            username: "u".into(),
+            password: "p".into(),
+        }),
+    });
+    let id = engine.add(request).await.unwrap();
+    let stored = || {
+        let store = riptide_store::Store::open(w.config().db_path).unwrap();
+        store.secrets(id).unwrap()
+    };
+    let before = stored().unwrap();
+    assert_eq!(before.cookies.as_deref(), Some("SID=secret"));
+
+    // same origin (scheme, host, port): everything stays
+    engine
+        .refresh_url(id, &w.server.url("/ok?size=1024&sig=2"), None, None)
+        .await
+        .unwrap();
+    assert_eq!(stored().unwrap(), before);
+
+    // another origin (the second port): cookies, credentials and custom headers are gone,
+    // Referer and User-Agent stay
+    engine
+        .refresh_url(id, &w.server.url_on_alt("/ok?size=1024"), None, None)
+        .await
+        .unwrap();
+    let after = stored().unwrap();
+    assert!(after.cookies.is_none() && after.auth.is_none());
+    assert_eq!(
+        after.headers,
+        vec![
+            (
+                "Referer".to_string(),
+                "https://example.test/page".to_string()
+            ),
+            ("User-Agent".to_string(), "TestAgent/1".to_string()),
+        ]
     );
     engine.shutdown().await;
 }

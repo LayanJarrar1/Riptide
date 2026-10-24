@@ -159,9 +159,36 @@ pub async fn check_update<R: Runtime>(
     Ok(info)
 }
 
+/// The order of an install: transfers are stopped at a checkpoint first (the installer replaces
+/// the files and, on Windows, ends this process), then `install` runs. If it fails, `revive`
+/// brings the engine back and the error goes to the caller, so a failed update never leaves the
+/// app running with a dead engine.
+async fn install_in_order<S, SF, R, RF>(
+    shutdown: S,
+    install: impl FnOnce() -> Result<(), String>,
+    revive: R,
+) -> Result<(), String>
+where
+    S: FnOnce() -> SF,
+    SF: std::future::Future<Output = ()>,
+    R: FnOnce() -> RF,
+    RF: std::future::Future<Output = ()>,
+{
+    shutdown().await;
+    match install() {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            tracing::warn!(error = %e, "update install failed; restarting the engine");
+            revive().await;
+            Err(e)
+        }
+    }
+}
+
 /// Downloads the update found by the last check, verifies its signature, stops the engine at
 /// a checkpoint (transfers resume after the restart) and runs the installer, which replaces
-/// the app and starts it again. Does not return on success.
+/// the app and starts it again. Does not return on success; a failed install returns its error
+/// and leaves the engine running.
 #[tauri::command]
 pub async fn install_update<R: Runtime>(
     app: AppHandle<R>,
@@ -178,17 +205,64 @@ pub async fn install_update<R: Runtime>(
         .download(|_, _| {}, || {})
         .await
         .map_err(to_message)?;
-    if let Some(engine) = app.try_state::<riptide_engine::Engine>() {
-        engine.inner().clone().shutdown().await;
-    }
+    let engine = app
+        .try_state::<riptide_engine::Engine>()
+        .map(|e| e.inner().clone());
     tracing::info!(version = %update.version, "installing update");
-    update.install(bytes).map_err(to_message)?;
+    install_in_order(
+        || async {
+            if let Some(engine) = &engine {
+                engine.shutdown().await;
+            }
+        },
+        || update.install(bytes).map_err(to_message),
+        || async {
+            if let Some(engine) = &engine {
+                if let Err(e) = engine.revive().await {
+                    tracing::error!(error = %e, "the engine could not be restarted after a failed update");
+                }
+                crate::torrent::start_if_needed(engine).await;
+            }
+        },
+    )
+    .await?;
     app.restart();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_failed_install_restarts_what_was_shut_down() {
+        use std::sync::Mutex;
+        let log = Mutex::new(Vec::<&str>::new());
+        let r = install_in_order(
+            || async { log.lock().unwrap().push("shutdown") },
+            || {
+                log.lock().unwrap().push("install");
+                Err("disk full".to_string())
+            },
+            || async { log.lock().unwrap().push("revive") },
+        )
+        .await;
+        assert_eq!(r, Err("disk full".to_string()));
+        assert_eq!(*log.lock().unwrap(), ["shutdown", "install", "revive"]);
+
+        // a successful install leaves the engine down: the app restarts into the new version
+        log.lock().unwrap().clear();
+        let r = install_in_order(
+            || async { log.lock().unwrap().push("shutdown") },
+            || {
+                log.lock().unwrap().push("install");
+                Ok(())
+            },
+            || async { log.lock().unwrap().push("revive") },
+        )
+        .await;
+        assert_eq!(r, Ok(()));
+        assert_eq!(*log.lock().unwrap(), ["shutdown", "install"]);
+    }
 
     #[test]
     fn release_url_accepts_only_plain_versions() {

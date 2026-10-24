@@ -72,4 +72,11 @@ allow_private_redirects: boolean,
 /**
  * Settings -> Torrents: seeding rules, upload cap, DHT, port.
  */
-torrent: TorrentOptions, };
+torrent: TorrentOptions, 
+/**
+ * Put a download that failed on a network error (no connection, timeout, reset, DNS) back
+ * in the queue after 1, 5 and 15 minutes, at most three times. Not for HTTP errors, disk
+ * errors, checksum mismatches or a changed file. Any action of the user starts the count
+ * over. On by default.
+ */
+auto_retry: boolean, };

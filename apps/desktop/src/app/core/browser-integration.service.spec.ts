@@ -41,7 +41,7 @@ describe('BrowserIntegrationService', () => {
           browsers: [{ browser: 'chrome', installed: true, folder: 'C:/Riptide/extension/chrome', folderFound: true }],
         } as unknown as T);
       } else if (cmd === 'get_engine_settings') {
-        return Promise.resolve({ default_dir: 'D:\\x', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, organize: false, organize_root: '', global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false } as unknown as T);
+        return Promise.resolve({ default_dir: 'D:\\x', connections: 8, per_host: 4, max_active: 3, user_agent: null, category_dirs: {}, organize: false, organize_root: '', global_speed_limit: null, proxy: { mode: 'system', url: '' }, mark_of_the_web: true, allow_private_redirects: false, auto_retry: true } as unknown as T);
       }
       return Promise.resolve(current as unknown as T);
     };
