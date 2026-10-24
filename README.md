@@ -60,24 +60,32 @@ Upgrading from an alpha build works in place. The database moves to a new format
 
 ## Screenshots
 
-<p align="center"><sub>The real interface with sample data.</sub></p>
+<p align="center"><sub>The real interface with sample data. These captures come from the current development build, so some of what they show (Research categories and modes, the redesigned Settings) arrives in the next beta, not in the 0.1.0-beta.1 download.</sub></p>
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/readme/v7-downloads-en.webp" alt="The downloads list: segmented progress bars, speed, time left and status"></td>
-    <td width="50%"><img src="assets/readme/v7-files-en.webp" alt="The file manager with two panes and coloured folders"></td>
+    <td width="50%"><img src="assets/readme/app-downloads-en-dark.webp" alt="The downloads list in the dark theme: segmented progress bars, status badges and a sidebar of categories"></td>
+    <td width="50%"><img src="assets/readme/app-files-en.webp" alt="The file manager with two panes, a folder tree and a Copy to other pane button"></td>
   </tr>
   <tr>
     <td align="center"><sub><b>Downloads.</b> Every stripe is one connection.</sub></td>
     <td align="center"><sub><b>Files.</b> Two panes, drag and drop.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/readme/v7-research-workspace-en.webp" alt="Research as a conversation: progress steps, a summary, and result cards with licence and why each matches"></td>
-    <td width="50%"><img src="assets/readme/v7-research-workspace-ar.webp" alt="The same Research page in Arabic, mirrored right to left"></td>
+    <td width="50%"><img src="assets/readme/app-research-quick-en.webp" alt="Research for a video: results grouped under Exact matches, each card saying which parts of the request were confirmed"></td>
+    <td width="50%"><img src="assets/readme/app-research-quick-ar.webp" alt="The same Research page in Arabic and the light theme, mirrored right to left"></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>Research.</b> Steps, a summary and result cards.</sub></td>
+    <td align="center"><sub><b>Research.</b> Pick a category and a mode; exact matches come first.</sub></td>
     <td align="center"><sub><b>بالعربية.</b> الواجهة تنعكس بالكامل.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/app-research-deep-en.webp" alt="Deep Research results in groups: Exact matches, Likely matches and a collapsed Related group"></td>
+    <td width="50%"><img src="assets/readme/app-settings-ai-en.webp" alt="Settings with a section list and the AI and Research page: connection test and daily usage"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Deep Research.</b> Results grouped by how well they match.</sub></td>
+    <td align="center"><sub><b>Settings.</b> Sections, and an AI that stays optional.</sub></td>
   </tr>
 </table>
 
