@@ -68,6 +68,8 @@ function* walk(dir) {
 const CALL_RE = /\bt\(\s*(['"])([^'"\n]+)\1\s*\)/g;
 const PIPE_RE = /(['"])([^'"\n]+)\1\s*\|\s*t\b/g;
 // t(`prefix.${expr}`) — a dynamic lookup; every key under `prefix.` counts as referenced.
+// plural('key', n) — a plural lookup; `key.other` must exist and every `key.<form>` counts as referenced.
+const PLURAL_RE = /\bplural\(\s*(?:\w+\s*,\s*)?(['"])([^'"\n]+)\1\s*,/g;
 const PREFIX_RE = /\bt\(\s*`([^`$\n]+\.)\$\{[^`\n]*\}`\s*\)/g;
 
 function lineOf(source, index) {
@@ -88,6 +90,17 @@ function collectUsedKeys() {
         }
       }
     }
+    PLURAL_RE.lastIndex = 0;
+    for (const match of source.matchAll(PLURAL_RE)) {
+      const key = `${match[2]}.other`;
+      if (!used.has(key)) {
+        used.set(key, `${rel(file)}:${lineOf(source, match.index)}`);
+      }
+      const prefix = `${match[2]}.`;
+      if (!prefixes.has(prefix)) {
+        prefixes.set(prefix, `${rel(file)}:${lineOf(source, match.index)}`);
+      }
+    }
     PREFIX_RE.lastIndex = 0;
     for (const match of source.matchAll(PREFIX_RE)) {
       const prefix = match[1];
@@ -102,11 +115,15 @@ function collectUsedKeys() {
 const ar = loadTable('ar', files.ar);
 const en = loadTable('en', files.en);
 
+// Arabic has more plural forms than English; those extras may exist in one file only, as long as
+// the `.other` form of the same key is in both.
+const isExtraPlural = (key) => /\.(zero|two|few|many)$/.test(key) && ar.has(key.replace(/\.\w+$/, '.other')) && en.has(key.replace(/\.\w+$/, '.other'));
+
 for (const key of ar.keys()) {
-  if (!en.has(key)) problems.push(`en.json is missing "${key}" (present in ar.json)`);
+  if (!en.has(key) && !isExtraPlural(key)) problems.push(`en.json is missing "${key}" (present in ar.json)`);
 }
 for (const key of en.keys()) {
-  if (!ar.has(key)) problems.push(`ar.json is missing "${key}" (present in en.json)`);
+  if (!ar.has(key) && !isExtraPlural(key)) problems.push(`ar.json is missing "${key}" (present in en.json)`);
 }
 
 const { used, prefixes } = collectUsedKeys();

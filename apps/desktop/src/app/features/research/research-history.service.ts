@@ -79,7 +79,7 @@ export class ResearchHistoryService {
 
   /** Changes one turn; the storage is written once the turn is no longer running. */
   patchTurn(conversationId: string, turnId: string, patch: Partial<Turn>): void {
-    this.update(conversationId, (c) => ({ ...c, turns: c.turns.map((t) => (t.id === turnId ? { ...t, ...patch } : t)) }));
+    this.update(conversationId, (c) => ({ ...c, turns: c.turns.map((t) => (t.id === turnId ? { ...t, ...patch } : t)) }), false);
     if (patch.status !== undefined && patch.status !== 'running') {
       this.save();
     }
@@ -95,8 +95,9 @@ export class ResearchHistoryService {
     return this.live.has(turnId);
   }
 
-  private update(id: string, fn: (c: Conversation) => Conversation): void {
-    this.all.update((list) => list.map((c) => (c.id === id ? { ...fn(c), updatedAt: Date.now() } : c)));
+  /** `touch` moves the conversation up the list; passive updates (a search filling in, badges refreshing) do not. */
+  private update(id: string, fn: (c: Conversation) => Conversation, touch = true): void {
+    this.all.update((list) => list.map((c) => (c.id === id ? { ...fn(c), updatedAt: touch ? Date.now() : c.updatedAt } : c)));
   }
 
   private save(): void {

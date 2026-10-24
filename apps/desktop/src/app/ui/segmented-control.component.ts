@@ -23,6 +23,7 @@ export interface SegmentedOption<T extends string> {
           class="segment"
           [class.is-active]="option.value === value()"
           [attr.aria-checked]="option.value === value()"
+          [disabled]="disabled()"
           [attr.lang]="optionLang()[option.value] ?? null"
           (click)="select(option.value)"
         >
@@ -56,7 +57,12 @@ export interface SegmentedOption<T extends string> {
         background-color var(--motion-fast) var(--ease-standard);
     }
 
-    .segment:hover {
+    .segment:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    .segment:hover:not(:disabled) {
       color: var(--color-text);
       background: var(--color-surface-hover);
     }
@@ -84,11 +90,14 @@ export class SegmentedControlComponent<T extends string> {
   /** Optional per-option `lang` attribute (used so "العربية" / "English" shape correctly). */
   readonly optionLang = input<Partial<Record<T, string>>>({});
 
+  /** Greys the whole group out and ignores clicks. */
+  readonly disabled = input(false);
+
   /** Emits when the user picks a different segment. */
   readonly valueChange = output<T>();
 
   protected select(next: T): void {
-    if (next !== this.value()) {
+    if (!this.disabled() && next !== this.value()) {
       this.valueChange.emit(next);
     }
   }

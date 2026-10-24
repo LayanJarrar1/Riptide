@@ -9,10 +9,11 @@ import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
 
 /**
- * Settings → Research sources: the two sources that need something from the user. Jamendo needs
- * the user's own free client id; general web search needs a backend the user chooses (Brave
- * Search API with a token, or a SearXNG instance, or none). Tokens and the client id go to the
- * Windows Credential Manager through the backend and come back only as a masked hint.
+ * Settings → Research sources: the two optional extras. The open sources need nothing. Jamendo
+ * wants the user's own free client id; general web search is "Advanced" because search engines
+ * charge for their APIs (Brave's is paid and needs a card; SearXNG is free when someone runs an
+ * instance) and is off by default. Tokens and the client id go to the Windows Credential Manager
+ * through the backend and come back only as a masked hint.
  */
 @Component({
   selector: 'app-research-settings',
@@ -45,6 +46,11 @@ import { ToastService } from '../../ui/toast.service';
           </div>
         </div>
 
+        <details class="advanced" [open]="v.settings.web !== 'none'">
+         <summary class="advanced-summary">
+          <app-icon name="chevronEnd" [size]="14" class="chev" />
+          <span>{{ i18n.t('rs.advanced') }}</span>
+         </summary>
         <div class="setting column">
           <div class="setting-text">
             <span class="setting-name">{{ i18n.t('rs.web') }}</span>
@@ -91,6 +97,7 @@ import { ToastService } from '../../ui/toast.service';
             <span>{{ i18n.t(v.webReady ? 'rs.webReady' : 'rs.webOff') }}</span>
           </div>
         </div>
+        </details>
       }
     </section>
   `,
@@ -171,6 +178,34 @@ import { ToastService } from '../../ui/toast.service';
 
       .choice input {
         accent-color: var(--color-accent);
+      }
+
+      .advanced {
+        margin-block-start: var(--space-2);
+        border-block-start: 1px solid var(--color-border);
+        padding-block-start: var(--space-3);
+      }
+
+      .advanced-summary {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        cursor: pointer;
+        list-style: none;
+        font-weight: var(--weight-medium);
+        user-select: none;
+      }
+
+      .advanced-summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .chev {
+        transition: transform var(--motion-fast) var(--ease-standard);
+      }
+
+      .advanced[open] .chev {
+        transform: rotate(calc(var(--dir-sign) * 90deg));
       }
 
       .state {

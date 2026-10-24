@@ -63,7 +63,7 @@ type Phase = 'resolving' | 'ready' | 'error';
                 <div class="head-text">
                   <p class="name" dir="auto">{{ p.name }}</p>
                   <p class="sub">
-                    {{ i18n.t('torrent.files').replace('{n}', '' + p.files.length) }} · <span class="num">{{ format.bytes(p.totalBytes) }}</span>
+                    {{ i18n.plural('torrent.files', p.files.length).replace('{n}', '' + p.files.length) }} · <span class="num">{{ format.bytes(p.totalBytes) }}</span>
                     @if (p.isPrivate) {
                       · {{ i18n.t('torrent.private') }}
                     }

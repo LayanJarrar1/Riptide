@@ -55,8 +55,8 @@ import { MAX_PROMPT } from './research-history';
             <span dir="auto">{{ providerLabel() }}</span>
           </button>
         } @else {
-          <button type="button" class="provider is-off" (click)="openAiSettings.emit()">
-            <app-icon name="info" [size]="13" />
+          <button type="button" class="provider is-off" (click)="setupAi.emit()">
+            <app-icon name="sparkles" [size]="13" />
             <span>{{ i18n.t('research.keywordMode.short') }}</span>
           </button>
         }
@@ -216,6 +216,8 @@ export class ResearchComposerComponent {
   readonly send = output<string>();
   readonly stop = output<void>();
   readonly openAiSettings = output<void>();
+  /** The "Keyword search · Add AI" chip: opens the guided setup. */
+  readonly setupAi = output<void>();
 
   protected readonly text = signal('');
   private readonly field = viewChild.required<ElementRef<HTMLTextAreaElement>>('field');

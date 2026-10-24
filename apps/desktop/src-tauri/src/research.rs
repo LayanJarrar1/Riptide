@@ -27,7 +27,7 @@
 //! Download-history titles are included in prompts only while *Let the AI see my download
 //! history* is on.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -378,12 +378,54 @@ impl Run {
     }
 }
 
+/// The results of this app run's searches by id (the only things `research_add` will download),
+/// bounded: when full the oldest ids go first, so the cards on screen keep resolving.
+struct HitCache {
+    map: HashMap<String, Hit>,
+    /// Ids in insertion order, oldest first.
+    order: VecDeque<String>,
+    max: usize,
+}
+
+impl HitCache {
+    fn new(max: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+            max,
+        }
+    }
+
+    /// Stores `hits`. An id already there keeps its place in the order (its hit is refreshed).
+    /// Then the oldest ids are evicted until the cache fits, never one of `hits` themselves.
+    fn insert(&mut self, hits: &[Hit]) {
+        for h in hits {
+            if self.map.insert(h.id.clone(), h.clone()).is_none() {
+                self.order.push_back(h.id.clone());
+            }
+        }
+        let keep: HashSet<&str> = hits.iter().map(|h| h.id.as_str()).collect();
+        while self.map.len() > self.max {
+            let Some(i) = self.order.iter().position(|id| !keep.contains(id.as_str())) else {
+                break;
+            };
+            if let Some(id) = self.order.remove(i) {
+                self.map.remove(&id);
+            }
+        }
+    }
+
+    fn get(&self, id: &str) -> Option<&Hit> {
+        self.map.get(id)
+    }
+}
+
 /// The adapters (kept between searches so their rate limiting carries over), the results of
-/// the searches of this app run (the only things `research_add` will download; bounded by
-/// `CACHE_MAX`, cleared only when full) and the recent runs.
+/// the searches of this app run (bounded by `CACHE_MAX`, oldest evicted first) and the recent
+/// runs.
 pub struct ResearchState {
     adapters: Vec<Arc<dyn SearchSource>>,
-    cache: Mutex<HashMap<String, Hit>>,
+    cache: Mutex<HitCache>,
     runs: Mutex<Vec<Arc<Run>>>,
     next_id: AtomicU64,
 }
@@ -395,7 +437,7 @@ impl Default for ResearchState {
                 .iter()
                 .filter_map(|s| default_source(*s))
                 .collect(),
-            cache: Mutex::new(HashMap::new()),
+            cache: Mutex::new(HitCache::new(CACHE_MAX)),
             runs: Mutex::new(Vec::new()),
             next_id: AtomicU64::new(1),
         }
@@ -542,7 +584,7 @@ async fn emitter(app: AppHandle, engine: Engine, id: u64, mut rx: mpsc::Unbounde
 /// Runs the given queries on the run's adapters and reports everything as events.
 async fn run_round(
     run: &Run,
-    cache: &Mutex<HashMap<String, Hit>>,
+    cache: &Mutex<HitCache>,
     adapters: &[Arc<dyn SearchSource>],
     queries: &[String],
 ) {
@@ -561,15 +603,7 @@ async fn run_round(
                 code: None,
             }),
             SearchEvent::Hits { source, hits } => {
-                {
-                    let mut c = Run::lock(cache);
-                    if c.len() + hits.len() > CACHE_MAX {
-                        c.clear();
-                    }
-                    for h in &hits {
-                        c.insert(h.id.clone(), h.clone());
-                    }
-                }
+                Run::lock(cache).insert(&hits);
                 Run::lock(&run.hits).extend(hits.iter().cloned());
                 *Run::lock(&run.counts).entry(source).or_default() += hits.len();
                 run.send(Ev::Hits {
@@ -1021,6 +1055,55 @@ mod tests {
             &format!("t{n}"),
             &format!("https://x.example/{}/{n}", src.id()),
         )
+    }
+
+    #[test]
+    fn cache_evicts_the_oldest_first_and_keeps_the_new_hits() {
+        let mut c = HitCache::new(5);
+        let batch =
+            |r: std::ops::Range<usize>| -> Vec<Hit> { r.map(|n| hit(Source::Arxiv, n)).collect() };
+        c.insert(&batch(0..4));
+        assert_eq!(c.map.len(), 4);
+        c.insert(&batch(4..7));
+        assert_eq!(c.map.len(), 5);
+        let ids = |r: std::ops::Range<usize>| -> Vec<String> {
+            r.map(|n| hit(Source::Arxiv, n).id).collect()
+        };
+        assert!(c.get(&ids(0..1)[0]).is_none());
+        assert!(c.get(&ids(1..2)[0]).is_none());
+        for id in ids(2..7) {
+            assert!(c.get(&id).is_some(), "{id}");
+        }
+        assert_eq!(c.order.len(), c.map.len());
+    }
+
+    #[test]
+    fn cache_reinsert_keeps_the_place_and_never_grows() {
+        let mut c = HitCache::new(3);
+        c.insert(&[hit(Source::Arxiv, 0), hit(Source::Arxiv, 1)]);
+        c.insert(&[hit(Source::Arxiv, 0)]);
+        assert_eq!((c.map.len(), c.order.len()), (2, 2));
+        // 0 is still the oldest, so it goes first
+        c.insert(&[hit(Source::Arxiv, 2), hit(Source::Arxiv, 3)]);
+        assert!(c.get(&hit(Source::Arxiv, 0).id).is_none());
+        assert!(c.get(&hit(Source::Arxiv, 1).id).is_some());
+        assert_eq!(c.map.len(), 3);
+    }
+
+    #[test]
+    fn cache_never_evicts_a_batch_larger_than_its_capacity() {
+        let mut c = HitCache::new(2);
+        c.insert(&[hit(Source::Arxiv, 0)]);
+        let big: Vec<Hit> = (1..5).map(|n| hit(Source::Arxiv, n)).collect();
+        c.insert(&big);
+        assert!(c.get(&hit(Source::Arxiv, 0).id).is_none());
+        for h in &big {
+            assert!(c.get(&h.id).is_some());
+        }
+        // the next small batch trims it back down
+        c.insert(&[hit(Source::Arxiv, 9)]);
+        assert_eq!(c.map.len(), 2);
+        assert!(c.get(&hit(Source::Arxiv, 9).id).is_some());
     }
 
     #[test]

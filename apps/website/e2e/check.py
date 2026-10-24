@@ -71,31 +71,31 @@ with sync_playwright() as p:
         hero_dl = page.eval_on_selector('.hero .btn-primary', 'e => e.href')
         check(f'{tag} hero CTA is the installer', hero_dl.endswith('x64-setup.exe'), hero_dl)
         REL = 'https://github.com/LayanJarrar1/Riptide/releases'
-        check(f'{tag} hero CTA is the alpha.5 installer', hero_dl == f'{REL}/download/v0.1.0-alpha.5/Riptide_0.1.0-alpha.5_x64-setup.exe', hero_dl)
+        check(f'{tag} hero CTA is the beta.1 installer', hero_dl == f'{REL}/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe', hero_dl)
         links = page.eval_on_selector_all('a[href]', 'els => els.map(e => e.href)')
-        for want in (f'{REL}/download/v0.1.0-alpha.5/Riptide-0.1.0-alpha.5-portable.zip', f'{REL}/download/v0.1.0-alpha.5/SHA256SUMS.txt', f'{REL}/tag/v0.1.0-alpha.5'):
+        for want in (f'{REL}/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip', f'{REL}/download/v0.1.0-beta.1/SHA256SUMS.txt', f'{REL}/tag/v0.1.0-beta.1'):
             check(f'{tag} links to {want.split("/")[-1]}', want in links)
         EXACT = {
-            'installer': f'{REL}/download/v0.1.0-alpha.5/Riptide_0.1.0-alpha.5_x64-setup.exe',
-            'portable': f'{REL}/download/v0.1.0-alpha.5/Riptide-0.1.0-alpha.5-portable.zip',
-            'sums': f'{REL}/download/v0.1.0-alpha.5/SHA256SUMS.txt',
+            'installer': f'{REL}/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe',
+            'portable': f'{REL}/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip',
+            'sums': f'{REL}/download/v0.1.0-beta.1/SHA256SUMS.txt',
         }
         rel_hrefs = page.eval_on_selector_all('a[href*="/releases"]', 'els => els.map(e => e.href)')
-        allowed = set(EXACT.values()) | {REL, f'{REL}/tag/v0.1.0-alpha.5'}
+        allowed = set(EXACT.values()) | {REL, f'{REL}/tag/v0.1.0-beta.1'}
         check(f'{tag} every releases href is exactly an expected release URL', rel_hrefs and all(h in allowed for h in rel_hrefs), str([h for h in rel_hrefs if h not in allowed]))
         main_dl = page.eval_on_selector('#download .dl-main', 'e => e.href'); port = page.eval_on_selector('#download .dl:not(.dl-main)', 'e => e.href')
         check(f'{tag} band installer and portable are the exact asset URLs', main_dl == EXACT['installer'] and port == EXACT['portable'], f'{main_dl} {port}')
         check(f'{tag} header Download button is the installer', page.eval_on_selector('.nav-actions .btn-primary', 'e => e.href') == EXACT['installer'])
         body = page.content()
         check(f'{tag} no leftover alpha 3 or 4', not re.search(r'alpha[ .\-]?[34]|ألفا [34]', body, re.I))
-        check(f'{tag} badges say alpha 5', ('Alpha 5' in body) if lang == 'en' else ('ألفا 5' in body))
+        check(f'{tag} badges say beta 1', ('Beta 1' in body) if lang == 'en' else ('بيتا 1' in body))
         check(f'{tag} no store tiles and no soon/coming text', page.locator('.stores, .store').count() == 0 and not re.search(r'coming soon|soon|قريب', page.content(), re.I))
-        VER = '0.1.0-alpha.5'
+        VER = '0.1.0-beta.1'
         check(f'{tag} hero CTA shows the version', VER in page.text_content('.hero .btn-primary'))
         check(f'{tag} footer shows the version', VER in page.text_content('.footer-meta'))
         check(f'{tag} download band has the version', VER in page.text_content('#download .dl-main'))
         wn = page.locator('.whats-new li').count()
-        check(f'{tag} whats-new list has 5-6 lines', 5 <= wn <= 6, str(wn))
+        check(f'{tag} whats-new list has 5-9 lines', 5 <= wn <= 9, str(wn))
         check(f'{tag} whats-new heading names the version', VER in page.text_content('.whats-new h3'))
         check(f'{tag} always-up-to-date block present', page.locator('.always-up p').text_content().count('GitHub') == 1)
         check(f'{tag} 3 install steps for Chrome', page.locator('.steps li').count() == 3 and 'chrome://extensions' in page.text_content('.steps'))
@@ -105,10 +105,10 @@ with sync_playwright() as p:
             check(f'{tag} copy mentions {word}', word in txt)
         check(f'{tag} FAQ has at most 7 entries', 1 <= page.locator('details.faq-item').count() <= 7)
         new_imgs = page.eval_on_selector_all('#new img', 'els => els.map(e => [e.getAttribute("src"), e.getAttribute("alt"), e.getAttribute("width"), e.getAttribute("height"), e.getAttribute("loading")])')
-        check(f'{tag} new-in-alpha-5 block has 4 lazy images with alt, width and height', len(new_imgs) == 4 and all(a and b and c and d and e == 'lazy' for a, b, c, d, e in new_imgs), str(new_imgs)[:200])
-        check(f'{tag} new-in-alpha-5 images are the {lang} ones', all(f'-{lang}.webp' in a for a, *_ in new_imgs))
+        check(f'{tag} new-in-beta-1 block has 4 lazy images with alt, width and height', len(new_imgs) == 4 and all(a and b and c and d and e == 'lazy' for a, b, c, d, e in new_imgs), str(new_imgs)[:200])
+        check(f'{tag} new-in-beta-1 images are the {lang} ones', all(f'-{lang}.webp' in a for a, *_ in new_imgs))
         check(f'{tag} open-sources policy note is shown', page.locator('#new .policy').count() == 1 and (('piracy' in page.text_content('#new .policy')) if lang == 'en' else ('القرصنة' in page.text_content('#new .policy'))))
-        check(f'{tag} new block title names the release', ('Alpha 5' in page.text_content('#new .new-title')) if lang == 'en' else ('ألفا 5' in page.text_content('#new .new-title')))
+        check(f'{tag} new block title names the release', ('Beta 1' in page.text_content('#new .new-title')) if lang == 'en' else ('بيتا 1' in page.text_content('#new .new-title')))
         check(f'{tag} no social-network mentions', not any(w in page.content().lower() for w in ('link' + 'edin', 'twitter.com', 'facebook.com')))
         wn_text = page.text_content('.whats-new')
         for word in (('BitTorrent', 'Research', 'Optional AI', 'Title bar') if lang == 'en' else ('تورنت', 'البحث', 'ذكاء اصطناعي اختياري', 'قوائم')):
@@ -536,7 +536,9 @@ with sync_playwright() as p:
     FEATURES = json.loads((Path(__file__).resolve().parent.parent / 'src' / 'features.json').read_text(encoding='utf8'))['features']
 
     def numbers(v):
-        return [int(n) for n in re.findall(r'\d+', v)]
+        core, _, pre = v.partition('-')
+        rank = {'alpha': 0, 'beta': 1, '': 2}.get(re.sub(r'[^a-z]', '', pre), 0)
+        return [int(n) for n in core.split('.')] + [rank] + [int(n) for n in re.findall(r'\d+', pre)]
 
     def expected_release(page_version):
         # Normal run: the page shows the release in release.json. Release preparation (RIPTIDE_RELEASE_AHEAD=1): the page may
@@ -567,7 +569,7 @@ with sync_playwright() as p:
             shown = feat['version'] == f['release'] and f['verified']
             in_list = title in page.text_content('.whats-new')
             check(f'{tag} features.json "{f["id"]}" is listed exactly when verified for {feat["version"]}', in_list == shown, f'{title!r} listed={in_list} expected={shown}')
-        check(f'{tag} channel badge text', ('Alpha' in body) if lang == 'en' else ('ألفا' in body))
+        check(f'{tag} channel badge text', ('Beta' in body) if lang == 'en' else ('بيتا' in body))
         pill = page.locator('.rel-pill')
         check(f'{tag} pill is visible on first visit', pill.is_visible())
         text = pill.inner_text()

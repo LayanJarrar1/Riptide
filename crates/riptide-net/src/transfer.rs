@@ -31,7 +31,7 @@ use crate::error::{Error, Result};
 use crate::file::PartFile;
 use crate::http::{ensure_success, send};
 use crate::limiter::HostLimiter;
-use crate::probe::{parse_content_range, parse_content_range_total};
+use crate::probe::{parse_content_range, parse_content_range_total, pick_validator};
 use crate::rate::RateLimiter;
 use crate::retry::RetryPolicy;
 use crate::speed::SpeedMeter;
@@ -299,7 +299,9 @@ async fn run_once(
     limiter: &Arc<HostLimiter>,
 ) -> Result<Run> {
     let streaming = plan.size.is_none() || !plan.supports_ranges;
-    let connections = if streaming {
+    // without ETag and Last-Modified nothing would notice the file changing between two
+    // connections' requests, so such a download uses one connection
+    let connections = if streaming || plan.validator.is_none() {
         1
     } else {
         cfg.connections.clamp(1, riptide_core::MAX_CONNECTIONS)
@@ -379,7 +381,12 @@ async fn run_once(
 
     // --- writer ------------------------------------------------------------------------------
     let (tx, rx) = mpsc::channel::<Chunk>(64);
-    let writer = spawn_writer(Arc::clone(&file), Arc::clone(&state), rx);
+    let writer = spawn_writer(
+        Arc::clone(&file),
+        Arc::clone(&state),
+        rx,
+        streaming && plan.size.is_none(),
+    );
 
     // --- segment tasks ------------------------------------------------------------------------
     let run_token = stop.child_token();
@@ -719,12 +726,41 @@ async fn checkpoint(
     streaming: bool,
 ) -> Result<()> {
     let f = Arc::clone(file);
-    tokio::task::spawn_blocking(move || f.sync())
+    checkpoint_with(move || f.sync(), state, events, streaming).await
+}
+
+/// [`checkpoint`] with the sync as a parameter. The segment table is cloned BEFORE the sync
+/// starts: the writer keeps raising `written` while `sync_data` runs, and those bytes are not
+/// durable yet. Emitting a table cloned afterwards could claim bytes a power cut would lose,
+/// leaving a silent hole on resume. The earlier snapshot is what gets emitted.
+async fn checkpoint_with(
+    sync: impl FnOnce() -> std::io::Result<()> + Send + 'static,
+    state: &State,
+    events: &mpsc::Sender<TransferEvent>,
+    streaming: bool,
+) -> Result<()> {
+    let segments = persistable(streaming, lock(state).segments.clone());
+    tokio::task::spawn_blocking(sync)
         .await
         .map_err(|e| Error::Protocol(format!("sync task failed: {e}")))??;
-    let segments = persistable(streaming, lock(state).segments.clone());
     let _ = events.send(TransferEvent::Checkpoint { segments }).await;
     Ok(())
+}
+
+/// Accounts `len` bytes written at `start` to `seg`. Only an unknown-size stream (`grow`) may
+/// extend the segment with the data; a ranged segment keeps its planned end, because work
+/// stealing may have shrunk it while chunks beyond the new end were still queued, and growing it
+/// back would overlap the new upper segment (the table would stop covering the file and bytes
+/// would count twice).
+fn record_write(seg: &mut Segment, start: u64, len: u64, grow: bool) {
+    let end = start + len;
+    if grow && end > seg.end {
+        seg.end = end;
+    }
+    let written = end.saturating_sub(seg.start);
+    if written > seg.written {
+        seg.written = written.min(seg.len());
+    }
 }
 
 /// Chunks are coalesced per segment up to this size before one positioned write.
@@ -741,6 +777,7 @@ fn spawn_writer(
     file: Arc<PartFile>,
     state: State,
     mut rx: mpsc::Receiver<Chunk>,
+    grow: bool,
 ) -> tokio::task::JoinHandle<Result<()>> {
     tokio::task::spawn_blocking(move || {
         let mut pending: std::collections::HashMap<usize, (u64, Vec<u8>)> =
@@ -751,17 +788,8 @@ fn spawn_writer(
                     return Ok(());
                 }
                 file.write_at(start, buf)?;
-                let end = start + buf.len() as u64;
                 let mut s = lock(state);
-                let seg = &mut s.segments[index];
-                if end > seg.end {
-                    // unknown-size stream: the segment grows with the data
-                    seg.end = end;
-                }
-                let written = end.saturating_sub(seg.start);
-                if written > seg.written {
-                    seg.written = written.min(seg.len());
-                }
+                record_write(&mut s.segments[index], start, buf.len() as u64, grow);
                 Ok(())
             };
 
@@ -952,11 +980,11 @@ impl SegmentTask {
                     .map(|(end, _)| end)
             }
             200 => Ok(SegEnd::Restart {
-                validator: headers
-                    .get(ETAG)
-                    .or_else(|| headers.get(LAST_MODIFIED))
-                    .and_then(|v| v.to_str().ok())
-                    .map(str::to_owned),
+                validator: pick_validator(
+                    headers.get(ETAG).and_then(|v| v.to_str().ok()),
+                    headers.get(LAST_MODIFIED).and_then(|v| v.to_str().ok()),
+                )
+                .map(str::to_owned),
                 size: headers
                     .get(CONTENT_LENGTH)
                     .and_then(|v| v.to_str().ok())
@@ -1169,5 +1197,90 @@ mod tests {
         let kept = persistable(true, vec![g.clone()]);
         assert_eq!((kept[0].written, kept[0].end), (0, 0));
         assert_eq!(persistable(false, vec![g.clone()])[0].written, 500);
+    }
+
+    fn state_of(segments: Vec<Segment>) -> State {
+        Arc::new(Mutex::new(Shared { segments }))
+    }
+
+    #[tokio::test]
+    async fn checkpoint_never_claims_bytes_written_during_the_sync() {
+        let mut g = seg(0, 0, 100);
+        g.written = 10;
+        let state = state_of(vec![g]);
+        let (tx, mut rx) = mpsc::channel(4);
+        let during = Arc::clone(&state);
+        // the writer advances `written` while sync_data is running
+        let sync = move || {
+            lock(&during).segments[0].written = 90;
+            Ok(())
+        };
+        checkpoint_with(sync, &state, &tx, false).await.unwrap();
+        match rx.recv().await.unwrap() {
+            TransferEvent::Checkpoint { segments } => {
+                assert_eq!(segments[0].written, 10, "snapshot is from before the sync");
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        // the live table did advance, and the next checkpoint will carry it
+        assert_eq!(lock(&state).segments[0].written, 90);
+    }
+
+    #[tokio::test]
+    async fn a_failed_sync_emits_no_checkpoint() {
+        let state = state_of(vec![seg(0, 0, 10)]);
+        let (tx, mut rx) = mpsc::channel(4);
+        let sync = || Err(std::io::Error::other("disk gone"));
+        assert!(checkpoint_with(sync, &state, &tx, false).await.is_err());
+        drop(tx);
+        assert!(rx.recv().await.is_none());
+    }
+
+    #[test]
+    fn a_split_segment_does_not_grow_back_over_its_neighbour() {
+        // a 8 MiB ranged segment, one connection busy, one free: work stealing splits it
+        let mib = 1024 * 1024;
+        let state = state_of(vec![{
+            let mut g = seg(0, 0, 8 * mib);
+            g.state = SegmentState::Active;
+            g.written = mib;
+            g
+        }]);
+        let mut tasks: JoinSet<(usize, Result<SegEnd>)> = JoinSet::new();
+        let mut spawned = Vec::new();
+        fill_connections(
+            &state,
+            2,
+            2 * mib,
+            &mut |i, _| {
+                lock(&state).segments[i].state = SegmentState::Active;
+                spawned.push(i);
+            },
+            &mut tasks,
+            DownloadId(1),
+            false,
+        );
+        assert_eq!(spawned, vec![1]);
+        let lower_end = lock(&state).segments[0].end;
+        assert!(lower_end < 8 * mib);
+        // the pump had already queued data past the new end; the writer lands it late
+        {
+            let mut s = lock(&state);
+            record_write(&mut s.segments[0], mib, 7 * mib, false);
+        }
+        let s = lock(&state);
+        assert_eq!(s.segments[0].end, lower_end, "end must not grow back");
+        assert!(s.segments[0].written <= s.segments[0].len());
+        assert!(covers(&s.segments, 8 * mib), "table still covers the file");
+        let total: u64 = s.segments.iter().map(|g| g.written).sum();
+        assert!(total <= 8 * mib, "progress never exceeds the file size");
+    }
+
+    #[test]
+    fn an_unknown_size_stream_still_grows_with_its_data() {
+        let mut g = seg(0, 0, 0);
+        record_write(&mut g, 0, 500, true);
+        record_write(&mut g, 500, 24, true);
+        assert_eq!((g.end, g.written), (524, 524));
     }
 }

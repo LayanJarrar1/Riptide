@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 import { AiSettingsComponent } from '../features/settings/ai-settings.component';
+import { ResearchSettingsComponent } from '../features/settings/research-settings.component';
 import { InvokeFn, TAURI_AVAILABLE, TAURI_INVOKE } from '../tauri/tauri-bridge';
 import { AiSettings, AiStatus } from './ai.models';
 import { AiService } from './ai.service';
@@ -108,6 +109,41 @@ describe('AiSettingsComponent', () => {
     expect(toggles.filter((t) => t.checked).length).toBe(0);
   });
 
+  it('offers Quick setup as the primary action, keeps the advanced form collapsed, and opens the guided dialog', async () => {
+    setup({ handler: (cmd) => (cmd === 'ai_status' ? status() : false) });
+    const fixture = TestBed.createComponent(AiSettingsComponent);
+    fixture.detectChanges();
+    await settle(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    const quick = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Quick setup')) as HTMLButtonElement;
+    expect(quick.className).toContain('v-primary');
+    expect(el.textContent).toContain('Smarter results with AI: free, takes about a minute');
+    const advanced = el.querySelector('details.advanced') as HTMLDetailsElement;
+    expect(advanced.open).toBeFalse();
+    expect(advanced.textContent).toContain('Advanced');
+    // the existing form is still there, inside it
+    expect(advanced.querySelector('input[name="ai-api-key"]')).not.toBeNull();
+    expect((el.querySelector('dialog') as HTMLDialogElement).open).toBeFalse();
+    quick.click();
+    await settle(fixture);
+    expect((el.querySelector('dialog') as HTMLDialogElement).open).toBeTrue();
+    expect(el.textContent).toContain('Where should the AI run?');
+  });
+
+  it('shows the stored key hint with Remove key outside the advanced section', async () => {
+    const { calls } = setup({ handler: (cmd) => (cmd === 'ai_status' ? status({ keyHint: '••••wxyz', configured: true, settings: settings({ model: 'm' }) }) : cmd === 'ai_remove_key' ? status() : false) });
+    const fixture = TestBed.createComponent(AiSettingsComponent);
+    fixture.detectChanges();
+    await settle(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    const top = el.querySelector('.top-key') as HTMLElement;
+    expect(top.textContent).toContain('••••wxyz');
+    expect(el.querySelector('details.advanced')?.contains(top)).toBeFalse();
+    (top.querySelector('button') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(calls.find((c) => c.cmd === 'ai_remove_key')?.args).toEqual({ provider: 'deepinfra' });
+  });
+
   it('saves the key, empties the field at once and renders only the hint', async () => {
     let current = status();
     const { calls } = setup({
@@ -195,5 +231,42 @@ describe('SeenNoticeComponent', () => {
     fixture.detectChanges();
     expect(el.textContent).toContain('no longer on disk');
     expect(el.textContent).not.toContain('Open file');
+  });
+});
+
+describe('ResearchSettingsComponent', () => {
+  function view(web: 'none' | 'brave' | 'searxng') {
+    return { settings: { web, searxngUrl: null }, braveHint: null, jamendoHint: null, webReady: false };
+  }
+
+  async function render(web: 'none' | 'brave' | 'searxng'): Promise<HTMLElement> {
+    setup({ handler: (cmd) => (cmd === 'research_settings' ? view(web) : false) });
+    const fixture = TestBed.createComponent(ResearchSettingsComponent);
+    fixture.detectChanges();
+    await settle(fixture);
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('presents web search as Advanced and collapsed, with the honest cost of search APIs', async () => {
+    const el = await render('none');
+    const advanced = el.querySelector('details.advanced') as HTMLDetailsElement;
+    expect(advanced.open).toBeFalse();
+    expect(advanced.textContent).toContain('Advanced: web search');
+    expect(advanced.textContent).toContain('search engines charge for their APIs');
+    expect(advanced.textContent).toContain("Brave's is paid and needs a card");
+    expect(advanced.textContent).toContain('SearXNG is free if you, or someone you trust, runs an instance');
+    // nothing asks ordinary users for a key; Jamendo is optional too
+    expect(el.textContent).toContain('The open sources work without any setup');
+    expect(el.textContent).toContain('Optional. Jamendo');
+    expect(el.textContent).not.toContain('a free plan exists');
+    expect(advanced.querySelector('input[name="brave-key"]')).toBeNull();
+  });
+
+  it('keeps the Brave field working and open when Brave is the saved choice', async () => {
+    const el = await render('brave');
+    const advanced = el.querySelector('details.advanced') as HTMLDetailsElement;
+    expect(advanced.open).toBeTrue();
+    expect(advanced.querySelector('input[name="brave-key"]')).not.toBeNull();
+    expect(advanced.textContent).toContain('Brave\'s Search API is paid and needs a card');
   });
 });

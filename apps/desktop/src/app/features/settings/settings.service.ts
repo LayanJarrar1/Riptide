@@ -348,6 +348,7 @@ export class SettingsService {
       proxy,
       mark_of_the_web: current.markDownloads,
       allow_private_redirects: current.allowPrivateRedirects,
+      auto_retry: known.auto_retry ?? true,
       torrent,
     };
     try {

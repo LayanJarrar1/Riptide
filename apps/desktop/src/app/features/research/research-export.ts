@@ -5,9 +5,15 @@ import { summarize } from './research-turn';
 /** What the writers need from the app: the translations, a size formatter and the date to print. */
 export interface ExportContext {
   readonly t: (key: string) => string;
+  /** Plural-aware lookup (`I18nService.plural`); without it `t` is used as is. */
+  readonly plural?: (key: string, n: number) => string;
   readonly bytes: (n: number) => string;
   /** `YYYY-MM-DD`. */
   readonly date: string;
+}
+
+function plural(c: ExportContext, key: string, n: number): string {
+  return c.plural ? c.plural(key, n) : c.t(key);
 }
 
 function fill(text: string, params: Record<string, string | number>): string {
@@ -46,9 +52,9 @@ export function summaryLines(turn: Turn, c: ExportContext): string[] {
     return lines;
   }
   const names = s.sources.map((x) => fill(c.t('research.sum.source'), { source: c.t(`research.source.${x.id}`), n: x.count }));
-  lines.push(fill(c.t('research.sum.found'), { n: s.total, sources: names.join(', ') }));
+  lines.push(fill(plural(c, 'research.sum.found', s.total), { n: s.total, sources: names.join(', ') }));
   if (s.pages > 0) {
-    lines.push(fill(c.t('research.sum.pages'), { n: s.pages }));
+    lines.push(fill(plural(c, 'research.sum.pages', s.pages), { n: s.pages }));
   }
   if (s.seen > 0) {
     lines.push(fill(c.t('research.sum.seen'), { n: s.seen }));
@@ -160,6 +166,11 @@ function citeKey(i: TurnItem, used: Set<string>): string {
   return key;
 }
 
+/** Braces would unbalance a BibTeX field; identifiers and addresses never need them (in an address they are percent-encoded). */
+function noBraces(text: string): string {
+  return text.replace(/\{/g, '%7B').replace(/\}/g, '%7D');
+}
+
 /** BibTeX for the citable results; `skipped` counts the ones that had too little to cite. */
 export function toBibtex(items: readonly TurnItem[]): { text: string; count: number; skipped: number } {
   const used = new Set<string>();
@@ -176,12 +187,13 @@ export function toBibtex(items: readonly TurnItem[]): { text: string; count: num
       fields.push(['year', String(i.year)]);
     }
     if (i.doi) {
-      fields.push(['doi', escapeBib(i.doi)]);
+      fields.push(['doi', noBraces(i.doi)]);
     }
     if (i.arxiv) {
-      fields.push(['eprint', escapeBib(i.arxiv)], ['archivePrefix', 'arXiv']);
+      fields.push(['eprint', noBraces(i.arxiv)], ['archivePrefix', 'arXiv']);
     }
-    fields.push(['url', escapeBib(i.pageUrl ?? i.downloadUrl)]);
+    // identifiers and addresses are machine-readable: no TeX escapes, only the braces that would unbalance the field
+    fields.push(['url', noBraces(i.pageUrl ?? i.downloadUrl)]);
     const body = fields.map(([k, v]) => `  ${k} = {${v}}`).join(',\n');
     entries.push(`@misc{${citeKey(i, used)},\n${body}\n}`);
   }

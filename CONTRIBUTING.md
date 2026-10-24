@@ -170,36 +170,36 @@ and keep the Arabic natural rather than literal.
 
 Maintainers only. Every number below is a command you can paste. The app's update path is
 `apps/desktop/src-tauri/src/updater.rs`: stable reads `releases/latest/download/latest.json`, beta
-reads `releases/download/channel-beta/latest-beta.json`. Every alpha is a pre-release, so while we
-are in alpha only the beta channel sees new versions, and beta is the app's default channel.
+reads `releases/download/channel-beta/latest-beta.json`. Every beta is a pre-release, so while we
+are in beta only the beta channel sees new versions, and beta is the app's default channel.
 
 1. **Bump and build.** From a clean `main`:
 
    ```powershell
    git switch main; git pull
-   git switch -c release/0.1.0-alpha.5
-   .\scripts\release.ps1 -Version 0.1.0-alpha.5 -Prerelease -Notes "One line for Settings > About"
+   git switch -c release/<version>
+   .\scripts\release.ps1 -Version <version> -Prerelease -Notes "One line for Settings > About"
    ```
 
    This bumps the workspace `Cargo.toml`, `Cargo.lock` and `apps/desktop/package.json`, builds the
    signed NSIS installer, its `.sig` and the portable zip, and writes `latest-beta.json` (plus
    `latest.json` for a stable version) and `SHA256SUMS.txt` into
-   `target\release-artifacts\0.1.0-alpha.5\`. It publishes nothing. Add the release to
+   `target\release-artifacts\<version>\`. It publishes nothing. Add the release to
    `CHANGELOG.md` and write the release notes (a Markdown file outside the repository).
-2. **Test the portable build.** Unzip `Riptide-0.1.0-alpha.5-portable.zip` somewhere else, start
+2. **Test the portable build.** Unzip `Riptide-<version>-portable.zip` somewhere else, start
    it, add a download, pause and resume it, and check *Settings → About* shows the new version.
-   Also install the installer over the previous alpha once and confirm the downloads list survived.
+   Also install the installer over the previous release once and confirm the downloads list survived.
 3. **Merge.** Commit the version bump and `CHANGELOG.md`, open a PR, wait for the `ci` check, merge
    it, then `git switch main; git pull`.
 4. **Publish.** The script refuses a dirty tree, a HEAD that is not on `origin/main` and artifacts
    that do not match `SHA256SUMS.txt`. Without `-Publish` it is a dry run:
 
    ```powershell
-   .\scripts\publish-release.ps1 -Version 0.1.0-alpha.5 -NotesFile C:\path\to\notes.md
-   .\scripts\publish-release.ps1 -Version 0.1.0-alpha.5 -NotesFile C:\path\to\notes.md -Publish
+   .\scripts\publish-release.ps1 -Version <version> -NotesFile C:\path\to\notes.md
+   .\scripts\publish-release.ps1 -Version <version> -NotesFile C:\path\to\notes.md -Publish
    ```
 
-   It creates the release `v0.1.0-alpha.5` (a pre-release because the version has a `-`) with the
+   It creates the release `v<version>` (a pre-release because the version has a `-`) with the
    installer, `.sig`, portable zip, `SHA256SUMS.txt`, `latest-beta.json` (and `latest.json` for
    stable), uploads `latest-beta.json` to the fixed pre-release `channel-beta` with `--clobber`,
    and then runs the next step. Pushing a `v*` tag instead lets
@@ -209,7 +209,7 @@ are in alpha only the beta channel sees new versions, and beta is the app's defa
    and that the feed announces the new version:
 
    ```powershell
-   .\scripts\verify-update-feed.ps1 -ExpectVersion 0.1.0-alpha.5
+   .\scripts\verify-update-feed.ps1 -ExpectVersion <version>
    ```
 
    Add `-Stable` for a stable release. A non-zero exit means nobody will be told about the update
@@ -217,30 +217,30 @@ are in alpha only the beta channel sees new versions, and beta is the app's defa
 6. **Site and README.** Point the download links at the new version, then review and merge:
 
    ```powershell
-   node scripts/set-release-version.mjs 0.1.0-alpha.5
-   git switch -c site/0.1.0-alpha.5
+   node scripts/set-release-version.mjs <version>
+   git switch -c site/<version>
    git add README.md apps/website/build.mjs
-   git commit -m "docs: download links for 0.1.0-alpha.5"
+   git commit -m "docs: download links for <version>"
    ```
 
-   `node scripts/set-release-version.mjs 0.1.0-alpha.5 --check` exits 1 when they still differ.
+   `node scripts/set-release-version.mjs <version> --check` exits 1 when they still differ.
 7. **Back up the signing key.** Keep a copy of `%USERPROFILE%\.riptide-keys` (the key and its
    password file) in a password manager or offline storage, never in the repository. Losing the
    key means installed copies can no longer update themselves.
 8. **How users are told.** Riptide checks the beta feed at most once a day (and on *Check for
    updates*), shows a system notification once per version and a badge in *Settings → About*, and
-   installs only after a click. While we are in alpha the default channel is beta. At the first
+   installs only after a click. While we are in beta the default channel is beta. At the first
    stable release, publish it without `-Prerelease` (so `latest.json` exists), run
    `verify-update-feed.ps1 -Stable`, and switch the default channel to stable in the app.
 
 **If an update is bad.** Mark the release as a draft on GitHub (*Edit → Set as a draft*, or
-`gh release edit v0.1.0-alpha.5 --draft`) so the installer link stops working, then restore the
+`gh release edit v<version> --draft`) so the installer link stops working, then restore the
 feed of the previous good version: download the previous release's `latest-beta.json` from
 `target\release-artifacts\<previous>\` (or re-create it with `release.ps1`'s output) and run
 
 ```powershell
-gh release upload channel-beta target\release-artifacts\0.1.0-alpha.4\latest-beta.json --clobber --repo LayanJarrar1/Riptide
-.\scripts\verify-update-feed.ps1 -ExpectVersion 0.1.0-alpha.4
+gh release upload channel-beta target\release-artifacts\<previous-version>\latest-beta.json --clobber --repo LayanJarrar1/Riptide
+.\scripts\verify-update-feed.ps1 -ExpectVersion <previous-version>
 ```
 
 Never reuse a version number: publish the fix as the next version. Users who already installed the

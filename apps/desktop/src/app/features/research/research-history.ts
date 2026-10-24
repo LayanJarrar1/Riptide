@@ -148,9 +148,23 @@ function storeTurn(t: Turn): unknown {
   };
 }
 
+/** Browser storage holds about 5 MB per origin; stay well under it so a save never fails silently. */
+export const MAX_BYTES = 2_000_000;
+
+/** The history as stored text, within the count caps and the byte budget (oldest turns go first). */
 export function serialize(list: readonly Conversation[]): string {
   const kept = list.slice(0, MAX_CONVERSATIONS).map((c) => ({ ...c, turns: c.turns.slice(-MAX_TURNS).map(storeTurn) }));
-  return JSON.stringify({ v: 1, conversations: kept });
+  let text = JSON.stringify({ v: 1, conversations: kept });
+  while (text.length > MAX_BYTES) {
+    // drop the oldest turn of the least recently used conversation that still has one, then empty conversations
+    const stale = [...kept].filter((c) => c.turns.length > 0).sort((a, b) => a.updatedAt - b.updatedAt)[0];
+    if (stale === undefined) {
+      break;
+    }
+    stale.turns.shift();
+    text = JSON.stringify({ v: 1, conversations: kept.filter((c) => c.turns.length > 0 || c.updatedAt === stale.updatedAt) });
+  }
+  return text;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

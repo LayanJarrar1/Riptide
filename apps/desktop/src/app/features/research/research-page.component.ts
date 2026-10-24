@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { AiSetupDialogComponent } from '../../ai/ai-setup-dialog.component';
 import { AiService } from '../../ai/ai.service';
 import { CategoryId, SourceId } from '../../ai/research.models';
 import { ResearchSession } from '../../ai/research.session';
@@ -33,7 +34,7 @@ interface LiveRef {
 @Component({
   selector: 'app-research-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, IconComponent, ResearchComposerComponent, ResearchSidebarComponent, ResearchTurnComponent],
+  imports: [AiSetupDialogComponent, ButtonComponent, IconComponent, ResearchComposerComponent, ResearchSidebarComponent, ResearchTurnComponent],
   providers: [ResearchSession],
   template: `
     @if (!ai.available) {
@@ -70,6 +71,14 @@ interface LiveRef {
                 <div class="hello">
                   <h2 class="hello-title">{{ i18n.t('research.hello') }}</h2>
                   <p class="muted">{{ i18n.t('research.subtitle') }}</p>
+                  <p class="ready"><app-icon name="check" [size]="14" /> {{ i18n.t('research.hello.ready') }}</p>
+                  @if (ai.status() !== null && !aiOn()) {
+                    <p class="upgrade">
+                      <app-icon name="sparkles" [size]="14" />
+                      <span>{{ i18n.t('research.hello.upgrade') }}</span>
+                      <button type="button" class="upgrade-link" (click)="setupOpen.set(true)">{{ i18n.t('research.hello.setup') }}</button>
+                    </p>
+                  }
                   <div class="examples" role="group" [attr.aria-label]="i18n.t('research.examples')">
                     @for (n of examples; track n) {
                       <button type="button" class="example" dir="auto" (click)="useExample(n)">{{ i18n.t('research.example.' + n) }}</button>
@@ -103,12 +112,14 @@ interface LiveRef {
                 (send)="send($event)"
                 (stop)="cancel()"
                 (openAiSettings)="openAiSettings()"
+                (setupAi)="setupOpen.set(true)"
               />
               <p class="policy">{{ i18n.t('research.footer') }}</p>
             </div>
           </div>
         </main>
       </div>
+      <app-ai-setup-dialog [open]="setupOpen()" (closed)="setupOpen.set(false)" />
     }
   `,
   styles: `
@@ -232,6 +243,47 @@ interface LiveRef {
       font-weight: var(--weight-semibold);
     }
 
+    .ready,
+    .upgrade {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+    }
+
+    .ready {
+      color: var(--color-text-secondary);
+    }
+
+    .ready app-icon {
+      color: var(--color-success);
+    }
+
+    .upgrade {
+      color: var(--color-text-muted);
+    }
+
+    .upgrade app-icon {
+      color: var(--color-accent);
+    }
+
+    .upgrade-link {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-accent);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .upgrade-link:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+
     .examples {
       display: flex;
       flex-wrap: wrap;
@@ -320,6 +372,7 @@ export class ResearchPageComponent implements OnInit {
   protected readonly category = signal<CategoryId>('all');
   protected readonly useAi = signal(true);
   protected readonly sideOpen = signal(false);
+  protected readonly setupOpen = signal(false);
   protected readonly liveRef = signal<LiveRef | null>(null);
 
   /** The AI is set up (provider + key + model). */
@@ -436,7 +489,8 @@ export class ResearchPageComponent implements OnInit {
     const conv = this.history.active() ?? this.history.startConversation(prompt);
     const reusable = this.findReusable(conv.turns, prompt, category, useAi);
     if (reusable !== null) {
-      this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
+      // the copy keeps the original's time, so repeating a prompt never stretches the reuse window
+      this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi, reusable.createdAt), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
     } else {
       void this.run(conv.id, emptyTurn(prompt, category, useAi));
     }
@@ -460,7 +514,7 @@ export class ResearchPageComponent implements OnInit {
     const key = promptKey(prompt, category, useAi);
     const now = Date.now();
     return (
-      [...turns].reverse().find((t) => t.status === 'done' && t.items.length > 0 && now - t.createdAt < REUSE_MS && this.history.isLive(t.id) && promptKey(t.prompt, t.category, t.useAi) === key) ?? null
+      [...turns].reverse().find((t) => t.status === 'done' && t.items.length > 0 && t.sources.every((s) => s.state === 'done') && now - t.createdAt < REUSE_MS && this.history.isLive(t.id) && promptKey(t.prompt, t.category, t.useAi) === key) ?? null
     );
   }
 

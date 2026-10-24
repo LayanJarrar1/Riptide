@@ -366,7 +366,7 @@
   },
   "feedback": {
     "title": "Found a rough edge?",
-    "lead": "It's an alpha. Your reports decide what gets fixed first.",
+    "lead": "It's a beta. Your reports decide what gets fixed first.",
     "links": [
       {
         "label": "Report a bug",
@@ -413,6 +413,10 @@
       {
         "q": "Do I need an AI account?",
         "a": "No. Research works as a plain search without one. If you add your own key, the AI ranks results and says why. Your key stays in Windows Credential Manager, and your download history is not shared unless you switch that on."
+      },
+      {
+        "q": "How do I set up the AI?",
+        "a": "Open Settings → AI → Quick setup. Pick Google Gemini or Groq (both free, no card), or run it on your own computer with Ollama or LM Studio (free and private, no key). Press Open the page, copy a key, press Paste, and Riptide tests it. It takes about a minute. Riptide sends only your search words, and Settings → AI → Remove key undoes it."
       }
     ]
   },
@@ -427,7 +431,8 @@
     "portableSub": "Unzip and run",
     "sums": "SHA-256 checksums",
     "allReleases": "All releases",
-    "note": "An early build. Expect rough edges, and tell us about them.",
+    "note": "A beta build. Expect rough edges, and tell us about them.",
+    "smartscreen": "Windows SmartScreen may warn about the installer because it is not code-signed yet. That is expected for a new, unsigned app. If you downloaded it from this page or the Releases page, choose More info, then Run anyway. To be sure the file is the one we published, run certutil -hashfile on it with SHA256 and compare the result with the SHA-256 checksums list.",
     "ext": {
       "title": "Install the extension in Chrome or Edge",
       "lead": "Sends downloads from Chrome and Edge to Riptide. Adds \"Download this video\" with a quality picker, download all or selected links and all images, and capture rules.",
@@ -444,25 +449,27 @@
       "title": "What's new in",
       "notes": "Full release notes",
       "items": [
-        "A downloads list that stays smooth with tens of thousands of items",
-        "A reminder when you have already downloaded a file"
+        "A downloads list with resizable columns, duration and average speed, and a list that stays smooth with tens of thousands of items",
+        "Category folders for new installations and a smaller, calmer Add dialog",
+        "Updates arrive through the beta channel"
       ]
     },
     "upd": {
       "h": "Always up to date",
-      "p": "Riptide checks GitHub Releases at most once a day and shows a notification when a new version exists. One click installs it, and updates are signed. You can turn the check off in Settings. It is the only network call besides your downloads."
+      "p": "Riptide checks GitHub Releases at most once a day and shows a notification when a new version exists. One click installs it, and updates are signed. You can turn the check off in Settings. It is the only call Riptide makes on its own; everything else happens when you start it (downloads, torrents, search, video support updates). See the privacy page for the full list."
     }
   },
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
     "license": "GPL-3.0 app, MIT / Apache-2.0 engine",
-    "made": "Alpha preview.",
+    "made": "Beta.",
     "github": "GitHub",
     "releases": "Releases",
     "licenseLink": "License",
     "privacy": "Privacy",
     "feedback": "Feedback",
-    "version": "Version"
+    "version": "Version",
+    "legal": "Use Riptide only for files you have the right to download. It is provided as is, without warranty of any kind, as the GPL-3.0 and MIT / Apache-2.0 licenses state."
   },
   "privacy": {
     "meta": {

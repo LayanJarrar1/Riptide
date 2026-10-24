@@ -6,6 +6,7 @@ import { CRAWL_SCOPES, MAX_CRAWL_DEPTH, CrawlFile } from '../../model/crawl';
 import { CATEGORY_KEYS } from '../../model/download';
 import { MAIN_QUEUE_ID } from '../../model/queue';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../tauri/tauri-bridge';
+import { FileNameComponent } from '../../ui/file-name.component';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
@@ -35,7 +36,7 @@ const STEPS: readonly GrabStep[] = ['spec', 'crawl', 'add'];
 @Component({
   selector: 'app-site-grabber-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, DialogComponent, IconComponent],
+  imports: [FileNameComponent, ButtonComponent, DialogComponent, IconComponent],
   providers: [GrabberSession],
   template: `
     <app-dialog [open]="open()" [title]="i18n.t('grab.title')" [wide]="true" (closed)="close()">
@@ -197,7 +198,7 @@ const STEPS: readonly GrabStep[] = ['spec', 'crawl', 'add'];
                     } @else if (row.file; as f) {
                       <label class="row" role="listitem" [style.block-size.px]="rowHeight">
                         <input type="checkbox" class="check" [checked]="row.checked" [attr.aria-label]="f.name" (change)="session.toggle(f.url, checked($event))" />
-                        <span class="name" dir="auto" [attr.title]="f.url">{{ f.name }}</span>
+                        <app-file-name class="name" [name]="f.name" [label]="f.url" />
                         <span class="host" dir="ltr">{{ f.host }}</span>
                         <span class="size num">{{ f.size === null ? '' : format.bytes(f.size) }}</span>
                       </label>
@@ -212,7 +213,7 @@ const STEPS: readonly GrabStep[] = ['spec', 'crawl', 'add'];
 
         @case ('add') {
           <div class="form">
-            <p class="summary">{{ i18n.t('grab.summary').replace('{count}', format.int(session.selection().length)) }}</p>
+            <p class="summary">{{ i18n.plural('grab.summary', session.selection().length).replace('{count}', format.int(session.selection().length)) }}</p>
 
             <label class="field">
               <span class="label">{{ i18n.t('add.saveTo') }}</span>
@@ -843,7 +844,7 @@ export class SiteGrabberDialogComponent {
     if (this.session.adding()) {
       return this.i18n.t('add.submitting');
     }
-    return this.i18n.t('grab.submit').replace('{count}', this.format.int(this.session.selection().length));
+    return this.i18n.plural('grab.submit', this.session.selection().length).replace('{count}', this.format.int(this.session.selection().length));
   });
 
   constructor() {

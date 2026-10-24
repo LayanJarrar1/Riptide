@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output } from '@angu
 
 import { I18nService } from '../../i18n/i18n.service';
 import { Download } from '../../model/download';
+import { FileNameComponent } from '../../ui/file-name.component';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { IconComponent } from '../../ui/icon.component';
@@ -18,14 +19,14 @@ export type DuplicateChoice = 'show' | 'add' | 'cancel';
 @Component({
   selector: 'app-duplicate-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, DialogComponent, IconComponent, StatusPillComponent],
+  imports: [FileNameComponent, ButtonComponent, DialogComponent, IconComponent, StatusPillComponent],
   template: `
     <app-dialog [open]="existing() !== null" [title]="i18n.t('duplicate.title')" (closed)="choose('cancel')">
       @if (existing(); as d) {
         <p class="text">{{ i18n.t('duplicate.body').replace('{name}', d.filename) }}</p>
         <div class="existing">
           <app-icon name="file" [size]="16" />
-          <span class="name" dir="auto">{{ d.filename }}</span>
+          <app-file-name class="name" [name]="d.filename" />
           <app-status-pill [state]="d.state" [failure]="d.failure" [compact]="true" />
         </div>
       }

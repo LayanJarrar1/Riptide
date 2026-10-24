@@ -13,9 +13,10 @@ const RESERVED: [&str; 24] = [
 const MAX_NAME_UNITS: usize = 255;
 
 /// Bidi controls that can make a name display differently from what it is (`gpj.exe` shown as
-/// `exe.jpg`).
+/// `exe.jpg`). LRM and RLM (U+200E, U+200F) are not listed: Arabic and mixed-direction names
+/// legitimately use them.
 fn is_bidi_control(c: char) -> bool {
-    matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}')
+    matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
 }
 
 /// `COM¹`, `LPT²` and so on: Windows treats the superscript digits as device numbers too.
@@ -25,6 +26,18 @@ fn is_superscript_device(stem: &str) -> bool {
     (prefix.eq_ignore_ascii_case("COM") || prefix.eq_ignore_ascii_case("LPT"))
         && matches!(chars.next(), Some('\u{00B9}' | '\u{00B2}' | '\u{00B3}'))
         && chars.next().is_none()
+}
+
+/// Checks the name of an item that already exists (a rename source, a transfer source). Windows may
+/// hold names it would not accept today (`report.`, `aux`), and the user must be able to repair or
+/// move them, so only an NTFS alternate data stream marker (`file.txt:stream`) is refused.
+pub(crate) fn validate_existing_name(name: &str) -> Result<()> {
+    if name.contains(':') {
+        return Err(Error::BadName(
+            "a name cannot contain : (that would address an alternate data stream)".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// Checks a single file or folder name. The rules are Windows' (the strictest of the platforms
@@ -109,13 +122,16 @@ mod tests {
             "COM\u{00B3}.txt",
             "evil\u{202E}gpj.exe",
             "a\u{2066}b",
-            "a\u{200F}b",
+            "a\u{202A}b",
         ] {
             assert!(
                 matches!(validate_name(bad), Err(Error::BadName(_))),
                 "{bad:?}"
             );
         }
+        // LRM and RLM are legitimate in Arabic and mixed-direction names
+        assert!(validate_name("مشروع\u{200F} (2024)\u{200E}.txt").is_ok());
+        assert!(validate_name("a\u{200F}b").is_ok());
         assert!(validate_name(&"a".repeat(255)).is_ok());
         assert!(validate_name(&"a".repeat(256)).is_err());
         // CONSOLE is not CON

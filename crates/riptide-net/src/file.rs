@@ -4,6 +4,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// Extension of a partial file.
 pub const PART_EXTENSION: &str = "rtpart";
@@ -120,7 +121,46 @@ impl PartFile {
         if overwrite && final_path.exists() {
             std::fs::remove_file(final_path)?;
         }
-        std::fs::rename(&self.path, final_path)
+        rename_with_retry(
+            &self.path,
+            final_path,
+            RENAME_ATTEMPTS,
+            RENAME_DELAY,
+            |from, to| std::fs::rename(from, to),
+        )
+    }
+}
+
+/// Tries of the final rename and the pause between them (about two seconds in all).
+const RENAME_ATTEMPTS: u32 = 10;
+const RENAME_DELAY: Duration = Duration::from_millis(200);
+
+/// Windows: an antivirus scanner or indexer holding the fresh file makes the rename fail with
+/// access denied (5) or a sharing / lock violation (32, 33) for a moment. Nothing else is
+/// transient, and elsewhere nothing is.
+fn is_transient_rename_error(e: &io::Error) -> bool {
+    cfg!(windows) && matches!(e.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// Runs `rename(from, to)`, retrying up to `attempts` times, `delay` apart, while the error is
+/// [`is_transient_rename_error`]. Any other error (such as an existing target) is returned at once.
+fn rename_with_retry(
+    from: &Path,
+    to: &Path,
+    attempts: u32,
+    delay: Duration,
+    mut rename: impl FnMut(&Path, &Path) -> io::Result<()>,
+) -> io::Result<()> {
+    let mut attempt = 1;
+    loop {
+        match rename(from, to) {
+            Err(e) if attempt < attempts && is_transient_rename_error(&e) => {
+                tracing::debug!(attempt, error = %e, "final rename blocked, retrying");
+                std::thread::sleep(delay);
+                attempt += 1;
+            }
+            other => return other,
+        }
     }
 }
 
@@ -191,6 +231,65 @@ mod tests {
         let f = PartFile::open(&part, Some(4)).unwrap();
         f.finish(&final_path, true).unwrap();
         assert_eq!(std::fs::read(&final_path).unwrap(), b"abcd");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rename_retries_a_sharing_violation_then_succeeds() {
+        for code in [5, 32, 33] {
+            let mut calls = 0;
+            let r = rename_with_retry(
+                Path::new("a"),
+                Path::new("b"),
+                10,
+                Duration::from_millis(1),
+                |_, _| {
+                    calls += 1;
+                    if calls < 4 {
+                        Err(io::Error::from_raw_os_error(code))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(r.is_ok(), "code {code}");
+            assert_eq!(calls, 4);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rename_gives_up_after_the_attempts() {
+        let mut calls = 0;
+        let r = rename_with_retry(
+            Path::new("a"),
+            Path::new("b"),
+            5,
+            Duration::from_millis(1),
+            |_, _| {
+                calls += 1;
+                Err(io::Error::from_raw_os_error(32))
+            },
+        );
+        assert!(r.is_err());
+        assert_eq!(calls, 5);
+    }
+
+    #[test]
+    fn rename_does_not_retry_other_errors() {
+        let mut calls = 0;
+        let r = rename_with_retry(
+            Path::new("a"),
+            Path::new("b"),
+            10,
+            Duration::from_millis(1),
+            |_, _| {
+                calls += 1;
+                Err(io::Error::new(io::ErrorKind::AlreadyExists, "exists"))
+            },
+        );
+        assert_eq!(r.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(calls, 1);
     }
 
     #[test]

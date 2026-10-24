@@ -80,6 +80,26 @@ describe('I18nService', () => {
     expect(service.t('app.tagline')).toBe('ريبتايد — مدير تحميل');
   });
 
+  it('plural() picks one/other in English', () => {
+    const { service } = setup(['en-US']);
+    expect(service.plural('research.state.done', 1)).toBe('{n} result');
+    expect(service.plural('research.state.done', 0)).toBe('{n} results');
+    expect(service.plural('research.state.done', 2)).toBe('{n} results');
+  });
+
+  it('plural() uses the six Arabic forms and falls back to .other, then the key', async () => {
+    const { service } = setup(['ar-SA']);
+    await service.ready();
+    expect(service.plural('research.state.done', 0)).toBe('لا نتائج');
+    expect(service.plural('research.state.done', 1)).toBe('نتيجة واحدة');
+    expect(service.plural('research.state.done', 2)).toBe('نتيجتان');
+    expect(service.plural('research.state.done', 3)).toBe('{n} نتائج');
+    expect(service.plural('research.state.done', 11)).toBe('{n} نتيجة');
+    expect(service.plural('research.state.done', 100)).toBe('{n} نتيجة');
+    spyOn(console, 'warn');
+    expect(service.plural('no.such.key', 2)).toBe('no.such.key');
+  });
+
   it('t() returns the key and warns when it is missing', () => {
     const { service } = setup(['en-US']);
     const warn = spyOn(console, 'warn');

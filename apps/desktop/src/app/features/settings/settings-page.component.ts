@@ -349,7 +349,7 @@ export function isValidProxyUrl(raw: string): boolean {
             }
           </div>
           <div class="about-actions">
-            <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="channel()" (valueChange)="setChannel($event)" />
+            <app-segmented-control [label]="i18n.t('settings.channel')" [options]="channelOptions()" [value]="channel()" [disabled]="prerelease()" (valueChange)="setChannel($event)" />
             <button appButton variant="secondary" icon="retry" type="button" [disabled]="updates.status() === 'checking' || updates.status() === 'installing'" (click)="checkUpdates()">{{ i18n.t(updates.status() === 'checking' ? 'settings.checkingUpdates' : 'settings.checkUpdates') }}</button>
           </div>
         </div>

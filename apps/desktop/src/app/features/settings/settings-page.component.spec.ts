@@ -30,6 +30,21 @@ describe('SettingsPageComponent update channel', () => {
     expect(el.textContent).toContain('Pre-release builds follow the beta channel.');
   });
 
+  function channelButtons(el: HTMLElement): HTMLButtonElement[] {
+    return Array.from(el.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Update channel"] button'));
+  }
+
+  it('disables the channel selector on a pre-release build', () => {
+    const buttons = channelButtons(render('0.1.0-beta.1', 'beta'));
+    expect(buttons.length).toBe(2);
+    expect(buttons.every((b) => b.disabled)).toBeTrue();
+  });
+
+  it('keeps the channel selector enabled on a stable build', () => {
+    const buttons = channelButtons(render('1.0.0', 'beta'));
+    expect(buttons.some((b) => b.disabled)).toBeFalse();
+  });
+
   it('honours the saved channel on a stable build, without the note', () => {
     const el = render('1.0.0', 'stable');
     expect(selected(el)).toBe('Stable');
