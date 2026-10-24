@@ -5,6 +5,7 @@ import { FormatService } from '../../core/format.service';
 import { scrollToReveal } from '../../data/list-nav';
 import { I18nService } from '../../i18n/i18n.service';
 import { categoryOf } from '../../model/download';
+import { FileNameComponent } from '../../ui/file-name.component';
 import { ButtonComponent } from '../../ui/button.component';
 import { DialogComponent } from '../../ui/dialog.component';
 import { EmptyStateComponent } from '../../ui/empty-state.component';
@@ -60,7 +61,7 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
 @Component({
   selector: 'app-file-pane',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, DialogComponent, EmptyStateComponent, IconComponent, MenuComponent],
+  imports: [...FORMAT_PIPES, FileNameComponent, ButtonComponent, DialogComponent, EmptyStateComponent, IconComponent, MenuComponent],
   host: {
     '[class.is-active]': 'active()',
     '(focusin)': 'focused.emit()',
@@ -74,10 +75,14 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
         <button appButton size="sm" variant="ghost" icon="arrowUp" [iconOnly]="true" type="button" [disabled]="!listing()?.parent" [attr.aria-label]="i18n.t('files.up')" [attr.title]="i18n.t('files.up')" (click)="goUp()"></button>
       </div>
       <nav class="crumbs" [attr.aria-label]="i18n.t('files.location')">
-        @for (c of crumbs(); track c.path; let last = $last) {
-          <button type="button" class="crumb" [class.is-current]="last" [attr.aria-current]="last ? 'location' : null" (click)="navigate(c.path)" (dragover)="onDragOver($event, c.path)" (drop)="onDrop($event, c.path)">
-            <span dir="auto">{{ c.label }}</span>
-          </button>
+        @for (c of shownCrumbs(); track c.path; let last = $last) {
+          @if (c.more) {
+            <button type="button" class="crumb crumb-more" [attr.aria-label]="i18n.t('files.crumbMore')" [attr.title]="i18n.t('files.crumbMore')" aria-haspopup="menu" (click)="openCrumbMenu($event)">…</button>
+          } @else {
+            <button type="button" class="crumb" [class.is-current]="last" [attr.aria-current]="last ? 'location' : null" [attr.title]="last ? currentPath() : c.path" (click)="navigate(c.path)" (dragover)="onDragOver($event, c.path)" (drop)="onDrop($event, c.path)">
+              <span dir="auto">{{ c.label }}</span>
+            </button>
+          }
           @if (!last) {
             <app-icon class="crumb-sep" name="chevronEnd" [size]="12" />
           }
@@ -106,7 +111,7 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
         <span class="hint">{{ i18n.t('files.searchResults').replace('{n}', format.int(rows().length)) }}</span>
         <button appButton size="sm" variant="ghost" icon="close" type="button" (click)="clearSearch()">{{ i18n.t('files.clearSearch') }}</button>
       } @else if (listing(); as l) {
-        <span class="hint">{{ i18n.t('files.itemCount').replace('{n}', format.int(l.entries.length)) }}</span>
+        <span class="hint">{{ i18n.plural('files.itemCount', l.entries.length).replace('{n}', format.int(l.entries.length)) }}</span>
       }
     </div>
 
@@ -170,7 +175,7 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
                 @if (renaming() === e.path) {
                   <input class="rename" type="text" #renameBox [value]="e.name" [attr.aria-label]="i18n.t('files.rename')" (keydown.enter)="commitRename(e, renameBox.value)" (keydown.escape)="renaming.set(null)" (blur)="commitRename(e, renameBox.value)" (click)="$event.stopPropagation()" />
                 } @else {
-                  <span class="name" dir="auto" [attr.title]="searchResults() !== null ? e.path : e.name">{{ e.name }}</span>
+                  <app-file-name class="name" [name]="e.name" [label]="searchResults() !== null ? e.path : e.name" />
                   @if (searchResults() !== null) {
                     <span class="where" dir="ltr">{{ parentOf(e.path) }}</span>
                   }
@@ -194,6 +199,8 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
         </button>
       }
     </aside>
+
+    <app-menu [open]="crumbMenu() !== null" [items]="crumbMenuItems()" [x]="crumbMenu()?.x ?? 0" [y]="crumbMenu()?.y ?? 0" (selected)="navigate($event)" (closed)="crumbMenu.set(null)" />
 
     <app-menu [open]="menu() !== null" [items]="menuItems()" [x]="menu()?.x ?? 0" [y]="menu()?.y ?? 0" (selected)="onMenu($event)" (closed)="menu.set(null)" />
 
@@ -258,7 +265,9 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
       --folder-slate: #6b7a8c;
       position: relative;
       display: grid;
-      grid-template-columns: 168px minmax(0, 1fr);
+      grid-template-columns: auto minmax(0, 1fr);
+      container-type: inline-size;
+      container-name: pane;
       grid-template-rows: auto auto minmax(0, 1fr);
       grid-template-areas: 'places bar' 'places actions' 'places grid';
       min-block-size: 0;
@@ -301,8 +310,8 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
     /* when the path does not fit, the outer folders shrink first; the one you are in never does */
     .crumb {
       flex: 0 1 auto;
-      min-inline-size: 28px;
-      max-inline-size: 180px;
+      min-inline-size: 36px;
+      max-inline-size: 140px;
       overflow: hidden;
       padding: 2px 6px;
       border: 0;
@@ -320,8 +329,15 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
       color: var(--color-text);
     }
 
-    .crumb.is-current {
+    .crumb-more {
       flex: none;
+      min-inline-size: 0;
+    }
+
+    .crumb.is-current {
+      flex: 0 0 auto;
+      min-inline-size: 12ch;
+      max-inline-size: none;
       color: var(--color-text);
       font-weight: var(--weight-medium);
     }
@@ -335,8 +351,8 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
       display: flex;
       align-items: center;
       gap: 6px;
-      flex: 0 1 220px;
-      min-inline-size: 120px;
+      flex: 0 1 180px;
+      min-inline-size: 110px;
       block-size: 28px;
       padding-inline: 8px;
       border: 1px solid var(--color-border);
@@ -377,6 +393,7 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
 
     .places {
       grid-area: places;
+      inline-size: 168px;
       display: flex;
       flex-direction: column;
       gap: 1px;
@@ -666,22 +683,45 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
       font-size: var(--text-sm);
     }
 
-    @container files (max-width: 760px) {
-      :host {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas: 'bar' 'actions' 'grid';
-      }
-
-      .places {
-        display: none;
-      }
-
+    /* Columns follow the width of this pane, not of the page: two panes share the window. */
+    @container pane (max-width: 759px) {
       .grid {
-        --file-columns: minmax(140px, 1fr) 84px;
+        --file-columns: minmax(120px, 1fr) 96px 104px;
       }
 
       .c-type,
-      .th-type,
+      .th-type {
+        display: none;
+      }
+    }
+
+    /* a narrow pane gives the path the whole first line and moves the search below it */
+    @container pane (max-width: 679px) {
+      .bar {
+        flex-wrap: wrap;
+      }
+
+      .crumbs {
+        flex: 1 1 0;
+      }
+
+      .search {
+        order: 3;
+        flex: 1 1 100%;
+      }
+    }
+
+    @container pane (max-width: 559px) {
+      .places {
+        display: none;
+      }
+    }
+
+    @container pane (max-width: 419px) {
+      .grid {
+        --file-columns: minmax(100px, 1fr) 84px;
+      }
+
       .c-modified,
       .th-modified {
         display: none;
@@ -801,6 +841,27 @@ export class FilePaneComponent {
     }
     return out;
   });
+
+  /** The path as shown: root and the last two folders stay, the middle collapses into one `…` item. */
+  protected readonly shownCrumbs = computed<readonly { label: string; path: string; more: boolean }[]>(() => {
+    const all = this.crumbs().map((c) => ({ ...c, more: false }));
+    if (all.length <= 3) {
+      return all;
+    }
+    return [all[0], { label: '…', path: '…', more: true }, ...all.slice(-2)];
+  });
+
+  protected readonly crumbMenu = signal<{ x: number; y: number } | null>(null);
+
+  protected readonly crumbMenuItems = computed<readonly MenuItem[]>(() => {
+    const all = this.crumbs();
+    return all.length <= 3 ? [] : all.slice(1, -2).map((c) => ({ id: c.path, label: c.label, icon: 'folder' as const }));
+  });
+
+  protected openCrumbMenu(ev: MouseEvent): void {
+    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    this.crumbMenu.set({ x: ev.clientX || r.left, y: r.bottom });
+  }
 
   protected readonly menuItems = computed<readonly MenuItem[]>(() => {
     const m = this.menu();
