@@ -62,6 +62,8 @@ impl ProcessRunner {
             "-J".into(),
             "--no-warnings".into(),
             "--no-cache-dir".into(),
+            // a config file in the user profile must not add options (downloads, exec hooks) to a search
+            "--ignore-config".into(),
             format!("ytsearch{count}:{query}"),
         ]
     }
@@ -319,7 +321,8 @@ mod tests {
     fn the_command_line_keeps_the_query_in_one_argument() {
         let args = ProcessRunner::args(8, "a b; rm -rf / \"x\"");
         assert_eq!(args.last().unwrap(), "ytsearch8:a b; rm -rf / \"x\"");
-        assert_eq!(args.len(), 5);
+        assert_eq!(args.len(), 6);
+        assert!(args.contains(&"--ignore-config".to_string()));
         assert!(args.contains(&"--flat-playlist".to_string()));
     }
 
