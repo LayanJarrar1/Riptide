@@ -48,5 +48,11 @@ module.exports = tseslint.config(
       ...angular.configs.templateAccessibility,
     ],
     rules: {},
-  }
+  },
+  {
+    // A settings row is a <label> around a control that is projected into it (<ng-content>), which
+    // the rule cannot see; the rows that use it always hold exactly one switch.
+    files: ["src/app/features/settings/setting-layout.component.ts", "src/app/features/settings/setting-layout.component.ts*/**"],
+    rules: { "@angular-eslint/template/label-has-associated-control": "off" },
+  },
 );
