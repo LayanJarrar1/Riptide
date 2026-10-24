@@ -242,21 +242,6 @@ describe('SettingsPageComponent deep links', () => {
     expect(TestBed.inject(Router).url).toContain('#privacy');
   });
 
-  it('older code that scrolls to an id in another section opens that section', async () => {
-    const r = await render({ url: '/settings#general' });
-    expect(selectedId(r.el)).toBe('general');
-    const stub = document.getElementById('research-sources');
-    expect(stub).not.toBeNull();
-    stub?.scrollIntoView({ block: 'start' });
-    r.harness.detectChanges();
-    await settle();
-    r.harness.detectChanges();
-    expect(selectedId(r.el)).toBe('ai');
-    expect(document.getElementById('research-sources')?.tagName).toBe('SECTION');
-    document.getElementById('about')?.scrollIntoView({ block: 'start' });
-    r.harness.detectChanges();
-    expect(selectedId(r.el)).toBe('updates');
-  });
 });
 
 describe('SettingsPageComponent controls write the same settings', () => {

@@ -1,4 +1,4 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, Directive, effect, ElementRef, inject, Injector, output, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, effect, ElementRef, inject, Injector, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -67,22 +67,6 @@ const SECTION_ICONS: Readonly<Record<SettingsSection, IconName>> = {
 };
 
 /**
- * Stands in for the group `id` while another section is showing: older code calls
- * `document.getElementById('ai')?.scrollIntoView()` after navigating here, and this makes that
- * call open the right section instead of doing nothing.
- */
-@Directive({ selector: '[appSettingsAnchor]' })
-export class SettingsAnchorDirective {
-  /** Something asked the page to scroll to this anchor. */
-  readonly reached = output<void>();
-
-  constructor() {
-    const el = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
-    el.scrollIntoView = () => this.reached.emit();
-  }
-}
-
-/**
  * Settings: a section list on the start side and one section at a time in the content pane,
  * each a stack of titled groups of rows. Every control writes straight to its setting; there is no
  * save button because nothing here is dangerous to change (the destructive actions ask first).
@@ -93,7 +77,6 @@ export class SettingsAnchorDirective {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     IconComponent,
-    SettingsAnchorDirective,
     GeneralSectionComponent,
     DownloadsSectionComponent,
     BrowserSectionComponent,
@@ -231,10 +214,6 @@ export class SettingsAnchorDirective {
         font-size: var(--text-sm);
       }
 
-      .stub {
-        display: none;
-      }
-
       .update-banner {
         display: flex;
         align-items: center;
@@ -361,9 +340,6 @@ export class SettingsAnchorDirective {
         </div>
       </div>
 
-      @for (anchor of strayAnchors(); track anchor) {
-        <span class="stub" appSettingsAnchor [id]="anchor" (reached)="go(anchor)"></span>
-      }
     </div>
   `,
 })
@@ -382,13 +358,6 @@ export class SettingsPageComponent {
 
   /** The section showing; the route fragment wins over the remembered one. */
   readonly section = signal<SettingsSection>(sectionOf(this.route.snapshot.fragment) ?? this.remembered());
-
-  /** Ids older code looks up that belong to a section that is not showing. */
-  protected readonly strayAnchors = computed(() =>
-    Object.entries(SETTINGS_ANCHORS)
-      .filter(([, section]) => section !== this.section())
-      .map(([anchor]) => anchor),
-  );
 
   constructor() {
     effect(() => {

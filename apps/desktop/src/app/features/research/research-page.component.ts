@@ -868,9 +868,7 @@ export class ResearchPageComponent implements OnInit {
   // ---------------------------------------------------------------- searching
 
   protected openAiSettings(): void {
-    void this.router.navigateByUrl('/settings').then(() => {
-      setTimeout(() => document.getElementById('ai')?.scrollIntoView({ block: 'start' }), 50);
-    });
+    void this.router.navigateByUrl('/settings#ai');
   }
 
   protected cancel(): void {

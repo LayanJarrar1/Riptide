@@ -932,9 +932,7 @@ export class ResearchTurnComponent {
   }
 
   protected openResearchSettings(): void {
-    void this.router.navigateByUrl('/settings').then(() => {
-      setTimeout(() => document.getElementById('research-sources')?.scrollIntoView({ block: 'start' }), 50);
-    });
+    void this.router.navigateByUrl('/settings#research-sources');
   }
 
   private exportContext(): ExportContext {
