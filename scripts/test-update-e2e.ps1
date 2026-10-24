@@ -442,7 +442,7 @@ try {
     $upgraded = Wait-For { (Get-ExeVersion) -eq $NewVersion } 180 'the installer to replace the app'
     Assert $upgraded "installed exe now reports $NewVersion (is: $(Get-ExeVersion))"
     $verRe = [regex]::Escape($NewVersion)
-    $relaunched = Wait-For { (Get-InstalledApps).Count -gt 0 -and (Get-AppLog) -match "data directory resolved version=$verRe" } 90 'the new version to start'
+    $relaunched = Wait-For { (Get-InstalledApps).Count -gt 0 -and (Get-AppLog) -match "data directory resolved version=`"?$verRe" } 90 'the new version to start'
     Assert $relaunched "the installer started the new version ($NewVersion) from the install folder, and it logs that version"
     $log = Get-AppLog
     if (-not $relaunched) {
