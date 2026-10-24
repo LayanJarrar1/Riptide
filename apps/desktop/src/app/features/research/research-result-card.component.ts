@@ -103,8 +103,12 @@ export function fileType(it: TurnItem): string | null {
       background: var(--color-surface-2);
     }
 
+    /* the box sits on the first line of the title, not above it */
     .pick {
-      padding-block-start: 2px;
+      display: flex;
+      align-items: center;
+      flex: none;
+      block-size: calc(var(--text-md) * var(--leading-snug, 1.35));
     }
 
     .page-mark {
@@ -113,6 +117,7 @@ export function fileType(it: TurnItem): string | null {
     }
 
     .pick input {
+      margin: 0;
       inline-size: 16px;
       block-size: 16px;
       accent-color: var(--color-accent);

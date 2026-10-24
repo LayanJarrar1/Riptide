@@ -87,6 +87,14 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
       transform: none;
     }
 
+    :host(.v-primary:disabled),
+    :host(.v-primary[aria-disabled='true']) {
+      opacity: 1;
+      background: var(--color-surface-3);
+      color: var(--color-text-secondary);
+      box-shadow: inset 0 0 0 1px var(--color-border-strong);
+    }
+
     :host(.v-primary) {
       background: var(--color-accent);
       color: var(--color-on-accent);
