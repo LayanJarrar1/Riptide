@@ -33,6 +33,16 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
   The result cache is no longer cleared by each new search, so earlier turns can still be added.
   See decision D-research-ws-1.
 
+### File manager: path handling
+
+- Moving or copying a folder into itself is now judged on resolved paths and ignoring case on
+  Windows (a junction or a differently cased path no longer slips past).
+- Replace no longer treats a differently cased path as another item, which could send the source
+  itself to the Recycle Bin.
+- A move across drives keeps the original when the folder holds links that were not copied, and says so.
+- Source names are validated: an alternate data stream (`file.txt:stream`) is refused; names with
+  bidirectional override characters, `CONIN$`, `CONOUT$` or `COM¹`/`LPT¹` are refused.
+
 ### File manager
 
 - A new Files page (sidebar) browses the disk from Downloads, the Riptide category folders, the

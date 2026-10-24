@@ -57,16 +57,38 @@ Branch `m6/ai-research-workspace`. Astryx targets React 19, so its patterns are 
 Known limits: a turn restored after a restart shows its results but cannot be downloaded until it is
 searched again (the backend cache is in memory); the downloads of the 60 kept results only.
 
+## Phase 5 — security review and checks
+
+Branch `m6/phase5-security-review` (stacked on Phase 4). Reviewed the Phase 1–4 diffs:
+
+- Secrets and personal paths: no API keys, tokens, e-mail addresses or Windows user-profile paths in the
+  files added by PRs #66–#68 or in tracked files (only a fake key inside a unit test). Research
+  history is stored in app storage, never in the repository, and without local paths.
+- External content in Research: results are text-only (a spec injects `<img onerror>` and `<b>`),
+  every link goes through `safeWebUrl`, `open_web_url` accepts http/https only, stored history is
+  re-validated on load (bad links and unknown sources are dropped).
+- `riptide-fs` / `files.rs` path handling — five findings fixed, each with a test: into-itself check
+  on resolved, case-folded paths; same-item test case-insensitive on Windows; a move across drives
+  keeps the original when links were not copied; source names validated (alternate data streams);
+  bidi override characters, `CONIN$`/`CONOUT$` and superscript `COM`/`LPT` names refused.
+- Left as documented limits (crate docs, "Known limits"): the time between an "exists" check and a
+  rename; no allowed-roots restriction (a file manager can touch any path the user can).
+- README feature list and CHANGELOG updated.
+
+Manual checks still needed on a real Windows session (nothing below was run in the desktop app):
+Recycle Bin restore through the shell, moves across drives, files another program has open,
+OneDrive placeholder files, the native save dialog for `.md` / `.bib` / `.ris`, `open_web_url`
+opening the browser, the Research page in RTL in the running app.
+
 ## Test evidence
 
-- `npm test` (Karma, ChromeHeadless, Linux): 548 passed, 1 failed. The failure is
-  `BatchDownloadDialogComponent scrolling moves the window and keeps the spacer math right`, which
-  fails the same way on unmodified `main` in this Linux container (layout-dependent).
+- `npm test` (Karma, Chrome headless, Windows Server 2022, Phase 4 branch): 599 passed, 0 failed
+  (the layout-dependent `BatchDownloadDialogComponent scrolling…` passes on Windows).
 - `npm run lint`, `npm run i18n:lint`: clean.
-- CI (`check.ps1` on windows-latest): see the pull request.
+- CI: GitHub Actions still ends every run in `startup_failure` (checked 2026-10-24), so no CI result exists for these PRs. Bundle: 500.33 kB initial (warning, budget 500 kB).
 
-Rust (Linux container): `cargo fmt --check` and clippy `-D warnings` on core/store/engine clean;
-`riptide-store` and `riptide-core` tests pass. `riptide-engine`: one failure,
+Rust (Windows): `cargo fmt --all -- --check` clean; clippy `-D warnings` and tests pass for
+`riptide-desktop` (99 tests) and `riptide-fs` (18 tests). Earlier, on Linux: core/store/engine clean. `riptide-engine`: one failure,
 `read_only_destination_fails_cleanly_then_works_once_writable`, because the container runs as root
 (a read-only directory does not stop root); Windows CI is the reference.
 
