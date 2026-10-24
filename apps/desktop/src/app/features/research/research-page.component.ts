@@ -359,10 +359,9 @@ interface LiveRef {
       line-height: var(--leading-normal);
     }
 
+    /* legal text is never cut with an ellipsis: it wraps */
     .policy.is-line {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-size: 11px;
     }
 
     .hello {
@@ -562,6 +561,53 @@ interface LiveRef {
       color: var(--color-accent-fg);
       font-size: 10px;
       font-weight: var(--weight-medium);
+    }
+
+    /* short windows (a 1080p screen at 200 %, 720p laptops): the greeting shrinks so the box and Send stay on screen */
+    @media (max-height: 800px) {
+      .hello {
+        gap: var(--space-1);
+      }
+
+      .mark-wrap,
+      .mark {
+        inline-size: 44px;
+        block-size: 44px;
+      }
+
+      .mark-wrap {
+        margin-block-end: 0;
+      }
+
+      .ripple {
+        border-radius: 15px;
+      }
+
+      .hello-title {
+        font-size: var(--text-xl, 1.25rem);
+      }
+
+      .hello .muted {
+        display: none;
+      }
+
+      .stage.is-empty .dock {
+        padding-block-start: var(--space-3);
+      }
+
+      .head {
+        padding-block: var(--space-2);
+      }
+    }
+
+    @media (max-height: 620px) {
+      .mark-wrap {
+        display: none;
+      }
+
+      .stage.is-empty .dock {
+        padding-block-start: var(--space-2);
+      }
     }
 
     @media (max-width: 900px) {

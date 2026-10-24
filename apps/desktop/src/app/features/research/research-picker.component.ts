@@ -47,7 +47,11 @@ let uid = 0;
       <div
         #list
         class="list"
-        [class.is-up]="placement() === 'up'"
+        [class.is-up]="up()"
+        [style.inset-inline-start.px]="startPx()"
+        [style.max-block-size.px]="maxPx()"
+        [style.--list-top.px]="topPx()"
+        [style.--list-bottom.px]="bottomPx()"
         role="listbox"
         tabindex="-1"
         [id]="listId"
@@ -141,10 +145,14 @@ let uid = 0;
       flex: none;
     }
 
+    /* fixed: the page's scroll containers would otherwise clip the list; position and height are set when it opens */
     .list {
-      position: absolute;
-      inset-inline-start: 0;
-      inset-block-start: calc(100% + 6px);
+      position: fixed;
+      inset-block-start: var(--list-top, auto);
+      inset-block-end: var(--list-bottom, auto);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
       z-index: var(--z-overlay);
       inline-size: max-content;
       min-inline-size: 280px;
@@ -157,10 +165,6 @@ let uid = 0;
       animation: pop var(--dur-1) var(--ease-emphasized-out) both;
     }
 
-    .list.is-up {
-      inset-block-start: auto;
-      inset-block-end: calc(100% + 6px);
-    }
 
     @keyframes pop {
       from {
@@ -266,6 +270,42 @@ export class ResearchPickerComponent {
     return s === null ? this.label() : `${this.label()}: ${s.label}`;
   });
 
+  /** Where the open list sits, worked out from the button's place in the window when it opens. */
+  protected readonly up = signal(false);
+  protected readonly startPx = signal(0);
+  protected readonly topPx = signal<number | null>(null);
+  protected readonly bottomPx = signal<number | null>(null);
+  protected readonly maxPx = signal(320);
+
+  private readonly closeOnResize = (): void => this.close(false);
+
+  private readonly closeOnScroll = (event: Event): void => {
+    // only a scroller that carries the button moves it away from the (fixed) list
+    const target = event.target;
+    if (target instanceof Node && target.contains(this.trigger().nativeElement)) {
+      this.close(false);
+    }
+  };
+
+  /** Opens below the button, or above it when there is more room there; the height follows the room. */
+  private place(): void {
+    const r = this.trigger().nativeElement.getBoundingClientRect();
+    const gap = 6;
+    const edge = 8;
+    const below = window.innerHeight - r.bottom - gap - edge;
+    const above = r.top - gap - edge;
+    const wantUp = this.placement() === 'up';
+    const fits = 340; // roughly the height of a full list
+    const up = wantUp ? above >= Math.min(fits, below) : below < Math.min(fits, above);
+    this.up.set(up);
+    this.maxPx.set(Math.max(120, Math.floor(up ? above : below)));
+    this.topPx.set(up ? null : r.bottom + gap);
+    this.bottomPx.set(up ? window.innerHeight - r.top + gap : null);
+    const rtl = this.i18n.dir() === 'rtl';
+    const start = rtl ? window.innerWidth - r.right : r.left;
+    this.startPx.set(Math.max(edge, start));
+  }
+
   protected toggle(): void {
     if (this.open()) {
       this.close(false);
@@ -289,12 +329,17 @@ export class ResearchPickerComponent {
   }
 
   private openList(): void {
+    this.place();
     this.focusPending = true;
     this.open.set(true);
+    window.addEventListener('scroll', this.closeOnScroll, true);
+    window.addEventListener('resize', this.closeOnResize);
   }
 
   private close(refocus: boolean): void {
     this.open.set(false);
+    window.removeEventListener('scroll', this.closeOnScroll, true);
+    window.removeEventListener('resize', this.closeOnResize);
     if (refocus) {
       this.trigger().nativeElement.focus();
     }
