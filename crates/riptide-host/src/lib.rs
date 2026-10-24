@@ -177,7 +177,13 @@ impl IntegrationSettings {
     /// Reads the file; the defaults when it is missing or malformed.
     pub fn load(path: &Path) -> IntegrationSettings {
         match std::fs::read(path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
+            // an editor or a script may have saved the file with a UTF-8 byte order mark
+            Ok(bytes) => serde_json::from_slice(
+                bytes
+                    .strip_prefix(&[0xEF_u8, 0xBB, 0xBF][..])
+                    .unwrap_or(&bytes),
+            )
+            .unwrap_or_else(|e| {
                 tracing::warn!(error = %e, "integration settings unreadable; using defaults");
                 IntegrationSettings::default()
             }),
@@ -678,6 +684,18 @@ mod tests {
             IntegrationSettings::load(&path),
             IntegrationSettings::default()
         );
+    }
+
+    #[test]
+    fn integration_settings_survive_a_byte_order_mark() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(INTEGRATION_FILE);
+        let mut bytes = vec![0xEF_u8, 0xBB, 0xBF];
+        bytes.extend_from_slice(br#"{"browser_host":false,"extra_extension_ids":["x@y"]}"#);
+        std::fs::write(&path, bytes).unwrap();
+        let s = IntegrationSettings::load(&path);
+        assert!(!s.browser_host);
+        assert_eq!(s.extra_extension_ids, vec!["x@y".to_string()]);
     }
 
     #[test]
