@@ -6,7 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{check_path, path_string, validate_name, Error, Result, PROPERTIES_LIMIT};
+use crate::names::validate_existing_name;
+use crate::{check_path, path_string, Error, Result, PROPERTIES_LIMIT};
 
 /// Copy or move.
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -138,9 +139,9 @@ fn sources_in(sources: &[PathBuf], dest: &Path) -> Result<Vec<Source>> {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .ok_or_else(|| Error::BadPath(path_string(&path)))?;
-        // the name is checked like a typed one: no `:` (an NTFS alternate data stream such as
-        // `file.txt:stream`), no bidi controls, no device names
-        validate_name(&name)?;
+        // an existing item keeps whatever name it has (so it can be moved out of a bad name);
+        // only an alternate data stream such as `file.txt:stream` is refused
+        validate_existing_name(&name)?;
         if path.symlink_metadata().is_err() {
             return Err(Error::NotFound(name));
         }
@@ -152,17 +153,34 @@ fn sources_in(sources: &[PathBuf], dest: &Path) -> Result<Vec<Source>> {
     Ok(out)
 }
 
-/// Whether two paths name the same item by spelling: case-insensitive on Windows (NTFS is, by
-/// default), exact elsewhere.
+/// Whether two paths name the same place after resolving links and junctions in their existing
+/// parts: case-insensitive on Windows (NTFS is, by default), exact elsewhere.
 pub(crate) fn same_path(a: &Path, b: &Path) -> bool {
     same_path_with(a, b, cfg!(windows))
 }
 
 fn same_path_with(a: &Path, b: &Path, ignore_case: bool) -> bool {
-    if !ignore_case {
-        return a == b;
+    let (a, b) = (resolve_lenient(a), resolve_lenient(b));
+    if ignore_case {
+        fold(&a) == fold(&b)
+    } else {
+        a == b
     }
-    fold(a) == fold(b)
+}
+
+/// Whether two paths are the same item: like [`same_path`], but the last component is not
+/// resolved, so a link and what it points to stay different items (as in [`is_inside`]).
+fn same_item(a: &Path, b: &Path) -> bool {
+    let resolve = |p: &Path| match (p.parent(), p.file_name()) {
+        (Some(parent), Some(name)) => resolve_lenient(parent).join(name),
+        _ => resolve_lenient(p),
+    };
+    let (a, b) = (resolve(a), resolve(b));
+    if cfg!(windows) {
+        fold(&a) == fold(&b)
+    } else {
+        a == b
+    }
 }
 
 /// The path with every component lower-cased, for case-insensitive comparison.
@@ -302,7 +320,7 @@ pub fn transfer(
                         riptide_core::unique_path(&dest, &s.name, |p| p.symlink_metadata().is_ok());
                 }
                 // copying an item onto itself can only mean "make a copy"
-                ConflictChoice::Replace if same_path(&target, &s.path) => {
+                ConflictChoice::Replace if same_item(&target, &s.path) => {
                     target =
                         riptide_core::unique_path(&dest, &s.name, |p| p.symlink_metadata().is_ok());
                 }
@@ -364,9 +382,54 @@ fn move_item(src: &Path, target: &Path, ctx: &mut Ctx<'_>) -> Result<()> {
         Err(e) if !crosses_volumes(&e) => return Err(e.into()),
         Err(_) => {}
     }
+    move_by_copy(src, target, ctx)
+}
+
+/// The cross-volume move: copy, then remove the source. A folder holding links cannot be moved
+/// this way (links are never copied), so that is found out before a single byte is copied.
+fn move_by_copy(src: &Path, target: &Path, ctx: &mut Ctx<'_>) -> Result<()> {
+    if contains_link(src) {
+        return Err(Error::Io(std::io::Error::other(
+            "contains links, which cannot be moved to another drive: nothing was copied and the \
+             original was kept",
+        )));
+    }
     let links_before = ctx.skipped_links;
     copy_item(src, target, ctx)?;
     remove_moved_source(src, ctx.skipped_links > links_before)
+}
+
+/// Whether the folder `path` holds a link or junction anywhere below it (never followed). Stops
+/// at the first one, or at the walk limit.
+fn contains_link(path: &Path) -> bool {
+    let Ok(meta) = path.symlink_metadata() else {
+        return false;
+    };
+    if !meta.is_dir() || meta.file_type().is_symlink() {
+        return false;
+    }
+    let (mut seen, mut stack) = (0u64, vec![path.to_path_buf()]);
+    while let Some(dir) = stack.pop() {
+        let Ok(items) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for item in items.flatten() {
+            seen += 1;
+            if seen > PROPERTIES_LIMIT {
+                return false;
+            }
+            let Ok(kind) = item.file_type() else {
+                continue;
+            };
+            if kind.is_symlink() {
+                return true;
+            }
+            if kind.is_dir() {
+                stack.push(item.path());
+            }
+        }
+    }
+    false
 }
 
 /// Removes the source of a cross-volume move once its copy is complete. Links inside it were not
@@ -711,7 +774,102 @@ mod tests {
         assert!(is_inside_with(&shouting, &album, true));
         assert!(same_path_with(&album, &t.root.join("SRC/Album"), true));
         assert!(!same_path_with(&album, &t.root.join("src/other"), true));
+        // (a Windows file system resolves the spelling to the real case, so only elsewhere)
+        #[cfg(not(windows))]
         assert!(!same_path_with(&album, &t.root.join("SRC/Album"), false));
+    }
+
+    /// A directory link (symlink; junction on Windows). False when the platform refuses to make one.
+    fn make_dir_link(link: &Path, target: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(target)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        }
+    }
+
+    fn is_link(p: &Path) -> bool {
+        p.symlink_metadata()
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn replace_through_a_directory_alias_never_trashes_the_source() {
+        let t = setup();
+        let jump = t.root.join("jump");
+        if !make_dir_link(&jump, &t.root.join("src")) {
+            return; // links cannot be created here
+        }
+        assert!(is_link(&jump), "the link was created, so the test must run");
+        assert!(same_path(&jump, &t.root.join("src")));
+        assert!(same_item(&jump.join("a.txt"), &t.root.join("src/a.txt")));
+        assert!(!same_item(&jump, &t.root.join("src")));
+        for kind in [TransferKind::Copy, TransferKind::Move] {
+            let r = transfer(
+                &[t.root.join("src/a.txt")],
+                &jump,
+                kind,
+                ConflictChoice::Replace,
+                &mut |_| {},
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+            assert!(r.failed.is_empty(), "{:?}", r.failed);
+            assert_eq!(std::fs::read(t.root.join("src/a.txt")).unwrap(), b"alpha");
+        }
+        let p = plan(&[t.root.join("src/a.txt")], &jump, TransferKind::Move).unwrap();
+        assert_eq!(
+            p.unchanged.len(),
+            1,
+            "a move into its own folder is a no-op"
+        );
+    }
+
+    #[test]
+    fn a_folder_with_links_is_refused_before_anything_is_copied() {
+        let t = setup();
+        let album = t.root.join("src/album");
+        assert!(!contains_link(&album));
+        let link = album.join("disc 2").join("ln");
+        if !make_dir_link(&link, &t.root.join("src")) {
+            return; // links cannot be created here
+        }
+        assert!(is_link(&link), "the link was created, so the test must run");
+        assert!(contains_link(&album));
+        let target = t.root.join("dest/album");
+        let mut ctx = Ctx {
+            progress: Progress {
+                done_bytes: 0,
+                total_bytes: 0,
+                current: String::new(),
+            },
+            on_progress: &mut |_| {},
+            cancel: &AtomicBool::new(false),
+            skipped_links: 0,
+        };
+        let err = move_by_copy(&album, &target, &mut ctx).unwrap_err();
+        assert!(err.to_string().contains("nothing was copied"), "{err}");
+        assert_eq!(ctx.progress.done_bytes, 0, "no byte was copied");
+        assert!(!target.exists());
+        assert!(album.join("01.mp3").exists());
+    }
+
+    #[test]
+    fn existing_source_names_only_refuse_streams() {
+        assert!(validate_existing_name("aux").is_ok());
+        assert!(validate_existing_name("report.").is_ok());
+        assert!(validate_existing_name("a\u{200F}b\u{202E}").is_ok());
+        assert!(validate_existing_name("file.txt:stream").is_err());
     }
 
     #[cfg(unix)]
@@ -749,7 +907,7 @@ mod tests {
     #[test]
     fn sources_with_stream_or_unsafe_names_are_refused() {
         let t = setup();
-        for name in ["a.txt:stream", "x\u{202e}txt.exe"] {
+        for name in ["a.txt:stream", "x.txt:Zone.Identifier"] {
             let r = plan(
                 &[t.root.join("src").join(name)],
                 &t.root.join("dest"),

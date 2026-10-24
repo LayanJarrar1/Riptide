@@ -256,9 +256,9 @@ pub fn rename(path: &Path, new_name: &str) -> Result<Entry> {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    // the item being renamed gets the same scrutiny as a typed name (`file.txt:stream` is an
-    // NTFS alternate data stream, not a file name)
-    validate_name(&old_name)?;
+    // the old name only has to not be an NTFS alternate data stream (`file.txt:stream`): items
+    // with names Windows would not accept today must stay repairable
+    names::validate_existing_name(&old_name)?;
     if path.symlink_metadata().is_err() {
         return Err(Error::NotFound(old_name));
     }
@@ -618,6 +618,33 @@ mod tests {
         ));
         assert!(matches!(
             rename(&t.path().join("Note.txt"), "..\\escape"),
+            Err(Error::BadName(_))
+        ));
+    }
+
+    #[test]
+    fn items_with_names_windows_rejects_can_still_be_renamed_to_valid_ones() {
+        let t = tmp();
+        // `\\?\` skips Win32 name normalisation, which would strip the trailing dot
+        let base = if cfg!(windows) {
+            PathBuf::from(format!(r"\\?\{}", t.path().display()))
+        } else {
+            t.path().to_path_buf()
+        };
+        for (old, new) in [("aux", "aux-fixed"), ("report.", "report.txt")] {
+            let p = base.join(old);
+            std::fs::write(&p, b"x").unwrap();
+            let r = rename(&p, new).unwrap();
+            assert_eq!(r.name, new);
+            assert!(base.join(new).exists());
+            assert!(!p.exists());
+        }
+        // a new name is still held to the full rules
+        let p = base.join("keep.txt");
+        std::fs::write(&p, b"x").unwrap();
+        assert!(matches!(rename(&p, "aux"), Err(Error::BadName(_))));
+        assert!(matches!(
+            rename(&base.join("file.txt:stream"), "ok"),
             Err(Error::BadName(_))
         ));
     }
