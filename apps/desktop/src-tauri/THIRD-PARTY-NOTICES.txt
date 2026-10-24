@@ -43,4 +43,32 @@ Servo / MPL-2.0 crates (linked into riptide-desktop.exe through Tauri's HTML han
   Changes:  none. Riptide uses these crates unmodified, exactly as published, so no modified
             MPL-covered file is distributed.
 
-Riptide itself is dual-licensed under MIT or Apache-2.0 (see LICENSE-MIT and LICENSE-APACHE).
+Fonts (bundled inside the app's interface files)
+  Inter                     https://rsms.me/inter/
+  IBM Plex Sans Arabic      https://github.com/IBM/plex
+  License:  SIL Open Font License 1.1. The full texts are in licenses/inter-OFL.txt and
+            licenses/ibm-plex-sans-arabic-OFL.txt next to the app. The fonts are used unmodified
+            (WOFF2 files as published) and are not sold on their own.
+
+JavaScript packages (interface runtime, compiled into the app's web files)
+  Angular 20 (core, common, compiler, forms, platform-browser, router)  MIT   https://angular.dev
+  RxJS 7                                                                Apache-2.0   https://rxjs.dev
+  tslib 2                                                               0BSD   https://github.com/microsoft/tslib
+  zone.js 0.15                                                          MIT   https://github.com/angular/angular
+  @tauri-apps/api 2                                                     Apache-2.0 OR MIT   https://tauri.app
+  Build-time tools (Angular CLI, TypeScript, esbuild and so on) are not part of the shipped app.
+
+Tauri and WebView2
+  Tauri (https://tauri.app) and its plugins are linked into riptide-desktop.exe and are licensed
+  Apache-2.0 OR MIT.
+  The interface is shown by the Microsoft Edge WebView2 runtime. Riptide does not include or
+  modify it: it comes with Windows 11 and current Windows 10 updates, and the installer runs
+  Microsoft's WebView2 bootstrapper when it is missing. WebView2 is licensed by Microsoft under
+  its own terms (https://developer.microsoft.com/microsoft-edge/webview2/).
+
+Riptide's own license
+  The desktop app, the command-line tool, the browser host, the IPC crate and the browser
+  extension are licensed GPL-3.0-or-later (licenses/Riptide-GPL-3.0.txt). The engine crates
+  (riptide-core, riptide-net, riptide-store, riptide-engine, riptide-media, riptide-crawl,
+  riptide-log, riptide-testserver and the other library crates marked MIT OR Apache-2.0 in
+  their Cargo.toml) are dual-licensed MIT OR Apache-2.0. Source: https://github.com/LayanJarrar1/Riptide

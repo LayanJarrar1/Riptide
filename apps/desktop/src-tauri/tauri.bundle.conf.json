@@ -9,6 +9,9 @@
       "THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt",
       "binaries/ffmpeg-LICENSE.txt": "licenses/ffmpeg-LICENSE.txt",
       "binaries/yt-dlp-LICENSE.txt": "licenses/yt-dlp-LICENSE.txt",
+      "../src/assets/fonts/inter/OFL.txt": "licenses/inter-OFL.txt",
+      "../src/assets/fonts/ibm-plex-sans-arabic/OFL.txt": "licenses/ibm-plex-sans-arabic-OFL.txt",
+      "../../../LICENSE": "licenses/Riptide-GPL-3.0.txt",
       "../../extension/dist/chrome": "extension/chrome",
       "../../extension/dist/edge": "extension/edge",
       "../../../scripts/install-extension.ps1": "install-extension.ps1"

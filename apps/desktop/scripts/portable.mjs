@@ -56,6 +56,14 @@ copyFileSync(join(desktop, 'src-tauri', 'THIRD-PARTY-NOTICES.txt'), join(folder,
 for (const tool of ['yt-dlp', 'ffmpeg']) {
   copyFileSync(join(binaries, `${tool}-LICENSE.txt`), join(folder, 'licenses', `${tool}-LICENSE.txt`));
 }
+// font and project licenses (same files the installer ships under licenses/)
+for (const [from, to] of [
+  [join(desktop, 'src', 'assets', 'fonts', 'inter', 'OFL.txt'), 'inter-OFL.txt'],
+  [join(desktop, 'src', 'assets', 'fonts', 'ibm-plex-sans-arabic', 'OFL.txt'), 'ibm-plex-sans-arabic-OFL.txt'],
+  [join(repo, 'LICENSE'), 'Riptide-GPL-3.0.txt'],
+]) {
+  copyFileSync(from, join(folder, 'licenses', to));
+}
 // the browser extension (built by scripts/stage-extension.mjs) and its installer script
 for (const browser of ['chrome', 'edge']) {
   const from = join(repo, 'apps', 'extension', 'dist', browser);

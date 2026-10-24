@@ -36,6 +36,11 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "Riptide",
+    "copyright": "Copyright (c) Riptide contributors. Licensed under GPL-3.0-or-later.",
+    "shortDescription": "Free, open-source download manager with Arabic and English interface.",
+    "category": "Utility",
+    "licenseFile": "../../../LICENSE",
     "targets": [
       "nsis"
     ],
@@ -47,9 +52,17 @@
       "icons/icon.ico"
     ],
     "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
       "nsis": {
         "installMode": "currentUser",
-        "installerHooks": "windows/hooks.nsh"
+        "installerHooks": "windows/hooks.nsh",
+        "languages": [
+          "Arabic",
+          "English"
+        ],
+        "displayLanguageSelector": true
       }
     }
   },
