@@ -27,6 +27,7 @@ pub mod opengameart;
 pub mod openlibrary;
 pub mod openverse;
 pub mod websearch;
+pub mod youtube;
 
 /// A searchable open source.
 #[async_trait]
@@ -54,8 +55,9 @@ pub trait SearchSource: Send + Sync {
 }
 
 /// Builds the adapter for `source` talking to the real service. `None` for the two sources
-/// that need the user's own setup ([`Source::Jamendo`]: client id, [`Source::Web`]: backend):
-/// build those with [`jamendo::Jamendo::new`] and [`websearch::WebSearch::new`].
+/// that need the user's own setup ([`Source::Jamendo`]: client id, [`Source::Web`]: backend,
+/// [`Source::Youtube`]: the bundled yt-dlp): build those with [`jamendo::Jamendo::new`],
+/// [`websearch::WebSearch::new`] and [`youtube::Youtube::new`].
 pub fn default_source(source: Source) -> Option<Arc<dyn SearchSource>> {
     Some(match source {
         Source::OpenAlex => Arc::new(openalex::OpenAlex::new()),
@@ -73,7 +75,7 @@ pub fn default_source(source: Source) -> Option<Arc<dyn SearchSource>> {
         Source::Blender => Arc::new(blender::Blender::new()),
         Source::OpenGameArt => Arc::new(opengameart::OpenGameArt::new()),
         Source::Nasa => Arc::new(nasa::Nasa::new()),
-        Source::Jamendo | Source::Web => return None,
+        Source::Jamendo | Source::Web | Source::Youtube => return None,
     })
 }
 
@@ -86,7 +88,7 @@ pub(crate) fn pacing(source: Source) -> Duration {
         Source::OpenAlex | Source::Crossref => Duration::from_millis(250),
         // Brave's free plan allows one request per second
         Source::Web => Duration::from_millis(1100),
-        Source::OpenGameArt => Duration::from_millis(1000),
+        Source::OpenGameArt | Source::Youtube => Duration::from_millis(1000),
         Source::EuropePmc
         | Source::InternetArchive
         | Source::Commons

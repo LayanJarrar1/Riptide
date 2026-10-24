@@ -174,6 +174,11 @@ pub const AUDIO_FILTER: &str = "mediatype:audio AND (licenseurl:(*creativecommon
 /// mixed.
 pub const VIDEO_FILTER: &str = "mediatype:movies AND (licenseurl:(*creativecommons.org*) OR collection:(prelinger OR silent_films OR feature_films)) AND -access-restricted-item:true";
 
+/// Software items are offered only with a Creative Commons licence URL: the Archive's software
+/// collections hold much that is not freely redistributable, so an explicit licence is required.
+pub const SOFTWARE_FILTER: &str =
+    "mediatype:software AND licenseurl:(*creativecommons.org*) AND -access-restricted-item:true";
+
 /// Longest album offered as one zip.
 const MAX_ALBUM_TRACKS: usize = 60;
 
@@ -185,6 +190,29 @@ const MAX_ALBUM_BYTES: u64 = 1_610_612_736;
 pub(crate) enum Media {
     Audio,
     Video,
+    Software,
+}
+
+/// How much a file looks like the program itself (lower is better); `None` for anything else.
+fn software_rank(name: &str) -> Option<u8> {
+    let n = name.to_ascii_lowercase();
+    let ends = |exts: &[&str]| exts.iter().any(|e| n.ends_with(e));
+    if ends(&[
+        ".exe",
+        ".msi",
+        ".msix",
+        ".dmg",
+        ".appimage",
+        ".deb",
+        ".rpm",
+        ".apk",
+    ]) {
+        Some(0)
+    } else if ends(&[".zip", ".7z", ".tar.gz", ".tgz", ".tar.xz", ".iso"]) {
+        Some(1)
+    } else {
+        None
+    }
 }
 
 fn collections(m: &Value) -> Vec<String> {
@@ -248,6 +276,7 @@ pub(crate) fn parse_media_metadata(
         Media::Video => {
             licence.is_some() || in_any(&["prelinger", "silent_films", "feature_films"])
         }
+        Media::Software => licence.is_some(),
     };
     if !allowed {
         return None;
@@ -300,6 +329,30 @@ pub(crate) fn parse_media_metadata(
                     format!("{} ({} tracks)", doc.title, list.len()),
                 )
             }
+        }
+        Media::Software => {
+            let (_, name, size) = files
+                .iter()
+                .filter_map(|f| {
+                    let name = f.get("name").and_then(jstr)?;
+                    // original uploads only: derivatives (thumbnails, torrents, listings) are not
+                    // the program
+                    let source = f
+                        .get("source")
+                        .and_then(jstr)
+                        .is_none_or(|s| s.eq_ignore_ascii_case("original"));
+                    (source && !name.contains('/'))
+                        .then(|| software_rank(name))
+                        .flatten()
+                        .map(|rank| (rank, name, size_of(f)))
+                })
+                .min_by_key(|(rank, _, size)| (*rank, std::cmp::Reverse(size.unwrap_or(0))))?;
+            (
+                download_url(base, id, name),
+                size,
+                name.to_string(),
+                doc.title.clone(),
+            )
         }
         Media::Video => {
             let (_, name, size) = files
@@ -358,6 +411,7 @@ impl InternetArchive {
         let filter = match media {
             Media::Audio => AUDIO_FILTER,
             Media::Video => VIDEO_FILTER,
+            Media::Software => SOFTWARE_FILTER,
         };
         let lucene = format!("({q}) AND {filter}");
         let url = format!(
@@ -430,6 +484,7 @@ impl SearchSource for InternetArchive {
         match category {
             Category::Music => self.search_media(Media::Audio, query, limit).await,
             Category::Video => self.search_media(Media::Video, query, limit).await,
+            Category::Software => self.search_media(Media::Software, query, limit).await,
             _ => self.search(query, limit).await,
         }
     }

@@ -57,6 +57,7 @@ pub(crate) struct Repo {
     pub description: Option<String>,
     pub license: Option<String>,
     pub html_url: String,
+    pub default_branch: Option<String>,
 }
 
 pub(crate) fn parse_repos(body: &Value) -> Vec<Repo> {
@@ -79,6 +80,7 @@ pub(crate) fn parse_repos(body: &Value) -> Vec<Repo> {
                             .filter(|l| *l != "NOASSERTION")
                             .map(str::to_string),
                         html_url: jstr(r.get("html_url")?)?.to_string(),
+                        default_branch: r.get("default_branch").and_then(jstr).map(str::to_string),
                     })
                 })
                 .collect()
@@ -116,6 +118,32 @@ fn is_companion(name: &str) -> bool {
     ]
     .iter()
     .any(|e| n.ends_with(e))
+}
+
+/// One open-source repository as a hit: the source archive of its default branch (GitHub builds
+/// it on request, so it has no size), the licence and the owner as publisher. Only repositories
+/// that declare an open licence are offered.
+pub(crate) fn repo_hit(repo: &Repo) -> Option<Hit> {
+    let spdx = repo.license.as_deref().filter(|l| is_open_licence(l))?;
+    let name = repo.full_name.rsplit('/').next().unwrap_or(&repo.full_name);
+    let branch = repo.default_branch.as_deref().unwrap_or("HEAD");
+    let url = format!(
+        "https://github.com/{}/archive/{}.zip",
+        repo.full_name, branch
+    );
+    let mut h = Hit::new(
+        Source::Github,
+        &format!("repo:{}", repo.full_name),
+        &repo.full_name,
+        &url,
+    );
+    h.filename = Some(format!("{name}.zip"));
+    h.page_url = Some(repo.html_url.clone());
+    h.license = Some(spdx.to_string());
+    h.publisher = repo.full_name.split('/').next().map(str::to_string);
+    h.authors = h.publisher.iter().cloned().collect();
+    h.summary = repo.description.as_deref().map(|d| tidy(d, 300));
+    Some(h)
 }
 
 pub(crate) fn parse_release(repo: &Repo, release: &Value) -> Vec<Hit> {
@@ -165,6 +193,8 @@ pub(crate) fn parse_release(repo: &Repo, release: &Value) -> Vec<Hit> {
                     h.page_url = Some(repo.html_url.clone());
                     h.license = repo.license.clone();
                     h.year = year;
+                    h.version = release.get("tag_name").and_then(jstr).map(str::to_string);
+                    h.publisher = repo.full_name.split('/').next().map(str::to_string);
                     h.authors = repo
                         .full_name
                         .split('/')
@@ -193,6 +223,9 @@ impl SearchSource for Github {
     async fn search_in(&self, category: Category, query: &str, limit: usize) -> Result<Vec<Hit>> {
         let q = check_query(query)?;
         let wanted = clamp(limit);
+        if category == Category::OpenSource {
+            return self.repos(&q, wanted).await;
+        }
         if category != Category::Games {
             return self.run(&q, wanted, false).await;
         }
@@ -206,6 +239,23 @@ impl SearchSource for Github {
 }
 
 impl Github {
+    /// Open-source projects: the repositories themselves (no release needed).
+    async fn repos(&self, q: &str, wanted: usize) -> Result<Vec<Hit>> {
+        let url = format!(
+            "{}/search/repositories?q={}&sort=stars&order=desc&per_page={}",
+            self.base,
+            enc(q),
+            (wanted * 2).clamp(6, 30)
+        );
+        let body = self.http.json(|| self.request(&url)).await?;
+        if body.get("items").is_none() {
+            return Err(ResearchError::Parse("no items field".into()));
+        }
+        let mut hits: Vec<Hit> = parse_repos(&body).iter().filter_map(repo_hit).collect();
+        hits.truncate(wanted);
+        Ok(hits)
+    }
+
     /// One repository search plus the latest release of the first few repositories.
     /// `open_only`: skip repositories that do not declare an open-source licence.
     async fn run(&self, q: &str, wanted: usize, open_only: bool) -> Result<Vec<Hit>> {
