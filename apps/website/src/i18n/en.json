@@ -197,8 +197,8 @@
     "titleA": "A list that",
     "titleB": "stays fast.",
     "lead": "Dense, calm, keyboard-friendly. Light and dark, English and Arabic.",
-    "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speeds, time left and status for each file",
-    "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speeds, time left and status for each file",
+    "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speed and status for each file",
+    "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speed and status for each file",
     "winLabel": "The Riptide desktop app."
   },
   "speed": {
