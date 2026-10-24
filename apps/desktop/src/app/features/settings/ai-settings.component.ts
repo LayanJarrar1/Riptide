@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 
-import { FORM_STYLES } from '../../ai/ai-styles';
-import { AiMessage, AiSettings, ConnectionView, ModelView, ProviderId, RequestPreview } from '../../ai/ai.models';
+import { AiSettings, ConnectionView, ModelView, ProviderId } from '../../ai/ai.models';
 import { AiSetupDialogComponent } from '../../ai/ai-setup-dialog.component';
 import { AiService } from '../../ai/ai.service';
 import { FormatService } from '../../core/format.service';
@@ -9,84 +8,98 @@ import { I18nService } from '../../i18n/i18n.service';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
+import { SettingGroupComponent, SettingRowComponent } from './setting-layout.component';
+
+/** The two things the status shows apart: AI being switched on (a key is saved) and the provider answering. */
+export type ProviderState = 'off' | 'untested' | 'working' | 'failing';
 
 /**
- * Settings → AI. Provider, key, model, endpoint, budget, and the privacy panel. The key field is
- * a password input that is emptied the moment the key is saved; the page only ever shows the
- * masked hint the backend returns. Everything else is saved as soon as it changes.
+ * Settings → AI & Research, the assistant half: status, quick setup, provider, model, key and
+ * the advanced endpoint and budget. The key field is a password input that is emptied the moment
+ * the key is saved; the page only ever shows the masked hint the backend returns. Everything
+ * else is saved as soon as it changes. The privacy switches live in Settings → Privacy & Data.
  */
 @Component({
   selector: 'app-ai-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AiSetupDialogComponent, ButtonComponent, IconComponent],
+  imports: [AiSetupDialogComponent, ButtonComponent, IconComponent, SettingGroupComponent, SettingRowComponent],
   template: `
-    <section class="section" id="ai">
-      <h2 class="section-title">{{ i18n.t('ai.title') }}</h2>
-      <p class="intro">{{ i18n.t('ai.subtitle') }}</p>
-
+    <app-setting-group anchor="ai" [heading]="i18n.t('ai.title')" [description]="i18n.t('ai.subtitle')">
       @if (!ai.available) {
-        <p class="setting-desc note">{{ i18n.t('ai.desktopOnly') }}</p>
+        <div class="sr-block"><p class="sr-note">{{ i18n.t('ai.desktopOnly') }}</p></div>
       } @else if (status(); as st) {
-        <div class="state" [class.is-on]="st.configured" role="status">
-          <span class="dot" [class.is-on]="st.configured"></span>
-          <span class="state-text">{{ i18n.t(st.configured ? 'ai.status.on' : 'ai.status.off') }}</span>
-        </div>
-        @if (!st.configured) {
-          <p class="setting-desc off-help">{{ i18n.t('ai.offHelp') }}</p>
-        }
-
-        <div class="quick">
+        <app-setting-row [label]="i18n.t('set.ai.enabled')" [description]="i18n.t(st.configured ? 'set.ai.enabledOn' : 'ai.offHelp')">
+          <span class="sr-pill" [class.is-ok]="st.configured" role="status" data-testid="ai-enabled">
+            <span class="sr-dot"></span>{{ i18n.t(st.configured ? 'set.ai.stateOn' : 'set.ai.stateOff') }}
+          </span>
           <button appButton [variant]="st.configured ? 'secondary' : 'primary'" icon="sparkles" type="button" (click)="setupOpen.set(true)">{{ i18n.t(st.configured ? 'aisetup.quickChange' : 'aisetup.quick') }}</button>
-          @if (!st.configured) {
-            <span class="setting-desc">{{ i18n.t('aisetup.quickHint') }}</span>
-          }
-        </div>
-        @if (st.keyHint; as hint) {
-          <div class="key-stored top-key">
-            <app-icon name="shieldCheck" [size]="16" class="ok" />
-            <span>{{ i18n.t('ai.keyStored').replace('{hint}', '') }}</span>
-            <code class="hint num" dir="ltr">{{ hint }}</code>
-            <button appButton variant="secondary" size="sm" icon="trash" type="button" [busy]="busy() === 'remove'" (click)="removeKey()">{{ i18n.t('ai.keyRemove') }}</button>
+        </app-setting-row>
+
+        <app-setting-row [label]="i18n.t('set.ai.provider')" [description]="providerText()">
+          <span class="sr-pill" [class.is-ok]="providerState() === 'working'" [class.is-bad]="providerState() === 'failing'" [class.is-warn]="providerState() === 'untested'" role="status" data-testid="ai-provider">
+            <span class="sr-dot"></span>{{ i18n.t('set.ai.provider.' + providerState()) }}
+          </span>
+          <button appButton variant="secondary" icon="bolt" type="button" [busy]="busy() === 'test'" [disabled]="!st.configured" (click)="test()">{{ i18n.t(busy() === 'test' ? 'ai.testing' : 'ai.test') }}</button>
+        </app-setting-row>
+
+        @if (connection(); as c) {
+          <div class="sr-block result" role="status">
+            <app-icon name="check" [size]="16" class="sr-ok" />
+            <div>
+              {{ testText(c) }}
+              @if (c.estimated) {
+                <div class="sr-note">{{ i18n.t('ai.testEstimated') }}</div>
+              }
+            </div>
           </div>
         }
 
-        <details class="advanced">
-          <summary class="preview-summary">
-            <app-icon name="chevronEnd" [size]="14" class="chev" />
-            <span>{{ i18n.t('ai.advanced') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.advancedDesc') }}</span>
-          </summary>
+        <app-setting-row [label]="i18n.t('set.ai.usage')" [description]="i18n.t('set.ai.usageDesc')">
+          <span class="sr-value num" data-testid="ai-usage">{{ i18n.t('ai.budgetUsed').replace('{tokens}', fmt.int(st.usage.tokens)).replace('{requests}', fmt.int(st.usage.requests)) }}</span>
+        </app-setting-row>
+      }
+    </app-setting-group>
 
-        <div class="setting">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('ai.provider') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.providerDesc') }}</span>
-          </div>
-          <select class="input provider" [attr.aria-label]="i18n.t('ai.provider')" (change)="onProvider($event)">
+    @if (ai.available && status(); as st) {
+      <app-setting-group [heading]="i18n.t('set.g.provider')">
+        <app-setting-row [field]="true" [label]="i18n.t('ai.provider')" [description]="i18n.t('ai.providerDesc')">
+          <select class="sr-input" [attr.aria-label]="i18n.t('ai.provider')" (change)="onProvider($event)">
             @for (p of st.providers; track p.id) {
               <option [value]="p.id" [selected]="p.id === st.settings.provider">{{ p.name }}</option>
             }
           </select>
-        </div>
+        </app-setting-row>
 
-        <div class="setting column">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('ai.key') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.keyDesc') }}</span>
+        <app-setting-row [stack]="true" [label]="i18n.t('ai.model')" [description]="i18n.t('ai.modelDesc')">
+          <div class="sr-fields">
+            <select class="sr-input" [attr.aria-label]="i18n.t('ai.modelPick')" [disabled]="models().length === 0" (change)="onModelPick($event)">
+              <option value="">{{ models().length === 0 ? i18n.t('ai.modelPick') : i18n.t('ai.modelLoaded').replace('{n}', models().length.toString()) }}</option>
+              @for (m of models(); track m.id) {
+                <option [value]="m.id" [selected]="m.id === st.settings.model">{{ m.id }}</option>
+              }
+            </select>
+            <button appButton variant="secondary" icon="retry" type="button" [busy]="busy() === 'models'" [disabled]="st.keyHint === null" (click)="loadModels()">{{ i18n.t(busy() === 'models' ? 'ai.modelLoading' : 'ai.modelLoad') }}</button>
           </div>
+          <input class="sr-input" type="text" dir="ltr" spellcheck="false" autocomplete="off" [placeholder]="i18n.t('ai.modelCustom')" [attr.aria-label]="i18n.t('ai.modelCustom')" [value]="st.settings.model" (change)="patch({ model: value($event) })" />
+          @if (modelsError(); as e) {
+            <p class="sr-error" role="alert">{{ e }}</p>
+          }
+        </app-setting-row>
+
+        <app-setting-row [stack]="true" [label]="i18n.t('ai.key')" [description]="i18n.t('ai.keyDesc')">
           @if (st.keyHint; as hint) {
-            <div class="key-stored">
-              <app-icon name="shieldCheck" [size]="16" class="ok" />
+            <div class="sr-fields" data-testid="ai-key-stored">
+              <app-icon name="shieldCheck" [size]="16" class="sr-ok" />
               <span>{{ i18n.t('ai.keyStored').replace('{hint}', '') }}</span>
-              <code class="hint num" dir="ltr">{{ hint }}</code>
+              <code class="sr-hint num" dir="ltr">{{ hint }}</code>
               <button appButton variant="secondary" size="sm" icon="trash" type="button" [busy]="busy() === 'remove'" (click)="removeKey()">{{ i18n.t('ai.keyRemove') }}</button>
             </div>
           } @else {
-            <p class="setting-desc">{{ i18n.t('ai.keyNone') }}</p>
+            <p class="sr-note">{{ i18n.t('ai.keyNone') }}</p>
           }
-          <div class="key-row">
+          <div class="sr-fields">
             <input
-              class="input key-input"
+              class="sr-input"
               [type]="reveal() ? 'text' : 'password'"
               name="ai-api-key"
               dir="ltr"
@@ -101,397 +114,79 @@ import { ToastService } from '../../ui/toast.service';
             <button appButton variant="ghost" size="sm" icon="eye" [iconOnly]="true" type="button" [attr.aria-label]="i18n.t('ai.keyShow')" [attr.aria-pressed]="reveal()" (click)="reveal.set(!reveal())"></button>
             <button appButton variant="primary" type="button" [busy]="busy() === 'key'" [disabled]="keyDraft().trim().length === 0" (click)="saveKey()">{{ i18n.t('ai.keySave') }}</button>
           </div>
-        </div>
+        </app-setting-row>
+      </app-setting-group>
 
-        <div class="setting column">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('ai.model') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.modelDesc') }}</span>
-          </div>
-          <div class="model-row">
-            <select class="input model-pick" [attr.aria-label]="i18n.t('ai.modelPick')" [disabled]="models().length === 0" (change)="onModelPick($event)">
-              <option value="">{{ models().length === 0 ? i18n.t('ai.modelPick') : i18n.t('ai.modelLoaded').replace('{n}', models().length.toString()) }}</option>
-              @for (m of models(); track m.id) {
-                <option [value]="m.id" [selected]="m.id === st.settings.model">{{ m.id }}</option>
-              }
-            </select>
-            <button appButton variant="secondary" icon="retry" type="button" [busy]="busy() === 'models'" [disabled]="st.keyHint === null" (click)="loadModels()">{{ i18n.t(busy() === 'models' ? 'ai.modelLoading' : 'ai.modelLoad') }}</button>
-          </div>
-          <input class="input" type="text" dir="ltr" spellcheck="false" autocomplete="off" [placeholder]="i18n.t('ai.modelCustom')" [attr.aria-label]="i18n.t('ai.modelCustom')" [value]="st.settings.model" (change)="patch({ model: value($event) })" />
-          @if (modelsError(); as e) {
-            <p class="field-error" role="alert">{{ e }}</p>
-          }
-        </div>
-
-        <div class="setting column">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('ai.baseUrl') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.baseUrlDesc') }}</span>
-          </div>
-          <input class="input" type="text" dir="ltr" spellcheck="false" autocomplete="off" [class.is-invalid]="baseUrlError()" [attr.aria-invalid]="baseUrlError()" [placeholder]="defaultBase()" [attr.aria-label]="i18n.t('ai.baseUrl')" [value]="st.settings.baseUrl ?? ''" (change)="patchBaseUrl($event)" />
-          @if (baseUrlError()) {
-            <p class="field-error" role="alert">{{ i18n.t('ai.baseUrlInvalid') }}</p>
-          }
-        </div>
-
-        <div class="setting column">
-          <div class="test-row">
-            <button appButton variant="secondary" icon="bolt" type="button" [busy]="busy() === 'test'" [disabled]="!st.configured" (click)="test()">{{ i18n.t(busy() === 'test' ? 'ai.testing' : 'ai.test') }}</button>
-          </div>
-          @if (connection(); as c) {
-            <div class="result ok-result" role="status">
-              <app-icon name="check" [size]="16" class="ok" />
-              <div>
-                <strong>{{ i18n.t('ai.testOk') }}.</strong>
-                {{ testText(c) }}
-                @if (c.estimated) {
-                  <div class="setting-desc">{{ i18n.t('ai.testEstimated') }}</div>
-                }
-              </div>
-            </div>
-          }
-          @if (testError(); as e) {
-            <div class="result bad-result" role="alert">
-              <app-icon name="alert" [size]="16" />
-              <div>{{ e }}</div>
-            </div>
-          }
-        </div>
-
-        <div class="setting column">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('ai.budget') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.budgetDesc') }}</span>
-          </div>
-          <div class="budget-row">
-            <label class="budget-field">
-              <span class="setting-desc">{{ i18n.t('ai.budgetTokens') }}</span>
-              <input class="input num" type="number" min="0" step="1000" [value]="st.settings.dailyTokenLimit ?? ''" (change)="patchLimit('dailyTokenLimit', $event)" />
-            </label>
-            <label class="budget-field">
-              <span class="setting-desc">{{ i18n.t('ai.budgetRequests') }}</span>
-              <input class="input num" type="number" min="0" step="10" [value]="st.settings.dailyRequestLimit ?? ''" (change)="patchLimit('dailyRequestLimit', $event)" />
-            </label>
-          </div>
-          <span class="setting-desc num">{{ i18n.t('ai.budgetUsed').replace('{tokens}', fmt.int(st.usage.tokens)).replace('{requests}', fmt.int(st.usage.requests)) }}</span>
-        </div>
-
-        </details>
-
-        <div class="privacy" role="group" [attr.aria-label]="i18n.t('ai.privacy')">
-          <div class="privacy-head">
-            <app-icon name="shieldCheck" [size]="20" class="ok" />
-            <h3 class="privacy-title">{{ i18n.t('ai.privacy') }}</h3>
-          </div>
-          <p class="privacy-text">{{ i18n.t('ai.privacyTelemetry') }}</p>
-
-          <label class="setting toggle-row">
-            <div class="setting-text">
-              <span class="setting-name">{{ i18n.t('ai.history') }}</span>
-              <span class="setting-desc">{{ i18n.t('ai.historyDesc') }}</span>
-            </div>
-            <span class="switch" [class.is-on]="st.settings.useDownloadHistory">
-              <input type="checkbox" role="switch" [checked]="st.settings.useDownloadHistory" (change)="patch({ useDownloadHistory: checked($event) })" />
-              <span class="knob"></span>
-            </span>
-          </label>
-          <label class="setting toggle-row">
-            <div class="setting-text">
-              <span class="setting-name">{{ i18n.t('ai.names') }}</span>
-              <span class="setting-desc">{{ i18n.t('ai.namesDesc') }}</span>
-            </div>
-            <span class="switch" [class.is-on]="st.settings.suggestNames">
-              <input type="checkbox" role="switch" [checked]="st.settings.suggestNames" (change)="patch({ suggestNames: checked($event) })" />
-              <span class="knob"></span>
-            </span>
-          </label>
-
-          <details class="preview" (toggle)="onPreviewToggle($event)">
-            <summary class="preview-summary">
-              <app-icon name="chevronEnd" [size]="14" class="chev" />
-              {{ i18n.t('ai.preview') }}
-            </summary>
-            <p class="setting-desc">{{ i18n.t('ai.previewDesc') }}</p>
-            <div class="preview-actions">
-              <button appButton variant="ghost" size="sm" icon="retry" type="button" (click)="loadPreview()">{{ i18n.t('ai.previewRefresh') }}</button>
-            </div>
-            @if (preview(); as p) {
-              <p class="preview-meta num">{{ previewMeta(p) }}</p>
-              @for (m of p.messages; track $index) {
-                <div class="msg">
-                  <span class="msg-role">{{ roleLabel(m) }}</span>
-                  <pre class="msg-body" dir="auto">{{ m.content }}</pre>
-                </div>
-              }
-            } @else {
-              <p class="setting-desc">{{ i18n.t('ai.previewEmpty') }}</p>
+      <details class="advanced">
+        <summary class="advanced-summary">
+          <app-icon name="chevronEnd" [size]="14" class="chev" />
+          <span>{{ i18n.t('ai.advanced') }}</span>
+          <span class="sr-note">{{ i18n.t('set.ai.advancedDesc') }}</span>
+        </summary>
+        <app-setting-group [heading]="i18n.t('set.g.advancedAi')">
+          <app-setting-row [stack]="true" [label]="i18n.t('ai.baseUrl')" [description]="i18n.t('ai.baseUrlDesc')">
+            <input class="sr-input" type="text" dir="ltr" spellcheck="false" autocomplete="off" [class.is-invalid]="baseUrlError()" [attr.aria-invalid]="baseUrlError()" [placeholder]="defaultBase()" [attr.aria-label]="i18n.t('ai.baseUrl')" [value]="st.settings.baseUrl ?? ''" (change)="patchBaseUrl($event)" />
+            @if (baseUrlError()) {
+              <p class="sr-error" role="alert">{{ i18n.t('ai.baseUrlInvalid') }}</p>
             }
-          </details>
-        </div>
-
-        <div class="privacy" role="group" [attr.aria-label]="i18n.t('ai.memory')">
-          <div class="privacy-head">
-            <app-icon name="inbox" [size]="20" />
-            <h3 class="privacy-title">{{ i18n.t('ai.memory') }}</h3>
-          </div>
-          <p class="privacy-text">{{ i18n.t('ai.memoryDesc') }}</p>
-          <label class="setting toggle-row">
-            <div class="setting-text">
-              <span class="setting-name">{{ i18n.t('ai.memorySkip') }}</span>
-              <span class="setting-desc">{{ i18n.t('ai.memorySkipDesc') }}</span>
-            </div>
-            <span class="switch" [class.is-on]="skip()">
-              <input type="checkbox" role="switch" [checked]="skip()" (change)="setSkip($event)" />
-              <span class="knob"></span>
-            </span>
-          </label>
-          <div class="setting">
-            <div class="setting-text">
-              <span class="setting-name">{{ i18n.t('ai.memoryClear') }}</span>
-            </div>
-            <button appButton variant="secondary" type="button" (click)="clearMemory()">{{ i18n.t('ai.memoryClear') }}</button>
-          </div>
-        </div>
-
-        <div class="setting">
-          <div class="setting-text">
-            <span class="setting-name">{{ i18n.t('ai.forget') }}</span>
-            <span class="setting-desc">{{ i18n.t('ai.forgetDesc') }}</span>
-          </div>
-          <button appButton variant="danger" icon="trash" type="button" [busy]="busy() === 'forget'" (click)="forget()">{{ i18n.t(confirmForget() ? 'ai.forgetConfirm' : 'ai.forget') }}</button>
-        </div>
-      }
-    </section>
+          </app-setting-row>
+          <app-setting-row [field]="true" [label]="i18n.t('ai.budgetTokens')" [description]="i18n.t('ai.budgetDesc')">
+            <input class="sr-input num" type="number" min="0" step="1000" dir="ltr" [attr.aria-label]="i18n.t('ai.budgetTokens')" [value]="st.settings.dailyTokenLimit ?? ''" (change)="patchLimit('dailyTokenLimit', $event)" />
+          </app-setting-row>
+          <app-setting-row [field]="true" [label]="i18n.t('ai.budgetRequests')">
+            <input class="sr-input num" type="number" min="0" step="10" dir="ltr" [attr.aria-label]="i18n.t('ai.budgetRequests')" [value]="st.settings.dailyRequestLimit ?? ''" (change)="patchLimit('dailyRequestLimit', $event)" />
+          </app-setting-row>
+        </app-setting-group>
+      </details>
+    }
     <app-ai-setup-dialog [open]="setupOpen()" (closed)="onSetupClosed()" />
   `,
-  styles: [
-    FORM_STYLES,
-    `
-      .section {
-        margin-block-start: var(--space-8);
-        padding-block-start: var(--space-5);
-        border-block-start: 1px solid var(--color-border);
-      }
+  styles: `
+    :host {
+      display: block;
+    }
 
-      .section-title {
-        font-size: var(--text-md);
-        font-weight: var(--weight-semibold);
-        margin-block-end: var(--space-1);
-      }
+    .result {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      line-height: var(--leading-normal);
+    }
 
-      .intro {
-        color: var(--color-text-muted);
-        font-size: var(--text-sm);
-        margin-block-end: var(--space-3);
-      }
+    .advanced {
+      margin-block-end: var(--space-8);
+    }
 
-      .note {
-        padding-block: var(--space-3);
-      }
+    .advanced-summary {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-block-end: var(--space-3);
+      cursor: pointer;
+      list-style: none;
+      font-weight: var(--weight-medium);
+      user-select: none;
+    }
 
-      .state {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-2);
-        padding: 4px 12px;
-        border: 1px solid var(--color-border-strong);
-        border-radius: var(--radius-full);
-        font-size: var(--text-sm);
-        font-weight: var(--weight-medium);
-      }
+    .advanced-summary::-webkit-details-marker {
+      display: none;
+    }
 
-      .state.is-on {
-        border-color: var(--color-success);
-      }
+    .advanced-summary:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: 2px;
+      border-radius: var(--radius-sm);
+    }
 
-      .off-help {
-        margin-block-start: var(--space-2);
-        max-inline-size: 60ch;
-      }
+    .chev {
+      transition: transform var(--motion-fast) var(--ease-standard);
+    }
 
-      .provider {
-        inline-size: 220px;
-      }
-
-      .quick {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--space-3);
-        margin-block: var(--space-4) var(--space-2);
-      }
-
-      .top-key {
-        margin-block-end: var(--space-2);
-      }
-
-      .advanced {
-        margin-block-start: var(--space-3);
-        border-block-start: 1px solid var(--color-border);
-        padding-block-start: var(--space-3);
-      }
-
-      .advanced[open] > summary .chev {
-        transform: rotate(calc(var(--dir-sign) * 90deg));
-      }
-
-      .ok {
-        color: var(--color-success);
-        flex-shrink: 0;
-      }
-
-      .key-stored {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--space-2);
-        font-size: var(--text-sm);
-      }
-
-      .hint {
-        padding: 2px 8px;
-        border-radius: var(--radius-sm);
-        background: var(--color-surface-3);
-        letter-spacing: 0.04em;
-        unicode-bidi: isolate;
-      }
-
-      .key-row,
-      .model-row,
-      .test-row {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-      }
-
-      .key-input,
-      .model-pick {
-        flex: 1;
-        min-inline-size: 0;
-      }
-
-      .result {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--space-2);
-        padding: var(--space-3);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        background: var(--color-surface-2);
-        font-size: var(--text-sm);
-        line-height: var(--leading-normal);
-      }
-
-      .bad-result {
-        border-color: var(--color-danger);
-        color: var(--color-danger);
-      }
-
-      .budget-row {
-        display: flex;
-        gap: var(--space-4);
-      }
-
-      .budget-field {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        flex: 1;
-      }
-
-      .privacy {
-        margin-block-start: var(--space-5);
-        padding: var(--space-4) var(--space-5);
-        border: 1px solid var(--color-accent);
-        border-radius: var(--radius-md);
-        background: var(--color-surface-2);
-      }
-
-      .privacy-head {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-      }
-
-      .privacy-title {
-        font-size: var(--text-md);
-        font-weight: var(--weight-semibold);
-      }
-
-      .privacy-text {
-        margin-block: var(--space-2) var(--space-2);
-        color: var(--color-text-secondary);
-        font-size: var(--text-sm);
-        line-height: var(--leading-normal);
-      }
-
-      .preview {
-        margin-block-start: var(--space-3);
-        border-block-start: 1px solid var(--color-border);
-        padding-block-start: var(--space-3);
-      }
-
-      .preview-summary {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        cursor: pointer;
-        list-style: none;
-        font-weight: var(--weight-medium);
-        user-select: none;
-      }
-
-      .preview-summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .chev {
-        transition: transform var(--motion-fast) var(--ease-standard);
-      }
-
-      .preview[open] .chev {
-        transform: rotate(calc(var(--dir-sign) * 90deg));
-      }
-
-      .preview-actions {
-        margin-block: var(--space-2);
-      }
-
-      .preview-meta {
-        color: var(--color-text-muted);
-        font-size: var(--text-xs);
-        margin-block-end: var(--space-2);
-        unicode-bidi: plaintext;
-      }
-
-      .msg {
-        margin-block-end: var(--space-2);
-      }
-
-      .msg-role {
-        display: block;
-        font-size: var(--text-xs);
-        font-weight: var(--weight-semibold);
-        color: var(--color-accent);
-        margin-block-end: 2px;
-      }
-
-      .msg-body {
-        margin: 0;
-        padding: var(--space-2) var(--space-3);
-        max-block-size: 14rem;
-        overflow: auto;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-sm);
-        background: var(--color-surface-1, var(--color-surface-3));
-        font-family: var(--font-mono, ui-monospace, monospace);
-        font-size: var(--text-xs);
-        line-height: 1.5;
-      }
-    `,
-  ],
+    .advanced[open] > summary .chev {
+      transform: rotate(calc(var(--dir-sign) * 90deg));
+    }
+  `,
 })
 export class AiSettingsComponent implements OnInit {
   protected readonly i18n = inject(I18nService);
@@ -502,16 +197,48 @@ export class AiSettingsComponent implements OnInit {
   protected readonly status = this.ai.status;
   protected readonly keyDraft = signal('');
   protected readonly reveal = signal(false);
-  protected readonly busy = signal<'key' | 'remove' | 'models' | 'test' | 'forget' | null>(null);
+  protected readonly busy = signal<'key' | 'remove' | 'models' | 'test' | null>(null);
   protected readonly models = signal<readonly ModelView[]>([]);
   protected readonly modelsError = signal<string | null>(null);
   protected readonly baseUrlError = signal(false);
   protected readonly connection = signal<ConnectionView | null>(null);
-  protected readonly testError = signal<string | null>(null);
-  protected readonly preview = signal<RequestPreview | null>(null);
-  protected readonly skip = signal(false);
-  protected readonly confirmForget = signal(false);
   protected readonly setupOpen = signal(false);
+
+  /**
+   * Whether the provider is actually answering, apart from AI being on: `off` (no key), `untested`
+   * (a key is saved but no test ran this session), `working` / `failing` after the last test.
+   */
+  protected readonly providerState = computed<ProviderState>(() => {
+    if (this.status()?.configured !== true) {
+      return 'off';
+    }
+    const last = this.ai.lastTest();
+    if (last === null) {
+      return 'untested';
+    }
+    return last.ok ? 'working' : 'failing';
+  });
+
+  protected readonly providerText = computed(() => {
+    const last = this.ai.lastTest();
+    switch (this.providerState()) {
+      case 'off':
+        return this.i18n.t('set.ai.providerOffDesc');
+      case 'untested':
+        return this.i18n.t('set.ai.providerUntestedDesc');
+      case 'working':
+        return this.i18n
+          .t('set.ai.providerWorkingDesc')
+          .replace('{model}', last?.model ?? '?')
+          .replace('{ms}', this.fmt.int(last?.ms ?? 0))
+          .replace('{time}', this.timeOf(last?.at ?? 0));
+      case 'failing':
+        return this.i18n
+          .t('set.ai.providerFailingDesc')
+          .replace('{error}', last?.error ?? '')
+          .replace('{time}', this.timeOf(last?.at ?? 0));
+    }
+  });
 
   protected readonly defaultBase = computed(() => {
     const st = this.status();
@@ -523,11 +250,10 @@ export class AiSettingsComponent implements OnInit {
       return;
     }
     await this.ai.refresh();
-    try {
-      this.skip.set(await this.ai.seenSkip());
-    } catch {
-      /* the switch stays off */
-    }
+  }
+
+  private timeOf(at: number): string {
+    return new Date(at).toLocaleTimeString(this.i18n.lang(), { hour: '2-digit', minute: '2-digit' });
   }
 
   /** The guided setup closed: what it saved is already in the status, so the cached lists are dropped. */
@@ -536,15 +262,10 @@ export class AiSettingsComponent implements OnInit {
     this.models.set([]);
     this.modelsError.set(null);
     this.connection.set(null);
-    this.testError.set(null);
   }
 
   protected value(event: Event): string {
     return (event.target as HTMLInputElement).value;
-  }
-
-  protected checked(event: Event): boolean {
-    return (event.target as HTMLInputElement).checked;
   }
 
   protected testText(c: ConnectionView): string {
@@ -557,19 +278,6 @@ export class AiSettingsComponent implements OnInit {
       .replace('{total}', this.fmt.int(c.promptTokens + c.completionTokens))
       .replace('{prompt}', this.fmt.int(c.promptTokens))
       .replace('{completion}', this.fmt.int(c.completionTokens));
-  }
-
-  protected roleLabel(m: AiMessage): string {
-    return this.i18n.t(`ai.role.${m.role}`);
-  }
-
-  protected previewMeta(p: RequestPreview): string {
-    return this.i18n
-      .t('ai.previewMeta')
-      .replace('{feature}', this.i18n.t(`ai.feature.${p.feature}`))
-      .replace('{host}', p.endpoint)
-      .replace('{model}', p.model)
-      .replace('{time}', p.at);
   }
 
   protected async patch(change: Partial<AiSettings>): Promise<void> {
@@ -610,7 +318,6 @@ export class AiSettingsComponent implements OnInit {
     const provider = (event.target as HTMLSelectElement).value as ProviderId;
     this.models.set([]);
     this.connection.set(null);
-    this.testError.set(null);
     // a different provider needs a different model id
     void this.patch({ provider, model: '', baseUrl: null });
   }
@@ -682,70 +389,12 @@ export class AiSettingsComponent implements OnInit {
   protected async test(): Promise<void> {
     this.busy.set('test');
     this.connection.set(null);
-    this.testError.set(null);
     try {
+      // the service records the outcome in `lastTest`, which the status reads
       this.connection.set(await this.ai.testConnection());
       await this.ai.refresh();
-    } catch (e: unknown) {
-      this.testError.set(this.ai.errorText(e));
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  protected onPreviewToggle(event: Event): void {
-    if ((event.target as HTMLDetailsElement).open) {
-      void this.loadPreview();
-    }
-  }
-
-  protected async loadPreview(): Promise<void> {
-    try {
-      this.preview.set(await this.ai.lastRequest());
     } catch {
-      this.preview.set(null);
-    }
-  }
-
-  protected async setSkip(event: Event): Promise<void> {
-    const on = this.checked(event);
-    this.skip.set(on);
-    try {
-      await this.ai.setSeenSkip(on);
-    } catch (e: unknown) {
-      this.skip.set(!on);
-      this.toasts.show('danger', this.ai.errorText(e));
-    }
-  }
-
-  protected async clearMemory(): Promise<void> {
-    try {
-      const n = await this.ai.seenForget();
-      this.toasts.show('success', this.i18n.t('ai.memoryCleared').replace('{n}', this.fmt.int(n)));
-    } catch (e: unknown) {
-      this.toasts.show('danger', this.ai.errorText(e));
-    }
-  }
-
-  /** Two clicks: the first arms the button for three seconds, the second deletes. */
-  protected async forget(): Promise<void> {
-    if (!this.confirmForget()) {
-      this.confirmForget.set(true);
-      setTimeout(() => this.confirmForget.set(false), 3000);
-      return;
-    }
-    this.confirmForget.set(false);
-    this.busy.set('forget');
-    try {
-      await this.ai.forgetAll();
-      this.models.set([]);
-      this.connection.set(null);
-      this.testError.set(null);
-      this.preview.set(null);
-      this.keyDraft.set('');
-      this.toasts.show('success', this.i18n.t('ai.forgetDone'));
-    } catch (e: unknown) {
-      this.toasts.show('danger', this.ai.errorText(e));
+      /* shown by the status: the reason is in lastTest */
     } finally {
       this.busy.set(null);
     }

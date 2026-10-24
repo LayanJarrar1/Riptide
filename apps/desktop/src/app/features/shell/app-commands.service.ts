@@ -182,13 +182,13 @@ export class AppCommands {
     void this.router.navigateByUrl('/research');
   }
 
-  /** Opens Settings, scrolled to `section` (`appearance`, `downloads`, `behaviour`, `integration`, `about`). */
+  /**
+   * Opens Settings on a section or a group, through the route fragment (`/settings#updates`): a
+   * section (`general`, `downloads`, `browser`, `network`, `ai`, `privacy`, `updates`) or one of
+   * the older group names (`appearance`, `behaviour`, `integration`, `about`, ...).
+   */
   openSettings(section?: string): void {
-    void this.router.navigateByUrl('/settings').then(() => {
-      if (section !== undefined) {
-        setTimeout(() => document.getElementById(section)?.scrollIntoView({ block: 'start' }), 50);
-      }
-    });
+    void this.router.navigateByUrl(section === undefined ? '/settings' : `/settings#${section}`);
   }
 
   /** Downloads the newest yt-dlp (what "Update video support" in Settings does). */
