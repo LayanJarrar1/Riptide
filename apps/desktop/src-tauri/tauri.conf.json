@@ -59,10 +59,10 @@
         "installMode": "currentUser",
         "installerHooks": "windows/hooks.nsh",
         "languages": [
-          "Arabic",
-          "English"
+          "English",
+          "Arabic"
         ],
-        "displayLanguageSelector": true
+        "displayLanguageSelector": false
       }
     }
   },
