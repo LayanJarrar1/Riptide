@@ -49,6 +49,9 @@
     the script refuses to run while riptide-desktop.exe is running (the installer would kill it).
 .PARAMETER SkipBuild
     Reuse the installers of a previous run from -WorkDir\artifacts.
+.PARAMETER SeedInstallerLanguage
+    Write 'Installer Language' (1033) into the sandboxed state before the upgrade, like an
+    interactive install. Default off: the value is deleted, to prove the update needs no language.
 .PARAMETER OldVersion / NewVersion
     Versions of the two disposable builds. NewVersion must be a higher semver than OldVersion.
 .PARAMETER WorkDir
@@ -65,6 +68,7 @@
 param(
     [switch]$StopInstalledApp,
     [switch]$SkipBuild,
+    [switch]$SeedInstallerLanguage,
     [string]$OldVersion = '0.1.0-beta.901',
     [string]$NewVersion = '0.1.0-beta.902',
     [string]$WorkDir = (Join-Path ([IO.Path]::GetTempPath()) 'rt-e2e'),
@@ -394,11 +398,17 @@ try {
     $p = Start-Process -FilePath $oldInstaller.FullName -ArgumentList @('/S', "/D=$Dir") -Wait -PassThru
     Assert ($p.ExitCode -eq 0) "old build installed silently (exit code $($p.ExitCode))"
     Assert (Test-Path -LiteralPath (Join-Path $Dir 'riptide-desktop.exe')) 'riptide-desktop.exe installed in the temp folder'
-    # A silent install (/S) skips the language dialog and so never stores the language; a normal
-    # interactive install stores "Installer Language" under HKCU\Software\riptide\Riptide. Without
-    # it the passive update installer stops at the "Installer Language" dialog and waits for a
-    # click. Seed what an interactive install writes, so this run mirrors a real user.
-    Set-ItemProperty -LiteralPath (RegPath 'Software\riptide\Riptide') -Name 'Installer Language' -Value '1033'
+    # Default: no stored "Installer Language" (an alpha-era or silent install), so the passive
+    # update must finish without the language dialog. Delete any value the silent install wrote.
+    # -SeedInstallerLanguage instead writes what an interactive install stores.
+    $langKey = RegPath 'Software\riptide\Riptide'
+    if ($SeedInstallerLanguage) {
+        if (-not (Test-Path -LiteralPath $langKey)) { New-Item -Path $langKey -Force | Out-Null }
+        Set-ItemProperty -LiteralPath $langKey -Name 'Installer Language' -Value '1033'
+    } elseif (Test-Path -LiteralPath $langKey) {
+        Remove-ItemProperty -LiteralPath $langKey -Name 'Installer Language' -ErrorAction SilentlyContinue
+    }
+    Assert ($SeedInstallerLanguage -or $null -eq (Get-ItemProperty -LiteralPath $langKey -Name 'Installer Language' -ErrorAction SilentlyContinue)) 'no stored Installer Language before the upgrade'
     [IO.File]::WriteAllText((Join-Path $Dir 'portable.txt'), 'update e2e: keep data next to the exe', (New-Object Text.UTF8Encoding($false)))
     Assert ((Get-ExeVersion) -eq $OldVersion) "installed exe reports $OldVersion (is: $(Get-ExeVersion))"
     Assert ((Get-UninstallVersion) -eq $OldVersion) "Uninstall DisplayVersion is $OldVersion"
@@ -435,12 +445,13 @@ try {
 
     Step '4. UPGRADE: genuine package, genuine signature'
     Write-Manifest $NewVersion $newInstaller.Name $newSig $port
+    $upgradeClock = [Diagnostics.Stopwatch]::StartNew()
     $app = Start-SandboxApp $port
     $found = Wait-For { (Get-AppLog) -match 'e2e update: update found' } 60 'the update to be found'
     Assert $found 'the old app found the update'
     # the installer replaces the files; the new version starts by itself and logs its version
     $upgraded = Wait-For { (Get-ExeVersion) -eq $NewVersion } 180 'the installer to replace the app'
-    Assert $upgraded "installed exe now reports $NewVersion (is: $(Get-ExeVersion))"
+    Assert $upgraded "installed exe now reports $NewVersion (is: $(Get-ExeVersion)) after $([int]$upgradeClock.Elapsed.TotalSeconds)s"
     $verRe = [regex]::Escape($NewVersion)
     $relaunched = Wait-For { (Get-InstalledApps).Count -gt 0 -and (Get-AppLog) -match "data directory resolved version=`"?$verRe" } 90 'the new version to start'
     Assert $relaunched "the installer started the new version ($NewVersion) from the install folder, and it logs that version"

@@ -307,6 +307,7 @@ October 2026.
   environment cannot redirect it. Plain http is allowed only in the e2e build, through a `--config`
   overlay (`dangerousInsecureTransportProtocol`) that lives in `scripts/test-update-e2e.ps1`; the
   package still needs a valid signature from the real key.
+- **No language dialog on update.** With `displayLanguageSelector` off (73e40e5), `scripts/test-update-e2e.ps1` upgrades beta.901 to beta.902 with no stored "Installer Language" and no dialog (9 s, 31 assertions); `-SeedInstallerLanguage` restores the old seeding.
 - **Not done.** `requireSignedVersion` (binds the announced version to the signature) needs the
   signing step to pass `--app-version`; worth doing before 1.0, tracked here.
 
