@@ -101,6 +101,21 @@ describe('AppComponent (shell)', () => {
     expect(names[0]).toContain('ubuntu');
   });
 
+  it('highlights a downloads view only on the list page, never on Files, Research or Settings', async () => {
+    const router = TestBed.inject(Router);
+    const active = (): string[] => Array.from(el().querySelectorAll('.nav-item.is-active')).map((n) => n.textContent?.trim() ?? '');
+    expect(active().some((t) => t.startsWith('All downloads'))).toBeTrue();
+    for (const url of ['/files', '/research', '/settings']) {
+      await router.navigateByUrl(url);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(active().some((t) => t.startsWith('All downloads')))
+        .withContext(url)
+        .toBeFalse();
+    }
+  });
+
   it('opens the add dialog with Ctrl+N (its chunk is fetched on the first request)', async () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true }));
     fixture.detectChanges();

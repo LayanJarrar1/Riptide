@@ -134,7 +134,7 @@ export class AppComponent implements OnInit {
   });
 
   /** Whether the list page is showing (sidebar highlights follow the view only then). */
-  protected readonly onDownloads = computed(() => !this.url().startsWith('/settings') && !this.url().startsWith('/research'));
+  protected readonly onDownloads = computed(() => /^\/?(?:[?#].*)?$/.test(this.url()));
 
   protected readonly statusText = computed(() => {
     const t = this.store.totals();
