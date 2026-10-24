@@ -8,6 +8,13 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-10-24
+
+The first beta. The features planned for v1 are in; expect rough edges. Updates arrive through the beta
+channel (Settings > About). Please report bugs on [GitHub issues](https://github.com/LayanJarrar1/Riptide/issues).
+This release also contains everything from 0.1.0-alpha.5, which was never published, so it is the first
+public release since 0.1.0-alpha.4. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-beta.1).
+
 ### AI Research as a conversation
 
 - Research is now a workspace. A list of conversations on the left (new, rename, delete, clear all)
@@ -103,6 +110,8 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
   downloads, while scrolling, sorting, searching and with the details drawer open.
 
 ## [0.1.0-alpha.5] - 2026-10-21
+
+Never published: included in 0.1.0-beta.1.
 
 BitTorrent, Research with an optional AI assistant, and an integrated title bar with menus. An alpha for
 Windows 10 and 11. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-alpha.5).
