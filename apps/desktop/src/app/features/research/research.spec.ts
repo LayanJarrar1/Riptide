@@ -69,7 +69,7 @@ interface Harness {
   emit(batch: ResearchBatch): void;
 }
 
-function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: () => void; failStart?: boolean; store?: MemoryPreferenceStore; reducedMotion?: boolean } = {}): Harness {
+function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: () => void; failStart?: boolean; store?: MemoryPreferenceStore; reducedMotion?: boolean; thumbs?: Record<string, string | null> } = {}): Harness {
   const calls: Harness['calls'] = [];
   // one handler per event name: other services listen to their own events through the same fake
   const handlers = new Map<string, (payload: never) => void>();
@@ -84,6 +84,8 @@ function setup(opts: { configured?: boolean; start?: StartResponse; onStart?: ()
           return Promise.reject('boom');
         }
         return Promise.resolve((opts.start ?? { ...START_EXTRA, searchId: 5, sources: ['arxiv', 'gutenberg'], unavailable: [], ai: false }) as T);
+      case 'research_thumbnail':
+        return Promise.resolve((opts.thumbs?.[String(args?.['id'])] ?? null) as T);
       case 'research_add':
         return Promise.resolve({ added: [11], skipped: [] } as T);
       case 'seen_check':
@@ -124,6 +126,16 @@ async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
 async function flush(fixture: ComponentFixture<unknown>): Promise<void> {
   for (let i = 0; i < 4; i++) {
     await new Promise<void>((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+  }
+}
+
+const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** Waits for the card's visibility observer and the fake backend to answer. */
+async function untilThumb(fixture: ComponentFixture<unknown>, el: HTMLElement): Promise<void> {
+  for (let i = 0; i < 80 && el.querySelector('app-research-card .thumb img') === null; i++) {
+    await new Promise<void>((r) => setTimeout(r, 50));
     fixture.detectChanges();
   }
 }
@@ -572,7 +584,7 @@ describe('ResearchPageComponent', () => {
   });
 
   it('lays video cards out with thumbnail, running time and source, and a YouTube page can be added', async () => {
-    const h = setup({ start: { ...START_EXTRA, category: 'videos', searchId: 5, sources: ['youtube'], unavailable: [], ai: false } });
+    const h = setup({ thumbs: { y1: PIXEL }, start: { ...START_EXTRA, category: 'videos', searchId: 5, sources: ['youtube'], unavailable: [], ai: false } });
     const { fixture, el } = await mount();
     await ask(fixture, el, 'documentary', 'Videos');
     h.emit(
@@ -587,9 +599,13 @@ describe('ResearchPageComponent', () => {
       ),
     );
     await settle(fixture);
+    await untilThumb(fixture, el);
     const card = el.querySelector('app-research-card') as HTMLElement;
     expect(card.querySelector('.dur')?.textContent?.trim()).toBe('1:02:05');
-    expect(card.querySelector('.thumb img')?.getAttribute('src')).toBe('https://i.ytimg.com/vi/abc/mq.jpg');
+    // the backend fetched it: the page only ever holds the data URL, never the remote address
+    expect(card.querySelector('.thumb img')?.getAttribute('src')).toBe(PIXEL);
+    expect(h.calls.filter((c) => c.cmd === 'research_thumbnail').map((c) => c.args)).toEqual([{ id: 'y1' }]);
+    expect(card.innerHTML).not.toContain('i.ytimg.com');
     expect(card.querySelector('.thumb img')?.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(card.textContent).toContain('Ocean Films');
     expect(card.textContent).toContain('Exact match');
@@ -600,6 +616,22 @@ describe('ResearchPageComponent', () => {
     dl.click();
     await flush(fixture);
     expect(h.calls.find((c) => c.cmd === 'research_add')?.args).toEqual({ request: { ids: ['y1'], queueId: null, category: null, startPaused: false, allowDuplicates: true } });
+  });
+
+  it('keeps the icon when the backend has no thumbnail for a card', async () => {
+    const h = setup({ thumbs: { y2: null }, start: { ...START_EXTRA, category: 'videos', searchId: 5, sources: ['youtube'], unavailable: [], ai: false } });
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'documentary', 'Videos');
+    h.emit(batch(5, { t: 'hits', source: 'youtube', items: [item('y2', 'youtube', { kind: 'page', downloadUrl: 'https://www.youtube.com/watch?v=x', thumbnail: 'https://i.ytimg.com/vi/x/mq.jpg' })] }, { t: 'phase', phase: 'done' }));
+    await settle(fixture);
+    for (let i = 0; i < 10 && !h.calls.some((c) => c.cmd === 'research_thumbnail'); i++) {
+      await new Promise<void>((r) => setTimeout(r, 50));
+    }
+    await flush(fixture);
+    const thumb = el.querySelector('app-research-card .thumb') as HTMLElement;
+    expect(h.calls.some((c) => c.cmd === 'research_thumbnail')).toBe(true);
+    expect(thumb.querySelector('img')).toBeNull();
+    expect(thumb.querySelector('app-icon')).not.toBeNull();
   });
 
   it('shows what a program card needs: publisher, version, platform and whether the source is official or a mirror', async () => {

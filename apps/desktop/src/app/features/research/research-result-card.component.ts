@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, input, output, signal, Signal } from '@angular/core';
 
 import { SeenNoticeComponent } from '../../ai/seen-notice.component';
 import { CategoryId, safeWebUrl, shortUrl, SourceId } from '../../ai/research.models';
@@ -9,6 +9,7 @@ import { IconComponent, IconName } from '../../ui/icon.component';
 import { isCitable } from './research-export';
 import { TurnItem } from './research-history';
 import { durationText, platformOf, reasonLines, ReasonLine } from './research-modes';
+import { ResearchThumbnailService } from './research-thumbnail.service';
 
 /** `pdf`, `zip`, ... from the file name or the address; `null` when there is none worth showing. */
 export function fileType(it: TurnItem): string | null {
@@ -430,6 +431,8 @@ export class ResearchCardComponent {
   readonly copyLink = output<void>();
   readonly copyCite = output<void>();
 
+  private readonly thumbs = inject(ResearchThumbnailService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly thumbFailed = signal(false);
   protected readonly variant = computed(() => variantOf(this.category()));
   protected readonly icon = computed(() => VARIANT_ICON[this.variant()]);
@@ -437,7 +440,12 @@ export class ResearchCardComponent {
   protected readonly downloadable = computed(() => this.item().kind === 'file' || this.item().source === 'youtube');
   protected readonly type = computed(() => fileType(this.item()));
   protected readonly pageLink = computed(() => safeWebUrl(this.item().pageUrl ?? (this.item().kind === 'page' ? this.item().downloadUrl : null)));
-  protected readonly thumb = computed(() => (this.thumbFailed() ? null : safeWebUrl(this.item().thumbnail)));
+  /**
+   * The service's answer for this card, requested only once it is on screen. The remote address is
+   * never put in the page (the CSP admits only `data:` images); without an answer the icon stays.
+   */
+  private readonly thumbRequest = signal<Signal<string | null> | null>(null);
+  protected readonly thumb = computed(() => (this.thumbFailed() ? null : (this.thumbRequest()?.() ?? null)));
   protected readonly hasMedia = computed(() => this.variant() === 'video' || this.variant() === 'image');
   protected readonly duration = computed(() => (this.variant() === 'video' ? durationText(this.item().durationSecs) : null));
   protected readonly platform = computed(() => platformOf(this.item().filename, this.item().downloadUrl));
@@ -473,6 +481,31 @@ export class ResearchCardComponent {
     const size = v === 'video' || v === 'code' || it.size === null ? '' : this.fmt.bytes(it.size);
     return [who, year, size].filter((p) => p.length > 0).join(' · ');
   });
+
+  constructor() {
+    const destroy = inject(DestroyRef);
+    afterNextRender(() => {
+      if (typeof IntersectionObserver === 'undefined') {
+        return;
+      }
+      let asked: string | null = null;
+      const io = new IntersectionObserver((entries) => {
+        const it = this.item();
+        if (asked === null && it.thumbnail !== null && this.hasMedia() && entries.some((e) => e.isIntersecting)) {
+          asked = it.id;
+          this.thumbRequest.set(this.thumbs.request(it.id));
+          io.disconnect();
+        }
+      });
+      io.observe(this.host.nativeElement);
+      destroy.onDestroy(() => {
+        io.disconnect();
+        if (asked !== null) {
+          this.thumbs.release(asked);
+        }
+      });
+    });
+  }
 
   protected reasonText(r: ReasonLine): string {
     return Object.entries(r.params).reduce((text, [k, v]) => text.replace(`{${k}}`, v), this.i18n.t(r.key));
