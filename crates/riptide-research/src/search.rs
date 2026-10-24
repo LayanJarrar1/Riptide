@@ -2,7 +2,7 @@
 //! repeated items collapse into one, sources are interleaved so no single source floods the
 //! list, and a failing source is reported next to the results instead of failing the search.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -10,6 +10,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 
 use crate::error::ResearchError;
+use crate::relevance::Duplicate;
 use crate::sources::SearchSource;
 use crate::types::{Category, Hit, Source};
 
@@ -77,8 +78,14 @@ pub enum SearchEvent {
 /// the rounds of a search (and a retry of a single source).
 #[derive(Debug, Default)]
 pub struct Dedup {
-    seen: HashSet<String>,
+    /// identity key -> id of the hit that was kept for it
+    seen: HashMap<String, String>,
+    /// duplicates dropped since the last [`Dedup::drain_duplicates`] (bounded)
+    dups: Vec<Duplicate>,
 }
+
+/// Most dropped duplicates remembered for comparison.
+const MAX_DUPLICATES: usize = 2000;
 
 impl Dedup {
     /// An empty memory.
@@ -102,11 +109,31 @@ impl Dedup {
         if title.chars().count() >= 24 {
             keys.push(format!("title:{title}"));
         }
-        if keys.iter().any(|k| self.seen.contains(k)) {
+        // the same title with the same size is the same file, however short the title
+        if let (Some(size), true) = (hit.size, title.chars().count() >= 3) {
+            keys.push(format!("titlesize:{title}:{size}"));
+        }
+        if let Some(kept) = keys.iter().find_map(|k| self.seen.get(k)).cloned() {
+            if self.dups.len() < MAX_DUPLICATES {
+                self.dups.push(Duplicate {
+                    kept,
+                    source: hit.source,
+                    year: hit.year,
+                    version: hit.version.clone(),
+                    size: hit.size,
+                });
+            }
             return false;
         }
-        self.seen.extend(keys);
+        for k in keys {
+            self.seen.insert(k, hit.id.clone());
+        }
         true
+    }
+
+    /// The duplicates dropped so far (for cross-source comparison); empties the list.
+    pub fn drain_duplicates(&mut self) -> Vec<Duplicate> {
+        std::mem::take(&mut self.dups)
     }
 }
 
@@ -136,7 +163,7 @@ async fn run_source(
         let mut first_err: Option<ResearchError> = None;
         let mut any_ok = false;
         for q in queries.iter().take(a.max_queries()) {
-            match a.search_in(category, q, per_source).await {
+            match a.search_in(category.for_adapter(), q, per_source).await {
                 Ok(h) => {
                     any_ok = true;
                     let _ = tx.send((source, Ok(h), false));
