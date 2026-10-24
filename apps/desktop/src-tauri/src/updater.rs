@@ -351,6 +351,15 @@ pub async fn check_update<R: Runtime>(
     pending: State<'_, PendingUpdate>,
     channel: Channel,
 ) -> Result<Option<UpdateInfo>, UpdateError> {
+    run_check(&app, &pending, channel).await
+}
+
+/// What [`check_update`] does, on plain references.
+pub async fn run_check<R: Runtime>(
+    app: &AppHandle<R>,
+    pending: &PendingUpdate,
+    channel: Channel,
+) -> Result<Option<UpdateInfo>, UpdateError> {
     let requested = channel;
     let channel = channel.effective(&app.package_info().version.to_string());
     if channel != requested {
@@ -366,7 +375,7 @@ pub async fn check_update<R: Runtime>(
         None
     };
     let endpoint = resolve_endpoint(channel, override_url.as_deref(), E2E_ENDPOINT_OVERRIDE)?;
-    let found = check_endpoint(&app, endpoint).await?;
+    let found = check_endpoint(app, endpoint).await?;
     let info = found.as_ref().map(UpdateInfo::from_update);
     tracing::info!(?channel, available = ?info.as_ref().map(|i| &i.version), "update check");
     pending.set_update(found);
@@ -525,6 +534,15 @@ pub async fn install_update<R: Runtime>(
     pending: State<'_, PendingUpdate>,
     interrupt_downloads: bool,
 ) -> Result<(), UpdateError> {
+    run_install(&app, &pending, interrupt_downloads).await
+}
+
+/// What [`install_update`] does, on plain references.
+pub async fn run_install<R: Runtime>(
+    app: &AppHandle<R>,
+    pending: &PendingUpdate,
+    interrupt_downloads: bool,
+) -> Result<(), UpdateError> {
     let engine = app
         .try_state::<riptide_engine::Engine>()
         .map(|e| e.inner().clone());
@@ -537,7 +555,7 @@ pub async fn install_update<R: Runtime>(
         })?;
         ensure_idle(count_active(&all), interrupt_downloads)?;
     }
-    download_pending(&app, &pending).await?;
+    download_pending(app, pending).await?;
     let (update, bytes) = pending.with(|slot| (slot.update.clone(), slot.bytes.clone()));
     let (Some(update), Some(bytes)) = (update, bytes) else {
         return Err(UpdateError::new(
@@ -568,6 +586,37 @@ pub async fn install_update<R: Runtime>(
     )
     .await?;
     app.restart();
+}
+
+/// End-to-end test hook (`update-e2e` builds only, and only with `RIPTIDE_UPDATE_AUTOINSTALL=1`):
+/// a few seconds after start, runs the same check, download, signature check and install that
+/// the Settings card runs, against the feed in `RIPTIDE_UPDATE_ENDPOINT`, and logs every step as
+/// an `e2e update:` line. `scripts/test-update-e2e.ps1` reads those lines; nothing here exists in
+/// a release build.
+#[cfg(feature = "update-e2e")]
+pub fn e2e_autorun<R: Runtime>(app: AppHandle<R>) {
+    if std::env::var("RIPTIDE_UPDATE_AUTOINSTALL").as_deref() != Ok("1") {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        let version = app.package_info().version.to_string();
+        tracing::info!(%version, "e2e update: running version");
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let Some(pending) = app.try_state::<PendingUpdate>() else {
+            return;
+        };
+        match run_check(&app, &pending, Channel::Beta).await {
+            Ok(None) => tracing::info!(%version, "e2e update: up to date"),
+            Ok(Some(info)) => {
+                tracing::info!(offered = %info.version, "e2e update: update found");
+                match run_install(&app, &pending, true).await {
+                    Ok(()) => tracing::info!("e2e update: install returned"),
+                    Err(e) => tracing::error!(kind = ?e.kind, "e2e update: install refused"),
+                }
+            }
+            Err(e) => tracing::error!(kind = ?e.kind, "e2e update: check failed"),
+        }
+    });
 }
 
 #[cfg(test)]

@@ -240,6 +240,9 @@ fn startup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
+
+    #[cfg(feature = "update-e2e")]
+    updater::e2e_autorun(app.handle().clone());
     Ok(())
 }
 
