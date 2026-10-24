@@ -79,7 +79,7 @@ const FIRST_PAGE = 20;
           <button appButton size="sm" variant="secondary" icon="stop" type="button" class="stop" (click)="stopSearch.emit()">{{ i18n.t('research.cancel') }}</button>
         }
 
-        @if (t.sources.length > 0 || t.unavailable.length > 0) {
+        @if (t.sources.length > 0) {
           <div class="chips" role="group" [attr.aria-label]="i18n.t('research.sources')">
             @for (s of t.sources; track s.id) {
               <span class="chip" [class.is-busy]="s.state === 'searching'" [class.is-failed]="s.state === 'failed'" [class.is-stopped]="s.state === 'stopped'" [class.is-active]="only() === s.id">
@@ -95,13 +95,15 @@ const FIRST_PAGE = 20;
                 }
               </span>
             }
-            @for (u of t.unavailable; track u) {
-              <span class="chip is-setup">
-                <span>{{ i18n.t('research.source.' + u) }}</span>
-                <button type="button" class="chip-setup" (click)="openResearchSettings()">{{ i18n.t('research.unavailable.' + u) }}</button>
-              </span>
-            }
           </div>
+        }
+
+        @for (u of t.unavailable; track u) {
+          <p class="optional-note" [attr.data-source]="u">
+            <app-icon name="info" [size]="14" />
+            <span>{{ i18n.t('research.optional.' + u) }}</span>
+            <button type="button" class="note-link" (click)="openResearchSettings()">{{ i18n.t('research.optionalSetup.' + u) }}</button>
+          </p>
         }
 
         @if (t.plan.length > 0) {
@@ -403,14 +405,12 @@ const FIRST_PAGE = 20;
       border-color: var(--color-danger);
     }
 
-    .chip.is-stopped,
-    .chip.is-setup {
+    .chip.is-stopped {
       border-style: dashed;
     }
 
     .chip-main,
-    .chip-retry,
-    .chip-setup {
+    .chip-retry {
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
@@ -426,9 +426,33 @@ const FIRST_PAGE = 20;
       cursor: default;
     }
 
-    .chip-setup {
-      color: var(--color-accent);
+    .optional-note {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
+      line-height: var(--leading-normal);
+    }
+
+    .note-link {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font: inherit;
       text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .note-link:hover {
+      color: var(--color-text);
+    }
+
+    .note-link:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
     }
 
     .chip-retry {

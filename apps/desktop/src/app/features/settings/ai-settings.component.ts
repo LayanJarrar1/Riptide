@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } 
 
 import { FORM_STYLES } from '../../ai/ai-styles';
 import { AiMessage, AiSettings, ConnectionView, ModelView, ProviderId, RequestPreview } from '../../ai/ai.models';
+import { AiSetupDialogComponent } from '../../ai/ai-setup-dialog.component';
 import { AiService } from '../../ai/ai.service';
 import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../i18n/i18n.service';
@@ -17,7 +18,7 @@ import { ToastService } from '../../ui/toast.service';
 @Component({
   selector: 'app-ai-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, IconComponent],
+  imports: [AiSetupDialogComponent, ButtonComponent, IconComponent],
   template: `
     <section class="section" id="ai">
       <h2 class="section-title">{{ i18n.t('ai.title') }}</h2>
@@ -33,6 +34,28 @@ import { ToastService } from '../../ui/toast.service';
         @if (!st.configured) {
           <p class="setting-desc off-help">{{ i18n.t('ai.offHelp') }}</p>
         }
+
+        <div class="quick">
+          <button appButton [variant]="st.configured ? 'secondary' : 'primary'" icon="sparkles" type="button" (click)="setupOpen.set(true)">{{ i18n.t(st.configured ? 'aisetup.quickChange' : 'aisetup.quick') }}</button>
+          @if (!st.configured) {
+            <span class="setting-desc">{{ i18n.t('aisetup.quickHint') }}</span>
+          }
+        </div>
+        @if (st.keyHint; as hint) {
+          <div class="key-stored top-key">
+            <app-icon name="shieldCheck" [size]="16" class="ok" />
+            <span>{{ i18n.t('ai.keyStored').replace('{hint}', '') }}</span>
+            <code class="hint num" dir="ltr">{{ hint }}</code>
+            <button appButton variant="secondary" size="sm" icon="trash" type="button" [busy]="busy() === 'remove'" (click)="removeKey()">{{ i18n.t('ai.keyRemove') }}</button>
+          </div>
+        }
+
+        <details class="advanced">
+          <summary class="preview-summary">
+            <app-icon name="chevronEnd" [size]="14" class="chev" />
+            <span>{{ i18n.t('ai.advanced') }}</span>
+            <span class="setting-desc">{{ i18n.t('ai.advancedDesc') }}</span>
+          </summary>
 
         <div class="setting">
           <div class="setting-text">
@@ -153,6 +176,8 @@ import { ToastService } from '../../ui/toast.service';
           <span class="setting-desc num">{{ i18n.t('ai.budgetUsed').replace('{tokens}', fmt.int(st.usage.tokens)).replace('{requests}', fmt.int(st.usage.requests)) }}</span>
         </div>
 
+        </details>
+
         <div class="privacy" role="group" [attr.aria-label]="i18n.t('ai.privacy')">
           <div class="privacy-head">
             <app-icon name="shieldCheck" [size]="20" class="ok" />
@@ -237,6 +262,7 @@ import { ToastService } from '../../ui/toast.service';
         </div>
       }
     </section>
+    <app-ai-setup-dialog [open]="setupOpen()" (closed)="onSetupClosed()" />
   `,
   styles: [
     FORM_STYLES,
@@ -285,6 +311,28 @@ import { ToastService } from '../../ui/toast.service';
 
       .provider {
         inline-size: 220px;
+      }
+
+      .quick {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        margin-block: var(--space-4) var(--space-2);
+      }
+
+      .top-key {
+        margin-block-end: var(--space-2);
+      }
+
+      .advanced {
+        margin-block-start: var(--space-3);
+        border-block-start: 1px solid var(--color-border);
+        padding-block-start: var(--space-3);
+      }
+
+      .advanced[open] > summary .chev {
+        transform: rotate(calc(var(--dir-sign) * 90deg));
       }
 
       .ok {
@@ -463,6 +511,7 @@ export class AiSettingsComponent implements OnInit {
   protected readonly preview = signal<RequestPreview | null>(null);
   protected readonly skip = signal(false);
   protected readonly confirmForget = signal(false);
+  protected readonly setupOpen = signal(false);
 
   protected readonly defaultBase = computed(() => {
     const st = this.status();
@@ -479,6 +528,15 @@ export class AiSettingsComponent implements OnInit {
     } catch {
       /* the switch stays off */
     }
+  }
+
+  /** The guided setup closed: what it saved is already in the status, so the cached lists are dropped. */
+  protected onSetupClosed(): void {
+    this.setupOpen.set(false);
+    this.models.set([]);
+    this.modelsError.set(null);
+    this.connection.set(null);
+    this.testError.set(null);
   }
 
   protected value(event: Event): string {

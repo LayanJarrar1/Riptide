@@ -217,6 +217,49 @@ describe('ResearchPageComponent', () => {
     expect(el.querySelectorAll('app-research-turn').length).toBe(0);
   });
 
+  it('presents keyword mode as ready and AI as an optional upgrade, and the chip opens the guided setup', async () => {
+    const h = setup();
+    const { fixture, el } = await mount();
+    expect(el.textContent).toContain('Ready to search the 16 open sources. No account and no key needed.');
+    expect(el.textContent).toContain('Smarter results with AI: free, takes about a minute.');
+    expect((el.querySelector('app-ai-setup-dialog dialog') as HTMLDialogElement).open).toBeFalse();
+    (el.querySelector('.provider.is-off') as HTMLButtonElement).click();
+    await flush(fixture);
+    // opened in place: no trip to Settings
+    expect((el.querySelector('app-ai-setup-dialog dialog') as HTMLDialogElement).open).toBeTrue();
+    expect(el.textContent).toContain('Where should the AI run?');
+    expect(h.calls.some((c) => c.cmd === 'ai_set_key')).toBeFalse();
+  });
+
+  it('the hint in the empty state opens the guided setup too, and is gone once AI is set up', async () => {
+    setup();
+    const first = await mount();
+    (first.el.querySelector('.upgrade-link') as HTMLButtonElement).click();
+    await flush(first.fixture);
+    expect((first.el.querySelector('app-ai-setup-dialog dialog') as HTMLDialogElement).open).toBeTrue();
+    TestBed.resetTestingModule();
+    setup({ configured: true });
+    const second = await mount();
+    expect(second.el.querySelector('.upgrade-link')).toBeNull();
+    expect(second.el.textContent).toContain('Ready to search the 16 open sources');
+  });
+
+  it('shows Web search as a calm optional note with a link to Settings, not a setup warning', async () => {
+    setup({ start: { searchId: 5, sources: ['arxiv'], unavailable: [{ source: 'web', reason: 'needs_setup' }, { source: 'jamendo', reason: 'needs_setup' }], ai: false } });
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'jazz');
+    const web = el.querySelector('.optional-note[data-source="web"]') as HTMLElement;
+    expect(web.textContent).toContain('Web search is optional and off. The open sources above find files without any setup.');
+    expect(web.querySelector('.note-link')?.textContent).toContain('Set up (advanced)');
+    expect(el.querySelector('.optional-note[data-source="jamendo"]')?.textContent).toContain('Jamendo music is optional');
+    // no chip, no warning styling, no alert role for an optional source
+    expect(el.querySelector('.chip.is-setup')).toBeNull();
+    expect(el.querySelector('.chip-setup')).toBeNull();
+    expect(web.closest('[role="alert"]')).toBeNull();
+    expect(web.getAttribute('role')).toBeNull();
+    expect(el.textContent).not.toContain('Choose a web search in Settings');
+  });
+
   it('Enter sends, Shift+Enter does not, and only the prompt travels to the backend', async () => {
     const h = setup();
     const { fixture, el } = await mount();
