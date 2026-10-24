@@ -9,6 +9,7 @@ import { DownloadRow } from '../../data/downloads.store';
 import { canPause, canResume, CategoryKey, failureFix } from '../../model/download';
 import { formatRatio } from '../../model/torrent';
 import { ButtonComponent } from '../../ui/button.component';
+import { FileNameComponent } from '../../ui/file-name.component';
 import { IconComponent, IconName } from '../../ui/icon.component';
 import { ProgressFlowComponent } from '../../ui/progress-flow.component';
 import { StatusPillComponent } from '../../ui/status-pill.component';
@@ -49,7 +50,7 @@ export function hostOf(url: string): string {
 @Component({
   selector: 'app-download-row',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [...FORMAT_PIPES, ButtonComponent, IconComponent, ProgressFlowComponent, StatusPillComponent, TickerDirective],
+  imports: [...FORMAT_PIPES, FileNameComponent, ButtonComponent, IconComponent, ProgressFlowComponent, StatusPillComponent, TickerDirective],
   host: {
     role: 'row',
     '[attr.aria-selected]': 'selected()',
@@ -74,7 +75,7 @@ export function hostOf(url: string): string {
       </span>
       <span class="name-block">
         <span class="name-line">
-          <span class="name" dir="auto" [attr.title]="row().d.filename">{{ row().d.filename }}</span>
+          <app-file-name class="name" [name]="row().d.filename" />
           @if (row().d.kind === 'torrent') {
             <span class="media-badge" role="img" [attr.title]="i18n.t('torrent.badge')" [attr.aria-label]="i18n.t('torrent.badge')"><app-icon name="magnet" [size]="10" /></span>
           }
@@ -308,9 +309,6 @@ export function hostOf(url: string): string {
 
     .name {
       font-weight: var(--weight-medium);
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
     }
 
     .host {
@@ -331,6 +329,7 @@ export function hostOf(url: string): string {
       color: var(--color-danger);
       font-size: var(--text-xs);
       white-space: nowrap;
+      max-inline-size: 100%;
       animation: reason-in var(--dur-2) var(--ease-emphasized-out) both;
     }
 
@@ -346,9 +345,16 @@ export function hostOf(url: string): string {
       }
     }
 
+    /* two lines at most: the full text is in the tooltip, and the row keeps its fixed height */
     .reason-text {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
       overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
     }
 
     .reason-sep {

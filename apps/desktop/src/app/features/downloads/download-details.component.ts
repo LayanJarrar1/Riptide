@@ -159,7 +159,7 @@ interface LogLine {
         <section class="block" style="--i: 6">
           <div class="block-head">
             <h3 class="block-title">{{ i18n.t('torrent.filesLabel') }}</h3>
-            <span class="block-meta num">{{ i18n.t('torrent.files').replace('{n}', '' + t.files.length) }}</span>
+            <span class="block-meta num">{{ i18n.plural('torrent.files', t.files.length).replace('{n}', '' + t.files.length) }}</span>
           </div>
           <app-torrent-file-list [files]="t.files" [selected]="selectedSet()" [progress]="live()?.fileProgress ?? null" />
         </section>
@@ -292,6 +292,7 @@ interface LogLine {
       font-weight: var(--weight-semibold);
       line-height: 1.3;
       overflow-wrap: anywhere;
+      unicode-bidi: plaintext;
     }
 
     .scroll {

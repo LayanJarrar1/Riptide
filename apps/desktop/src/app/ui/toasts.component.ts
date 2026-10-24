@@ -126,6 +126,7 @@ import { toastIcon, ToastService } from './toast.service';
       flex: 1;
       min-inline-size: 0;
       overflow-wrap: anywhere;
+      unicode-bidi: plaintext;
     }
 
     /* The clock: a hairline that drains from inline-start to inline-end and holds on hover. */

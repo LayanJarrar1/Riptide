@@ -270,7 +270,7 @@ describe('SiteGrabberDialogComponent', () => {
     primary().click(); // Next
     fixture.detectChanges();
     expect(session().step()).toBe('add');
-    expect(primary().textContent).toContain('Add 1 downloads');
+    expect(primary().textContent).toContain('Add 1 download');
     expect(el().querySelector<HTMLInputElement>('input[name="dir"]')?.value).toBe('D:\\Downloads');
     // Main is the default queue
     expect(el().querySelector<HTMLSelectElement>('select[name="queue"]')?.selectedOptions[0].textContent?.trim()).toBe('Main queue');
