@@ -8,6 +8,25 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+### File manager
+
+- A new Files page (sidebar) browses the disk from Downloads, the Riptide category folders, the
+  profile folders and the drives: history (Back, Forward, Up, Alt+arrows, Backspace),
+  breadcrumbs, sorting by name, type, size or date (folders first), filter as you type and a
+  search through subfolders (Enter), a virtual list that stays fast with thousands of items.
+- Open, show in Explorer, new folder, rename in place (F2), copy, cut and paste (Ctrl+C / X / V),
+  delete to the Recycle Bin (Del) and restore from it, properties with the size and contents of
+  a folder. Rename, delete, copy and move offer Undo.
+- Two panes side by side with a draggable divider (arrow keys, double-click to centre), each with
+  its own folder, history, sort and selection; F6 switches panes. Drag items between panes or
+  onto a folder (Ctrl copies), or use Copy / Move to other pane.
+- Name conflicts are asked once per transfer (skip, keep both, replace); replace sends the old
+  item to the Recycle Bin. A transfer checks free space first, copies through a temporary name,
+  shows progress with Cancel, and a move across drives deletes the original only after the copy
+  is complete. A cancelled or failed item leaves nothing half-copied behind.
+- Folder colours: nine presets and a reset, kept in Riptide's own settings (Windows' folder icons
+  are not changed).
+
 ### Download folders and the add dialog
 
 - New installations sort downloads into category folders: `Downloads\Riptide\Applications`,

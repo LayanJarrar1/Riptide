@@ -109,6 +109,10 @@
     </div>
 
     <div class="nav-foot">
+      <a class="nav-item" routerLink="/files" routerLinkActive="is-active" ariaCurrentWhenActive="page">
+        <app-icon name="folder" [size]="16" />
+        <span class="nav-text">{{ 'nav.files' | t }}</span>
+      </a>
       <a class="nav-item" routerLink="/research" routerLinkActive="is-active" ariaCurrentWhenActive="page">
         <app-icon name="sparkles" [size]="16" />
         <span class="nav-text">{{ 'nav.research' | t }}</span>

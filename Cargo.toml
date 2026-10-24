@@ -12,6 +12,7 @@ members = [
     "crates/riptide-crawl",
     "crates/riptide-ai",
     "crates/riptide-research",
+    "crates/riptide-fs",
     "crates/riptide-cli",
     "crates/riptide-host",
     "crates/riptide-testserver",
@@ -46,6 +47,7 @@ riptide-crawl = { path = "crates/riptide-crawl" }
 riptide-ai = { path = "crates/riptide-ai" }
 riptide-torrent = { path = "crates/riptide-torrent" }
 riptide-research = { path = "crates/riptide-research" }
+riptide-fs = { path = "crates/riptide-fs" }
 riptide-host = { path = "crates/riptide-host" }
 riptide-testserver = { path = "crates/riptide-testserver" }
 

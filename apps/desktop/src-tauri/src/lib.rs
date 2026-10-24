@@ -21,6 +21,7 @@ pub mod commands;
 pub mod crawl;
 pub mod exit;
 pub mod extension;
+pub mod files;
 pub mod integration;
 pub mod ipc_server;
 pub mod media;
@@ -170,6 +171,7 @@ pub fn run() {
         .manage(shell::Shell::default())
         .manage(protocol::PendingOpen::default())
         .manage(std::sync::Arc::new(crawl::Crawls::default()))
+        .manage(std::sync::Arc::new(files::FileOps::default()))
         .setup(move |app| {
             // the window first: portable mode gives it a profile folder next to the app
             let paths = riptide_log::Paths::resolve()?;
@@ -345,6 +347,19 @@ pub fn run() {
             commands::open_file,
             commands::show_in_folder,
             commands::pick_folder,
+            files::fs_places,
+            files::fs_list,
+            files::fs_entry,
+            files::fs_create_folder,
+            files::fs_rename,
+            files::fs_trash,
+            files::fs_trashed,
+            files::fs_restore,
+            files::fs_properties,
+            files::fs_search,
+            files::fs_plan,
+            files::fs_transfer,
+            files::fs_cancel,
             commands::integration_status,
             commands::register_browser_host,
             commands::unregister_browser_host,
