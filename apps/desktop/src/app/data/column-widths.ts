@@ -24,7 +24,7 @@ interface LayoutSpec {
 /**
  * Default tracks per layout. The narrower layouts drop columns in order of usefulness: time left,
  * added and the optional columns, then speed, then size and status (which the details drawer
- * still shows). The default full set needs 1034px, so it fits a 1280px window with the sidebar
+ * still shows). The default full set needs 1038px, so it fits a 1280px window with the sidebar
  * open; turning on optional columns can make the list scroll sideways.
  */
 export const GRID_LAYOUTS: Readonly<Record<GridLayout, LayoutSpec>> = {
@@ -35,7 +35,7 @@ export const GRID_LAYOUTS: Readonly<Record<GridLayout, LayoutSpec>> = {
       ['progress', { min: 150, fr: 1.6 }],
       ['speed', { min: 96 }],
       ['avgSpeed', { min: 104 }],
-      ['eta', { min: 84 }],
+      ['eta', { min: 112 }],
       ['duration', { min: 96 }],
       ['status', { min: 172 }],
       ['category', { min: 112 }],
