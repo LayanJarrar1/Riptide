@@ -23,7 +23,7 @@
   /* ---- Colour: text ------------------------------------------------------------------ */
   --color-text: #e9eef2;
   --color-text-secondary: #a9b5bf;
-  --color-text-muted: #6d7b87;
+  --color-text-muted: #8593a0;
   --color-text-inverse: #0b0f12;
 
   /* ---- Colour: lines ----------------------------------------------------------------- */
@@ -162,7 +162,7 @@
   --state-completed-soft: rgb(61 220 151 / 12%);
   --state-failed: var(--color-danger);
   --state-failed-soft: rgb(242 102 95 / 14%);
-  --state-cancelled: #6d7b87;
+  --state-cancelled: #8593a0;
   --state-cancelled-soft: rgb(109 123 135 / 14%);
 
   /* ---- Segment flow: the fill of a byte range on its track --------------------------- */
@@ -192,7 +192,7 @@
 
   --color-text: #121a20;
   --color-text-secondary: #4b5863;
-  --color-text-muted: #7d8b96;
+  --color-text-muted: #5b6975;
   --color-text-inverse: #f4f6f8;
 
   --color-border: rgb(16 24 32 / 10%);
@@ -220,7 +220,7 @@
   --state-verifying-soft: rgb(47 111 209 / 12%);
   --state-completed-soft: rgb(31 157 100 / 12%);
   --state-failed-soft: rgb(209 63 57 / 12%);
-  --state-cancelled: #7d8b96;
+  --state-cancelled: #5b6975;
   --state-cancelled-soft: rgb(125 139 150 / 12%);
 
   --flow-track: #e3e8ec;
