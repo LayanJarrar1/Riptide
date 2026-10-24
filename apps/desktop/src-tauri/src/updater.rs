@@ -212,6 +212,23 @@ fn plugin_error(phase: Phase, e: tauri_plugin_updater::Error) -> UpdateError {
 /// is `true`).
 pub const E2E_ENDPOINT_OVERRIDE: bool = cfg!(feature = "update-e2e");
 
+/// The feed an `update-e2e` build was pointed at: `RIPTIDE_UPDATE_ENDPOINT`, or the text of
+/// `update-e2e-endpoint.txt` next to the executable (a relaunched app does not inherit the
+/// environment of the process that started the installer, the file does survive the update).
+#[cfg(feature = "update-e2e")]
+fn e2e_endpoint_override() -> Option<String> {
+    std::env::var("RIPTIDE_UPDATE_ENDPOINT").ok().or_else(|| {
+        let exe = std::env::current_exe().ok()?;
+        std::fs::read_to_string(exe.parent()?.join("update-e2e-endpoint.txt")).ok()
+    })
+}
+
+/// Release builds have no override.
+#[cfg(not(feature = "update-e2e"))]
+fn e2e_endpoint_override() -> Option<String> {
+    None
+}
+
 /// The manifest URL to ask: the channel's, unless `allow_override` and `override_url` is a
 /// valid URL (test builds only; see [`E2E_ENDPOINT_OVERRIDE`]).
 pub fn resolve_endpoint(
@@ -369,11 +386,7 @@ pub async fn run_check<R: Runtime>(
             "pre-release build: using the beta feed"
         );
     }
-    let override_url = if E2E_ENDPOINT_OVERRIDE {
-        std::env::var("RIPTIDE_UPDATE_ENDPOINT").ok()
-    } else {
-        None
-    };
+    let override_url = e2e_endpoint_override();
     let endpoint = resolve_endpoint(channel, override_url.as_deref(), E2E_ENDPOINT_OVERRIDE)?;
     let found = check_endpoint(app, endpoint).await?;
     let info = found.as_ref().map(UpdateInfo::from_update);

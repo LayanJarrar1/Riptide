@@ -106,6 +106,7 @@ pub fn start_logging(filter: &str) -> Option<riptide_log::LogGuard> {
     match riptide_log::init(&config) {
         Ok(guard) => {
             tracing::info!(
+                version = env!("CARGO_PKG_VERSION"),
                 portable = paths.portable,
                 data_dir = %paths.data_dir.display(),
                 "data directory resolved"
