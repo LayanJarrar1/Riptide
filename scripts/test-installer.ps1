@@ -115,10 +115,18 @@ function Get-Default([string]$Key) {
     if (-not (Test-Path -LiteralPath $p)) { return $null }
     return (Get-ItemProperty -LiteralPath $p).'(default)'
 }
+function Invoke-Reg {
+    # reg.exe writes status text to stderr; with $ErrorActionPreference = 'Stop' Windows PowerShell 5.1
+    # turns that into a terminating error (even for success), which aborted the state restore half way.
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & reg.exe @args 2>&1 | Out-Null } finally { $ErrorActionPreference = $old }
+}
+
 function Snapshot([string]$Key) {
     # the whole subtree as text, to compare "before" and "after"
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ("rt-snap-" + [guid]::NewGuid().ToString('N') + '.reg')
-    & reg.exe export "HKCU\$Key" $tmp /y 2>&1 | Out-Null
+    Invoke-Reg export "HKCU\$Key" $tmp /y
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $tmp)) { return $null }
     $text = [IO.File]::ReadAllText($tmp)
     Remove-Item -LiteralPath $tmp -Force
@@ -132,7 +140,7 @@ function Save-State {
         $file = Join-Path $Saved ("key$i.reg")
         $exists = Test-Path -LiteralPath (RegPath $key)
         $script:SavedKeys += , @{ Key = $key; File = $file; Existed = $exists; Before = (Snapshot $key) }
-        if ($exists) { & reg.exe export "HKCU\$key" $file /y | Out-Null }
+        if ($exists) { Invoke-Reg export "HKCU\$key" $file /y }
     }
     $j = 0
     foreach ($lnk in $Shortcuts) {
@@ -159,7 +167,7 @@ function Restore-State {
     foreach ($entry in $script:SavedKeys) {
         $p = RegPath $entry.Key
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
-        if ($entry.Existed) { & reg.exe import $entry.File 2>&1 | Out-Null }
+        if ($entry.Existed) { try { Invoke-Reg import $entry.File } catch { Write-Host "  restore failed for $($entry.Key): $_" -ForegroundColor Red } }
     }
     foreach ($lnk in $Shortcuts) {
         if (Test-Path -LiteralPath $lnk) { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue }
