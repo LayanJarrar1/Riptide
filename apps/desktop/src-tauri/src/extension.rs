@@ -5,7 +5,7 @@
 //! the installer / portable zip ships (`extension\chrome`, `extension\edge` next to the
 //! executable) and the browser's `…://extensions` page.
 //!
-//! Hard rule 5 applies: the webview can ask for exactly two actions, both on fixed targets. The
+//! The browser can only ask: the webview can ask for exactly two actions, both on fixed targets. The
 //! folder is `<app folder>\extension\<chrome|edge>` and the page is the literal
 //! `chrome://extensions` / `edge://extensions` opened with a browser executable found in the
 //! registry's `App Paths` or its standard install folders. No path or URL from the caller is

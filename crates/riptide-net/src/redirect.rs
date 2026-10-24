@@ -105,7 +105,7 @@ pub fn strip_query(raw: &str) -> String {
     }
 }
 
-/// Removes a `user:password@` part from the authority of a URL string (hard rule 4: credentials
+/// Removes a `user:password@` part from the authority of a URL string (credentials
 /// never reach logs, errors or the downloads table).
 fn redact_userinfo(raw: &str) -> String {
     let Some(scheme_end) = raw.find("://") else {

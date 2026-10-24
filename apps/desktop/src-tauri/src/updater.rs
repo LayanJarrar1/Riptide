@@ -1,5 +1,5 @@
-//! Self-update through `tauri-plugin-updater`, the only network call Riptide makes that is not
-//! one of the user's downloads (Hard rule 6), and one the user can switch off.
+//! Self-update through `tauri-plugin-updater`, the only call Riptide makes on its own
+//! (everything else starts with the user), and one the user can switch off.
 //!
 //! Two channels, each a signed `latest*.json` manifest on GitHub Releases:
 //!

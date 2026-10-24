@@ -54,7 +54,8 @@ shipped binary (not in this change: no binary links it yet except the optional C
   logs the info-hash, the display name and the tracker count. librqbit itself may print tracker
   URLs at `debug`/`trace`, so its targets must stay at `info` or above in every default filter.
 
-**Files are written in place.** CLAUDE.md rule 2 (`<name>.rtpart`, renamed on completion) does
+**Files are written in place.** The project's crash-safety rule for HTTP downloads (write to
+`<name>.rtpart`, rename on completion) does
 not fit a torrent: pieces arrive in random order across many files, and a seeding torrent must
 keep its final names. Completion is recorded in Riptide's registry only after every selected
 piece passed its SHA-1 check (`TorrentEngine::verify` re-hashes everything on demand), and a
@@ -191,7 +192,7 @@ contain them. They stay visible as warnings. Revisit this entry when `.cargo/aud
 showing its own results, and earlier turns stay on screen.
 
 - **Astryx is not used.** Astryx (facebook/astryx) needs React 19. Installing it would mean moving
-  the app off Angular, which is the team's stack (D2), so it is not installed and the app is not
+  the app off Angular, which is the team's stack, so it is not installed and the app is not
   migrated. Its patterns (a clean layout, accessible inputs, menus, overlays) are reproduced in
   Angular with the existing `ui/` components and the design tokens.
 - **Conversations live only in `localStorage`**, through `PREFERENCE_STORE`. They are capped at 30
@@ -206,3 +207,38 @@ showing its own results, and earlier turns stay on screen.
   after a restart has no cache entries, so it cannot be added until searched again.
 - **`open_web_url` opens only `http`/`https`.** The command validates the URL (scheme, at most 2048
   bytes, no control characters) and opens it in the default browser, on a user click.
+
+## D-beta-1: Behaviour added in the beta.1 review round
+
+*Status: accepted.* Small rules that came out of the pre-beta review. Each one has a test in the
+crate named in brackets.
+
+- **Automatic retry after network loss** (`riptide-engine`). A download that fails on a network
+  error (no connection, timeout, reset, DNS) goes back to the queue after 1, 5 and 15 minutes, at
+  most three times, when the setting `auto_retry` is on (default). HTTP errors, disk errors,
+  checksum mismatches and a changed file are never retried by themselves. The counter lives in
+  memory only: a restart or any action by the user (pause, resume, refresh, cancel) starts the
+  count over, so a crash cannot leave a download retrying forever.
+- **A checksum mismatch discards the bad bytes** (`riptide-engine`). The part file and the segment
+  table are deleted (segments first, so a crash in between never leaves segments that claim bytes
+  a deleted file had). A retry downloads the file again instead of verifying the same wrong bytes
+  forever.
+- **`Engine::revive` after a failed update install** (`riptide-engine`). Installing an update
+  shuts the engine down before the installer starts. If the installer cannot start, the process
+  keeps running, so `revive` queues the interrupted downloads again exactly as crash recovery
+  would, and restarts the scheduler and the schedule timer. On an engine that is not shut down it
+  does nothing.
+- **A startup failure shows a message box** (`riptide-desktop`). A database that cannot be opened
+  or a window that cannot be created used to end the process silently. It is now logged and shown
+  in a native error box that names the log folder, then the process exits with code 1.
+- **Refresh across origins drops secrets** (`riptide-engine`, the browser extension's `refresh`).
+  When the new address has another origin (scheme, host or port) than the stored one, the stored
+  cookies, credentials and custom headers are dropped; only `Referer` and `User-Agent` stay.
+  Credentials captured for one site never follow a record to another.
+- **Free-disk check before downloading** (`riptide-engine`). A download of known size needs what
+  it still has to write plus a 64 MiB margin free on the target volume; otherwise it stops with a
+  disk-full error before writing. An unknown size or an unreadable free-space figure never
+  blocks a download.
+- **Weak ETags are never used in `If-Range`** (`riptide-net`). RFC 7233 forbids them there. The
+  validator is the strong `ETag`, else `Last-Modified`, else nothing; a download whose only
+  validator is weak is not resumable and restarts from zero.

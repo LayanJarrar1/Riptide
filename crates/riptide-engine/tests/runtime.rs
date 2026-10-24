@@ -984,7 +984,7 @@ async fn settings_saved_before_organising_existed_keep_files_where_they_went() {
     engine.shutdown().await;
 }
 
-/// Hard rule 4: credentials stored for one origin never follow a refreshed link to another.
+/// Secrets stay secret: credentials stored for one origin never follow a refreshed link to another.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn refresh_url_drops_secrets_when_the_origin_changes_and_keeps_them_otherwise() {
     use riptide_core::{Credentials, Secrets};

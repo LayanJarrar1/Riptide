@@ -839,7 +839,7 @@ fn without_origin_bound(old: Secrets) -> Secrets {
 fn prepare_add(request: &DownloadRequest, settings: &EngineSettings) -> Result<Prepared> {
     let url = riptide_net::parse_http_url(&request.url)?;
     // `user:password@` in the link is a credential, not part of the address: the record keeps
-    // the clean URL and the secrets table gets the credentials (hard rule 4)
+    // the clean URL and the secrets table gets the credentials (secrets stay out of the record)
     let (clean_url, url_auth) = riptide_net::split_userinfo(&url);
     let media_selection = match request.kind {
         DownloadKind::Http => None,
@@ -1795,7 +1795,7 @@ impl Engine {
         fresh.error = None;
         let referrer = referrer.map(str::to_string);
         // stored credentials were captured for the old address; they never follow the record to
-        // another origin (hard rule 4). An unparseable old URL counts as another origin.
+        // another origin (secrets are never sent to another site). An unparseable old URL counts as another origin.
         let cross_origin = Url::parse(&before.url).map_or(true, |old| {
             riptide_net::Origin::of(&old) != riptide_net::Origin::of(&parsed)
         });
