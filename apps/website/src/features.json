@@ -9,7 +9,25 @@
       "text_en": "Magnet links and .torrent files, with a file choice before anything starts.",
       "text_ar": "روابط ماغنت وملفات .torrent، مع اختيار الملفات قبل أن يبدأ أي شيء.",
       "verified": true,
-      "release": "0.1.0-alpha.5"
+      "release": "0.1.0-beta.1"
+    },
+    {
+      "id": "research-workspace",
+      "title_en": "Research conversations",
+      "title_ar": "محادثات البحث",
+      "text_en": "Keep your searches as saved conversations on this computer, and export citations as BibTeX or RIS.",
+      "text_ar": "احتفظ بعمليات بحثك كمحادثات محفوظة على هذا الحاسوب، وصدّر المراجع بصيغة BibTeX أو RIS.",
+      "verified": true,
+      "release": "0.1.0-beta.1"
+    },
+    {
+      "id": "file-manager",
+      "title_en": "File manager",
+      "title_ar": "مدير الملفات",
+      "text_en": "Two panes, drag and drop, the Recycle Bin with Undo, and folder colours.",
+      "text_ar": "لوحتان، سحب وإفلات، سلة المحذوفات مع تراجع، وألوان للمجلدات.",
+      "verified": true,
+      "release": "0.1.0-beta.1"
     },
     {
       "id": "ai-research",
@@ -18,7 +36,7 @@
       "text_en": "Search open sources by category. Results stream in, each with a licence badge.",
       "text_ar": "ابحث في مصادر مفتوحة حسب الفئة. تصل النتائج تباعًا وعلى كل نتيجة شارة ترخيص.",
       "verified": true,
-      "release": "0.1.0-alpha.5"
+      "release": "0.1.0-beta.1"
     },
     {
       "id": "ai-optional",
@@ -27,7 +45,7 @@
       "text_en": "Bring your own key to rank results and see why. Off until you set it up.",
       "text_ar": "استخدم مفتاحك الخاص ليرتّب النتائج ويشرح السبب. متوقف حتى تُعدّه.",
       "verified": true,
-      "release": "0.1.0-alpha.5"
+      "release": "0.1.0-beta.1"
     },
     {
       "id": "title-bar",
@@ -36,7 +54,7 @@
       "text_en": "File, Downloads, Tools, View, Window and Help, from the keyboard too.",
       "text_ar": "ملف، التنزيلات، أدوات، عرض، نافذة، مساعدة، وتعمل بلوحة المفاتيح أيضًا.",
       "verified": true,
-      "release": "0.1.0-alpha.5"
+      "release": "0.1.0-beta.1"
     }
   ]
 }

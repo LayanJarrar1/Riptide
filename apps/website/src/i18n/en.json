@@ -366,7 +366,7 @@
   },
   "feedback": {
     "title": "Found a rough edge?",
-    "lead": "It's an alpha. Your reports decide what gets fixed first.",
+    "lead": "It's a beta. Your reports decide what gets fixed first.",
     "links": [
       {
         "label": "Report a bug",
@@ -427,7 +427,7 @@
     "portableSub": "Unzip and run",
     "sums": "SHA-256 checksums",
     "allReleases": "All releases",
-    "note": "An early build. Expect rough edges, and tell us about them.",
+    "note": "A beta build. Expect rough edges, and tell us about them.",
     "ext": {
       "title": "Install the extension in Chrome or Edge",
       "lead": "Sends downloads from Chrome and Edge to Riptide. Adds \"Download this video\" with a quality picker, download all or selected links and all images, and capture rules.",
@@ -444,8 +444,9 @@
       "title": "What's new in",
       "notes": "Full release notes",
       "items": [
-        "A downloads list that stays smooth with tens of thousands of items",
-        "A reminder when you have already downloaded a file"
+        "A downloads list with resizable columns, duration and average speed, and a list that stays smooth with tens of thousands of items",
+        "Category folders for new installations and a smaller, calmer Add dialog",
+        "Updates arrive through the beta channel"
       ]
     },
     "upd": {
@@ -456,7 +457,7 @@
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
     "license": "GPL-3.0 app, MIT / Apache-2.0 engine",
-    "made": "Alpha preview.",
+    "made": "Beta.",
     "github": "GitHub",
     "releases": "Releases",
     "licenseLink": "License",
