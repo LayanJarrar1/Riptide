@@ -22,6 +22,18 @@ Anything else makes it exit with an error and write nothing. The site reads the 
 runtime API calls, nothing taken from the query string. Releases older than `0.1.0-alpha.3` predate the
 checksum file and are not listed.
 
+## Testing the self-update before a release
+
+`scripts/test-update-e2e.ps1` builds two disposable signed installers (`0.1.0-beta.901` and `.902`) with the
+real updater key from `%USERPROFILE%\.riptide-keys`, installs the old one into a temp folder in portable mode,
+serves a signed manifest from `http://127.0.0.1`, and checks two things: a package with one flipped byte is
+refused with a signature error and nothing changes, and the genuine package upgrades the app (new version
+installed and started by the installer). Registry keys, shortcuts and a running installed Riptide are restored
+exactly (`-StopInstalledApp` closes it first and starts it again). The test builds use the `update-e2e` cargo
+feature; release builds never do (see decision `D-updater-2`). Run it before tagging when the updater, the
+installer hooks or the Tauri/plugin versions changed. `scripts/verify-update-feed.ps1 -RunningVersion <v>` then
+proves the published feed offers the new version to people on `<v>`.
+
 ## Checklist (all seven, in this order)
 
 1. **Confirm the implementation.** The feature works in the built installer, not only in a dev build.

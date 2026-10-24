@@ -18,6 +18,10 @@
 
 .PARAMETER ExpectVersion
     The version the feed must announce, e.g. 0.1.0-alpha.5.
+.PARAMETER RunningVersion
+    A version somebody runs today, e.g. 0.1.0-beta.1. The feed must offer them an update: its
+    version must have higher semver precedence (alpha < beta < rc < stable, build metadata
+    ignored), the rule the app applies.
 .PARAMETER Stable
     Also check the stable feed (only stable releases carry latest.json).
 .PARAMETER Repo
@@ -31,6 +35,7 @@
 [CmdletBinding()]
 param(
     [string]$ExpectVersion = '',
+    [string]$RunningVersion = '',
     [switch]$Stable,
     [string]$Repo = 'LayanJarrar1/Riptide',
     [string]$BetaFeedUrl = ''
@@ -41,6 +46,36 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 
 $semver = '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$'
 $script:problems = New-Object System.Collections.Generic.List[string]
+
+# Semver precedence (https://semver.org section 11): -1, 0 or 1. Build metadata is ignored.
+function Compare-SemVer([string]$A, [string]$B) {
+    function Split-Version([string]$V) {
+        $core = $V.Split('+')[0]
+        $parts = $core.Split('-', 2)
+        return @{ Nums = ($parts[0].Split('.') | ForEach-Object { [int64]$_ }); Pre = $(if ($parts.Count -gt 1) { $parts[1].Split('.') } else { @() }) }
+    }
+    $x = Split-Version $A; $y = Split-Version $B
+    for ($i = 0; $i -lt 3; $i++) {
+        if ($x.Nums[$i] -lt $y.Nums[$i]) { return -1 }
+        if ($x.Nums[$i] -gt $y.Nums[$i]) { return 1 }
+    }
+    if ($x.Pre.Count -eq 0 -and $y.Pre.Count -eq 0) { return 0 }
+    if ($x.Pre.Count -eq 0) { return 1 }   # a release is above its own pre-releases
+    if ($y.Pre.Count -eq 0) { return -1 }
+    $n = [Math]::Max($x.Pre.Count, $y.Pre.Count)
+    for ($i = 0; $i -lt $n; $i++) {
+        if ($i -ge $x.Pre.Count) { return -1 }
+        if ($i -ge $y.Pre.Count) { return 1 }
+        $p = $x.Pre[$i]; $q = $y.Pre[$i]
+        $pn = $p -match '^\d+$'; $qn = $q -match '^\d+$'
+        if ($pn -and $qn) { if ([int64]$p -lt [int64]$q) { return -1 }; if ([int64]$p -gt [int64]$q) { return 1 }; continue }
+        if ($pn) { return -1 }
+        if ($qn) { return 1 }
+        $c = [string]::CompareOrdinal($p, $q)
+        if ($c -ne 0) { return [Math]::Sign($c) }
+    }
+    return 0
+}
 
 function Fail([string]$Text) { $script:problems.Add($Text); Write-Host "  FAIL  $Text" -ForegroundColor Red }
 function Pass([string]$Text) { Write-Host "  ok    $Text" -ForegroundColor Green }
@@ -92,6 +127,13 @@ function Test-Feed([string]$Name, [string]$Url, [string]$Expect) {
 
     $code = Test-Url "$($win.url)"
     if ($code -eq 200) { Pass "installer answers 200: $($win.url)" } else { Fail "${Name}: installer URL answered ${code}: $($win.url)" }
+
+    if ($RunningVersion) {
+        if ($feed.version -is [string] -and $feed.version -match $semver) {
+            if ((Compare-SemVer "$($feed.version)" $RunningVersion) -gt 0) { Pass "a user on $RunningVersion is offered $($feed.version)" }
+            else { Fail "${Name}: $($feed.version) is not newer than $RunningVersion, so those users are NOT offered it" }
+        }
+    }
 
     if ($Expect) {
         if ($feed.version -eq $Expect) { Pass "feed announces the expected version $Expect" }

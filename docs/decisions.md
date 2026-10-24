@@ -274,3 +274,38 @@ October 2026.
 - **Future option.** A hosted tier may be offered later as a business option. It must stay opt-in,
   be clearly labelled, and never gate the download engine or any existing feature.
 
+
+## D-updater-2: One updater, typed failures, no install over running downloads, a test feed
+
+*Status: accepted.* Audited October 2026 against the plugin's behaviour; no second updater was added.
+
+- **One path.** `tauri-plugin-updater` stays the only updater. Signatures (minisign, the public key
+  in `tauri.conf.json`) are verified by the plugin before anything is installed; a bad or missing
+  signature is an explicit `signature` error in Settings, never a silent skip.
+- **Typed failures.** Check, download and install answer `{ kind, message }`: `offline`, `server`,
+  `manifest`, `signature`, `download`, `install`, `downloads_active`, `no_update`. The plugin
+  reports a non-2xx feed as "release not found", so a check failure is classified `server`; the
+  step (check or download) decides what a dropped connection means. The UI shows plain sentences
+  per kind and keeps the last success and last error across restarts.
+- **Download first, install on request.** The package is downloaded and verified on its own
+  (`download_update`, progress events), kept in memory, and installed by `install_update`. A
+  failed download keeps the update, so Retry does not need a new check.
+- **Never install over running downloads.** `install_update` refuses with `downloads_active` while
+  anything is queued, probing, downloading or verifying, unless the caller passes
+  `interrupt_downloads`. The UI offers "install when downloads finish" (the package is fetched
+  now, the installer starts when the list is idle) and "install now" (the engine stops at a
+  checkpoint, transfers resume after the restart).
+- **Schedule.** One check shortly after start (20 s, never during window creation), then when the
+  interval has passed (default 6 h, 1/6/12/24 h in the card, 30 minutes after a failed check).
+  "Check for updates automatically" off means no automatic check at all.
+- **Semver precedence.** The plugin's default comparator uses the `semver` crate's total order,
+  which breaks ties with build metadata (`0.1.0-beta.1+x` would be offered to `0.1.0-beta.1`).
+  Riptide installs `cmp_precedence`, so metadata never counts and `alpha < beta < rc < stable`.
+- **The e2e feed override is a compile-time feature.** `update-e2e` (never enabled by the release
+  scripts) is the only way to read `RIPTIDE_UPDATE_ENDPOINT` and to run the update flow at start
+  (`RIPTIDE_UPDATE_AUTOINSTALL=1`). A release binary does not contain that code, so its
+  environment cannot redirect it. Plain http is allowed only in the e2e build, through a `--config`
+  overlay (`dangerousInsecureTransportProtocol`) that lives in `scripts/test-update-e2e.ps1`; the
+  package still needs a valid signature from the real key.
+- **Not done.** `requireSignedVersion` (binds the announced version to the signature) needs the
+  signing step to pass `--app-version`; worth doing before 1.0, tracked here.
