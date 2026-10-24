@@ -130,7 +130,52 @@ async function flush(fixture: ComponentFixture<unknown>): Promise<void> {
   }
 }
 
+/**
+ * Lets the browser deliver the scroll events its own `focus()` calls queue (they fire on the next
+ * frame, and an open picker closes on a scroll that carries its button). Falls back to a timer
+ * so a throttled frame clock cannot hang the test.
+ */
+function afterFrames(): Promise<void> {
+  const frames = new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  return Promise.race([frames, new Promise<void>((r) => setTimeout(r, 200))]);
+}
+
 const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+let restoreObserver: (() => void) | null = null;
+
+afterEach(() => {
+  restoreObserver?.();
+  restoreObserver = null;
+});
+
+/**
+ * Replaces the browser's IntersectionObserver with one that reports every observed element as
+ * visible right away, so the card's "scrolled into view" step no longer depends on layout, window
+ * size or how busy the headless browser is. Returns the restore function.
+ */
+function fakeVisibleObserver(): () => void {
+  const real = globalThis.IntersectionObserver;
+  class AlwaysVisible {
+    constructor(private readonly cb: IntersectionObserverCallback) {}
+    observe(target: Element): void {
+      queueMicrotask(() => this.cb([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver));
+    }
+    unobserve(): void {
+      return;
+    }
+    disconnect(): void {
+      return;
+    }
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+  globalThis.IntersectionObserver = AlwaysVisible as unknown as typeof IntersectionObserver;
+  return () => {
+    globalThis.IntersectionObserver = real;
+  };
+}
 
 /** Waits for the card's visibility observer and the fake backend to answer. */
 async function untilThumb(fixture: ComponentFixture<unknown>, el: HTMLElement): Promise<void> {
@@ -362,6 +407,7 @@ describe('ResearchPageComponent', () => {
     const { fixture, el } = await mount();
     const t = trigger(el, 'Mode');
     t.focus();
+    await afterFrames();
     t.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     await flush(fixture);
     expect(el.querySelector('[role="listbox"]')).not.toBeNull();
@@ -371,6 +417,7 @@ describe('ResearchPageComponent', () => {
     await flush(fixture);
     expect(el.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(t);
+    await afterFrames();
     // open again, move down twice from the first option and choose with Enter (a click on the focused option)
     t.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     await flush(fixture);
@@ -584,6 +631,7 @@ describe('ResearchPageComponent', () => {
   });
 
   it('lays video cards out with thumbnail, running time and source, and a YouTube page can be added', async () => {
+    restoreObserver = fakeVisibleObserver();
     const h = setup({ thumbs: { y1: PIXEL }, start: { ...START_EXTRA, category: 'videos', searchId: 5, sources: ['youtube'], unavailable: [], ai: false } });
     const { fixture, el } = await mount();
     await ask(fixture, el, 'documentary', 'Videos');
@@ -619,6 +667,7 @@ describe('ResearchPageComponent', () => {
   });
 
   it('keeps the icon when the backend has no thumbnail for a card', async () => {
+    restoreObserver = fakeVisibleObserver();
     const h = setup({ thumbs: { y2: null }, start: { ...START_EXTRA, category: 'videos', searchId: 5, sources: ['youtube'], unavailable: [], ai: false } });
     const { fixture, el } = await mount();
     await ask(fixture, el, 'documentary', 'Videos');
