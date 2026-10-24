@@ -39,10 +39,23 @@ Phase 2 merged in PR #67.
 Needs a real Windows session to confirm: Recycle Bin restore through the shell, moves across
 drives, locked files (another program has them open), OneDrive placeholder files.
 
-## Phase 4
+## Phase 4 — AI Research workspace
 
-Not started: AI research chat (Angular 20 app — Astryx targets React 19, so its patterns would be
-reproduced in Angular rather than installed).
+Branch `m6/ai-research-workspace`. Astryx targets React 19, so its patterns are reproduced in Angular
+(decision D-research-ws-1).
+
+| # | Feature | State | Notes |
+| --- | --- | --- | --- |
+| 13 | Conversations | Done | `research-history.ts` (models, caps, defensive parser), `research-history.service.ts` (`PREFERENCE_STORE`, key `riptide.research.history.v1`), `research-sidebar.component.ts` (new, rename, delete, clear all with confirmation). 30 conversations, 40 turns, 60 results; stored without local paths. |
+| 14 | Turns and progress steps | Done | `research-turn.ts` derives the five steps from the real events (plan, sources, rank, seen matches, end); a step that never ran is `skipped`. `research-turn.component.ts` renders the turn from a stored `Turn`, so live and restored turns look the same. `ResearchSession` is unchanged except for `watch()`, which the page uses to mirror it into the stored turn. |
+| 15 | Result cards | Done | `research-result-card.component.ts`: type, source, description, size, year, licence, why, seen badge, open page (`open_web_url`), download. Text only, `safeWebUrl` for every link. |
+| 16 | Turn actions | Done | Download selected / one, select all, copy response, save Markdown, BibTeX and RIS (`research-export.ts`), cancel, retry source, search without AI, try again. |
+| 17 | Composer | Done | Enter / Shift+Enter (IME-safe), kind of result, AI switch, provider and model chip linking to Settings → AI. |
+| 18 | Token efficiency | Done | A turn sends `{ topic, useAi, lang, category }` only; an identical prompt within 10 minutes reuses the results (no search, no AI call). |
+| 19 | Backend | Done | `research_start` no longer clears the result cache; `open_web_url`; `save_text_file(kind)`. |
+
+Known limits: a turn restored after a restart shows its results but cannot be downloaded until it is
+searched again (the backend cache is in memory); the downloads of the 60 kept results only.
 
 ## Test evidence
 
@@ -59,6 +72,4 @@ Rust (Linux container): `cargo fmt --check` and clippy `-D warnings` on core/sto
 
 ## Next action
 
-Phase 4, item 13: read the current research page (`features/research/`), then redesign it as a
-conversation with history, progress steps and result cards, reproducing Astryx-style patterns in
-Angular.
+Merge the Phase 4 and Phase 5 pull requests, then walk through the manual checks below on Windows.

@@ -379,7 +379,8 @@ impl Run {
 }
 
 /// The adapters (kept between searches so their rate limiting carries over), the results of
-/// the latest search (the only things `research_add` will download) and the recent runs.
+/// the searches of this app run (the only things `research_add` will download; bounded by
+/// `CACHE_MAX`, cleared only when full) and the recent runs.
 pub struct ResearchState {
     adapters: Vec<Arc<dyn SearchSource>>,
     cache: Mutex<HashMap<String, Hit>>,
@@ -749,8 +750,6 @@ pub async fn research_start(
         counts: Mutex::new(HashMap::new()),
     });
     {
-        // a new search replaces the old page: older results are no longer addable
-        Run::lock(&state.cache).clear();
         let mut runs = Run::lock(&state.runs);
         for old in runs.iter() {
             old.token.cancel();
@@ -837,7 +836,7 @@ pub async fn research_preview(
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddRequest {
-    /// Hit ids from the latest search.
+    /// Hit ids from a search made during this app run.
     pub ids: Vec<String>,
     /// Queue to put them in; the Main queue when absent.
     #[serde(default)]
@@ -859,7 +858,7 @@ pub struct AddRequest {
 pub struct AddSkip {
     /// The hit id.
     pub id: String,
-    /// `unknown` (not from the current search), `page` (a web page, not a file),
+    /// `unknown` (not fetched by a search of this app run), `page` (a web page, not a file),
     /// `already_downloaded`, `private_address` (the file is on a private network) or `failed`.
     pub reason: &'static str,
 }
@@ -886,7 +885,8 @@ pub async fn aims_at_private_network(engine: &Engine, hit: &Hit, searxng_is_priv
     engine.is_private_target(&hit.download_url).await
 }
 
-/// Adds results from the latest search as normal downloads.
+/// Adds results from any search of this app run as normal downloads (only ids the backend
+/// itself fetched are accepted).
 #[tauri::command]
 pub async fn research_add(
     engine: State<'_, Engine>,

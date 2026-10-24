@@ -331,6 +331,7 @@ pub fn run() {
             research::seen_forget,
             commands::pick_text_file,
             commands::save_text_file,
+            commands::open_web_url,
             commands::pause_download,
             commands::resume_download,
             commands::cancel_download,

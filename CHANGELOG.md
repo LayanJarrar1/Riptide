@@ -8,6 +8,31 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+### AI Research as a conversation
+
+- Research is now a workspace. A list of conversations on the left (new, rename, delete, clear all)
+  and, for each prompt, a turn: your message, compact progress steps (understanding the request,
+  searching sources, evaluating results, checking previous downloads, preparing recommendations;
+  each follows the real events of the search, and a step that did not run is shown as skipped),
+  a short summary built from the actual results (counts, sources, what you already downloaded, top
+  picks with the reason the AI gave), and the result cards.
+- Result cards show the title, source, description, file type, size, year, licence, why it
+  matches, an "already downloaded" badge, Open source page and Download.
+- Per turn: download selected, select all, copy the response, save the research as a Markdown file,
+  export citations as BibTeX or RIS (from DOI, arXiv id, authors, year and title), cancel, retry a
+  failed source, "Search without AI" when the AI step failed, and Try again after an error.
+- A multiline prompt box (Enter sends, Shift+Enter adds a line), the kind of result, the AI switch
+  and a provider and model indicator that opens the AI settings. English and Arabic, mirrored.
+- Conversations are kept on this computer only (browser storage of the app), at most 30
+  conversations, 40 turns each and 60 results per turn, without local paths. Each turn sends only its
+  own prompt: no earlier turn goes to the AI, and an identical prompt asked again within ten minutes
+  reuses the results instead of searching again. Results from an earlier session cannot be downloaded
+  until searched again.
+- Results are rendered as text only and only `http` and `https` links are acted on. New command
+  `open_web_url` (http/https only); `save_text_file` offers Markdown, BibTeX and RIS file types.
+  The result cache is no longer cleared by each new search, so earlier turns can still be added.
+  See decision D-research-ws-1.
+
 ### File manager
 
 - A new Files page (sidebar) browses the disk from Downloads, the Riptide category folders, the
