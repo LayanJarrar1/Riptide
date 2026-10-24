@@ -2,6 +2,8 @@
 //! round trip per hop, `Retry-After` parsing. Every request the engine makes goes through
 //! [`send`].
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use reqwest::header::{HeaderValue, AUTHORIZATION, LOCATION, RETRY_AFTER, WWW_AUTHENTICATE};
 use reqwest::{Client, Method, RequestBuilder, Response};
 use url::Url;
@@ -140,17 +142,54 @@ pub fn ensure_success(response: &Response) -> Result<()> {
     ))
 }
 
-/// `Retry-After` in seconds (delta-seconds form; HTTP-date form is treated as "soon").
+/// `Retry-After` in seconds: the delta-seconds form as is, the HTTP-date form as the time left
+/// until that date (0 if it is already past). Callers cap the wait.
 pub fn retry_after_secs(value: Option<&HeaderValue>) -> Option<u64> {
+    retry_after_at(value, SystemTime::now())
+}
+
+fn retry_after_at(value: Option<&HeaderValue>, now: SystemTime) -> Option<u64> {
     let v = value?.to_str().ok()?.trim();
     if let Ok(secs) = v.parse::<u64>() {
         return Some(secs);
     }
-    // an HTTP-date: without a clock-skew-safe parser, treat it as a short wait
-    if v.contains("GMT") {
-        return Some(5);
+    let date = parse_imf_fixdate(v)?;
+    let now = now.duration_since(UNIX_EPOCH).ok()?.as_secs();
+    Some(date.saturating_sub(now))
+}
+
+/// `Wed, 21 Oct 2026 07:28:00 GMT` (IMF-fixdate) as Unix seconds.
+fn parse_imf_fixdate(v: &str) -> Option<u64> {
+    let (_, rest) = v.split_once(", ")?;
+    let mut parts = rest.split_whitespace();
+    let day: u64 = parts.next()?.parse().ok()?;
+    let month_name = parts.next()?;
+    let month = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+    .iter()
+    .position(|m| m.eq_ignore_ascii_case(month_name))? as u64
+        + 1;
+    let year: u64 = parts.next()?.parse().ok()?;
+    let mut hms = parts.next()?.split(':');
+    let h: u64 = hms.next()?.parse().ok()?;
+    let m: u64 = hms.next()?.parse().ok()?;
+    let s: u64 = hms.next()?.parse().ok()?;
+    if parts.next()? != "GMT" || parts.next().is_some() || hms.next().is_some() {
+        return None;
     }
-    None
+    if !(1..=31).contains(&day) || year < 1970 || h > 23 || m > 59 || s > 60 {
+        return None;
+    }
+    // days from civil (Howard Hinnant), for years >= 1970
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y / 400;
+    let yoe = y - era * 400;
+    let mp = (month + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some(days * 86_400 + h * 3_600 + m * 60 + s)
 }
 
 #[cfg(test)]
@@ -163,12 +202,25 @@ mod tests {
             retry_after_secs(Some(&HeaderValue::from_static("120"))),
             Some(120)
         );
+        // an HTTP-date is the time left until it
+        let date = HeaderValue::from_static("Wed, 21 Oct 2026 07:28:00 GMT");
+        let at = |unix: u64| UNIX_EPOCH + std::time::Duration::from_secs(unix);
+        assert_eq!(parse_imf_fixdate("Thu, 01 Jan 1970 00:00:10 GMT"), Some(10));
         assert_eq!(
-            retry_after_secs(Some(&HeaderValue::from_static(
-                "Wed, 21 Oct 2026 07:28:00 GMT"
-            ))),
-            Some(5)
+            parse_imf_fixdate("Wed, 21 Oct 2026 07:28:00 GMT"),
+            Some(1_792_567_680)
         );
+        assert_eq!(
+            retry_after_at(Some(&date), at(1_792_567_680 - 90)),
+            Some(90)
+        );
+        assert_eq!(retry_after_at(Some(&date), at(1_792_567_680 + 90)), Some(0));
+        assert_eq!(
+            parse_imf_fixdate("Mon, 29 Feb 2028 12:00:00 GMT"),
+            Some(1_835_438_400)
+        );
+        assert_eq!(parse_imf_fixdate("Wed, 21 Oct 2026 07:28:00 PST"), None);
+        assert_eq!(parse_imf_fixdate("garbage GMT"), None);
         assert_eq!(
             retry_after_secs(Some(&HeaderValue::from_static("soon"))),
             None

@@ -40,14 +40,29 @@ pub struct Probe {
 }
 
 impl Probe {
-    /// The validator a resume sends in `If-Range`: the ETag if present, else `Last-Modified`.
+    /// The validator a resume sends in `If-Range`: a strong ETag if present, else
+    /// `Last-Modified`. A weak ETag (`W/"..."`) is never used: RFC 7233 forbids it in `If-Range`
+    /// and servers answer `200`, which would silently degrade every resume to a restart. A
+    /// download whose only validator is weak is therefore not resumable.
     pub fn validator(&self) -> Option<&str> {
-        self.etag.as_deref().or(self.last_modified.as_deref())
+        pick_validator(self.etag.as_deref(), self.last_modified.as_deref())
     }
 
     /// Whether a partial file can be resumed in place (ranges + known size + a validator).
     pub fn resumable(&self) -> bool {
         self.supports_ranges && self.size.is_some() && self.validator().is_some()
+    }
+}
+
+/// The `If-Range` validator out of an `ETag` and a `Last-Modified` header value: the ETag when
+/// it is strong, else `Last-Modified`, else nothing (weak ETags are not allowed in `If-Range`).
+pub(crate) fn pick_validator<'a>(
+    etag: Option<&'a str>,
+    last_modified: Option<&'a str>,
+) -> Option<&'a str> {
+    match etag.map(str::trim) {
+        Some(e) if !e.starts_with("W/") && !e.starts_with("w/") => Some(e),
+        _ => last_modified,
     }
 }
 
@@ -74,9 +89,16 @@ async fn probe_once(client: &Client, url: &Url, ctx: &RequestContext) -> Result<
     let head = send(client, ctx, Method::HEAD, url.clone(), |r| r).await;
     if let Ok(sent) = head {
         let status = sent.response.status().as_u16();
-        if sent.response.status().is_success()
-            && sent.response.headers().contains_key(CONTENT_LENGTH)
-        {
+        // a zero length is not believed: some servers answer HEAD with `Content-Length: 0`
+        // for a body they do serve; the ranged GET below tells the truth
+        let has_length = sent
+            .response
+            .headers()
+            .get(CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .is_some_and(|n| n > 0);
+        if sent.response.status().is_success() && has_length {
             return Ok(from_head(sent.response, sent.url));
         }
         // 405/501 (no HEAD), 403 (HEAD-only auth quirks), or no length: fall through to GET
@@ -87,10 +109,20 @@ async fn probe_once(client: &Client, url: &Url, ctx: &RequestContext) -> Result<
         r.header(RANGE, "bytes=0-0")
     })
     .await?;
-    ensure_success(&sent.response)?;
     let status = sent.response.status().as_u16();
     let headers = sent.response.headers().clone();
     let final_url = sent.url;
+    if status == 416
+        && headers
+            .get(CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(parse_content_range_total)
+            == Some(0)
+    {
+        // `bytes=0-0` on a genuinely empty file is unsatisfiable: the file is empty
+        return Ok(build(final_url, &headers, Some(0), true));
+    }
+    ensure_success(&sent.response)?;
     drop(sent.response); // never read the body
 
     let (size, supports_ranges) = if status == 206 {
@@ -255,6 +287,34 @@ mod tests {
         );
         assert_eq!(parse_content_range("bytes 5-9/*"), Some((5, 9, None)));
         assert_eq!(parse_content_range("items 1-2/3"), None);
+    }
+
+    #[test]
+    fn weak_etag_is_never_an_if_range_validator() {
+        const LM: &str = "Wed, 21 Oct 2026 07:28:00 GMT";
+        assert_eq!(pick_validator(Some("\"abc\""), Some(LM)), Some("\"abc\""));
+        assert_eq!(pick_validator(Some("W/\"abc\""), Some(LM)), Some(LM));
+        assert_eq!(pick_validator(Some("W/\"abc\""), None), None);
+        assert_eq!(pick_validator(None, Some(LM)), Some(LM));
+        assert_eq!(pick_validator(None, None), None);
+    }
+
+    #[test]
+    fn weak_etag_without_last_modified_is_not_resumable() {
+        let mut p = Probe {
+            final_url: Url::parse("https://h/f").unwrap(),
+            size: Some(10),
+            supports_ranges: true,
+            etag: Some("W/\"x\"".into()),
+            last_modified: None,
+            content_type: None,
+            content_encoding: None,
+            filename: "f".into(),
+            suggested_name: None,
+        };
+        assert!(!p.resumable());
+        p.last_modified = Some("Wed, 21 Oct 2026 07:28:00 GMT".into());
+        assert!(p.resumable());
     }
 
     #[test]

@@ -299,6 +299,38 @@ async fn work_stealing_splits_large_segments() {
 }
 
 #[tokio::test]
+async fn a_download_without_any_validator_uses_one_connection() {
+    let h = harness().await;
+    let size = 8 * MIB;
+    let done = Job::new(&h, &format!("/ok?size={size}"))
+        .validator(None)
+        .run()
+        .await;
+    assert_eq!(
+        completed(&done).len(),
+        1,
+        "no validator, no parallel ranges"
+    );
+    assert_eq!(
+        sha(&done.final_path).await,
+        expected_sha256_hex(DEFAULT_SEED, size)
+    );
+}
+
+#[tokio::test]
+async fn an_empty_file_probes_as_size_zero_and_completes() {
+    let h = harness().await;
+    let ctx = ctx_for(&h.server.url("/ok"));
+    let p = probe(&h.client, &h.server.url("/ok?size=0"), &ctx)
+        .await
+        .unwrap();
+    assert_eq!(p.size, Some(0));
+    let done = Job::new(&h, "/ok?size=0").run().await;
+    completed(&done);
+    assert_eq!(std::fs::metadata(&done.final_path).unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn servers_without_ranges_or_length_get_one_streaming_connection() {
     let h = harness().await;
     let size = 2 * MIB;
@@ -804,6 +836,11 @@ async fn gzip_despite_identity_is_saved_as_sent() {
 // ------------------------------------------------------------------------ builder helpers
 
 impl<'a> Job<'a> {
+    fn validator(mut self, v: Option<String>) -> Self {
+        self.validator = Some(v);
+        self
+    }
+
     fn connections(mut self, n: u32) -> Self {
         self.connections = n;
         self
