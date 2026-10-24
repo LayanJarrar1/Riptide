@@ -95,7 +95,7 @@ const EMPTY_LIST: UrlListResult = { urls: [], ignored: 0, duplicates: 0 };
               ></textarea>
               @if (listText().trim().length > 0) {
                 <span class="help list-summary">
-                  <span>{{ i18n.t('batch.found').replace('{count}', '' + list().urls.length) }}</span>
+                  <span>{{ i18n.plural('batch.found', list().urls.length).replace('{count}', '' + list().urls.length) }}</span>
                   @if (list().duplicates > 0) {
                     <span>{{ i18n.t('batch.duplicates').replace('{count}', '' + list().duplicates) }}</span>
                   }

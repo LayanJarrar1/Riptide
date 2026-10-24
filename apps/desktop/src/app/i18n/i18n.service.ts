@@ -128,4 +128,21 @@ export class I18nService {
     }
     return value;
   }
+
+  /**
+   * Plural-aware lookup: picks `key.<category>` for `n` by the CLDR rules of the active language
+   * (English: one/other; Arabic: zero/one/two/few/many/other), then `key.other`, then `key`.
+   * The result still carries its placeholders; the caller fills them in.
+   */
+  plural(key: string, n: number): string {
+    const table: Table = TABLES[this.lang()] ?? TABLES['en'] ?? {};
+    const category = new Intl.PluralRules(this.lang()).select(n);
+    for (const candidate of [`${key}.${category}`, `${key}.other`]) {
+      const value: string | undefined = table[candidate];
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    return this.t(key);
+  }
 }

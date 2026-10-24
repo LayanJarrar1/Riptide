@@ -5,9 +5,15 @@ import { summarize } from './research-turn';
 /** What the writers need from the app: the translations, a size formatter and the date to print. */
 export interface ExportContext {
   readonly t: (key: string) => string;
+  /** Plural-aware lookup (`I18nService.plural`); without it `t` is used as is. */
+  readonly plural?: (key: string, n: number) => string;
   readonly bytes: (n: number) => string;
   /** `YYYY-MM-DD`. */
   readonly date: string;
+}
+
+function plural(c: ExportContext, key: string, n: number): string {
+  return c.plural ? c.plural(key, n) : c.t(key);
 }
 
 function fill(text: string, params: Record<string, string | number>): string {
@@ -46,9 +52,9 @@ export function summaryLines(turn: Turn, c: ExportContext): string[] {
     return lines;
   }
   const names = s.sources.map((x) => fill(c.t('research.sum.source'), { source: c.t(`research.source.${x.id}`), n: x.count }));
-  lines.push(fill(c.t('research.sum.found'), { n: s.total, sources: names.join(', ') }));
+  lines.push(fill(plural(c, 'research.sum.found', s.total), { n: s.total, sources: names.join(', ') }));
   if (s.pages > 0) {
-    lines.push(fill(c.t('research.sum.pages'), { n: s.pages }));
+    lines.push(fill(plural(c, 'research.sum.pages', s.pages), { n: s.pages }));
   }
   if (s.seen > 0) {
     lines.push(fill(c.t('research.sum.seen'), { n: s.seen }));

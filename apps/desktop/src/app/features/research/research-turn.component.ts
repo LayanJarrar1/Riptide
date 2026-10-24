@@ -646,7 +646,7 @@ export class ResearchTurnComponent {
       case 'stopped':
         return this.i18n.t('research.state.stopped');
       default:
-        return this.i18n.t('research.state.done').replace('{n}', this.fmt.int(s.found));
+        return this.i18n.plural('research.state.done', s.found).replace('{n}', this.fmt.int(s.found));
     }
   }
 
@@ -690,7 +690,7 @@ export class ResearchTurnComponent {
   }
 
   private exportContext(): ExportContext {
-    return { t: (k) => this.i18n.t(k), bytes: (n) => this.fmt.bytes(n), date: new Date().toISOString().slice(0, 10) };
+    return { t: (k) => this.i18n.t(k), plural: (k, n) => this.i18n.plural(k, n), bytes: (n) => this.fmt.bytes(n), date: new Date().toISOString().slice(0, 10) };
   }
 
   // ---------------------------------------------------------------- results
