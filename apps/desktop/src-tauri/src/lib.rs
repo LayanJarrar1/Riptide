@@ -316,7 +316,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(exit::ExitGuard::default())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(updater::plugin())
         .manage(updater::PendingUpdate::default())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -434,6 +434,8 @@ pub fn run() {
             media::media_tools_info,
             media::update_media_tools,
             updater::check_update,
+            updater::download_update,
+            updater::active_download_count,
             updater::install_update,
             updater::open_release_page,
             notify::notify_update,
