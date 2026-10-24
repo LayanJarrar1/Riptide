@@ -218,40 +218,35 @@ function Invoke-Uninstaller([string]$Dir, [string]$What) {
 function Test-HostPing([string]$Dir, [string]$What) {
     # What Chrome does: start the host with the extension origin as argv, speak 4-byte-length JSON.
     $hostExe = Join-Path $Dir 'riptide-host.exe'
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $hostExe
-    $psi.Arguments = "chrome-extension://$ChromiumId/"
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.CreateNoWindow = $true
-    $psi.EnvironmentVariables['RIPTIDE_HOST_NO_LAUNCH'] = '1'
-    $psi.EnvironmentVariables['RIPTIDE_IPC_ENDPOINT'] = "\\.\pipe\riptide-installer-test-$Guid-none"
-    $psi.EnvironmentVariables['RIPTIDE_HOST_DATA_DIR'] = $IntegrationDir
-    $proc = [System.Diagnostics.Process]::Start($psi)
+    # The frame goes in through a file redirect (cmd.exe), not through Process.StandardInput:
+    # on Windows PowerShell 5.1 (.NET Framework) that stream starts with a UTF-8 byte order mark,
+    # which the host rightly rejects as a 380 MB frame.
+    $frame = Join-Path $Temp "ping-$([guid]::NewGuid().ToString('N')).bin"
+    $reply_file = "$frame.out"
+    $json = [Text.Encoding]::UTF8.GetBytes('{"id":7,"type":"ping"}')
+    [IO.File]::WriteAllBytes($frame, ([byte[]][BitConverter]::GetBytes([int]$json.Length)) + $json)
+    $saved = @{}
+    foreach ($k in 'RIPTIDE_HOST_NO_LAUNCH', 'RIPTIDE_IPC_ENDPOINT', 'RIPTIDE_HOST_DATA_DIR') { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
     try {
-        $json = [Text.Encoding]::UTF8.GetBytes('{"id":7,"type":"ping"}')
-        $stdin = $proc.StandardInput.BaseStream
-        $stdin.Write([BitConverter]::GetBytes([int]$json.Length), 0, 4)
-        $stdin.Write($json, 0, $json.Length)
-        $stdin.Flush()
-        $stdout = $proc.StandardOutput.BaseStream
-        $head = New-Object byte[] 4
-        $got = $stdout.Read($head, 0, 4)
+        $env:RIPTIDE_HOST_NO_LAUNCH = '1'
+        $env:RIPTIDE_IPC_ENDPOINT = "\\.\pipe\riptide-installer-test-$Guid-none"
+        $env:RIPTIDE_HOST_DATA_DIR = $IntegrationDir
+        $cmdline = '/c ""' + $hostExe + '" "chrome-extension://' + $ChromiumId + '/" < "' + $frame + '" > "' + $reply_file + '""'
+        $proc = Start-Process -FilePath "$env:ComSpec" -ArgumentList $cmdline -WindowStyle Hidden -PassThru
+        if (-not $proc.WaitForExit(15000)) { $proc.Kill() }
+        $bytes = if (Test-Path -LiteralPath $reply_file) { [IO.File]::ReadAllBytes($reply_file) } else { [byte[]]@() }
         $reply = ''
-        if ($got -eq 4) {
-            $len = [BitConverter]::ToInt32($head, 0)
-            $buf = New-Object byte[] $len
-            $off = 0
-            while ($off -lt $len) { $n = $stdout.Read($buf, $off, $len - $off); if ($n -le 0) { break }; $off += $n }
-            $reply = [Text.Encoding]::UTF8.GetString($buf, 0, $off)
+        if ($bytes.Length -ge 4) {
+            $len = [BitConverter]::ToInt32($bytes, 0)
+            $take = [Math]::Min($len, $bytes.Length - 4)
+            $reply = [Text.Encoding]::UTF8.GetString($bytes, 4, $take)
         }
         Assert ($reply -match '"id"\s*:\s*7') "$What : host answers from a path with spaces and non-ASCII ($reply)"
         Assert ($reply -match 'not running') "$What : Chrome origin accepted, app reported as not running"
         Assert ($reply -notmatch 'not allowed') "$What : host did not refuse the extension"
     } finally {
-        try { $proc.StandardInput.Close() } catch { }
-        if (-not $proc.WaitForExit(5000)) { $proc.Kill() }
+        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
+        Remove-Item -LiteralPath $frame, $reply_file -Force -ErrorAction SilentlyContinue
     }
 }
 
