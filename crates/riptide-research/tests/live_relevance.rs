@@ -27,7 +27,7 @@ struct Live {
     query: &'static str,
     category: Category,
     mode: Mode,
-    /// Matches `title + file name` of a result that is what the user asked for.
+    /// Matches the title of a result that is what the user asked for.
     correct: &'static str,
 }
 
@@ -96,7 +96,7 @@ fn adapters(category: Category) -> Vec<Arc<dyn SearchSource>> {
 }
 
 fn text_of(h: &Hit) -> String {
-    format!("{} {}", h.title, h.filename.as_deref().unwrap_or(""))
+    h.title.clone()
 }
 
 #[tokio::test]

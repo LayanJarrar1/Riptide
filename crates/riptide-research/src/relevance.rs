@@ -6,7 +6,7 @@
 //!
 //! | Class | Meaning |
 //! |---|---|
-//! | `Exact` | every title word is in the title / file name / by-line, in order, and a real part of the title; every stated constraint is verified |
+//! | `Exact` | every title word is in the title / file name / by-line, in order, and at least three quarters of the title;  every stated constraint is verified |
 //! | `Strong` | as `Exact`, but a soft constraint (year, file type) is not stated by the result |
 //! | `Related` | most words match, but a constrained episode / season / version is not stated, the words are a small or reshuffled part of a longer title, or the match is partial |
 //! | `Unrelated` | a stated value contradicts the query (episode 21 for "episode 22"), a quoted phrase or an excluded word decides it, or too few words match |
@@ -327,6 +327,11 @@ fn is_video_type(t: &str) -> bool {
 
 // ---------------------------------------------------------------- assessment
 
+/// An exact match needs at least this share of the title's content words to be words of the
+/// query: a title that is mostly something else ("Attention Is (not) All You Need for Commonsense
+/// Reasoning") is the same subject at best.
+const LOOSE_BELOW: f32 = 0.75;
+
 /// Platform and packaging words in release titles and file names.
 const RELEASE_NOISE: &[&str] = &[
     "win",
@@ -368,6 +373,27 @@ fn content_words(title_words: &[String], intent: &QueryIntent) -> usize {
         .map(|w| stem(w))
         .collect();
     distinct.len()
+}
+
+/// The title without an "owner/" prefix (repository names), normalised.
+fn core_words_text(hit: &Hit) -> String {
+    match hit.title.split_once('/') {
+        Some((owner, rest)) if !owner.trim().contains(' ') && !rest.trim().is_empty() => {
+            normalize(rest)
+        }
+        _ => normalize(&hit.title),
+    }
+}
+
+/// The part of a normalised title before its first subtitle separator (`:`, ` - `, ` | `,
+/// ` (`, ` [`), or `None` when there is none.
+fn lead_segment(title: &str) -> Option<String> {
+    let cut = [":", " - ", " – ", " — ", " | ", "|", " (", " ["]
+        .iter()
+        .filter_map(|sep| title.find(sep))
+        .min()?;
+    let lead = title[..cut].trim();
+    (!lead.is_empty()).then(|| lead.to_string())
 }
 
 /// Judges one result against the query.
@@ -484,14 +510,23 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
         !pos.is_empty() && pos.windows(2).all(|w| w[0] <= w[1])
     };
     // "owner/name" (a repository): the owner is the publisher, not part of what the thing is called
-    let core_words = match hit.title.split_once('/') {
-        Some((owner, rest)) if !owner.trim().contains(' ') && !rest.trim().is_empty() => {
-            tokens(&normalize(rest))
-        }
-        _ => title_words.clone(),
-    };
-    let tight_share = share(&core_words).max(share(&name_words)).min(1.0);
-    let ordered = in_order(&core_words) || in_order(&name_words);
+    let core_words = tokens(&core_words_text(hit));
+    // "Title: subtitle", "Title - Episode name", "Title (720p)": when the part before the
+    // separator is exactly the words asked for, the rest is a subtitle or a tag
+    let lead_words = lead_segment(&core_words_text(hit))
+        .map(|lead| tokens(&lead))
+        // the lead must be the asked words and nothing else ("Attention Is Not All You Need:
+        // ..." is another paper)
+        .filter(|lead| {
+            terms.iter().all(|t| position(lead, t).is_some())
+                && share(lead) >= 0.999
+        })
+        .unwrap_or_default();
+    let tight_share = share(&core_words)
+        .max(share(&name_words))
+        .max(share(&lead_words))
+        .min(1.0);
+    let ordered = in_order(&core_words) || in_order(&name_words) || in_order(&lead_words);
 
     // ---- constraints
     let name_facts = Facts::of(&format!("{} {} {}", hit.title, name_n, tail));
@@ -601,7 +636,7 @@ pub fn assess(intent: &QueryIntent, hit: &Hit) -> Assessment {
     } else {
         // a verified episode / season / version is strong evidence of identity, so a title that
         // also carries an episode name or release tags may be as long as it likes
-        let loose = !terms.is_empty() && !identifying_matched && tight_share < 0.5;
+        let loose = !terms.is_empty() && !identifying_matched && tight_share < LOOSE_BELOW;
         let scrambled = terms.len() >= 2 && !ordered && words_ok;
         if loose {
             reasons.push(Reason::LooseTitle);
@@ -1046,6 +1081,49 @@ mod tests {
         // all the words, wrong order or lost in a long title: the same subject at best
         assert_eq!(class(q, &reordered), MatchClass::Related);
         assert_eq!(class(q, &loose), MatchClass::Related);
+    }
+
+    #[test]
+    fn a_title_that_is_mostly_something_else_is_related_but_a_subtitle_is_fine() {
+        let q = "attention is all you need";
+        for t in [
+            "Attention Is (not) All You Need for Commonsense Reasoning",
+            "Is Attention all You Need in Medical Image Analysis? A Review",
+            "Attention Is Not All You Need: Pure Attention Loses Rank Doubly Exponentially",
+        ] {
+            assert_eq!(
+                class(q, &hit(Source::Arxiv, "a", t)),
+                MatchClass::Related,
+                "{t}"
+            );
+        }
+        for t in [
+            "Attention Is All You Need",
+            "Attention Is All You Need (2017)",
+            "Attention is all you need: the transformer paper",
+        ] {
+            assert_eq!(
+                class(q, &hit(Source::Arxiv, "a", t)),
+                MatchClass::Exact,
+                "{t}"
+            );
+        }
+        // an owner prefix is the publisher, not part of the name
+        let q = "ripgrep";
+        assert_eq!(
+            class(q, &hit(Source::Github, "a", "BurntSushi/ripgrep")),
+            MatchClass::Exact
+        );
+        assert_eq!(
+            class(q, &hit(Source::Github, "b", "phiresky/ripgrep-all")),
+            MatchClass::Related
+        );
+        // a verified episode makes a long episode title fine
+        let t = "Friends S03E07 - The One with the Race Car Bed";
+        assert_eq!(
+            class("friends s03e07", &hit(Source::Youtube, "c", t)),
+            MatchClass::Exact
+        );
     }
 
     #[test]
