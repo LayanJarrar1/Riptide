@@ -18,6 +18,7 @@ development build. Get the alpha preview (installer or portable zip) from
 - [Video, batches and the site grabber](#video-batches-and-the-site-grabber)
 - [Research: open and public sources](#research-open-and-public-sources)
 - [BitTorrent and magnet links](#bittorrent-and-magnet-links)
+- [Set up AI (optional)](#set-up-ai-optional)
 - [AI assistant and your privacy](#ai-assistant-and-your-privacy)
 - [Already downloaded](#already-downloaded)
 - [Queues and schedules](#queues-and-schedules)
@@ -134,10 +135,11 @@ The drawer's own buttons pause, cancel or remove the download. `Esc` closes it.
 *Research* (sidebar, or **Tools → Research**) searches open and public sources and lists files with a direct download link. Pick a tab: **All, Papers, Books, Music, Video, Games, Software, Images, Datasets, Web**.
 
 - **Results appear as each source answers.** Every source has a chip (searching, how many results, timed out or failed with a retry button). You can keep using the page, filter by a source by clicking its chip, and press **Cancel** at any time.
+- **No setup needed.** Out of the box Research searches the open sources with your own words (keyword mode). AI is an optional upgrade: see [Set up AI (optional)](#set-up-ai-optional).
 - **With an AI provider** (Settings → AI) the question is expanded into extra searches, and then the results are ranked, one line of "why it matches" per result, arriving one by one while the list re-sorts in place. Without one, your own words are sent to the sources as they are.
 - **Licence badge.** Each result shows *public domain*, a Creative Commons licence, *open source* with the licence name, or *licence unknown* when the source does not say. The badge repeats what the source reports; it is not legal advice.
 - **Sources.** Papers: OpenAlex, Crossref, arXiv, Europe PMC. Books: Project Gutenberg, Open Library (fully open scans), LibriVox audiobooks, Internet Archive. Music: Internet Archive audio, Jamendo (needs your free client id, Settings → Research sources), Openverse, Wikimedia Commons, OpenGameArt. Video: Internet Archive public-domain films, Wikimedia Commons, NASA, Blender open movies. Games: open-source games on GitHub (OSI licence required), OpenGameArt. Software: GitHub releases. Images: Openverse, Wikimedia Commons, NASA. Datasets: Data.gov.
-- **Web.** Choose a backend in Settings → Research sources: the Brave Search API (your own token, kept in the Windows Credential Manager) or a SearXNG instance, or leave it off. Web results are pages, not files: **Find files on this page** opens the site grabber on that page (robots.txt respected) so you can tick what to download.
+- **Web (optional, advanced, off by default).** Search engines charge for their APIs, so Riptide does not ask ordinary users for a key. If you want it, choose a backend under Advanced in Settings → Research sources: the Brave Search API (paid, needs a card, your own token kept in the Windows Credential Manager) or a SearXNG instance (free if you, or someone you trust, runs one). Web results are pages, not files: **Find files on this page** opens the site grabber on that page (robots.txt respected) so you can tick what to download.
 - **What is not here, on purpose.** Riptide does not search torrent indexes, piracy or "abandonware" sites, paywall-bypass or Sci-Hub-like sources, or anything whose purpose is copyrighted content without a licence. Only download what you have the right to download. See decision D-research-1.
 - Everything a source returns is treated as untrusted text: it is shown as plain text, only http and https links are used, and the AI can only rank what the sources returned.
 
@@ -160,6 +162,21 @@ The drawer's own buttons pause, cancel or remove the download. `Esc` closes it.
 **Safety.** File names inside a torrent go through the same checks as any download (no folders outside the one you chose, no reserved Windows names). Tracker addresses are never shown in lists or written to the log, because private trackers keep a passkey there.
 
 Only download what you have the right to download.
+
+## Set up AI (optional)
+
+Research already works without AI. Adding it makes Research plan extra searches, rank the results and explain each match. It is free to set up with the right provider and takes about a minute.
+
+1. Open **Settings → AI → Quick setup** (or click **Keyword search · Add AI** in Research). Choose where the AI runs: **Google Gemini** (free, recommended), **Groq** (free, very fast), **On this computer** (Ollama or LM Studio: free and private, no key, the app must be installed and running) or **Another provider** (OpenAI, Anthropic, OpenRouter, DeepSeek, Mistral, Together, Fireworks, DeepInfra).
+2. **Get your key.** Press **Open the page**, sign in, press the button that creates a key and copy it, then press **Paste** (or Ctrl+V in the field). Riptide recognises a key from its start (for example `AIza` for Gemini, `gsk_` for Groq) and switches provider if you picked the wrong one. The local option has no key, so this step is skipped.
+3. **Test.** Riptide saves the key, picks a sensible model, saves your choice and runs a small test. When it says **AI is ready** you are done. If something fails you see why, and you can try again, use another key or remove the key.
+
+What you should know:
+
+- **Cost.** Gemini and Groq have free plans with no card. A paid provider charges you directly: Riptide takes no cut and has no account.
+- **Privacy.** Riptide sends only your search words. Your download history is never sent unless you turn that on in Settings → AI. The free plans of cloud providers may use prompts to improve their products; use the local option if that matters to you.
+- **Remove it.** Settings → AI → **Remove key** deletes the key from this computer. **Forget everything** also resets the AI settings. Research keeps working in keyword mode.
+- **Change the model.** Settings → AI → **Advanced** has the provider, key, model, endpoint and limits.
 
 ## AI assistant and your privacy
 

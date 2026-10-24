@@ -413,6 +413,10 @@
       {
         "q": "Do I need an AI account?",
         "a": "No. Research works as a plain search without one. If you add your own key, the AI ranks results and says why. Your key stays in Windows Credential Manager, and your download history is not shared unless you switch that on."
+      },
+      {
+        "q": "How do I set up the AI?",
+        "a": "Open Settings → AI → Quick setup. Pick Google Gemini or Groq (both free, no card), or run it on your own computer with Ollama or LM Studio (free and private, no key). Press Open the page, copy a key, press Paste, and Riptide tests it. It takes about a minute. Riptide sends only your search words, and Settings → AI → Remove key undoes it."
       }
     ]
   },

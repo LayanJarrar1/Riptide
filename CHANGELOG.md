@@ -15,6 +15,19 @@ channel (Settings > About). Please report bugs on [GitHub issues](https://github
 This release also contains everything from 0.1.0-alpha.5, which was never published, so it is the first
 public release since 0.1.0-alpha.4. See the [release](https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-beta.1).
 
+### Guided AI setup and a calmer Web source
+
+- Research is complete without any key: keyword mode over the open sources is the default and the
+  page says so. AI is an optional upgrade ("Smarter results with AI: free, takes about a minute").
+- New **Quick setup** (Settings → AI, the Research composer chip and the empty Research page): three
+  steps (choose, get your key, automatic test). Google Gemini and Groq are free with no card; Ollama
+  or LM Studio run on this computer with no key; other providers are in a list. The key is recognised
+  from its prefix, pasted on a click only, and never shown again. The old form is now under
+  **Advanced**. See decision D-ai-onboarding-1.
+- Web search is now **Advanced** and off by default, with an honest note that search engines charge
+  for their APIs (Brave's is paid and needs a card). The Web and Jamendo sources are shown as calm
+  optional notes in Research instead of "needs setup" chips.
+
 ### AI Research as a conversation
 
 - Research is now a workspace. A list of conversations on the left (new, rename, delete, clear all)

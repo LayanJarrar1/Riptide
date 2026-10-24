@@ -242,3 +242,35 @@ crate named in brackets.
 - **Weak ETags are never used in `If-Range`** (`riptide-net`). RFC 7233 forbids them there. The
   validator is the strong `ETag`, else `Last-Modified`, else nothing; a download whose only
   validator is weak is not resumable and restarts from zero.
+
+## D-ai-onboarding-1: AI is an optional upgrade with a guided free setup, not a key hunt
+
+*Status: accepted.* Research must feel complete for someone who never creates an API key. Checked in
+October 2026.
+
+- **Keyword mode is the default and is presented as complete.** The 16 open sources need no setup.
+  AI ("Smarter results with AI: free, takes about a minute") is an optional upgrade, never a missing
+  feature or a warning.
+- **No Brave default.** Brave's Search API no longer has a free tier (a card is required, about $5
+  per 1,000 searches), so asking ordinary users for a Brave key is a poor experience. Keyless web
+  search APIs are fragile or unofficial, so we add none. Web search stays as an *Advanced* setting
+  (Brave with the user's own token, or a SearXNG instance) and is off by default; Jamendo, which
+  only needs a free client id, is shown as optional in the same calm way.
+- **Gemini, Groq and local first.** Google Gemini (aistudio.google.com/apikey) and Groq
+  (console.groq.com/keys) issue free keys with only an account, no card. Ollama and LM Studio run on
+  the user's computer with no key and no data leaving it. Other providers (OpenAI, Anthropic,
+  OpenRouter, DeepSeek, Mistral, Together, Fireworks, DeepInfra) sit behind an "Another provider"
+  list. The setup dialog says plainly that free cloud plans may use prompts to improve their
+  products, that Riptide sends only the search words (never the download history unless the user
+  turns that on), and that a paid provider charges the user directly.
+- **The setup never turns sharing on.** `useDownloadHistory` and `suggestNames` are written back
+  exactly as they were. The key travels only from the field to `ai_set_key`, is emptied at once and
+  is never rendered. The local option sets provider `openai` with a loopback base URL and a
+  placeholder key (the backend requires one; local servers ignore it). The provider and address are
+  saved before the key, because the backend binds a key to the address it is saved for.
+- **No Riptide-hosted proxy in the beta.** A hosted proxy would need accounts, a server we pay for,
+  and would put prompts through our infrastructure. That contradicts "no accounts, no telemetry"
+  and the privacy rules, and it would make a running cost for a free project.
+- **Future option.** A hosted tier may be offered later as a business option. It must stay opt-in,
+  be clearly labelled, and never gate the download engine or any existing feature.
+
