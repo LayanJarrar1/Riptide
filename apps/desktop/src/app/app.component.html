@@ -1,4 +1,4 @@
-<div class="frame" [class.is-booting]="ui.booting()" [class.no-sidebar]="!settings.settings().sidebarVisible">
+<div class="frame" [class.is-booting]="ui.booting()" [class.no-sidebar]="!settings.settings().sidebarVisible" [class.is-rail]="rail()">
   <app-title-bar class="titlebar" />
   <header class="topbar">
     <a class="brand" routerLink="/" [attr.aria-label]="'app.title' | t">
@@ -71,6 +71,8 @@
           class="nav-item"
           [class.is-active]="store.category() === null && store.queue() === null && store.view() === view && onDownloads()"
           [attr.aria-current]="store.category() === null && store.queue() === null && store.view() === view && onDownloads() ? 'page' : null"
+          [attr.title]="rail() ? ('view.' + view | t) : null"
+          [attr.aria-label]="rail() ? ('view.' + view | t) : null"
           (click)="goView(view)"
         >
           <app-icon [name]="viewIcons[view]" [size]="16" />
@@ -94,6 +96,8 @@
             class="nav-item"
             [class.is-active]="store.category() === c && onDownloads()"
             [attr.aria-current]="store.category() === c && onDownloads() ? 'page' : null"
+            [attr.title]="rail() ? ('category.' + c | t) : null"
+            [attr.aria-label]="rail() ? ('category.' + c | t) : null"
             (click)="goCategory(c)"
           >
             <app-icon [name]="categoryIcons[c]" [size]="16" />
@@ -104,20 +108,33 @@
       </div>
     }
 
-    <div class="nav-group">
+    <div class="nav-group queues-group">
       <app-queues-nav [current]="onDownloads() ? store.queue() : null" (open)="goQueue($event)" />
     </div>
 
     <div class="nav-foot">
-      <a class="nav-item" routerLink="/files" routerLinkActive="is-active" ariaCurrentWhenActive="page">
+      @if (railPage()) {
+        <button
+          type="button"
+          class="nav-item rail-toggle"
+          [attr.aria-expanded]="!rail()"
+          [attr.aria-label]="(rail() ? 'nav.expand' : 'nav.collapse') | t"
+          [attr.title]="(rail() ? 'nav.expand' : 'nav.collapse') | t"
+          (click)="navRail.toggle()"
+        >
+          <app-icon [name]="rail() ? 'chevronEnd' : 'chevronStart'" [size]="16" />
+          <span class="nav-text">{{ 'nav.collapse' | t }}</span>
+        </button>
+      }
+      <a class="nav-item" routerLink="/files" routerLinkActive="is-active" ariaCurrentWhenActive="page" [attr.title]="rail() ? ('nav.files' | t) : null" [attr.aria-label]="rail() ? ('nav.files' | t) : null">
         <app-icon name="folder" [size]="16" />
         <span class="nav-text">{{ 'nav.files' | t }}</span>
       </a>
-      <a class="nav-item" routerLink="/research" routerLinkActive="is-active" ariaCurrentWhenActive="page">
+      <a class="nav-item" routerLink="/research" routerLinkActive="is-active" ariaCurrentWhenActive="page" [attr.title]="rail() ? ('nav.research' | t) : null" [attr.aria-label]="rail() ? ('nav.research' | t) : null">
         <app-icon name="sparkles" [size]="16" />
         <span class="nav-text">{{ 'nav.research' | t }}</span>
       </a>
-      <a class="nav-item" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page">
+      <a class="nav-item" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page" [attr.title]="rail() ? ('nav.settings' | t) : null" [attr.aria-label]="rail() ? ('nav.settings' | t) : null">
         <app-icon name="settings" [size]="16" />
         <span class="nav-text">{{ 'nav.settings' | t }}</span>
         @if (updates.badgeVersion(); as version) {

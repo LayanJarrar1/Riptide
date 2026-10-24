@@ -20,6 +20,7 @@ import { filter } from 'rxjs';
 
 import { DiskSpaceService } from './core/disk-space.service';
 import { FormatService } from './core/format.service';
+import { NavRailService, prefersRail } from './core/nav-rail.service';
 import { TickerDirective } from './core/ticker.directive';
 import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
@@ -108,6 +109,7 @@ export class AppComponent implements OnInit {
   protected readonly format = inject(FormatService);
   private readonly router = inject(Router);
   protected readonly updates = inject(UpdateService);
+  protected readonly navRail = inject(NavRailService);
   private readonly searchRef = viewChild<ElementRef<HTMLInputElement>>('search');
 
   protected readonly views = LIST_VIEWS;
@@ -132,6 +134,10 @@ export class AppComponent implements OnInit {
     const counts = this.store.categoryCounts();
     return this.categories.filter((c) => (counts.get(c) ?? 0) > 0);
   });
+
+  /** Research and Files give the width to their content: the navigation is an icon rail there (unless expanded). */
+  protected readonly railPage = computed(() => prefersRail(this.url()));
+  protected readonly rail = computed(() => this.navRail.isRail(this.url()));
 
   /** Whether the list page is showing (sidebar highlights follow the view only then). */
   protected readonly onDownloads = computed(() => /^\/?(?:[?#].*)?$/.test(this.url()));
