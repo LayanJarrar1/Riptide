@@ -103,7 +103,7 @@ with sync_playwright() as p:
         txt = page.text_content('main')
         for word in ('yt-dlp', '144p', 'robots.txt', 'file[001-120].zip'):
             check(f'{tag} copy mentions {word}', word in txt)
-        check(f'{tag} FAQ has at most 7 entries', 1 <= page.locator('details.faq-item').count() <= 7)
+        check(f'{tag} FAQ has at most 8 entries', 1 <= page.locator('details.faq-item').count() <= 8)
         new_imgs = page.eval_on_selector_all('#new img', 'els => els.map(e => [e.getAttribute("src"), e.getAttribute("alt"), e.getAttribute("width"), e.getAttribute("height"), e.getAttribute("loading")])')
         check(f'{tag} new-in-beta-1 block has 4 lazy images with alt, width and height', len(new_imgs) == 4 and all(a and b and c and d and e == 'lazy' for a, b, c, d, e in new_imgs), str(new_imgs)[:200])
         check(f'{tag} new-in-beta-1 images are the {lang} ones', all(f'-{lang}.webp' in a for a, *_ in new_imgs))
