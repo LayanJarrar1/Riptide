@@ -20,6 +20,19 @@ import {
 import type { AiMessage } from './ai.models';
 import type { CategoryId, ResearchSettings, ResearchSettingsView } from './research.models';
 
+/** What the last "Test connection" found; session-only, so Settings can say whether the provider answered. */
+export interface AiTestResult {
+  readonly ok: boolean;
+  /** Epoch milliseconds. */
+  readonly at: number;
+  /** The model that answered, on success. */
+  readonly model: string | null;
+  /** Round trip of the test completion in milliseconds, on success. */
+  readonly ms: number | null;
+  /** The reason, on failure. */
+  readonly error: string | null;
+}
+
 /**
  * The webview's side of Settings → AI, the Research page and the download memory. Every call is
  * a Tauri command; outside Tauri (plain browser, tests) `available` is false and nothing is
@@ -35,6 +48,9 @@ export class AiService {
 
   /** Latest status from the backend; `null` until the first answer. */
   readonly status = signal<AiStatus | null>(null);
+
+  /** The last connection test, `null` when none ran since the key, provider or endpoint changed. */
+  readonly lastTest = signal<AiTestResult | null>(null);
 
   /** Loads (or reloads) the status. */
   async refresh(): Promise<AiStatus | null> {
@@ -52,19 +68,25 @@ export class AiService {
   }
 
   async saveSettings(settings: AiSettings): Promise<AiStatus> {
+    const before = this.status()?.settings;
     const s = await this.invoke<AiStatus>('ai_save_settings', { settings });
+    if (before !== undefined && (before.provider !== s.settings.provider || before.baseUrl !== s.settings.baseUrl || before.model !== s.settings.model)) {
+      this.lastTest.set(null);
+    }
     this.status.set(s);
     return s;
   }
 
   async setKey(provider: ProviderId, key: string): Promise<AiStatus> {
     const s = await this.invoke<AiStatus>('ai_set_key', { provider, key });
+    this.lastTest.set(null);
     this.status.set(s);
     return s;
   }
 
   async removeKey(provider: ProviderId): Promise<AiStatus> {
     const s = await this.invoke<AiStatus>('ai_remove_key', { provider });
+    this.lastTest.set(null);
     this.status.set(s);
     return s;
   }
@@ -74,8 +96,16 @@ export class AiService {
     return this.invoke<ModelView[]>('ai_list_models', { provider });
   }
 
-  testConnection(): Promise<ConnectionView> {
-    return this.invoke<ConnectionView>('ai_test_connection');
+  /** Asks the provider for its models and a one-word reply, and remembers how it went in {@link lastTest}. */
+  async testConnection(): Promise<ConnectionView> {
+    try {
+      const c = await this.invoke<ConnectionView>('ai_test_connection');
+      this.lastTest.set({ ok: true, at: Date.now(), model: c.model, ms: c.completeMs, error: null });
+      return c;
+    } catch (e: unknown) {
+      this.lastTest.set({ ok: false, at: Date.now(), model: null, ms: null, error: this.errorText(e) });
+      throw e;
+    }
   }
 
   lastRequest(): Promise<RequestPreview | null> {
@@ -84,6 +114,7 @@ export class AiService {
 
   async forgetAll(): Promise<AiStatus> {
     const s = await this.invoke<AiStatus>('ai_forget_all');
+    this.lastTest.set(null);
     this.status.set(s);
     return s;
   }

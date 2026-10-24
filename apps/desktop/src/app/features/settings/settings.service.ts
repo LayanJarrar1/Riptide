@@ -19,6 +19,10 @@ export interface Settings {
   readonly connections: number;
   /** Connections per host across downloads. */
   readonly perHost: number;
+  /** Downloads running at once across all queues (1..32; engine-side). */
+  readonly maxActive: number;
+  /** Put a download that failed on a network error back in the queue, up to three times (engine-side). */
+  readonly autoRetry: boolean;
   /** Global cap in bytes per second, `null` = unlimited. */
   readonly speedLimitBps: number | null;
   readonly confirmOnExit: boolean;
@@ -99,6 +103,8 @@ export const DEFAULT_SETTINGS: Settings = {
   torrentsDir: '',
   connections: 8,
   perHost: 4,
+  maxActive: 3,
+  autoRetry: true,
   speedLimitBps: null,
   confirmOnExit: true,
   startWithWindows: false,
@@ -258,6 +264,8 @@ export class SettingsService {
         defaultDir: engine.default_dir,
         connections: engine.connections,
         perHost: engine.per_host,
+        maxActive: engine.max_active ?? 3,
+        autoRetry: engine.auto_retry ?? true,
         categoryDirs,
         organize: engine.organize ?? false,
         organizeRoot: engine.organize_root ?? '',
@@ -291,6 +299,7 @@ export class SettingsService {
 
   private async pushEngineSettings(current: Settings): Promise<void> {
     const { defaultDir, connections, perHost, categoryDirs } = current;
+    const maxActive = Math.min(32, Math.max(1, Math.round(current.maxActive)));
     const known = this.engine;
     // not loaded yet: the load merges the engine's values and the effect runs again
     if (known === null) {
@@ -324,6 +333,8 @@ export class SettingsService {
       known.default_dir === defaultDir &&
       known.connections === connections &&
       known.per_host === perHost &&
+      known.max_active === maxActive &&
+      (known.auto_retry ?? true) === current.autoRetry &&
       JSON.stringify(known.category_dirs ?? {}) === JSON.stringify(category_dirs) &&
       (known.organize ?? false) === current.organize &&
       (known.organize_root ?? '') === organize_root &&
@@ -339,7 +350,7 @@ export class SettingsService {
       default_dir: defaultDir,
       connections,
       per_host: perHost,
-      max_active: known.max_active,
+      max_active: maxActive,
       user_agent: known.user_agent,
       category_dirs,
       organize: current.organize,
@@ -348,7 +359,7 @@ export class SettingsService {
       proxy,
       mark_of_the_web: current.markDownloads,
       allow_private_redirects: current.allowPrivateRedirects,
-      auto_retry: known.auto_retry ?? true,
+      auto_retry: current.autoRetry,
       torrent,
     };
     try {
