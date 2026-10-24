@@ -22,6 +22,19 @@
 //! at a time, each validated against the results (see `riptide_research::assist`). The page is
 //! usable from the first batch and a search can be cancelled at any time.
 //!
+//! # Relevance
+//!
+//! Nothing reaches the page unchecked. The query is understood first
+//! ([`riptide_research::QueryIntent`]: episode, season, version, year, file type, phrases,
+//! exclusions; Arabic folded), then every result is classified `exact` / `strong` / `related` /
+//! `unrelated` by [`riptide_research::relevance`]. `Unrelated` results (a different episode, a
+//! different version...) are dropped, `related` ones are shown only when the mode allows it or when
+//! nothing better exists, and each item carries its class (`confidence`) and the reasons. The AI
+//! can only reorder within a class: its scores are squeezed into the class's band, so it can
+//! never promote a result. A search names its category (one of seven, no "all") and a
+//! [`Mode`] (quick search, deep research, video search, source finder) whose budget bounds the
+//! sources, phrasings, rounds, AI tokens and time spent.
+//!
 //! The model never sees a URL: ranking works on ids of results the adapters returned. Titles
 //! and snippets are third-party text; they are escaped by the UI and never executed.
 //! Download-history titles are included in prompts only while *Let the AI see my download
@@ -31,17 +44,22 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use riptide_ai::Message;
-use riptide_core::{Category as FileCategory, DownloadRequest, QueueId};
+use riptide_core::{Category as FileCategory, DownloadKind, DownloadRequest, QueueId};
 use riptide_engine::{Engine, Error as EngineError, SeenHint, SeenMatch, SeenQuery};
 use riptide_research::assist::{self, Ranked, MAX_HISTORY_TITLES, MAX_RANK_INPUT};
+use riptide_research::modes::{RoundState, StopReason};
+use riptide_research::relevance::{
+    compare, confine_score, order, Assessed, Comparison, Gate, MatchClass, Reason, Trust,
+};
 use riptide_research::sources::jamendo::Jamendo;
 use riptide_research::sources::websearch::{validate_searxng_base, WebBackend, WebSearch};
+use riptide_research::sources::youtube::{ProcessRunner, Youtube};
 use riptide_research::{
-    default_source, search_stream, Category, Dedup, Hit, HitKind, Rights, SearchEvent,
-    SearchSource, Source, SOURCE_DEADLINE,
+    default_source, queries, search_stream, Category, Dedup, Hit, HitKind, Mode, QueryIntent,
+    Rights, SearchEvent, SearchSource, Source,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -215,19 +233,19 @@ pub struct SearchRequest {
     /// UI language (`ar` / `en`): the language of the "why this matches" lines.
     #[serde(default)]
     pub lang: String,
-    /// What kind of thing to look for.
-    #[serde(default = "default_category")]
+    /// What kind of thing to look for. Required: one of the seven search categories (the old
+    /// ids `papers`, `books` and `games` still map to `academic`, `documents` and `open-source`;
+    /// `all`, `music` and `datasets` are refused).
     pub category: Category,
+    /// How to search (default: quick search).
+    #[serde(default)]
+    pub mode: Mode,
     /// Restrict to these sources; all that serve the category when absent.
     #[serde(default)]
     pub sources: Option<Vec<Source>>,
     /// Hits per source and query (default 6).
     #[serde(default)]
     pub per_source: Option<usize>,
-}
-
-fn default_category() -> Category {
-    Category::All
 }
 
 /// One result card.
@@ -241,17 +259,53 @@ pub struct ResultItem {
     pub rights: Rights,
     /// Already downloaded?
     pub seen: Option<SeenMatch>,
+    /// How well it matches the query: `exact`, `strong` or `related` (a related result is
+    /// flagged as such; `unrelated` is never sent).
+    pub confidence: MatchClass,
+    /// Share (0-1) of the title words found in the title, file name or by-line.
+    pub coverage: f32,
+    /// 0-100: orders results *within* a confidence class (the AI's score is confined to the same
+    /// band, see [`Ranked`] events).
+    pub match_score: u8,
+    /// What was verified: matched, missing and conflicting constraints, word coverage.
+    pub reasons: Vec<Reason>,
+    /// `official`, `primary`, `unknown` or `mirror` (the source finder shows it).
+    pub trust: Trust,
+    /// Looks like a mirror or aggregator copy.
+    pub mirror: bool,
 }
 
 impl ResultItem {
-    fn new(hit: Hit) -> Self {
-        let rights = hit.rights();
+    fn new(a: Assessed) -> Self {
+        let rights = a.hit.rights();
         ResultItem {
-            hit,
+            hit: a.hit,
             rights,
             seen: None,
+            confidence: a.assessment.class,
+            coverage: a.assessment.coverage,
+            match_score: a.assessment.score,
+            reasons: a.assessment.reasons,
+            trust: a.assessment.trust,
+            mirror: a.assessment.mirror,
         }
     }
+}
+
+/// A ranking entry as the page receives it: the model's order and reason, with the score
+/// confined to the band of the result's confidence class.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankedItem {
+    /// The hit id.
+    pub id: String,
+    /// 0-100, already confined to the class band: sorting by it never moves a result across a
+    /// class.
+    pub score: u8,
+    /// One line on why it matches (no links).
+    pub why: String,
+    /// The result's confidence class (the one the program computed, not the model).
+    pub confidence: MatchClass,
 }
 
 /// A source that cannot take part, and why.
@@ -276,6 +330,15 @@ pub struct StartResponse {
     pub unavailable: Vec<Unavailable>,
     /// The AI will plan and rank (it is on and was asked for).
     pub ai: bool,
+    /// The mode that runs.
+    pub mode: Mode,
+    /// The category searched (always one of the seven).
+    pub category: Category,
+    /// What was understood of the query (episode, season, version, year, file type, phrases,
+    /// exclusions, language), for the page to show as chips.
+    pub intent: QueryIntent,
+    /// The phrasings that run first (more may follow from the AI plan and later rounds).
+    pub queries: Vec<String>,
 }
 
 /// What the AI did during a search.
@@ -330,7 +393,25 @@ pub enum Ev {
     /// Validated ranking entries.
     Rank {
         /// The entries, best first within this batch.
-        items: Vec<Ranked>,
+        items: Vec<RankedItem>,
+    },
+    /// Which other sources returned the same items and where sources disagree (deep research
+    /// and the source finder), sent once when the results are in.
+    Compare {
+        /// The comparison.
+        comparison: Comparison,
+    },
+    /// How the search ended, sent once before `end`.
+    #[serde(rename_all = "camelCase")]
+    Summary {
+        /// Exact matches shown.
+        exact: usize,
+        /// Strong matches shown.
+        strong: usize,
+        /// Results judged unrelated (or related and never shown): hidden from the page.
+        hidden: usize,
+        /// Why the later rounds were skipped, when they were.
+        stop: Option<StopReason>,
     },
     /// The AI part is over.
     Ai {
@@ -361,9 +442,16 @@ struct Run {
     dedup: Mutex<Dedup>,
     topic: String,
     category: Category,
+    mode: Mode,
+    intent: QueryIntent,
+    /// Classifies every result and decides which ones are shown.
+    gate: Mutex<Gate>,
+    /// The class the program gave each shown result (the AI's scores are confined to it).
+    verdicts: Mutex<HashMap<String, MatchClass>>,
     per_source: usize,
     adapters: Vec<Arc<dyn SearchSource>>,
     queries: Mutex<Vec<String>>,
+    /// The results that were shown (what the AI may rank).
     hits: Mutex<Vec<Hit>>,
     counts: Mutex<HashMap<Source, usize>>,
 }
@@ -466,40 +554,46 @@ async fn history_for_ai(ai: &AiService, engine: &Engine) -> Option<Vec<String>> 
     engine.seen_titles(MAX_HISTORY_TITLES).await.ok()
 }
 
-/// The adapters that take part in a search for `category`, plus the ones that would but are
-/// not set up.
+/// The adapters that take part in a search for `category` under `mode` (the category's sources in
+/// priority order, cut to the mode's source budget), plus the ones that would but are not set up.
 fn pick_adapters(
     state: &ResearchState,
     ai: &AiService,
+    engine: &Engine,
+    mode: Mode,
     category: Category,
     only: Option<&[Source]>,
 ) -> (Vec<Arc<dyn SearchSource>>, Vec<Unavailable>) {
-    let wanted = |s: Source| s.serves(category) && only.is_none_or(|o| o.contains(&s));
-    let mut out: Vec<Arc<dyn SearchSource>> = state
-        .adapters
-        .iter()
-        .filter(|a| wanted(a.source()))
-        .cloned()
-        .collect();
+    let mut out: Vec<Arc<dyn SearchSource>> = Vec::new();
     let mut missing = Vec::new();
-    if wanted(Source::Jamendo) {
-        match ai.named_secret("jamendo") {
-            Some(id) => out.push(Arc::new(Jamendo::new(id.expose()))),
-            None => missing.push(Unavailable {
-                source: Source::Jamendo,
-                reason: "needs_setup",
-            }),
-        }
-    }
-    if wanted(Source::Web) {
-        match web_backend(ai, &read_settings(ai)) {
-            Some(b) => out.push(Arc::new(WebSearch::new(b))),
-            // in "All" an unset web search is simply absent; on its own tab it is explained
-            None if category == Category::Web => missing.push(Unavailable {
-                source: Source::Web,
-                reason: "needs_setup",
-            }),
-            None => {}
+    let mut need_setup = |source| {
+        missing.push(Unavailable {
+            source,
+            reason: "needs_setup",
+        });
+    };
+    for source in mode.config().pick_sources(category, only) {
+        match source {
+            Source::Jamendo => match ai.named_secret("jamendo") {
+                Some(id) => out.push(Arc::new(Jamendo::new(id.expose()))),
+                None => need_setup(source),
+            },
+            Source::Web => match web_backend(ai, &read_settings(ai)) {
+                Some(b) => out.push(Arc::new(WebSearch::new(b))),
+                None => need_setup(source),
+            },
+            // video search runs the bundled yt-dlp (the same copy the media downloads use)
+            Source::Youtube => match engine.media_tools().filter(|t| t.is_available()) {
+                Some(tool) => out.push(Arc::new(Youtube::new(Box::new(ProcessRunner::new(
+                    tool.exe(),
+                ))))),
+                None => need_setup(source),
+            },
+            other => {
+                if let Some(a) = state.adapters.iter().find(|a| a.source() == other) {
+                    out.push(a.clone());
+                }
+            }
         }
     }
     (out, missing)
@@ -581,6 +675,37 @@ async fn emitter(app: AppHandle, engine: Engine, id: u64, mut rx: mpsc::Unbounde
     }
 }
 
+/// Sends the results the gate let through: remembers them (for adding and ranking), counts them
+/// per source and reports them best class first.
+fn show(run: &Run, cache: &Mutex<HitCache>, mut shown: Vec<Assessed>) {
+    if shown.is_empty() {
+        return;
+    }
+    order(&mut shown, run.mode.config().verification.prefer_official);
+    let hits: Vec<Hit> = shown.iter().map(|a| a.hit.clone()).collect();
+    Run::lock(cache).insert(&hits);
+    Run::lock(&run.hits).extend(hits.iter().cloned());
+    {
+        let mut verdicts = Run::lock(&run.verdicts);
+        for a in &shown {
+            verdicts.insert(a.hit.id.clone(), a.assessment.class);
+        }
+    }
+    let mut by_source: Vec<(Source, Vec<ResultItem>)> = Vec::new();
+    for a in shown {
+        let source = a.hit.source;
+        *Run::lock(&run.counts).entry(source).or_default() += 1;
+        let item = ResultItem::new(a);
+        match by_source.iter_mut().find(|(s, _)| *s == source) {
+            Some((_, v)) => v.push(item),
+            None => by_source.push((source, vec![item])),
+        }
+    }
+    for (source, items) in by_source {
+        run.send(Ev::Hits { source, items });
+    }
+}
+
 /// Runs the given queries on the run's adapters and reports everything as events.
 async fn run_round(
     run: &Run,
@@ -593,7 +718,7 @@ async fn run_round(
         queries,
         run.per_source,
         run.category,
-        SOURCE_DEADLINE,
+        run.mode.config().budget.deadline,
         &run.dedup,
         |ev| match ev {
             SearchEvent::Started(source) => run.send(Ev::Source {
@@ -602,14 +727,10 @@ async fn run_round(
                 found: Run::lock(&run.counts).get(&source).copied().unwrap_or(0),
                 code: None,
             }),
-            SearchEvent::Hits { source, hits } => {
-                Run::lock(cache).insert(&hits);
-                Run::lock(&run.hits).extend(hits.iter().cloned());
-                *Run::lock(&run.counts).entry(source).or_default() += hits.len();
-                run.send(Ev::Hits {
-                    source,
-                    items: hits.into_iter().map(ResultItem::new).collect(),
-                });
+            SearchEvent::Hits { hits, .. } => {
+                // only results that match the query reach the page
+                let shown = Run::lock(&run.gate).offer(hits);
+                show(run, cache, shown);
             }
             SearchEvent::Finished { source, .. } => run.send(Ev::Source {
                 source,
@@ -632,12 +753,32 @@ async fn run_round(
     .await;
 }
 
+/// Shows the related results that were held back when nothing better was found.
+fn release_held(run: &Run, cache: &Mutex<HitCache>) {
+    let released = Run::lock(&run.gate).finish();
+    show(run, cache, released);
+}
+
+/// The AI's scores confined to the class the program gave each result. Entries for results that
+/// were never shown are dropped.
+fn confine(run: &Run, r: Ranked) -> Option<RankedItem> {
+    let class = *Run::lock(&run.verdicts).get(&r.id)?;
+    Some(RankedItem {
+        score: confine_score(class, r.score),
+        id: r.id,
+        why: r.why,
+        confidence: class,
+    })
+}
+
 async fn run_search(app: AppHandle, run: Arc<Run>, use_ai: bool, lang: String) {
     let ai = app.state::<AiService>();
     let engine = app.state::<Engine>();
     let state = app.state::<ResearchState>();
     let cache = &state.cache;
     let topic = run.topic.clone();
+    let cfg = run.mode.config();
+    let started = Instant::now();
     let mut outcome = AiOutcome {
         requested: use_ai,
         ..AiOutcome::default()
@@ -659,68 +800,173 @@ async fn run_search(app: AppHandle, run: Arc<Run>, use_ai: bool, lang: String) {
         None
     };
     run.send(Ev::Phase { phase: "searching" });
-    *Run::lock(&run.queries) = vec![topic.clone()];
 
-    // round 1 (the user's own words) runs while the AI plans; when the plan arrives its extra
-    // phrasings are searched too, without waiting for round 1 to end
-    let round1 = run_round(&run, cache, &run.adapters, std::slice::from_ref(&topic));
+    // the deterministic phrasings, in rounds the mode's budget allows; the first round runs while
+    // the AI (if the mode asks for it) plans extra phrasings, which are searched without waiting
+    // for round 1 to end
+    let phrasings = queries::variants(&run.intent, run.mode);
+    let per_round = phrasings.len().div_ceil(cfg.budget.max_rounds).max(1);
+    let mut rounds: Vec<Vec<String>> = phrasings
+        .chunks(per_round)
+        .map(<[String]>::to_vec)
+        .collect();
+    let first = if rounds.is_empty() {
+        Vec::new()
+    } else {
+        rounds.remove(0)
+    };
+    *Run::lock(&run.queries) = first.clone();
+    let mut queries_run = first.len();
+    let round1 = run_round(&run, cache, &run.adapters, &first);
+    let plan_budget = cfg.budget.max_ai_tokens;
     let planning = async {
+        if !cfg.ai.plan {
+            return None;
+        }
         let (p, s) = provider.as_ref()?;
-        let plan_messages = assist::plan_messages(&topic, history.as_deref(), run.category);
+        let max_tokens = (plan_budget / 3).clamp(200, 600);
+        let plan_messages = assist::plan_messages_with(
+            &topic,
+            history.as_deref(),
+            run.category,
+            cfg.system_instructions,
+        );
         ai.note_request("research-plan", s, &plan_messages);
         let charge = ai.charge_if_dropped(&plan_messages);
-        let planned =
-            assist::plan_queries(p.as_ref(), &topic, history.as_deref(), run.category).await;
+        let planned = assist::plan_queries_with(
+            p.as_ref(),
+            &topic,
+            history.as_deref(),
+            run.category,
+            cfg.system_instructions,
+            max_tokens,
+        )
+        .await;
         charge.done();
         match planned {
             Ok(plan) => {
+                let known: HashSet<String> = Run::lock(&run.queries)
+                    .iter()
+                    .map(|q| q.to_lowercase())
+                    .collect();
+                let room = cfg.budget.max_queries.saturating_sub(first.len());
                 let extra: Vec<String> = plan
                     .queries
                     .iter()
-                    .filter(|q| !q.eq_ignore_ascii_case(&topic))
+                    .filter(|q| !known.contains(&q.to_lowercase()))
+                    .take(room)
                     .cloned()
                     .collect();
                 run.send(Ev::Plan {
                     queries: plan.queries.clone(),
                 });
-                if !extra.is_empty() {
+                // enough exact matches already: do not spend more of the user's sources
+                let enough = Run::lock(&run.gate).exact_count() >= cfg.budget.stop_after_exact;
+                if !extra.is_empty() && !enough {
                     Run::lock(&run.queries).extend(extra.iter().cloned());
                     run_round(&run, cache, &run.adapters, &extra).await;
                 }
-                Some(Ok(plan.usage.total_tokens))
+                Some(Ok((plan.usage.total_tokens, extra.len())))
             }
             Err(e) => Some(Err(ai.fail(&e))),
         }
     };
     let (_, planned) = tokio::join!(round1, planning);
     match planned {
-        Some(Ok(tokens)) => {
+        Some(Ok((tokens, extra))) => {
             outcome.used = true;
             outcome.tokens += tokens;
+            queries_run += extra;
             ai.note_usage(tokens);
         }
         Some(Err(f)) => outcome.error = Some(f),
         None => {}
     }
 
-    // ranking streams in after all the results are in
-    if let (Some((p, s)), true) = (&provider, outcome.used) {
+    // later rounds, until a stop condition of the mode says enough
+    let mut rounds_done = 1;
+    let mut stop = None;
+    for round in rounds {
+        let reason = cfg.stop_reason(&RoundState {
+            rounds_done,
+            exact_found: Run::lock(&run.gate).exact_count(),
+            elapsed: started.elapsed(),
+            ai_tokens: u32::try_from(outcome.tokens).unwrap_or(u32::MAX),
+            queries_left: round.len(),
+        });
+        if reason.is_some() {
+            stop = reason;
+            break;
+        }
+        Run::lock(&run.queries).extend(round.iter().cloned());
+        queries_run += round.len();
+        run_round(&run, cache, &run.adapters, &round).await;
+        rounds_done += 1;
+    }
+    tracing::debug!(queries_run, rounds_done, "research rounds finished");
+    release_held(&run, cache);
+
+    // the comparison across sources (deep research, source finder)
+    let verification = cfg.verification;
+    if verification.compare_sources {
+        let dups = Run::lock(&run.dedup).drain_duplicates();
+        let comparison = compare(&Run::lock(&run.hits), &dups);
+        let comparison = if verification.note_contradictions {
+            comparison
+        } else {
+            Comparison {
+                notes: Vec::new(),
+                ..comparison
+            }
+        };
+        if !comparison.also_in.is_empty() || !comparison.notes.is_empty() {
+            run.send(Ev::Compare { comparison });
+        }
+    }
+    {
+        let gate = Run::lock(&run.gate);
+        run.send(Ev::Summary {
+            exact: gate.exact_count(),
+            strong: gate.strong_count(),
+            hidden: gate.dropped_count(),
+            stop,
+        });
+    }
+
+    // ranking streams in after all the results are in; the model only reorders inside a class
+    if let (Some((p, s)), true) = (&provider, cfg.ai.rank) {
         let list = rank_input(&Run::lock(&run.hits), MAX_RANK_INPUT);
-        if list.len() >= 2 {
+        let left = cfg
+            .budget
+            .max_ai_tokens
+            .saturating_sub(u32::try_from(outcome.tokens).unwrap_or(u32::MAX));
+        if list.len() >= 2 && left >= 300 {
             run.send(Ev::Phase { phase: "ranking" });
-            let rank_messages = assist::rank_messages(&topic, &list, history.as_deref(), &lang);
+            let rank_messages = assist::rank_messages_with(
+                &topic,
+                &list,
+                history.as_deref(),
+                &lang,
+                cfg.system_instructions,
+            );
             ai.note_request("research-rank", s, &rank_messages);
+            outcome.used = true;
             let charge = ai.charge_if_dropped(&rank_messages);
             let tx = run.tx.clone();
+            let runref = run.clone();
             let mut sink = move |r: Ranked| {
-                let _ = tx.send(Ev::Rank { items: vec![r] });
+                if let Some(item) = confine(&runref, r) {
+                    let _ = tx.send(Ev::Rank { items: vec![item] });
+                }
             };
-            let done = assist::rank_stream(
+            let done = assist::rank_stream_with(
                 p.as_ref(),
                 &topic,
                 &list,
                 history.as_deref(),
                 &lang,
+                cfg.system_instructions,
+                left.min(1800),
                 &mut sink,
             )
             .await;
@@ -761,23 +1007,42 @@ pub async fn research_start(
     if topic.is_empty() {
         return Err("type a topic first".into());
     }
+    // no silent "all": the user names what they are looking for
+    let category = request.category.canonical().ok_or(
+        "choose a category: videos, software, documents, images, academic, open-source or web",
+    )?;
+    let mode = request.mode;
+    if !mode.config().accepts(category) {
+        return Err(format!("{} only searches videos", mode.id()));
+    }
     let (adapters, unavailable) = pick_adapters(
         &state,
         &ai,
-        request.category,
+        &engine,
+        mode,
+        category,
         request.sources.as_deref().filter(|s| !s.is_empty()),
     );
     let use_ai = request.use_ai && ai.configured();
     let id = state.next_id.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::unbounded_channel();
+    let intent = QueryIntent::parse(&topic);
+    let cfg = mode.config();
     let run = Arc::new(Run {
         id,
         tx,
         token: CancellationToken::new(),
         dedup: Mutex::new(Dedup::new()),
         topic,
-        category: request.category,
-        per_source: request.per_source.unwrap_or(6).clamp(1, 20),
+        category,
+        mode,
+        gate: Mutex::new(Gate::new(intent.clone(), mode)),
+        intent,
+        verdicts: Mutex::new(HashMap::new()),
+        per_source: request
+            .per_source
+            .unwrap_or(cfg.per_source_cap)
+            .clamp(1, cfg.per_source_cap),
         adapters,
         queries: Mutex::new(Vec::new()),
         hits: Mutex::new(Vec::new()),
@@ -798,6 +1063,10 @@ pub async fn research_start(
         sources: run.adapters.iter().map(|a| a.source()).collect(),
         unavailable,
         ai: use_ai,
+        mode,
+        category,
+        intent: run.intent.clone(),
+        queries: queries::variants(&run.intent, mode),
     };
     if run.adapters.is_empty() {
         run.send(Ev::Phase { phase: "done" });
@@ -842,7 +1111,7 @@ pub fn research_retry_source(
         let adapters = [adapter];
         tokio::select! {
             () = token.cancelled() => {}
-            () = run_round(&run, &state.cache, &adapters, &queries) => {}
+            () = run_round(&run, &state.cache, &adapters, &queries) => release_held(&run, &state.cache),
         }
     });
     Ok(())
@@ -855,12 +1124,14 @@ pub async fn research_preview(
     engine: State<'_, Engine>,
     topic: String,
     category: Option<Category>,
+    mode: Option<Mode>,
 ) -> Result<Vec<Message>, String> {
     let history = history_for_ai(&ai, &engine).await;
-    Ok(assist::plan_messages(
+    Ok(assist::plan_messages_with(
         &topic.split_whitespace().collect::<Vec<_>>().join(" "),
         history.as_deref(),
         category.unwrap_or(Category::All),
+        mode.unwrap_or_default().config().system_instructions,
     ))
 }
 
@@ -961,7 +1232,12 @@ pub async fn research_add(
             });
             continue;
         };
-        if hit.kind == HitKind::Page || !riptide_core::batch::is_http_url(&hit.download_url) {
+        // a video page found by the video search is handed to yt-dlp (the media flow); any
+        // other page is not a file
+        let is_video_page = hit.source == Source::Youtube && hit.kind == HitKind::Page;
+        if (hit.kind == HitKind::Page && !is_video_page)
+            || !riptide_core::batch::is_http_url(&hit.download_url)
+        {
             out.skipped.push(AddSkip { id, reason: "page" });
             continue;
         }
@@ -978,7 +1254,12 @@ pub async fn research_add(
             dir: dir.clone(),
             queue_id: request.queue_id.map(QueueId),
             start_paused: request.start_paused,
-            referrer: hit.page_url.clone(),
+            referrer: (!is_video_page).then(|| hit.page_url.clone()).flatten(),
+            kind: if is_video_page {
+                DownloadKind::Media
+            } else {
+                DownloadKind::Http
+            },
             ..DownloadRequest::new(hit.download_url.clone())
         };
         let seen_hint = SeenHint {
@@ -1047,6 +1328,7 @@ pub async fn seen_forget(engine: State<'_, Engine>) -> Result<usize, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use riptide_research::relevance::assess;
 
     fn hit(src: Source, n: usize) -> Hit {
         Hit::new(
@@ -1156,7 +1438,11 @@ mod tests {
         assert_eq!(v["t"], "source");
         assert_eq!(v["source"], "libri-vox");
         assert_eq!(v["found"], 3);
-        let item = ResultItem::new(hit(Source::Arxiv, 1));
+        let h = hit(Source::Arxiv, 1);
+        let item = ResultItem::new(Assessed {
+            assessment: assess(&QueryIntent::parse("t1"), &h),
+            hit: h,
+        });
         let v = serde_json::to_value(&Ev::Hits {
             source: Source::Arxiv,
             items: vec![item],
@@ -1165,5 +1451,64 @@ mod tests {
         assert_eq!(v["t"], "hits");
         assert_eq!(v["items"][0]["rights"]["kind"], "unknown");
         assert_eq!(v["items"][0]["kind"], "file");
+        // the verdict travels with the result
+        assert_eq!(v["items"][0]["confidence"], "exact");
+        assert!(v["items"][0]["reasons"].is_array());
+        assert!(v["items"][0]["matchScore"].is_u64());
+        assert_eq!(v["items"][0]["trust"], "primary");
+        // fields only present when a source returned them
+        assert!(v["items"][0]["durationSecs"].is_null());
+        assert!(v["items"][0]["thumbnail"].is_null());
+    }
+
+    #[test]
+    fn new_events_have_the_documented_shape() {
+        let v = serde_json::to_value(Ev::Summary {
+            exact: 2,
+            strong: 1,
+            hidden: 9,
+            stop: Some(StopReason::EnoughExact),
+        })
+        .unwrap();
+        assert_eq!(v["t"], "summary");
+        assert_eq!(v["hidden"], 9);
+        assert_eq!(v["stop"], "enough-exact");
+        let v = serde_json::to_value(Ev::Rank {
+            items: vec![RankedItem {
+                id: "x".into(),
+                score: 80,
+                why: "w".into(),
+                confidence: MatchClass::Strong,
+            }],
+        })
+        .unwrap();
+        assert_eq!(v["items"][0]["confidence"], "strong");
+        let v = serde_json::to_value(Ev::Compare {
+            comparison: Comparison::default(),
+        })
+        .unwrap();
+        assert_eq!(v["t"], "compare");
+    }
+
+    #[test]
+    fn a_search_must_name_its_category_and_old_ids_still_work() {
+        // no silent "all": a request without a category does not even parse
+        assert!(serde_json::from_str::<SearchRequest>(r#"{"topic":"x"}"#).is_err());
+        let req = |c: &str| -> SearchRequest {
+            serde_json::from_str(&format!(r#"{{"topic":"x","category":"{c}"}}"#)).unwrap()
+        };
+        assert_eq!(req("videos").mode, Mode::QuickSearch);
+        // stored history ids map to the seven
+        assert_eq!(req("video").category.canonical(), Some(Category::Video));
+        assert_eq!(req("papers").category.canonical(), Some(Category::Academic));
+        assert_eq!(req("books").category.canonical(), Some(Category::Documents));
+        // the ones with no home are refused by research_start
+        for c in ["all", "music", "datasets"] {
+            assert_eq!(req(c).category.canonical(), None, "{c}");
+        }
+        let r: SearchRequest =
+            serde_json::from_str(r#"{"topic":"x","category":"web","mode":"deep-research"}"#)
+                .unwrap();
+        assert_eq!(r.mode, Mode::DeepResearch);
     }
 }
