@@ -23,7 +23,7 @@ import { UpdateCardComponent } from '../update-card.component';
   imports: [SettingGroupComponent, SettingRowComponent, SwitchComponent, SegmentedControlComponent, ButtonComponent, UpdateCardComponent],
   template: `
     <app-setting-group anchor="about" [heading]="i18n.t('set.g.updates')">
-      <div class="card-wrap"><app-update-card /></div>
+      <app-update-card />
       <app-setting-row [clickable]="true" [label]="i18n.t('settings.autoUpdate')" [description]="i18n.t('settings.autoUpdateDesc')">
         <app-switch [checked]="s().checkUpdates" [label]="i18n.t('settings.autoUpdate')" (checkedChange)="patch({ checkUpdates: $event })" />
       </app-setting-row>
@@ -45,11 +45,6 @@ import { UpdateCardComponent } from '../update-card.component';
         <button appButton variant="secondary" size="sm" icon="book" type="button" (click)="open(docsUrl)">{{ i18n.t('set.openGuide') }}</button>
       </app-setting-row>
     </app-setting-group>
-  `,
-  styles: `
-    .card-wrap {
-      padding-inline: var(--space-5);
-    }
   `,
 })
 export class UpdatesSectionComponent {

@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit } from '@angular/core';
 
-import { FORM_STYLES } from '../../ai/ai-styles';
 import { effectiveChannel } from '../../core/update-channel';
 import { CHECK_INTERVAL_OPTIONS_HOURS, UpdateService } from '../../core/update.service';
 import { FormatService } from '../../core/format.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { ButtonComponent } from '../../ui/button.component';
 import { ToastService } from '../../ui/toast.service';
+import { SettingRowComponent } from './setting-layout.component';
 import { SettingsService } from './settings.service';
 
 /**
@@ -22,49 +22,40 @@ import { SettingsService } from './settings.service';
 @Component({
   selector: 'app-update-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent],
+  imports: [ButtonComponent, SettingRowComponent],
   template: `
     <div class="update-card">
-      <div class="setting">
-        <div class="setting-text">
-          <span class="setting-name">{{ i18n.t('update.version') }} <span class="num" dir="ltr">{{ updates.currentVersion() ?? '—' }}</span></span>
-          <span class="setting-desc">
-            {{ i18n.t('update.channel') }}: {{ channelLabel() }} · {{ lastCheckText() }}
-          </span>
-        </div>
-        <button appButton variant="secondary" icon="retry" type="button" [disabled]="busy()" (click)="check()">
+      <app-setting-row
+        [label]="i18n.t('update.version') + ' ' + versionText()"
+        [description]="i18n.t('update.channel') + ': ' + channelLabel() + ' · ' + lastCheckText()"
+      >
+        <button appButton variant="secondary" size="sm" icon="retry" type="button" [disabled]="busy()" (click)="check()">
           {{ i18n.t(updates.status() === 'checking' ? 'settings.checkingUpdates' : 'update.checkNow') }}
         </button>
-      </div>
+      </app-setting-row>
 
-      <div class="setting column state" role="status" aria-live="polite">
-        <div class="setting-text">
-          <span class="setting-name" [class.is-error]="updates.status() === 'error'" [class.is-update]="updates.available() !== null">{{ stateText() }}</span>
-          @if (errorText(); as text) {
-            <span class="setting-desc is-error">{{ text }}</span>
-          }
+      <div class="state" role="status" aria-live="polite" [class.is-error]="updates.status() === 'error'" [class.is-update]="updates.available() !== null">
+        <app-setting-row [stack]="true" [label]="stateText()" [description]="errorText()">
           @if (updates.available(); as update) {
             @if (update.notes) {
-              <span class="setting-desc update-notes" dir="auto">{{ update.notes }}</span>
+              <span class="sr-note full update-notes" dir="auto">{{ update.notes }}</span>
             }
           }
-        </div>
 
-        @if (updates.status() === 'downloading') {
-          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="percent() ?? null" [attr.aria-label]="i18n.t('update.downloading')">
-            <div class="bar-fill" [class.is-unknown]="percent() === null" [style.inline-size.%]="percent() ?? 40"></div>
-          </div>
-        }
+          @if (updates.status() === 'downloading') {
+            <div class="bar full" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="percent() ?? null" [attr.aria-label]="i18n.t('update.downloading')">
+              <div class="bar-fill" [class.is-unknown]="percent() === null" [style.inline-size.%]="percent() ?? 40"></div>
+            </div>
+          }
 
-        @if (updates.blockedByDownloads()) {
-          <span class="setting-desc">{{ i18n.t('update.blocked') }}</span>
-        }
-        @if (updates.installScheduled()) {
-          <span class="setting-desc">{{ i18n.t('update.scheduled') }}</span>
-        }
+          @if (updates.blockedByDownloads()) {
+            <span class="sr-note full">{{ i18n.t('update.blocked') }}</span>
+          }
+          @if (updates.installScheduled()) {
+            <span class="sr-note full">{{ i18n.t('update.scheduled') }}</span>
+          }
 
-        @if (updates.available() !== null) {
-          <div class="actions">
+          @if (updates.available() !== null) {
             @if (updates.installScheduled()) {
               <button appButton variant="secondary" type="button" (click)="updates.cancelScheduledInstall()">{{ i18n.t('update.cancelScheduled') }}</button>
             } @else if (updates.blockedByDownloads()) {
@@ -77,48 +68,44 @@ import { SettingsService } from './settings.service';
                 {{ i18n.t(updates.status() === 'installing' ? 'settings.updateInstalling' : 'settings.updateRestart') }}
               </button>
             }
-          </div>
-        } @else if (updates.status() === 'error') {
-          <div class="actions">
+          } @else if (updates.status() === 'error') {
             <button appButton variant="primary" icon="retry" type="button" (click)="retry()">{{ i18n.t('update.retry') }}</button>
-          </div>
-        }
+          }
+        </app-setting-row>
       </div>
 
-      <label class="setting">
-        <div class="setting-text">
-          <span class="setting-name">{{ i18n.t('update.interval') }}</span>
-          <span class="setting-desc">{{ i18n.t('update.intervalDesc') }}</span>
-        </div>
-        <select class="input interval" [disabled]="!settings.settings().checkUpdates" [value]="updates.intervalHours()" (change)="setInterval($event)">
+      <app-setting-row [clickable]="true" [label]="i18n.t('update.interval')" [description]="i18n.t('update.intervalDesc')">
+        <select class="sr-input interval" [disabled]="!settings.settings().checkUpdates" [value]="updates.intervalHours()" (change)="setInterval($event)">
           @for (h of intervals; track h) {
             <option [value]="h" [selected]="h === updates.intervalHours()">{{ everyLabel(h) }}</option>
           }
         </select>
-      </label>
+      </app-setting-row>
     </div>
   `,
   styles: [
-    FORM_STYLES,
     `
-      .is-update {
+      .update-card > * + * {
+        border-block-start: 1px solid var(--color-border);
+      }
+
+      .state.is-update ::ng-deep .sr-name {
         color: var(--color-accent);
       }
 
-      .is-error {
+      .state.is-error ::ng-deep .sr-name,
+      .state.is-error ::ng-deep .sr-desc {
         color: var(--color-danger);
+      }
+
+      .full {
+        flex: 1 1 100%;
       }
 
       .update-notes {
         white-space: pre-line;
         max-block-size: 12rem;
         overflow: auto;
-      }
-
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-2);
       }
 
       .bar {
@@ -166,6 +153,9 @@ export class UpdateCardComponent implements OnInit {
   protected readonly settings = inject(SettingsService);
   private readonly format = inject(FormatService);
   private readonly toasts = inject(ToastService);
+
+  /** The running version as shown in the row label. */
+  protected readonly versionText = computed(() => this.updates.currentVersion() ?? '—');
 
   protected readonly intervals = CHECK_INTERVAL_OPTIONS_HOURS;
 
