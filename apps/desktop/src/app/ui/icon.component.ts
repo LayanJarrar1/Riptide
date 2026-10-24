@@ -57,13 +57,15 @@ const PATHS: Readonly<Record<string, string>> = {
   sparkles: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
   edit: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7M8 11h5',
+  code: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16',
+  panelStart: 'M3 5h18v14H3zM9 5v14',
 };
 
 /** Icon names available to templates. */
 export type IconName = keyof typeof PATHS;
 
 /** Icons that point along the reading direction and must mirror in RTL. */
-const DIRECTIONAL = new Set<IconName>(['chevronEnd', 'chevronStart', 'external', 'folderOpen']);
+const DIRECTIONAL = new Set<IconName>(['chevronEnd', 'chevronStart', 'external', 'folderOpen', 'panelStart']);
 
 @Component({
   selector: 'app-icon',
