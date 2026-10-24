@@ -33,7 +33,7 @@ import { UpdateCardComponent } from '../update-card.component';
     </app-setting-group>
 
     <app-setting-group [heading]="i18n.t('set.g.about')">
-      <app-setting-row [label]="'Riptide ' + (tauri.appInfo()?.version ?? '0.1.0')" [description]="i18n.t('settings.aboutDesc')">
+      <app-setting-row [label]="'Riptide ' + (tauri.appInfo()?.version ?? '0.1.0')" [isolate]="tauri.appInfo()?.version ?? '0.1.0'" [description]="i18n.t('settings.aboutDesc')">
         @if (tauri.appInfo()?.build; as build) {
           <span class="sr-value num" dir="ltr">{{ i18n.t('set.build') }} {{ build }}</span>
         }

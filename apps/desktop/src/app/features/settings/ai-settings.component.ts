@@ -55,7 +55,7 @@ export type ProviderState = 'off' | 'untested' | 'working' | 'failing';
         }
 
         <app-setting-row [label]="i18n.t('set.ai.usage')" [description]="i18n.t('set.ai.usageDesc')">
-          <span class="sr-value num" data-testid="ai-usage">{{ i18n.t('ai.budgetUsed').replace('{tokens}', fmt.int(st.usage.tokens)).replace('{requests}', fmt.int(st.usage.requests)) }}</span>
+          <span class="sr-value num" data-testid="ai-usage">{{ usageText(st.usage.tokens, st.usage.requests) }}</span>
         </app-setting-row>
       }
     </app-setting-group>
@@ -192,6 +192,14 @@ export class AiSettingsComponent implements OnInit {
   protected readonly i18n = inject(I18nService);
   protected readonly ai = inject(AiService);
   protected readonly fmt = inject(FormatService);
+
+  /** "Today: 1,200 tokens in 3 requests", each count in the plural form of the language. */
+  protected usageText(tokens: number, requests: number): string {
+    return this.i18n
+      .t('ai.budgetUsed')
+      .replace('{tokens}', this.i18n.plural('ai.usageTokens', tokens).replace('{n}', this.fmt.int(tokens)))
+      .replace('{requests}', this.i18n.plural('ai.usageRequests', requests).replace('{n}', this.fmt.int(requests)));
+  }
   private readonly toasts = inject(ToastService);
 
   protected readonly status = this.ai.status;

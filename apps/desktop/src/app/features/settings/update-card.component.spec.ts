@@ -77,6 +77,13 @@ describe('UpdateCardComponent', () => {
     expect(button('Check now')).toBeDefined();
   });
 
+  it('isolates the version number so Arabic text cannot reorder it', async () => {
+    render();
+    await refresh();
+    const bdi = (fixture.nativeElement as HTMLElement).querySelector('bdi[dir="ltr"]');
+    expect(bdi?.textContent).toBe('0.1.0-beta.1');
+  });
+
   it('says up to date when there is no update', async () => {
     render();
     answer = null;

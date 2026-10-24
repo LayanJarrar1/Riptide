@@ -62,6 +62,11 @@ export interface SegmentedOption<T extends string> {
       opacity: 0.6;
     }
 
+    /* a locked group still shows what is selected at full strength; only the other choices dim */
+    .segment.is-active:disabled {
+      opacity: 1;
+    }
+
     .segment:hover:not(:disabled) {
       color: var(--color-text);
       background: var(--color-surface-hover);

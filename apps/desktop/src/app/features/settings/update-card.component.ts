@@ -27,6 +27,7 @@ import { SettingsService } from './settings.service';
     <div class="update-card">
       <app-setting-row
         [label]="i18n.t('update.version') + ' ' + versionText()"
+        [isolate]="versionText()"
         [description]="i18n.t('update.channel') + ': ' + channelLabel() + ' · ' + lastCheckText()"
       >
         <button appButton variant="secondary" size="sm" icon="retry" type="button" [disabled]="busy()" (click)="check()">
@@ -35,7 +36,7 @@ import { SettingsService } from './settings.service';
       </app-setting-row>
 
       <div class="state" role="status" aria-live="polite" [class.is-error]="updates.status() === 'error'" [class.is-update]="updates.available() !== null">
-        <app-setting-row [stack]="true" [label]="stateText()" [description]="errorText()">
+        <app-setting-row [stack]="true" [label]="stateText()" [isolate]="updates.available()?.version ?? null" [description]="errorText()">
           @if (updates.available(); as update) {
             @if (update.notes) {
               <span class="sr-note full update-notes" dir="auto">{{ update.notes }}</span>

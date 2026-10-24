@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, input, ViewEncapsulation } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, ViewEncapsulation } from '@angular/core';
 
 /**
  * Styles shared by every Settings section: groups (a titled card), rows (text on the start side,
@@ -322,7 +322,13 @@ export class SettingGroupComponent {
   template: `
     <ng-template #body>
       <div class="sr-text">
-        <span class="sr-name">{{ label() }}</span>
+        <span class="sr-name">
+          @if (labelParts(); as parts) {
+            {{ parts[0] }}<bdi dir="ltr">{{ parts[1] }}</bdi>{{ parts[2] }}
+          } @else {
+            {{ label() }}
+          }
+        </span>
         @if (description(); as text) {
           <span class="sr-desc">{{ text }}</span>
         }
@@ -338,8 +344,18 @@ export class SettingGroupComponent {
 })
 export class SettingRowComponent {
   readonly label = input.required<string>();
+  /** A piece of the label that must keep its left-to-right order inside Arabic text (a version number). */
+  readonly isolate = input<string | null>(null);
   readonly description = input<string | null>(null);
   readonly stack = input(false);
   readonly field = input(false);
   readonly clickable = input(false);
+
+  /** The label split around the isolated piece, or `null` when there is nothing to isolate. */
+  protected readonly labelParts = computed<readonly [string, string, string] | null>(() => {
+    const piece = this.isolate();
+    const label = this.label();
+    const at = piece ? label.indexOf(piece) : -1;
+    return piece && at >= 0 ? [label.slice(0, at), piece, label.slice(at + piece.length)] : null;
+  });
 }
