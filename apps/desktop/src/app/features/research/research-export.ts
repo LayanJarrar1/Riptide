@@ -166,6 +166,11 @@ function citeKey(i: TurnItem, used: Set<string>): string {
   return key;
 }
 
+/** Braces would unbalance a BibTeX field; identifiers and addresses never need them (in an address they are percent-encoded). */
+function noBraces(text: string): string {
+  return text.replace(/\{/g, '%7B').replace(/\}/g, '%7D');
+}
+
 /** BibTeX for the citable results; `skipped` counts the ones that had too little to cite. */
 export function toBibtex(items: readonly TurnItem[]): { text: string; count: number; skipped: number } {
   const used = new Set<string>();
@@ -182,13 +187,13 @@ export function toBibtex(items: readonly TurnItem[]): { text: string; count: num
       fields.push(['year', String(i.year)]);
     }
     if (i.doi) {
-      fields.push(['doi', i.doi]);
+      fields.push(['doi', noBraces(i.doi)]);
     }
     if (i.arxiv) {
-      fields.push(['eprint', i.arxiv], ['archivePrefix', 'arXiv']);
+      fields.push(['eprint', noBraces(i.arxiv)], ['archivePrefix', 'arXiv']);
     }
     // identifiers and addresses are machine-readable: no TeX escapes, only the braces that would unbalance the field
-    fields.push(['url', (i.pageUrl ?? i.downloadUrl).replace(/\{/g, '%7B').replace(/\}/g, '%7D')]);
+    fields.push(['url', noBraces(i.pageUrl ?? i.downloadUrl)]);
     const body = fields.map(([k, v]) => `  ${k} = {${v}}`).join(',\n');
     entries.push(`@misc{${citeKey(i, used)},\n${body}\n}`);
   }
