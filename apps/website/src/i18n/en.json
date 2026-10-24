@@ -428,6 +428,7 @@
     "sums": "SHA-256 checksums",
     "allReleases": "All releases",
     "note": "A beta build. Expect rough edges, and tell us about them.",
+    "smartscreen": "Windows SmartScreen may warn about the installer because it is not code-signed yet. That is expected for a new, unsigned app. If you downloaded it from this page or the Releases page, choose More info, then Run anyway. To be sure the file is the one we published, run certutil -hashfile on it with SHA256 and compare the result with the SHA-256 checksums list.",
     "ext": {
       "title": "Install the extension in Chrome or Edge",
       "lead": "Sends downloads from Chrome and Edge to Riptide. Adds \"Download this video\" with a quality picker, download all or selected links and all images, and capture rules.",
@@ -451,7 +452,7 @@
     },
     "upd": {
       "h": "Always up to date",
-      "p": "Riptide checks GitHub Releases at most once a day and shows a notification when a new version exists. One click installs it, and updates are signed. You can turn the check off in Settings. It is the only network call besides your downloads."
+      "p": "Riptide checks GitHub Releases at most once a day and shows a notification when a new version exists. One click installs it, and updates are signed. You can turn the check off in Settings. It is the only call Riptide makes on its own; everything else happens when you start it (downloads, torrents, search, video support updates). See the privacy page for the full list."
     }
   },
   "footer": {
@@ -463,7 +464,8 @@
     "licenseLink": "License",
     "privacy": "Privacy",
     "feedback": "Feedback",
-    "version": "Version"
+    "version": "Version",
+    "legal": "Use Riptide only for files you have the right to download. It is provided as is, without warranty of any kind, as the GPL-3.0 and MIT / Apache-2.0 licenses state."
   },
   "privacy": {
     "meta": {

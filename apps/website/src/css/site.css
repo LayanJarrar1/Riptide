@@ -718,12 +718,13 @@ html:is(.anim, .calm).js-ready .cta:not(.in) .cta-lines path { stroke-dashoffset
 /* ---- Footer ------------------------------------------------------------------------------ */
 .site-footer { padding-block: 32px 24px; border-top: 1px solid var(--line); }
 .footer-grid { display: grid; gap: 16px; }
-@media (min-width: 900px) { .footer-grid { grid-template-columns: 1fr 1.4fr; align-items: start; } .footer-meta { grid-column: 1 / -1; } }
+@media (min-width: 900px) { .footer-grid { grid-template-columns: 1fr 1.4fr; align-items: start; } .footer-meta, .footer-legal { grid-column: 1 / -1; } }
 .footer-brand { display: grid; gap: 8px; justify-items: start; color: var(--fg2); }
 .footer-logo { height: 26px; width: auto; }
 .footer-links { display: flex; flex-wrap: wrap; gap: 4px 22px; justify-content: flex-start; }
 .footer-links a { display: inline-flex; min-height: 36px; align-items: center; color: var(--fg2); text-decoration: none; font-weight: 550; font-size: .9375rem; transition: color var(--dur-1); }
 .footer-links a:hover { color: var(--fg); }
+.footer-legal { margin: 0; font-size: .8125rem; color: var(--fg2); max-width: 70ch; }
 .footer-meta { display: flex; flex-wrap: wrap; gap: 6px 20px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .8125rem; color: var(--fg2); }
 
 /* ---- Legal and 404 ----------------------------------------------------------------------- */
