@@ -387,3 +387,23 @@ optional extra that cannot change a verdict.
   or script than the query are found only when the AI plan translates them; look-alike titles
   ("Hubble Ultra Deep Field" for "Hubble Deep Field") and reactions/reviews that repeat the title
   and episode pass the title rules; a title with a subtitle after `:` / ` - ` counts as the title.
+
+## D-research-thumbs-1: Result thumbnails are fetched by the backend, the CSP stays strict
+
+- **Problem.** Result cards carry a `thumbnail` address from the source (YouTube through yt-dlp,
+  Wikimedia Commons, Openverse, NASA, Internet Archive). The webview's CSP is `img-src 'self' data:`,
+  so those never load in the real app.
+- **Decision.** Do not loosen the CSP (an open `img-src` lets any page content or injected markup
+  phone home). Instead `research_thumbnail(id)` looks the hit up in the backend result cache and
+  fetches only the thumbnail address that the source itself reported for it; an address from the
+  webview is never accepted. It returns a `data:` URL, or `None` (the card keeps its icon).
+- **Limits.** `http(s)` only; private, loopback and link-local targets refused (also on each of at
+  most 3 redirects) through the same `NetGuard::blocking` guard and guarded DNS resolver as other
+  untrusted addresses; no cookies and no credentials; 8 s for the whole request; at most 512 KiB,
+  counted as the body arrives (a larger `Content-Length` is refused up front); the content type must
+  be `image/jpeg`, `png`, `webp` or `gif` and the first bytes must match it (SVG is refused). Results,
+  and refusals, are kept in a 100-entry in-memory LRU so scrolling does not refetch. Nothing is
+  written to disk and URLs are logged without their query string, or not at all.
+- **Privacy.** The only requests are those that follow a search the user started, one per result
+  card that scrolls into view (3 at a time), to the host that already serves that result. No
+  telemetry; the website privacy text lists this under Research.

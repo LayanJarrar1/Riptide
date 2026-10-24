@@ -503,7 +503,7 @@
           "Riptide connects to the servers of the files you choose to download and, only when you use the features described below, to the services those features need.",
           "The only request it makes on its own is an optional check for a new version against GitHub Releases (github.com), at most once a day. It sends nothing about you beyond what any web request carries, such as your IP address, and it can be turned off in Settings. GitHub's own privacy statement applies to that request. Update video support, in Settings, fetches the newest yt-dlp only when you press it.",
           "Torrents. When you add a magnet link or a .torrent file, Riptide connects to the peers, trackers and DHT nodes of that torrent, which can see your IP address, as with any torrent client. Seeding is off by default.",
-          "Research. When you search, your words go to the open sources you left switched on (for example OpenAlex, arXiv, Wikimedia Commons and GitHub), and to Brave Search or a SearXNG instance only if you set one up.",
+          "Research. When you search, your words go to the open sources you left switched on (for example OpenAlex, arXiv, Wikimedia Commons and GitHub), and to Brave Search or a SearXNG instance only if you set one up. Riptide then fetches the small preview image of the results you are shown, from the site that hosts each one, and nothing else.",
           "AI, optional and off until you set it up. The search text, the list of results and, only if you turn that on, the titles of up to 25 recent downloads go to the provider you chose, using your own API key. The key is kept in Windows Credential Manager and is never written to Riptide's settings, database or logs. There is no Riptide server in between."
         ]
       },
