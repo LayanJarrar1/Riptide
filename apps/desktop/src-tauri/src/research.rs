@@ -514,6 +514,8 @@ impl HitCache {
 pub struct ResearchState {
     adapters: Vec<Arc<dyn SearchSource>>,
     cache: Mutex<HitCache>,
+    thumbs: Mutex<ThumbCache>,
+    thumb_client: std::sync::OnceLock<Option<reqwest::Client>>,
     runs: Mutex<Vec<Arc<Run>>>,
     next_id: AtomicU64,
 }
@@ -526,6 +528,8 @@ impl Default for ResearchState {
                 .filter_map(|s| default_source(*s))
                 .collect(),
             cache: Mutex::new(HitCache::new(CACHE_MAX)),
+            thumbs: Mutex::new(ThumbCache::new(THUMB_CACHE_MAX)),
+            thumb_client: std::sync::OnceLock::new(),
             runs: Mutex::new(Vec::new()),
             next_id: AtomicU64::new(1),
         }
@@ -1325,6 +1329,187 @@ pub async fn seen_forget(engine: State<'_, Engine>) -> Result<usize, String> {
     engine.seen_forget().await.map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------- thumbnails
+
+/// Most thumbnails kept in memory (as ready `data:` URLs).
+const THUMB_CACHE_MAX: usize = 100;
+/// Most bytes read for one thumbnail; more is refused.
+const THUMB_MAX_BYTES: usize = 512 * 1024;
+/// Whole request budget for one thumbnail.
+const THUMB_TIMEOUT: Duration = Duration::from_secs(8);
+/// Redirects followed for a thumbnail (each hop is checked like the first address).
+const THUMB_MAX_HOPS: usize = 3;
+
+/// Thumbnails already fetched, newest use last; `None` remembers a refusal so scrolling does not
+/// retry it.
+struct ThumbCache {
+    map: HashMap<String, Option<String>>,
+    order: VecDeque<String>,
+    max: usize,
+}
+
+impl ThumbCache {
+    fn new(max: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+            max,
+        }
+    }
+
+    fn get(&mut self, id: &str) -> Option<Option<String>> {
+        let v = self.map.get(id)?.clone();
+        if let Some(i) = self.order.iter().position(|k| k == id) {
+            if let Some(k) = self.order.remove(i) {
+                self.order.push_back(k);
+            }
+        }
+        Some(v)
+    }
+
+    fn put(&mut self, id: &str, v: Option<String>) {
+        if self.map.insert(id.to_owned(), v).is_some() {
+            self.order.retain(|k| k != id);
+        }
+        self.order.push_back(id.to_owned());
+        while self.map.len() > self.max {
+            match self.order.pop_front() {
+                Some(old) => {
+                    self.map.remove(&old);
+                }
+                None => break,
+            }
+        }
+    }
+}
+
+/// The image type that `bytes` start with, from its signature.
+fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some("image/png")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
+}
+
+/// Fetches one thumbnail and returns it as a `data:` URL, or `None` when anything is off: not
+/// `http(s)`, a private or special address (also after a redirect), no cookies sent, longer than
+/// [`THUMB_MAX_BYTES`] (read bounded as it arrives), a content type other than jpeg / png / webp /
+/// gif, or bytes whose signature does not match that type.
+async fn fetch_thumbnail(
+    client: &reqwest::Client,
+    guard: &riptide_net::NetGuard,
+    url: &str,
+) -> Option<String> {
+    use base64::Engine as _;
+    let mut current = riptide_net::parse_http_url(url).ok()?;
+    let mut hops = 0;
+    let mut resp = loop {
+        // production always passes `NetGuard::blocking()`; tests pass `off()` to reach a loopback mock
+        if guard.blocks() && guard.is_private_host(&current).await {
+            return None;
+        }
+        let r = tokio::time::timeout(THUMB_TIMEOUT, client.get(current.clone()).send())
+            .await
+            .ok()?
+            .ok()?;
+        if r.status().is_redirection() {
+            hops += 1;
+            let next = r.headers().get(reqwest::header::LOCATION)?.to_str().ok()?;
+            current = riptide_net::parse_http_url(current.join(next).ok()?.as_str()).ok()?;
+            if hops > THUMB_MAX_HOPS {
+                return None;
+            }
+            continue;
+        }
+        break r;
+    };
+    if !resp.status().is_success() {
+        return None;
+    }
+    let declared = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .next()?
+        .trim()
+        .to_ascii_lowercase();
+    let declared = if declared == "image/jpg" {
+        "image/jpeg".to_owned()
+    } else {
+        declared
+    };
+    if !matches!(
+        declared.as_str(),
+        "image/jpeg" | "image/png" | "image/webp" | "image/gif"
+    ) {
+        return None;
+    }
+    if resp
+        .content_length()
+        .is_some_and(|n| n > THUMB_MAX_BYTES as u64)
+    {
+        return None;
+    }
+    let mut body: Vec<u8> = Vec::new();
+    let read = async {
+        while let Ok(Some(chunk)) = resp.chunk().await {
+            if body.len() + chunk.len() > THUMB_MAX_BYTES {
+                return false;
+            }
+            body.extend_from_slice(&chunk);
+        }
+        true
+    };
+    if !tokio::time::timeout(THUMB_TIMEOUT, read).await.ok()? {
+        return None;
+    }
+    if sniff_image(&body)? != declared {
+        return None;
+    }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&body);
+    Some(format!("data:{declared};base64,{b64}"))
+}
+
+/// The thumbnail of a result of this app run as a `data:` URL, for the cards (the webview's
+/// content security policy admits only `data:` images, by design). The address is the one the
+/// source reported for that hit; nothing the webview sends is ever fetched. `None` when the id is
+/// unknown, the hit has no thumbnail, or the image is refused (see `fetch_thumbnail`).
+#[tauri::command]
+pub async fn research_thumbnail(
+    state: State<'_, ResearchState>,
+    id: String,
+) -> Result<Option<String>, String> {
+    Ok(thumbnail_for(&state, &id).await)
+}
+
+async fn thumbnail_for(state: &ResearchState, id: &str) -> Option<String> {
+    if let Some(v) = Run::lock(&state.thumbs).get(id) {
+        return v;
+    }
+    let url = Run::lock(&state.cache)
+        .get(id)
+        .and_then(|h| h.thumbnail.clone())?;
+    let guard = riptide_net::NetGuard::blocking();
+    let client = state.thumb_client.get_or_init(|| {
+        riptide_net::build_client_guarded(&riptide_net::ClientOptions::default(), &guard).ok()
+    });
+    let out = match client {
+        Some(c) => fetch_thumbnail(c, &guard, &url).await,
+        None => None,
+    };
+    Run::lock(&state.thumbs).put(id, out.clone());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1510,5 +1695,123 @@ mod tests {
             serde_json::from_str(r#"{"topic":"x","category":"web","mode":"deep-research"}"#)
                 .unwrap();
         assert_eq!(r.mode, Mode::DeepResearch);
+    }
+
+    // ---- thumbnails
+
+    const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0];
+
+    async fn serve(
+        path: &str,
+        ct: &str,
+        body: Vec<u8>,
+    ) -> (wiremock::MockServer, String, reqwest::Client) {
+        use wiremock::matchers::{method, path as p};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(p(path))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(body, ct))
+            .mount(&server)
+            .await;
+        let url = format!("{}{path}", server.uri());
+        let client = riptide_net::build_client(&riptide_net::ClientOptions::default()).unwrap();
+        (server, url, client)
+    }
+
+    #[tokio::test]
+    async fn thumbnail_becomes_a_data_url() {
+        let (_s, url, c) = serve("/t.png", "image/png", PNG.to_vec()).await;
+        let g = riptide_net::NetGuard::off();
+        let out = fetch_thumbnail(&c, &g, &url).await.unwrap();
+        assert!(out.starts_with("data:image/png;base64,"));
+    }
+
+    #[tokio::test]
+    async fn thumbnail_refuses_private_addresses() {
+        let (_s, url, c) = serve("/t.png", "image/png", PNG.to_vec()).await;
+        // the mock server listens on 127.0.0.1
+        let g = riptide_net::NetGuard::blocking();
+        assert_eq!(fetch_thumbnail(&c, &g, &url).await, None);
+    }
+
+    #[tokio::test]
+    async fn thumbnail_refuses_other_schemes() {
+        let c = riptide_net::build_client(&riptide_net::ClientOptions::default()).unwrap();
+        let g = riptide_net::NetGuard::off();
+        for u in [
+            "file:///etc/passwd",
+            "ftp://example.org/a.png",
+            "data:image/png;base64,AAAA",
+            "javascript:1",
+        ] {
+            assert_eq!(fetch_thumbnail(&c, &g, u).await, None, "{u}");
+        }
+    }
+
+    #[tokio::test]
+    async fn thumbnail_refuses_oversized_images() {
+        let mut big = PNG.to_vec();
+        big.resize(THUMB_MAX_BYTES + 1, 0);
+        let (_s, url, c) = serve("/big.png", "image/png", big).await;
+        let g = riptide_net::NetGuard::off();
+        assert_eq!(fetch_thumbnail(&c, &g, &url).await, None);
+        let mut ok = PNG.to_vec();
+        ok.resize(THUMB_MAX_BYTES, 0);
+        let (_s2, url2, c2) = serve("/ok.png", "image/png", ok).await;
+        assert!(fetch_thumbnail(&c2, &g, &url2).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn thumbnail_refuses_wrong_type_or_signature() {
+        let g = riptide_net::NetGuard::off();
+        let (_s, url, c) = serve("/a", "text/html", PNG.to_vec()).await;
+        assert_eq!(fetch_thumbnail(&c, &g, &url).await, None);
+        let (_s2, url2, c2) = serve("/b", "image/svg+xml", b"<svg/>".to_vec()).await;
+        assert_eq!(fetch_thumbnail(&c2, &g, &url2).await, None);
+        // says png, is not
+        let (_s3, url3, c3) = serve("/c", "image/png", b"<html>nope</html>".to_vec()).await;
+        assert_eq!(fetch_thumbnail(&c3, &g, &url3).await, None);
+        // says jpeg, is png
+        let (_s4, url4, c4) = serve("/d", "image/jpeg", PNG.to_vec()).await;
+        assert_eq!(fetch_thumbnail(&c4, &g, &url4).await, None);
+    }
+
+    #[test]
+    fn signatures_are_recognised() {
+        assert_eq!(sniff_image(&[0xFF, 0xD8, 0xFF, 0xE0]), Some("image/jpeg"));
+        assert_eq!(sniff_image(b"GIF89a.."), Some("image/gif"));
+        assert_eq!(sniff_image(b"RIFF\0\0\0\0WEBPVP8 "), Some("image/webp"));
+        assert_eq!(sniff_image(b"RIFF\0\0\0\0WAVEfmt "), None);
+        assert_eq!(sniff_image(b""), None);
+    }
+
+    #[test]
+    fn thumb_cache_is_bounded_and_remembers_refusals() {
+        let mut c = ThumbCache::new(2);
+        c.put("a", Some("x".into()));
+        c.put("b", None);
+        assert_eq!(c.get("a"), Some(Some("x".into())));
+        c.put("c", Some("y".into()));
+        // `b` was the least recently used
+        assert_eq!(c.get("b"), None);
+        assert_eq!(c.get("a"), Some(Some("x".into())));
+        assert_eq!(c.get("c"), Some(Some("y".into())));
+    }
+
+    #[tokio::test]
+    async fn unknown_thumbnail_id_gives_none() {
+        let state = ResearchState::default();
+        assert_eq!(thumbnail_for(&state, "nope:1").await, None);
+        // a known hit whose thumbnail is a loopback address is refused, and the refusal is cached
+        let mut h = hit(Source::Arxiv, 1);
+        h.thumbnail = Some("http://127.0.0.1:9/t.png".into());
+        Run::lock(&state.cache).insert(std::slice::from_ref(&h));
+        assert_eq!(thumbnail_for(&state, &h.id).await, None);
+        assert_eq!(Run::lock(&state.thumbs).get(&h.id), Some(None));
+        // a hit without a thumbnail has nothing to fetch
+        let bare = hit(Source::Arxiv, 2);
+        Run::lock(&state.cache).insert(std::slice::from_ref(&bare));
+        assert_eq!(thumbnail_for(&state, &bare.id).await, None);
     }
 }

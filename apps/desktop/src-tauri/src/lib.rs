@@ -392,6 +392,7 @@ pub fn run() {
             research::research_remove_secret,
             research::research_preview,
             research::research_add,
+            research::research_thumbnail,
             research::seen_check,
             research::seen_settings,
             research::seen_set_skip,

@@ -55,6 +55,8 @@ riptide-fs = { workspace = true }
 riptide-store = { workspace = true }
 chrono = { workspace = true }
 tokio-util = { workspace = true }
+reqwest = { workspace = true }
+base64 = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 # HKCU Native Messaging keys; a safe wrapper over the registry API (no `unsafe` in this crate)
@@ -72,7 +74,6 @@ sha2 = { workspace = true }
 wiremock = "0.6"
 # real signatures for the updater specs (generates a throw-away key pair per test)
 minisign = "0.10"
-base64 = { workspace = true }
 semver = "1"
 tauri = { version = "2", features = ["test"] }
 tracing-subscriber = { workspace = true }
