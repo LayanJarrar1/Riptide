@@ -436,7 +436,8 @@ export class ResearchPageComponent implements OnInit {
     const conv = this.history.active() ?? this.history.startConversation(prompt);
     const reusable = this.findReusable(conv.turns, prompt, category, useAi);
     if (reusable !== null) {
-      this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
+      // the copy keeps the original's time, so repeating a prompt never stretches the reuse window
+      this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi, reusable.createdAt), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
     } else {
       void this.run(conv.id, emptyTurn(prompt, category, useAi));
     }
@@ -460,7 +461,7 @@ export class ResearchPageComponent implements OnInit {
     const key = promptKey(prompt, category, useAi);
     const now = Date.now();
     return (
-      [...turns].reverse().find((t) => t.status === 'done' && t.items.length > 0 && now - t.createdAt < REUSE_MS && this.history.isLive(t.id) && promptKey(t.prompt, t.category, t.useAi) === key) ?? null
+      [...turns].reverse().find((t) => t.status === 'done' && t.items.length > 0 && t.sources.every((s) => s.state === 'done') && now - t.createdAt < REUSE_MS && this.history.isLive(t.id) && promptKey(t.prompt, t.category, t.useAi) === key) ?? null
     );
   }
 

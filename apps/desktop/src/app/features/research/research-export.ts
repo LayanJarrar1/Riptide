@@ -176,12 +176,13 @@ export function toBibtex(items: readonly TurnItem[]): { text: string; count: num
       fields.push(['year', String(i.year)]);
     }
     if (i.doi) {
-      fields.push(['doi', escapeBib(i.doi)]);
+      fields.push(['doi', i.doi]);
     }
     if (i.arxiv) {
-      fields.push(['eprint', escapeBib(i.arxiv)], ['archivePrefix', 'arXiv']);
+      fields.push(['eprint', i.arxiv], ['archivePrefix', 'arXiv']);
     }
-    fields.push(['url', escapeBib(i.pageUrl ?? i.downloadUrl)]);
+    // identifiers and addresses are machine-readable: no TeX escapes, only the braces that would unbalance the field
+    fields.push(['url', (i.pageUrl ?? i.downloadUrl).replace(/\{/g, '%7B').replace(/\}/g, '%7D')]);
     const body = fields.map(([k, v]) => `  ${k} = {${v}}`).join(',\n');
     entries.push(`@misc{${citeKey(i, used)},\n${body}\n}`);
   }

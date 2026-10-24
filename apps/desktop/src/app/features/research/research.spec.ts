@@ -417,12 +417,22 @@ describe('ResearchPageComponent', () => {
     const h = setup();
     const { fixture, el } = await mount();
     await ask(fixture, el, 'frogs');
-    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] }, { t: 'phase', phase: 'done' }, { t: 'end' }));
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] }, { t: 'source', source: 'arxiv', state: 'done', found: 1, code: null }, { t: 'source', source: 'gutenberg', state: 'done', found: 0, code: null }, { t: 'phase', phase: 'done' }, { t: 'end' }));
     await settle(fixture);
     await ask(fixture, el, '  Frogs ');
     expect(h.calls.filter((c) => c.cmd === 'research_start').length).toBe(1);
     expect(el.querySelectorAll('app-research-turn').length).toBe(2);
     expect(el.textContent).toContain('Nothing was searched or sent again.');
+  });
+
+  it('does not reuse a search where a source failed', async () => {
+    const h = setup();
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv')] }, { t: 'source', source: 'arxiv', state: 'done', found: 1, code: null }, { t: 'source', source: 'gutenberg', state: 'failed', found: 0, code: 'timeout' }, { t: 'phase', phase: 'done' }, { t: 'end' }));
+    await settle(fixture);
+    await ask(fixture, el, 'frogs');
+    expect(h.calls.filter((c) => c.cmd === 'research_start').length).toBe(2);
   });
 
   it('recovers from a failed search with Try again', async () => {

@@ -1,5 +1,5 @@
 import { escapeBib, escapeMd, exportName, isCitable, responseText, toBibtex, toMarkdown, toRis, ExportContext } from './research-export';
-import { Conversation, emptyTurn, MAX_CONVERSATIONS, MAX_RESULTS, MAX_TURNS, parseHistory, promptKey, serialize, Turn, TurnItem } from './research-history';
+import { Conversation, emptyTurn, MAX_BYTES, MAX_CONVERSATIONS, MAX_RESULTS, MAX_TURNS, parseHistory, promptKey, serialize, Turn, TurnItem } from './research-history';
 import { deriveSteps, summarize } from './research-turn';
 
 function item(id: string, over: Partial<TurnItem> = {}): TurnItem {
@@ -80,6 +80,24 @@ describe('research history storage', () => {
     const back = parseHistory(serialize([c]))[0];
     expect(back.turns.length).toBe(MAX_TURNS);
     expect(back.turns[back.turns.length - 1].items.length).toBe(MAX_RESULTS);
+  });
+
+  it('stays within the byte budget by dropping the oldest turns first', () => {
+    const fat = (i: number): TurnItem => item(`i${i}`, { summary: 'x'.repeat(390), title: 'T'.repeat(390) });
+    const mk = (id: string, updatedAt: number): Conversation => ({
+      id,
+      title: id,
+      titled: false,
+      createdAt: 0,
+      updatedAt,
+      turns: Array.from({ length: 30 }, (_, n) => turn({ id: `${id}-t${n}`, status: 'done', items: Array.from({ length: 60 }, (_, k) => fat(k)) })),
+    });
+    const list = [mk('new', 3), mk('mid', 2), mk('old', 1)];
+    const text = serialize(list);
+    expect(text.length).toBeLessThanOrEqual(MAX_BYTES);
+    const back = parseHistory(text);
+    const turnsOf = (id: string): number => back.find((c) => c.id === id)?.turns.length ?? 0;
+    expect(turnsOf('new')).toBeGreaterThan(turnsOf('old'));
   });
 
   it('survives garbage, drops unsafe links and marks an interrupted turn as stopped', () => {
@@ -192,6 +210,12 @@ describe('research summary and exports', () => {
     const text = responseText(turn({ status: 'done', items }), ctx);
     expect(text).toContain('Top picks');
     expect(text).toContain('1. Frogs *of* Peru [1]: Covers frogs');
+  });
+
+  it('keeps identifiers and addresses raw in BibTeX', () => {
+    const r = toBibtex([item('z', { doi: '10.1007/s_1%x', arxiv: '2101.00001', authors: ['A B'], year: 2020, pageUrl: 'https://e.org/a_b?x=1&y=2' })]);
+    expect(r.text).toContain('doi = {10.1007/s_1%x}');
+    expect(r.text).toContain('url = {https://e.org/a_b?x=1&y=2}');
   });
 
   it('exports BibTeX only for what can be cited, with escaped fields and unique keys', () => {

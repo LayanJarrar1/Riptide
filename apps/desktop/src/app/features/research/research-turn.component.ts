@@ -814,8 +814,11 @@ export class ResearchTurnComponent {
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    // the download starts after the click returns: keep the address alive for a moment
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
     this.toasts.show('success', done);
   }
 }
