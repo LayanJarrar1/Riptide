@@ -9,7 +9,6 @@ import {
 } from '@angular/core';
 
 import { MotionService } from '../core/motion.service';
-import { I18nService } from '../i18n/i18n.service';
 import { ThemeService } from '../theme/theme.service';
 import {
   LOGO_MARK_FILL,
@@ -24,20 +23,40 @@ const MARK_BOX = { x: 125, y: 48, w: 163, h: 212 } as const;
 const FULL_BOX = { x: 125, y: 48, w: 705, h: 258 } as const;
 /** The mark is 200 units tall; `size` is that height in px. */
 const MARK_UNITS = 200;
-/** Vertical bands (brand-kit x ranges) that give each "stream" of the R its own drawing pass. */
+/**
+ * Centre lines of the three streams of the R, from the bottom of each vertical up and around
+ * the bowl. They only drive a reveal mask (thick strokes that uncover the original filled
+ * path); they are never painted, so they are not part of the logo artwork.
+ */
 const STREAMS = [
-  { id: 'a', x: 125, w: 56 },
-  { id: 'b', x: 181, w: 50 },
-  { id: 'c', x: 231, w: 57 },
+  {
+    id: 'a',
+    d: 'M138.6 258 L138.6 118 C138.6 85 165 61.8 200 61.8 C235 61.8 264.5 88 264.5 122 C264.5 150 250 170 238 184',
+  },
+  {
+    id: 'b',
+    d: 'M157.8 258 L157.8 118 C157.8 96 176 81 199 81 C228 81 249.5 100 249.5 122 C249.5 140 238 152 224 160 C214 166 213 176 213 188 C213 196 216 202 222 212',
+  },
+  {
+    id: 'c',
+    d: 'M177 258 L177 118 C177 107 187 100.3 199 100.3 C218 100.3 228 110 228 122 C228 134 216 142 208 148 C198 154 194 168 194 185 C194 196 198 205 204 215 L222 250',
+  },
 ] as const;
+/** The leg of the R, where the streams merge: revealed as one piece when the streams arrive. */
+const LEG_POINTS = '205,205 222,156 244,158 246,181 288,258 205,258';
+/** The ripple ring starts at the foot of the leg, outside the mark. */
+const RIPPLE = { cx: 258, cy: 236, r: 14 } as const;
+
+let nextLogoId = 0;
 
 /**
- * The Riptide logo for the Research start page. It plays once on first view: the three
- * streams of the R draw in (stroke-dash of the original outline), the fills fade in as the
- * strokes fade out, the mark settles from 0.96 to 1 and the wordmark slides in from the
- * inline-end. Only transform, opacity and stroke-dashoffset animate; paths and fills are the
- * brand kit's, so the resting state is the brand SVG. Reduced motion shows it at once.
- * The logo never mirrors in RTL; only the wordmark's slide direction follows reading order.
+ * The Riptide logo for the Research start page. It plays once on first view, like the brand
+ * sting: the three streams of the filled R grow up from its foot and around the bowl (a
+ * stroke-dash mask uncovers the original filled path, no outline stage), one faint ripple ring
+ * leaves the leg, then the wordmark is revealed left to right. Only transform, opacity,
+ * stroke-dashoffset and clip-path animate; paths and fills are the brand kit's, so the
+ * resting state is the brand SVG. Reduced motion shows it at once. The logo never mirrors in
+ * RTL: the wordmark is Latin and always reveals left to right.
  */
 @Component({
   selector: 'app-brand-logo-animated',
@@ -50,35 +69,53 @@ const STREAMS = [
         [attr.width]="width()"
         [attr.height]="height()"
         [attr.viewBox]="viewBox()"
-        [style.--slide]="slide()"
         role="img"
         aria-label="Riptide"
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          @for (s of streams; track s.id) {
-            <clipPath [attr.id]="'rt-logo-' + s.id">
-              <rect [attr.x]="s.x" y="40" [attr.width]="s.w" height="230" />
-            </clipPath>
-          }
+          <mask
+            [attr.id]="maskId"
+            maskUnits="userSpaceOnUse"
+            x="120"
+            y="40"
+            width="180"
+            height="230"
+          >
+            @for (s of streams; track s.id; let i = $index) {
+              <path
+                class="reveal"
+                [style.--i]="i"
+                [attr.d]="s.d"
+                pathLength="1"
+                stroke-dasharray="1 2"
+                fill="none"
+                stroke="#fff"
+                stroke-width="22"
+              />
+            }
+            <polygon class="leg" [attr.points]="legPoints" fill="#fff" />
+          </mask>
         </defs>
         <g class="mark">
-          <path class="fill" [attr.d]="markPath" [attr.fill]="markFill()" />
-          @for (s of streams; track s.id; let i = $index) {
-            <g [attr.clip-path]="'url(#rt-logo-' + s.id + ')'" aria-hidden="true">
-              <path
-                class="stroke"
-                [style.--i]="i"
-                [attr.d]="markPath"
-                pathLength="1"
-                fill="none"
-                [attr.stroke]="markFill()"
-                stroke-width="2.4"
-                stroke-linejoin="round"
-              />
-            </g>
-          }
+          <path
+            class="fill"
+            [attr.d]="markPath"
+            [attr.fill]="markFill()"
+            [attr.mask]="'url(#' + maskId + ')'"
+          />
         </g>
+        <circle
+          class="ripple"
+          [attr.cx]="ripple.cx"
+          [attr.cy]="ripple.cy"
+          [attr.r]="ripple.r"
+          fill="none"
+          [attr.stroke]="markFill()"
+          stroke-width="1.5"
+          vector-effect="non-scaling-stroke"
+          aria-hidden="true"
+        />
         @if (showWordmark()) {
           <g class="word" [attr.fill]="wordFill()">
             @for (d of wordmarkPaths; track $index) {
@@ -93,43 +130,43 @@ const STREAMS = [
     :host {
       display: inline-block;
       line-height: 0;
-      /* Brand easing; timings: draw 900 ms staggered, fills 250 ms, settle 500 ms, wordmark 300 ms. */
+      /* Streams grow over ~1 s on a gentle curve; ripple 550 ms; wordmark reveal 450 ms. */
       --logo-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+      --logo-draw: cubic-bezier(0.45, 0, 0.2, 1);
     }
     .logo {
       display: block;
       overflow: visible;
     }
-    .stroke {
+    .ripple {
       opacity: 0;
     }
-    .play .stroke {
-      opacity: 1;
-      stroke-dasharray: 1;
-      stroke-dashoffset: 1;
-      animation:
-        logo-draw 900ms var(--logo-ease) calc(var(--i) * 110ms) forwards,
-        logo-stroke-out 250ms var(--logo-ease) 1000ms both;
+    .play .reveal {
+      stroke-dashoffset: 0;
+      animation: logo-draw 1050ms var(--logo-draw) calc(var(--i) * 90ms) backwards;
     }
-    .play .fill {
-      animation: logo-fade-in 250ms var(--logo-ease) 1000ms backwards;
+    .play .leg {
+      animation: logo-fade-in 300ms var(--logo-draw) 850ms backwards;
     }
     .play .mark {
       transform-box: fill-box;
       transform-origin: center;
       animation: logo-settle 500ms var(--logo-ease) 900ms backwards;
     }
+    .play .ripple {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: logo-ripple 1550ms var(--logo-ease) backwards;
+    }
     .play .word {
-      animation: logo-slide 300ms var(--logo-ease) 1300ms backwards;
+      animation: logo-word 450ms var(--logo-draw) 1400ms backwards;
     }
     @keyframes logo-draw {
+      from {
+        stroke-dashoffset: 1;
+      }
       to {
         stroke-dashoffset: 0;
-      }
-    }
-    @keyframes logo-stroke-out {
-      to {
-        opacity: 0;
       }
     }
     @keyframes logo-fade-in {
@@ -142,31 +179,45 @@ const STREAMS = [
     }
     @keyframes logo-settle {
       from {
-        transform: scale(0.96);
+        transform: scale(0.97);
       }
       to {
         transform: none;
       }
     }
-    @keyframes logo-slide {
-      from {
+    /* Idle for the first 1000 ms (the streams grow), then one 550 ms ring. */
+    @keyframes logo-ripple {
+      0%,
+      64.5% {
         opacity: 0;
-        transform: translateX(var(--slide));
+        transform: scale(0.35);
+      }
+      65% {
+        opacity: 0.4;
+        transform: scale(0.35);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(2.6);
+      }
+    }
+    @keyframes logo-word {
+      from {
+        opacity: 0.2;
+        clip-path: inset(0 100% 0 0);
       }
       to {
         opacity: 1;
-        transform: none;
+        clip-path: inset(0 0 0 0);
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .stroke,
-      .fill,
+      .reveal,
+      .leg,
       .mark,
+      .ripple,
       .word {
         animation: none !important;
-      }
-      .stroke {
-        opacity: 0 !important;
       }
     }
   `,
@@ -174,7 +225,6 @@ const STREAMS = [
 export class BrandLogoAnimatedComponent {
   protected readonly motion = inject(MotionService);
   private readonly theme = inject(ThemeService);
-  private readonly i18n = inject(I18nService);
 
   /** Mark height in px. */
   readonly size = input(72);
@@ -186,6 +236,9 @@ export class BrandLogoAnimatedComponent {
   protected readonly markPath = LOGO_MARK_PATH;
   protected readonly wordmarkPaths = LOGO_WORDMARK_PATHS;
   protected readonly streams = STREAMS;
+  protected readonly legPoints = LEG_POINTS;
+  protected readonly ripple = RIPPLE;
+  protected readonly maskId = `rt-logo-mask-${nextLogoId++}`;
   protected readonly runs = signal(0);
 
   private firstReplay = true;
@@ -199,12 +252,6 @@ export class BrandLogoAnimatedComponent {
   protected readonly height = computed(() => (this.box().h * this.size()) / MARK_UNITS);
   protected readonly markFill = computed(() => LOGO_MARK_FILL[this.theme.resolved()]);
   protected readonly wordFill = computed(() => LOGO_WORDMARK_FILL[this.theme.resolved()]);
-  /** The wordmark starts 8 px (in logo units) toward the inline-end: right in LTR, left in RTL. */
-  protected readonly slide = computed(() => {
-    const px = (8 * MARK_UNITS) / this.size();
-    return `${this.i18n.dir() === 'rtl' ? -px : px}px`;
-  });
-
   constructor() {
     effect(() => {
       this.replay();
