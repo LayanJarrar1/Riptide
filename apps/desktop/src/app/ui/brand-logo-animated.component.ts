@@ -31,19 +31,27 @@ const MARK_UNITS = 200;
 const STREAMS = [
   {
     id: 'a',
-    d: 'M138.6 258 L138.6 118 C138.6 85 165 61.8 200 61.8 C235 61.8 264.5 88 264.5 122 C264.5 150 250 170 238 184',
+    w: 20,
+    delay: 0,
+    dur: 1050,
+    d: 'M138.6 268 L138.6 118 C138.6 85 165 61.8 200 61.8 C235 61.8 264.5 88 264.5 122 C264.5 150 250 170 238 184 L262 232 L270 262',
   },
   {
     id: 'b',
-    d: 'M157.8 258 L157.8 118 C157.8 96 176 81 199 81 C228 81 249.5 100 249.5 122 C249.5 140 238 152 224 160 C214 166 213 176 213 188 C213 196 216 202 222 212',
+    w: 21,
+    delay: 90,
+    dur: 1050,
+    d: 'M157.8 268 L157.8 118 C157.8 96 176 81 199 81 C228 81 249.5 100 249.5 122 C249.5 140 238 152 224 160 C214 166 213 176 213 188 C213 196 216 202 222 212 L244 262',
   },
   {
     id: 'c',
-    d: 'M177 258 L177 118 C177 107 187 100.3 199 100.3 C218 100.3 228 110 228 122 C228 134 216 142 208 148 C198 154 194 168 194 185 C194 196 198 205 204 215 L222 250',
+    w: 19,
+    delay: 180,
+    dur: 1050,
+    d: 'M177 268 L177 118 C177 107 187 100.3 199 100.3 C218 100.3 228 110 228 122 C228 134 216 142 208 148 C198 154 194 168 194 185 C194 196 198 205 204 215 L224 262',
   },
+  { id: 'leg', w: 44, delay: 560, dur: 500, d: 'M234 170 L268 270' },
 ] as const;
-/** The leg of the R, where the streams merge: revealed as one piece when the streams arrive. */
-const LEG_POINTS = '205,205 222,156 244,158 246,181 288,258 205,258';
 /** The ripple ring starts at the foot of the leg, outside the mark. */
 const RIPPLE = { cx: 258, cy: 236, r: 14 } as const;
 
@@ -82,19 +90,21 @@ let nextLogoId = 0;
             width="180"
             height="230"
           >
-            @for (s of streams; track s.id; let i = $index) {
+            @for (s of streams; track s.id) {
               <path
                 class="reveal"
-                [style.--i]="i"
+                [style.--delay]="s.delay + 'ms'"
+                [style.--dur]="s.dur + 'ms'"
                 [attr.d]="s.d"
                 pathLength="1"
                 stroke-dasharray="1 2"
                 fill="none"
                 stroke="#fff"
-                stroke-width="22"
+                [attr.stroke-width]="s.w"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               />
             }
-            <polygon class="leg" [attr.points]="legPoints" fill="#fff" />
           </mask>
         </defs>
         <g class="mark">
@@ -143,10 +153,7 @@ let nextLogoId = 0;
     }
     .play .reveal {
       stroke-dashoffset: 0;
-      animation: logo-draw 1050ms var(--logo-draw) calc(var(--i) * 90ms) backwards;
-    }
-    .play .leg {
-      animation: logo-fade-in 300ms var(--logo-draw) 850ms backwards;
+      animation: logo-draw var(--dur) var(--logo-draw) var(--delay) backwards;
     }
     .play .mark {
       transform-box: fill-box;
@@ -213,7 +220,6 @@ let nextLogoId = 0;
     }
     @media (prefers-reduced-motion: reduce) {
       .reveal,
-      .leg,
       .mark,
       .ripple,
       .word {
@@ -236,7 +242,6 @@ export class BrandLogoAnimatedComponent {
   protected readonly markPath = LOGO_MARK_PATH;
   protected readonly wordmarkPaths = LOGO_WORDMARK_PATHS;
   protected readonly streams = STREAMS;
-  protected readonly legPoints = LEG_POINTS;
   protected readonly ripple = RIPPLE;
   protected readonly maskId = `rt-logo-mask-${nextLogoId++}`;
   protected readonly runs = signal(0);
