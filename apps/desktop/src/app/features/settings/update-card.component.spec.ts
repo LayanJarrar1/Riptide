@@ -113,7 +113,11 @@ describe('UpdateCardComponent', () => {
     failing['check_update'] = { kind: 'offline', message: 'x' };
     await updates.check().catch(() => undefined);
     const text = await refresh();
-    expect(text).toContain('The update did not finish');
+    // a failed check is not a failed update: nothing was downloaded or installed
+    expect(text).toContain('Could not check for updates');
+    expect(text).not.toContain('The update did not finish');
+    expect(text).toContain('Last check failed');
+    expect(text).not.toContain('Never checked');
     expect(text).toContain('No connection to the update server.');
     expect(button('Try again')).toBeDefined();
   });
@@ -125,6 +129,7 @@ describe('UpdateCardComponent', () => {
     await updates.download().catch(() => undefined);
     const text = await refresh();
     expect(text).toContain('not signed by Riptide, so it was not installed');
+    expect(text).toContain('The update did not finish');
     expect(button('Try again')).toBeDefined();
     expect(calls).not.toContain('install_update');
   });
@@ -174,7 +179,8 @@ describe('UpdateCardComponent', () => {
   it('remembers the failure of an earlier session', async () => {
     render({ 'riptide.updates.lastError': JSON.stringify({ kind: 'server', at: T0 - 60_000 }) });
     const text = await refresh();
-    expect(text).toContain('The update server did not answer with a release.');
+    expect(text).toContain('could not be reached or has no release published yet');
+    expect(text).toContain('Last check failed');
   });
 
   it('changes the interval of the automatic checks', async () => {

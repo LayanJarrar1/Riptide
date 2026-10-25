@@ -19,6 +19,9 @@ import { SettingsService } from './settings.service';
  * interval of the automatic checks. All state lives in {@link UpdateService}, so the card can be
  * dropped anywhere (`<app-update-card />`).
  */
+/** Failures of the check itself (the feed could not be read), as opposed to a download or install. */
+const CHECK_FAILURES: ReadonlySet<string> = new Set(['offline', 'server', 'manifest']);
+
 @Component({
   selector: 'app-update-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -175,6 +178,11 @@ export class UpdateCardComponent implements OnInit {
   /** "Last checked 3 minutes ago" / "Never checked". */
   protected readonly lastCheckText = computed(() => {
     const at = this.updates.lastSuccessAt();
+    const failed = this.updates.lastError();
+    // a check that failed after the last good one is what the user needs to see, not "never checked"
+    if (failed !== null && CHECK_FAILURES.has(failed.kind) && (at === null || failed.at > at)) {
+      return this.i18n.t('update.lastCheckFailed').replace('{when}', this.format.relative(failed.at));
+    }
     return at === null ? this.i18n.t('update.neverChecked') : this.i18n.t('update.lastChecked').replace('{when}', this.format.relative(at));
   });
 
@@ -198,8 +206,11 @@ export class UpdateCardComponent implements OnInit {
         return fill('update.state.ready');
       case 'installing':
         return fill('update.state.installing');
-      case 'error':
-        return this.i18n.t('update.state.error');
+      case 'error': {
+        // failing to reach the feed is not a failed update: nothing was downloaded or installed
+        const kind = this.updates.lastError()?.kind;
+        return this.i18n.t(kind !== undefined && CHECK_FAILURES.has(kind) ? 'update.state.checkFailed' : 'update.state.error');
+      }
       default:
         return fill('update.state.idle');
     }
