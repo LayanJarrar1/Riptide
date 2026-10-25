@@ -20,9 +20,9 @@ interface Track {
  * sideways: see `fitGrid`.
  */
 const TRACKS: Readonly<Record<ColumnKey, Track>> = {
-  name: { min: 160, base: 160, fr: 2.2 },
+  name: { min: 200, base: 280, fr: 3 },
   size: { min: 96, base: 150 },
-  progress: { min: 120, base: 120, fr: 1.6 },
+  progress: { min: 120, base: 120, fr: 1 },
   speed: { min: 80, base: 96 },
   avgSpeed: { min: 88, base: 104 },
   eta: { min: 84, base: 112 },
@@ -93,13 +93,13 @@ export function fitGrid(available: number, widths: ColumnWidths, hidden: Readonl
   }
   const autoHidden = wanted.filter((k) => !visible.includes(k));
 
+  const flex = (k: ColumnKey): boolean => TRACKS[k].fr !== undefined;
   const pref = new Map<ColumnKey, number>();
   for (const key of visible) {
     const t = TRACKS[key];
     const w = widths[key];
-    pref.set(key, w !== undefined ? Math.max(t.min, w) : t.fr !== undefined ? t.min : t.base);
+    pref.set(key, w !== undefined ? Math.max(t.min, w) : t.base);
   }
-  const grows = (k: ColumnKey): boolean => TRACKS[k].fr !== undefined && widths[k] === undefined;
   let deficit = [...pref.values()].reduce((a, b) => a + b, ACTIONS_PX) - available;
   const shrink = (keys: readonly ColumnKey[]): void => {
     const slack = keys.reduce((sum, k) => sum + ((pref.get(k) ?? 0) - minOf(k)), 0);
@@ -113,10 +113,16 @@ export function fitGrid(available: number, widths: ColumnWidths, hidden: Readonl
     }
     deficit -= take;
   };
-  shrink(visible.filter((k) => TRACKS[k].fr !== undefined && widths[k] !== undefined));
-  shrink(visible.filter((k) => TRACKS[k].fr === undefined));
+  // the name keeps the most room: every other column gives way first, then the progress, then the name
+  shrink(visible.filter((k) => !flex(k)));
+  shrink(visible.filter((k) => k === 'progress'));
+  shrink(visible.filter((k) => k === 'name'));
 
-  const tracks = visible.map((key) => (grows(key) ? `minmax(${TRACKS[key].min}px, ${TRACKS[key].fr}fr)` : `${pref.get(key)}px`));
+  // Spare room goes to the name first, then the progress. A width the user set stays exact (the
+  // other flexible column takes the spare); only when both are set does the name absorb it.
+  const grows = (key: ColumnKey): boolean =>
+    flex(key) && (widths[key] === undefined || (key === 'name' && widths.progress !== undefined));
+  const tracks = visible.map((key) => (grows(key) ? `minmax(${pref.get(key)}px, ${TRACKS[key].fr}fr)` : `${pref.get(key)}px`));
   return { visible, autoHidden, template: [...tracks, `${ACTIONS_PX}px`].join(' ') };
 }
 

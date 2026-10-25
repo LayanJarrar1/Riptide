@@ -103,12 +103,14 @@ export function hostOf(url: string): string {
     </div>
 
     @if (!hidden().has('size')) {
-      <div class="cell c-size num" role="gridcell">
+      <div class="cell c-size num" role="gridcell" [attr.title]="showDownloaded() ? (row().downloaded | bytes) + ' / ' + (row().d.size | bytes) : null">
         @if (showDownloaded()) {
           <span class="size-done">{{ row().downloaded | bytes }}</span>
           <span class="size-sep">/</span>
+          <span class="size-total">{{ row().d.size | bytes }}</span>
+        } @else {
+          <span>{{ row().d.size | bytes }}</span>
         }
-        <span>{{ row().d.size | bytes }}</span>
       </div>
     }
 
@@ -353,7 +355,8 @@ export function hostOf(url: string): string {
       overflow: hidden;
       white-space: normal;
       line-height: 1.15;
-      overflow-wrap: anywhere;
+      overflow-wrap: normal;
+      word-break: normal;
     }
 
     .reason-sep {
@@ -398,6 +401,18 @@ export function hostOf(url: string): string {
 
     :host([data-state='downloading']) .c-speed {
       color: var(--color-text);
+    }
+
+    /* too narrow for "downloaded / total": show the downloaded part whole (the total is in the title) */
+    .c-size {
+      container-type: inline-size;
+    }
+
+    @container (max-width: 122px) {
+      .size-sep,
+      .size-total {
+        display: none;
+      }
     }
 
     .size-done {

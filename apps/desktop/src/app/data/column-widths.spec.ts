@@ -19,9 +19,13 @@ import {
 
 describe('column widths', () => {
   const none = new Set<ColumnKey>();
-  const nums = (template: string): number[] => template.split(' ').map((t) => Number.parseInt(t.replace('minmax(', ''), 10));
-  const fixedWidth = (template: string): number =>
-    template.split(' ').reduce((sum, t) => sum + (t.startsWith('minmax') || t.endsWith('fr)') || t.endsWith('px)') ? 0 : Number.parseInt(t, 10)), 0);
+  /** [floor px, is flexible] of every track but the actions one. */
+  const tracks = (template: string): { px: number; flex: boolean }[] =>
+    (template.match(/minmax\([^)]*\)|\d+px/g) ?? [])
+      .slice(0, -1)
+      .map((t) => ({ px: Number.parseInt(t.replace('minmax(', ''), 10), flex: t.startsWith('minmax') }));
+  /** The least width the template can take: every floor plus the actions track. */
+  const floorSum = (template: string): number => tracks(template).reduce((sum, t) => sum + t.px, 0) + ACTIONS_PX;
 
   it('exposes the fitted template as the one grid variable', () => {
     expect(gridVars(fitGrid(1300, {}))).toEqual({ '--grid-columns': fitGrid(1300, {}).template });
@@ -31,41 +35,45 @@ describe('column widths', () => {
     const fit = fitGrid(1300, {});
     expect(fit.visible).toEqual(['name', 'size', 'progress', 'speed', 'eta', 'status', 'added']);
     expect(fit.autoHidden).toEqual([]);
-    expect(fit.template).toBe('minmax(160px, 2.2fr) 150px minmax(120px, 1.6fr) 96px 112px 160px 104px 60px');
+    expect(fit.template).toBe('minmax(280px, 3fr) 150px minmax(120px, 1fr) 96px 112px 160px 104px 60px');
   });
 
-  it('the default columns fit a 1024px list without hiding anything', () => {
-    const fit = fitGrid(1024 - 24, {});
-    expect(fit.autoHidden).toEqual([]);
-    // fixed tracks plus the flexible minimums leave the tracks inside the list
-    expect(fixedWidth(fit.template) + 160 + 120).toBeLessThanOrEqual(1000);
+  it('a 1024px window (785px list) keeps the name at 240px or more and ends exactly at the edge', () => {
+    const available = 785 - 24;
+    const fit = fitGrid(available, {});
+    expect(fit.visible).toContain('status');
+    expect(floorSum(fit.template)).toBeLessThanOrEqual(available);
+    const t = tracks(fit.template);
+    const spare = available - floorSum(fit.template);
+    // spare room goes to the name first: its share (3fr of 4) is the larger one
+    expect(t[0].px + (spare * 3) / 4).toBeGreaterThanOrEqual(240);
   });
 
-  it('a user width becomes a fixed track while it fits', () => {
-    expect(fitGrid(1300, { name: 420, speed: 130 }).template).toBe('420px 150px minmax(120px, 1.6fr) 130px 112px 160px 104px 60px');
+  it('a user width keeps its floor while it fits', () => {
+    expect(fitGrid(1300, { name: 420, speed: 130 }).template).toBe('420px 150px minmax(120px, 1fr) 130px 112px 160px 104px 60px');
   });
 
-  it('shrinks the flexible columns first, down to their minimum, before touching the others', () => {
-    const fit = nums(fitGrid(1500, { name: 700, progress: 400 }).template);
-    const [name, size, progress, speed, eta, status, added] = fit;
-    expect([size, speed, eta, status, added]).toEqual([150, 96, 112, 160, 104]);
-    expect(name + progress + 150 + 96 + 112 + 160 + 104 + ACTIONS_PX).toBeLessThanOrEqual(1500);
-    expect(name).toBeGreaterThanOrEqual(160);
-    expect(progress).toBeGreaterThanOrEqual(120);
-    expect(name).toBeLessThan(700);
-    // a tighter list takes the flexible ones to the floor, then scales the others proportionally
-    const tight = nums(fitGrid(980, { name: 700, progress: 400, size: 300, status: 300 }).template);
-    expect(tight[0]).toBe(160);
-    expect(tight[2]).toBe(120);
-    expect(tight[1]).toBeGreaterThanOrEqual(96);
-    expect(tight[1]).toBeLessThan(300);
-    expect(tight[5]).toBeGreaterThanOrEqual(132);
-    expect(tight[5]).toBeLessThan(300);
-    expect(tight.slice(0, 7).reduce((a, b) => a + b, ACTIONS_PX)).toBeLessThanOrEqual(980);
-    // proportional: the column with the larger slack (status: 300-132) gives up more than size (300-96)? no, share is by slack
-    const sizeCut = (300 - tight[1]) / (300 - 96);
-    const statusCut = (300 - tight[5]) / (300 - 132);
-    expect(Math.abs(sizeCut - statusCut)).toBeLessThan(0.05);
+  it('shrinks every other column before the progress, and the name last', () => {
+    // preferences: name 700 + progress 400 + size 300 + status 300
+    const widths = { name: 700, progress: 400, size: 300, status: 300 };
+    const roomy = tracks(fitGrid(2200, widths).template);
+    expect(roomy.map((t) => t.px)).toEqual([700, 300, 400, 96, 112, 300, 104]);
+    // 1000px: the others drop toward their minimums first, name and progress keep their wants
+    const mid = tracks(fitGrid(1900, widths).template).map((t) => t.px);
+    expect(mid[0]).toBe(700);
+    expect(mid[2]).toBe(400);
+    expect(mid[1]).toBeLessThan(300);
+    expect(mid[5]).toBeLessThan(300);
+    expect(floorSum(fitGrid(1900, widths).template)).toBeLessThanOrEqual(1900);
+    // tighter: the others sit at their minimums, then the progress gives way, then the name
+    const tight = tracks(fitGrid(1050, widths).template).map((t) => t.px);
+    expect(tight[1]).toBe(96);
+    expect(tight[5]).toBe(132);
+    expect(tight[2]).toBeLessThan(400);
+    expect(tight[0]).toBeGreaterThan(200);
+    const tighter = tracks(fitGrid(861, widths).template).map((t) => t.px);
+    expect(tighter[2]).toBe(120);
+    expect(floorSum(fitGrid(861, widths).template)).toBeLessThanOrEqual(861);
   });
 
   it('never produces tracks wider than the available width, for any width and preference', () => {
@@ -73,10 +81,8 @@ describe('column widths', () => {
     for (let available = 300; available <= 2400; available += 37) {
       for (const widths of [{}, wide, { name: 1600 }]) {
         const fit = fitGrid(available, widths, none);
-        if (available >= 160 + 120 + 132 + ACTIONS_PX) {
-          const mins = { name: 160, progress: 120, size: 96, speed: 80, avgSpeed: 88, eta: 84, duration: 80, status: 132, category: 96, added: 96 } as Record<string, number>;
-          const flexMins = fit.visible.filter((k) => (k === 'name' || k === 'progress') && widths[k as keyof typeof widths] === undefined).reduce((sum, k) => sum + mins[k], 0);
-          expect(fixedWidth(fit.template) + flexMins).toBeLessThanOrEqual(available);
+        if (available >= 200 + 120 + 132 + ACTIONS_PX) {
+          expect(floorSum(fit.template)).toBeLessThanOrEqual(available);
         }
         expect(fit.visible).toContain('name');
         expect(fit.visible).toContain('progress');
@@ -114,7 +120,7 @@ describe('column widths', () => {
 
   it('clamps a drag so the others keep their minimums', () => {
     const visible = fitGrid(1000, {}).visible;
-    const minimums: Record<string, number> = { name: 160, progress: 120, speed: 80, eta: 84, status: 132, added: 96 };
+    const minimums: Record<string, number> = { name: 200, progress: 120, speed: 80, eta: 84, status: 132, added: 96 };
     const others = visible.filter((k) => k !== 'size').reduce((sum, k) => sum + minimums[k], 0);
     expect(maxDragWidth('size', 1000, visible)).toBe(1000 - ACTIONS_PX - others);
     expect(maxDragWidth('size', 100, visible)).toBe(96);
@@ -122,7 +128,7 @@ describe('column widths', () => {
   });
 
   it('clamps to the per-column minimum and the global maximum', () => {
-    expect(clampWidth('name', 10)).toBe(160);
+    expect(clampWidth('name', 10)).toBe(200);
     expect(clampWidth('size', 10)).toBe(96);
     expect(clampWidth('status', 99999)).toBe(MAX_COLUMN_WIDTH);
     expect(clampWidth('eta', 100.6)).toBe(101);

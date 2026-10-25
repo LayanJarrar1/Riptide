@@ -251,6 +251,19 @@ describe('DownloadsPageComponent layout and scale', () => {
       }
     }
 
+    it('gives the name the most room at 1024px, fills the width to the edge and never splits a word', async () => {
+      await setup(100, 1024);
+      expect(cell('name').getBoundingClientRect().width).toBeGreaterThanOrEqual(240);
+      const last = header().lastElementChild as HTMLElement;
+      const pad = Number.parseFloat(getComputedStyle(header()).paddingInlineEnd);
+      const edge = header().getBoundingClientRect().left + header().clientWidth - pad;
+      expect(Math.abs(last.getBoundingClientRect().right - edge)).toBeLessThanOrEqual(1);
+      for (const t of Array.from(el().querySelectorAll<HTMLElement>('.reason-text'))) {
+        expect(getComputedStyle(t).overflowWrap).not.toBe('anywhere');
+        expect(getComputedStyle(t).wordBreak).toBe('normal');
+      }
+    });
+
     it('hides low-priority columns to fit and brings them back when the window widens', async () => {
       await setup(100, 700, { [HIDDEN_COLUMNS_KEY]: '[]' });
       expect(el().querySelector('.hc-duration')).toBeNull();
