@@ -8,7 +8,7 @@
  */
 import { dirOf, formatBytes } from '../i18n';
 import type { Lang, MessageKey } from '../i18n';
-import { buildMenu, isSubstantialVideo, isVideoPageUrl } from '../media';
+import { BEST_ROW, buildMenu, isSubstantialVideo, isVideoPageUrl, shouldPrefetch } from '../media';
 import { parseMediaError } from '../media-error';
 import type { MenuRow } from '../media';
 import type { HandoffReply, MediaProbeReply, Message } from '../messages';
@@ -112,6 +112,7 @@ export function initVideo(ctx: VideoContext): VideoUi {
   let popFoot: HTMLDivElement | null = null;
   let compactTimer: ReturnType<typeof setTimeout> | null = null;
   let lastHref = location.href;
+  let prefetched = '';
 
   const tr = ctx.tr;
 
@@ -397,6 +398,8 @@ export function initVideo(ctx: VideoContext): VideoUi {
     popTitle.textContent = tr('video.button');
     popTitle.removeAttribute('title');
     setMessage(tr('video.loading'));
+    // "Best" works without the list, so it is offered at once; the list replaces it on arrival
+    popBody.append(itemButton(BEST_ROW, document.title.slice(0, 200)));
     footer(false);
     place();
     void (async () => {
@@ -485,6 +488,12 @@ export function initVideo(ctx: VideoContext): VideoUi {
       void ctx.send({ kind: 'media-found', count });
     }
     const show = allowed() && (count > 0 || hinted);
+    if (show && shouldPrefetch(location.href, prefetched)) {
+      // warm the app's probe cache so the popover has its list by the time it is opened;
+      // same message the popover sends, only on a page already treated as a video page
+      prefetched = location.href;
+      void ctx.send({ kind: 'media-probe', url: location.href });
+    }
     if (show) {
       build();
       if (wrap && !wrap.hasAttribute('data-on')) {

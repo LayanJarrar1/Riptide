@@ -740,6 +740,8 @@ struct Inner {
     test_crash_after_rename: AtomicBool,
     /// The bundled yt-dlp (and ffmpeg) for media records; `None` until the app sets it.
     media: RwLock<Option<YtDlp>>,
+    /// Recent video probes (10 minutes, in memory), shared by the extension and the Add dialog.
+    probe_cache: riptide_media::ProbeCache,
     /// The BitTorrent engine and its bridge to the download rows; `None` until
     /// [`Engine::enable_torrents`].
     torrents: RwLock<Option<Arc<torrent::TorrentRuntime>>>,
@@ -1147,6 +1149,7 @@ impl Engine {
             test_stop_delay_ms: std::sync::atomic::AtomicU64::new(0),
             test_crash_after_rename: AtomicBool::new(false),
             media: RwLock::new(None),
+            probe_cache: riptide_media::ProbeCache::default(),
             torrents: RwLock::new(None),
             torrents_starting: tokio::sync::Mutex::new(()),
             torrent_previews: Mutex::new(std::collections::VecDeque::new()),
@@ -1177,6 +1180,7 @@ impl Engine {
         if let Ok(mut m) = self.inner.media.write() {
             *m = tools;
         }
+        self.inner.probe_cache.clear(); // a new yt-dlp may list other formats
     }
 
     /// The yt-dlp media records use, if set.
@@ -1194,7 +1198,41 @@ impl Engine {
     /// temporary file and nowhere else.
     pub async fn probe_media(&self, url: &str, cookies: Option<&str>) -> Result<MediaInfo> {
         riptide_net::parse_http_url(url)?;
-        Ok(self.require_media()?.probe(url, cookies).await?)
+        let tool = self.require_media()?;
+        let cookies = cookies.filter(|c| !c.trim().is_empty());
+        let Some(page) = riptide_media::normalize_url(url) else {
+            return Ok(tool.probe(url, cookies).await?);
+        };
+        // A page that probed fine without cookies is cached for everyone; one that needed the
+        // login is cached per cookie header (hashed, never stored), so it is never served to a
+        // caller without that login.
+        let anon = format!("anon|{page}");
+        let with_cookies = cookies.map(|c| {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            c.hash(&mut h);
+            format!("ck{:x}|{page}", h.finish())
+        });
+        let lookup = |cache: &riptide_media::ProbeCache| {
+            cache
+                .get(&anon)
+                .or_else(|| with_cookies.as_deref().and_then(|k| cache.get(k)))
+        };
+        if let Some(hit) = lookup(&self.inner.probe_cache) {
+            return Ok(hit);
+        }
+        // one yt-dlp run per page: later callers wait here and then find the answer cached
+        let _turn = self.inner.probe_cache.lock(&page).await;
+        if let Some(hit) = lookup(&self.inner.probe_cache) {
+            return Ok(hit);
+        }
+        let (info, attempt) = tool.probe_resilient(url, cookies, None).await?;
+        let key = match (attempt.cookies, with_cookies) {
+            (true, Some(k)) => k,
+            _ => anon,
+        };
+        self.inner.probe_cache.put(key, info.clone());
+        Ok(info)
     }
 
     /// Crawls a site for downloadable files (the *site grabber*) with the engine's own HTTP

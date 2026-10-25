@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 
 pub mod args;
+pub mod cache;
 pub mod cookies;
 pub mod ladder;
 pub mod parse;
@@ -31,6 +32,7 @@ pub mod runner;
 use std::path::PathBuf;
 
 pub use args::PlayerClients;
+pub use cache::{normalize_url, ProbeCache};
 pub use cookies::{sweep_stale_cookie_files, CookieFile, STALE_AFTER};
 pub use ladder::{Attempt, Ladder, MAX_ATTEMPTS};
 pub use parse::{parse_info, parse_progress_line, ErrorClass, ProgressLine, ProgressTracker};

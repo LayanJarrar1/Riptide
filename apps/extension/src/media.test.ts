@@ -1,7 +1,8 @@
-import { test } from 'node:test';
+﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  BEST_ROW,
   buildMenu,
   classifyMediaResponse,
   cookieOriginOf,
@@ -9,6 +10,7 @@ import {
   isMediaKey,
   isSubstantialVideo,
   isVideoPageUrl,
+  shouldPrefetch,
   withSite,
 } from './media';
 import type { MediaChoice } from './protocol';
@@ -97,4 +99,18 @@ test('menu split, order kept, unknown and duplicate keys dropped', () => {
 test('withSite adds once', () => {
   assert.deepEqual(withSite(['a.com'], 'b.com'), ['a.com', 'b.com']);
   assert.deepEqual(withSite(['a.com'], 'a.com'), ['a.com']);
+});
+
+test('the popover can offer Best before the list arrives', () => {
+  assert.ok(isMediaKey(BEST_ROW.key));
+  assert.equal(BEST_ROW.kind, 'best');
+});
+
+test('prefetch only on video pages, once per URL', () => {
+  const watch = 'https://www.youtube.com/watch?v=abc';
+  assert.ok(shouldPrefetch(watch, ''));
+  assert.ok(!shouldPrefetch(watch, watch));
+  assert.ok(shouldPrefetch('https://www.youtube.com/watch?v=def', watch));
+  assert.ok(!shouldPrefetch('https://www.youtube.com/', ''));
+  assert.ok(!shouldPrefetch('https://example.com/watch?v=abc', ''));
 });

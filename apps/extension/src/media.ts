@@ -153,3 +153,14 @@ export function buildMenu(choices: readonly MediaChoice[]): QualityMenu {
 export function withSite(list: readonly string[], site: string): string[] {
   return list.includes(site) ? [...list] : [...list, site];
 }
+
+/** The row shown the moment the popover opens, before the quality list arrives. */
+export const BEST_ROW: MenuRow = { key: 'best', kind: 'best', height: null, ext: '', approxSize: null };
+
+/**
+ * Whether to warm the app's probe cache for `url`: only a page the extension already treats as
+ * a video page, and only once per URL (`already` is the last URL prefetched on this page).
+ */
+export function shouldPrefetch(url: string, already: string): boolean {
+  return url !== already && isVideoPageUrl(url);
+}
