@@ -22,14 +22,15 @@ the platform integrations. This file is the plan, what is done, and how to build
 | Wording | Windows, Credential Manager | **macOS, Keychain, Open at login** | A `<key>Mac` string replaces `<key>` on a Mac when it exists (`I18nService.t`). |
 | Menu bar | in-window menu | **app menu (About, Hide, Quit ⌘Q), Edit, Window** + the in-window menu | `mac_menu.rs`. Tauri's default Quit ended the process on the spot; ours asks while downloads run (like closing the window) and stops them at a checkpoint. Labels are English for now. |
 | Dock icon | – | **reopens the window** | A click on the Dock icon while the window sits in the menu bar shows it (`RunEvent::Reopen`). |
+| Release and updates | NSIS + `windows-x86_64` feed entry | **opt-in `darwin-aarch64`** | With the repository variable `MACOS_RELEASE=true`, `release.yml` also builds `Riptide_<version>_aarch64.dmg` and the signed `.app.tar.gz`, uploads both and adds `darwin-aarch64` to `latest-beta.json` (and `latest.json` for stable tags) and `SHA256SUMS.txt`. It only patches a feed of the same version. |
 | Notifications, autostart, tray, updater check | yes | yes (plugins) | Autostart uses a LaunchAgent. |
 
 ## Remaining phases
 
-1. **Release and updates.** Add a macOS job to `release.yml`: universal or per-arch builds,
-   Developer ID signing, notarization, `.app.tar.gz` updater artifacts, and `darwin-aarch64` /
-   `darwin-x86_64` entries in `latest.json`. Needs an Apple Developer account (the secrets listed
-   in `.github/workflows/macos.yml`).
+1. **Intel Macs and signing.** Releases are Apple Silicon only (`darwin-aarch64`); an Intel or
+   universal build needs `riptide-host` staged for `x86_64-apple-darwin` / `universal-apple-darwin`.
+   Signed and notarized releases need an Apple Developer account (the secrets listed in
+   `.github/workflows/macos.yml`).
 2. **Default handler switch.** Settings → Integration could set Riptide as the default `magnet:`
    handler through LaunchServices (`LSSetDefaultHandlerForURLScheme`), opt-in like on Windows.
 3. **ffmpeg for video.** Bundle an LGPL-only macOS ffmpeg, or let the user point Riptide at one
@@ -78,4 +79,5 @@ cargo clippy --target aarch64-apple-darwin -p riptide-desktop --all-targets -- -
 - [ ] A queue set to "Sleep" puts the Mac to sleep; "Shut down" asks once for permission, then shuts down.
 - [ ] Files: browse `/Volumes`, copy between two volumes, delete to the Trash, Option-drag copies.
 - [ ] Settings → Integration → Set up: Chrome, Edge and Firefox each get `app.riptide.host.json` under `~/Library/Application Support/…/NativeMessagingHosts/`, and a download clicked in the browser arrives in Riptide (with the app running and not running). Turn off removes the links.
+- [ ] After a release with `MACOS_RELEASE=true`: an older Mac install finds the update in Settings → About, installs it and restarts.
 - [ ] A YouTube page downloads with yt-dlp (single-file formats without ffmpeg).

@@ -7,6 +7,12 @@ name: release
 #
 # Secrets: TAURI_SIGNING_PRIVATE_KEY (contents of riptide-updater.key) and, if the key has one,
 # TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
+#
+# macOS (opt-in): with the repository variable MACOS_RELEASE set to `true`, a Mac runner also
+# builds Riptide_<version>_aarch64.dmg and the signed updater archive, and once the Windows job
+# has published, adds both to the release and a `darwin-aarch64` entry to latest-beta.json
+# (and latest.json for stable tags). Signing and notarization use the APPLE_* secrets listed in
+# macos.yml; without them the app is only ad-hoc signed. See docs/MACOS.md.
 
 on:
   push:
@@ -98,3 +104,126 @@ jobs:
           if ('${{ steps.v.outputs.prerelease }}' -ne 'true') { $verifyArgs.Stable = $true }
           & .\scripts\verify-update-feed.ps1 @verifyArgs
           if ($LASTEXITCODE -ne 0) { throw 'the update feed check failed' }
+
+  macos:
+    name: build (macos, Apple Silicon)
+    if: vars.MACOS_RELEASE == 'true'
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from tag
+        id: v
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag $GITHUB_REF_NAME is not v<semver>" >&2; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Version bump (as scripts/release.ps1)
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          perl -0pi -e 's/(^\[workspace\.package\]\s*$.*?^version\s*=\s*")[^"]*(")/${1}$ENV{VERSION}${2}/ms' Cargo.toml
+          grep -q "^version = \"$VERSION\"" Cargo.toml
+          (cd apps/desktop && npm ci --no-audit --no-fund && npm version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null)
+          cargo update --workspace --offline || cargo update --workspace
+
+      - name: Build the .dmg and the updater archive
+        working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then echo 'secret TAURI_SIGNING_PRIVATE_KEY is not set' >&2; exit 1; fi
+          # a secret that is not set arrives as an empty variable; tauri-cli must not see those
+          for v in TAURI_SIGNING_PRIVATE_KEY_PASSWORD APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          npm run bundle:mac -- --config src-tauri/tauri.release.conf.json
+
+      - name: Collect
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          out="target/release-artifacts/macos"
+          mkdir -p "$out"
+          cp "target/release/bundle/dmg/Riptide_${VERSION}_aarch64.dmg" "$out/"
+          # one name per version and architecture on the release page; the signature covers the bytes
+          cp target/release/bundle/macos/Riptide.app.tar.gz "$out/Riptide_${VERSION}_aarch64.app.tar.gz"
+          cp target/release/bundle/macos/Riptide.app.tar.gz.sig "$out/Riptide_${VERSION}_aarch64.app.tar.gz.sig"
+          ls -l "$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: riptide-macos-release
+          path: target/release-artifacts/macos/
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-publish:
+    name: publish (macos)
+    needs: [windows, macos]
+    if: vars.MACOS_RELEASE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: riptide-macos-release
+          path: mac
+
+      - name: Add the macOS files and the darwin-aarch64 update entry
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          dmg="Riptide_${version}_aarch64.dmg"
+          archive="Riptide_${version}_aarch64.app.tar.gz"
+          gh release upload "$TAG" "mac/$dmg" "mac/$archive" --clobber
+
+          entry=$(jq -n --arg sig "$(tr -d '\r\n' < "mac/$archive.sig")" \
+            --arg url "https://github.com/$GH_REPO/releases/download/$TAG/$archive" \
+            '{signature: $sig, url: $url}')
+          # adds the entry to a feed of this version only: a newer release may have replaced it
+          patch() {
+            local file="$1"
+            test "$(jq -r .version "$file")" = "$version" || { echo "$file is not for $version; left alone"; return 1; }
+            jq --argjson e "$entry" '.platforms["darwin-aarch64"] = $e' "$file" > "$file.new" && mv "$file.new" "$file"
+          }
+
+          mkdir beta && gh release download channel-beta -p latest-beta.json -D beta
+          patch beta/latest-beta.json && gh release upload channel-beta beta/latest-beta.json --clobber
+
+          if [[ "$version" != *-* ]]; then
+            mkdir stable && gh release download "$TAG" -p latest.json -D stable
+            patch stable/latest.json && gh release upload "$TAG" stable/latest.json --clobber
+          fi
+
+          mkdir sums && gh release download "$TAG" -p SHA256SUMS.txt -D sums
+          (cd mac && sha256sum "$dmg" "$archive") >> sums/SHA256SUMS.txt
+          gh release upload "$TAG" sums/SHA256SUMS.txt --clobber
