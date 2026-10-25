@@ -41,7 +41,7 @@ describe('BrandLogoAnimatedComponent', () => {
     expect(svg?.getAttribute('role')).toBe('img');
     expect(svg?.getAttribute('aria-label')).toBe('Riptide');
     expect(root().querySelector('path.fill')?.getAttribute('d')).toBe(LOGO_MARK_PATH);
-    expect(root().querySelectorAll('path.reveal').length).toBe(3);
+    expect(root().querySelectorAll('path.reveal').length).toBe(4);
   });
 
   it('skips the animation under reduced motion', () => {
