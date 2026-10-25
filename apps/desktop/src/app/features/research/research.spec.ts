@@ -347,7 +347,7 @@ describe('ResearchPageComponent', () => {
     fixture.detectChanges();
     expect(sendButton(el).disabled).toBe(true);
     expect(el.querySelector('#research-need')?.textContent).toContain('Choose a category first');
-    expect(el.querySelector('.send-wrap')?.getAttribute('title')).toBe('Choose a category first');
+    expect(el.querySelector('.send')?.getAttribute('title')).toBe('Choose a category first');
     // Enter does not search either
     el.querySelector('#research-prompt')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     await settle(fixture);
@@ -388,7 +388,7 @@ describe('ResearchPageComponent', () => {
     const { fixture, el } = await mount();
     trigger(el, 'Mode').click();
     fixture.detectChanges();
-    const options = [...el.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    const options = [...el.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
     expect(options.map((o) => o.querySelector('.option-name')?.textContent?.trim())).toEqual(['Quick Search', 'Deep Research', 'Video Search', 'Source Finder']);
     expect(options.every((o) => (o.querySelector('.option-desc')?.textContent ?? '').trim().length > 0)).toBe(true);
     options[2].click();
@@ -399,7 +399,7 @@ describe('ResearchPageComponent', () => {
     choose(fixture, el, 'Images');
     await settle(fixture);
     expect(trigger(el, 'Mode').textContent).toContain('Quick Search');
-    expect(el.querySelector('.note')?.textContent).toContain('Video Search is for Videos only');
+    expect(el.querySelector('.banner.is-warn')?.textContent).toContain('Video Search is for Videos only');
   });
 
   it('opens the pickers from the keyboard: arrows move, Enter chooses, Escape closes and returns the focus', async () => {
@@ -410,32 +410,32 @@ describe('ResearchPageComponent', () => {
     await afterFrames();
     t.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     await flush(fixture);
-    expect(el.querySelector('[role="listbox"]')).not.toBeNull();
+    expect(el.querySelector('[role="menu"]')).not.toBeNull();
     expect(t.getAttribute('aria-expanded')).toBe('true');
-    const list = el.querySelector('[role="listbox"]') as HTMLElement;
+    const list = el.querySelector('[role="menu"]') as HTMLElement;
     list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await flush(fixture);
-    expect(el.querySelector('[role="listbox"]')).toBeNull();
+    expect(el.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(t);
     await afterFrames();
     // open again, move down twice from the first option and choose with Enter (a click on the focused option)
     t.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     await flush(fixture);
-    const opts = [...el.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    const opts = [...el.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
     expect(document.activeElement).toBe(opts[0]);
-    (el.querySelector('[role="listbox"]') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    (el.querySelector('[role="menu"]') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
     expect(document.activeElement).toBe(opts[1]);
     opts[1].click();
     await flush(fixture);
     expect(trigger(el, 'Mode').textContent).toContain('Deep Research');
-    expect(el.querySelector('[role="listbox"]')).toBeNull();
+    expect(el.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('shows the AI chip as a quiet option: keyword mode opens the guided setup in place', async () => {
     const h = setup();
     const { fixture, el } = await mount();
     expect((el.querySelector('app-ai-setup-dialog dialog') as HTMLDialogElement).open).toBeFalse();
-    (el.querySelector('.provider.is-off') as HTMLButtonElement).click();
+    (el.querySelector('.icon-button.is-dim') as HTMLButtonElement).click();
     await flush(fixture);
     // opened in place: no trip to Settings
     expect((el.querySelector('app-ai-setup-dialog dialog') as HTMLDialogElement).open).toBeTrue();
@@ -503,7 +503,10 @@ describe('ResearchPageComponent', () => {
     h.emit(batch(5, { t: 'plan', queries: ['frog habitats'] }, { t: 'hits', source: 'gutenberg', items: [item('g1', 'gutenberg'), item('g2', 'gutenberg')] }, { t: 'source', source: 'gutenberg', state: 'done', found: 2, code: null }, { t: 'source', source: 'arxiv', state: 'failed', found: 0, code: 'timeout' }));
     await settle(fixture);
     expect(state('1')).toContain('is-done');
-    expect(el.textContent).toContain('frog habitats');
+    // the phrasings that were searched sit in the first step's details
+    (el.querySelector('.row.is-button') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(el.querySelector('.code-body')?.textContent).toContain('frog habitats');
     expect(state('2')).toContain('is-done');
     expect(el.querySelector('.chip-retry')).not.toBeNull();
     (el.querySelector('.chip-retry') as HTMLButtonElement).click();
@@ -718,7 +721,7 @@ describe('ResearchPageComponent', () => {
     const { fixture, el } = await mount();
     trigger(el, 'Mode').click();
     fixture.detectChanges();
-    [...el.querySelectorAll<HTMLButtonElement>('[role="option"]')][1].click();
+    [...el.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')][1].click();
     await settle(fixture);
     await ask(fixture, el, 'reef');
     expect(h.calls.find((c) => c.cmd === 'research_start')?.args).toEqual({ request: { topic: 'reef', useAi: false, lang: 'en', category: 'documents', mode: 'deep-research' } });
@@ -988,16 +991,16 @@ describe('ResearchPageComponent', () => {
   it('offers the provider and model as a chip with an AI switch, and a keyword fallback when the AI fails', async () => {
     const h = setup({ configured: true, start: { ...START_EXTRA, searchId: 5, sources: ['arxiv'], unavailable: [], ai: true } });
     const { fixture, el } = await mount();
-    expect(el.querySelector('.provider')?.textContent).toContain('DeepInfra · m');
+    expect(el.querySelector('.icon-button')?.getAttribute('title')).toContain('DeepInfra · m');
     // the chip's menu turns the AI off for the next search
-    (el.querySelector('.provider') as HTMLButtonElement).click();
+    (el.querySelector('.icon-button') as HTMLButtonElement).click();
     await flush(fixture);
     const menu = [...el.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
     expect(menu.map((m) => m.textContent?.trim())).toEqual(['Turn AI off for this search', 'AI settings']);
     menu[0].click();
     await flush(fixture);
-    expect(el.querySelector('.provider')?.textContent).toContain('AI off');
-    (el.querySelector('.provider') as HTMLButtonElement).click();
+    expect(el.querySelector('.icon-button')?.getAttribute('title')).toContain('AI off');
+    (el.querySelector('.icon-button') as HTMLButtonElement).click();
     await flush(fixture);
     [...el.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')][0].click();
     await flush(fixture);
