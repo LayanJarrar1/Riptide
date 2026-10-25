@@ -8,6 +8,53 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-10-25
+
+Research is rebuilt around what you are looking for, Settings are reorganised, and updates now check and
+install themselves safely. Updates arrive through the beta channel.
+
+### Research
+
+- **Choose what you are looking for first:** Videos, Software & apps, Documents & PDFs, Images, Academic
+  research, Open-source projects or General web. Send stays disabled until you pick one.
+- **Four modes:** Quick search (fast, strict), Deep research (more phrasings, compares sources and notes
+  where they disagree), Video search, and Source finder (prefers official publishers, flags mirrors).
+- **Results that match:** Riptide reads the episode, season, version, year, file type, quoted phrases and
+  excluded words in your request (Arabic included) and checks every result against them. Results are grouped
+  as exact matches, likely matches and related; a result that contradicts your request (another episode,
+  another version) is never shown, and the page says how many weaker results it hid. Nothing is invented:
+  size, duration, version and date appear only when the source states them.
+- **Video search without a key:** YouTube results through the bundled yt-dlp, with duration and thumbnail,
+  downloadable through the normal video flow.
+- A new look: a centred start page with the logo, a cleaner prompt box with mode and category pickers,
+  result cards that fit each kind of result, a history sidebar you can search, resize and hide, and a compact
+  icon rail on Research and Files.
+- Result thumbnails are fetched by the app itself (private addresses refused, size and type checked), so the
+  page never loads third-party images directly.
+
+### Settings
+
+- Seven sections: General, Downloads, Browser integration, Network, AI & Research, Privacy & Data, Updates &
+  About, with a section list, deep links and confirmations before anything is deleted.
+- New: maximum active downloads and automatic retry after the network comes back.
+- AI shows two states: whether it is enabled and whether the provider actually answers.
+
+### Updates
+
+- Checks 20 seconds after start and every 6 hours (1, 6, 12 or 24 h), remembers the last check and the last
+  error, and retries after a failure.
+- The package is downloaded and its signature verified as a separate step; installing never interrupts
+  active downloads unless you choose to, and "Install when downloads finish" waits for them.
+- Pre-release versions are ordered correctly (alpha < beta < rc < stable).
+- The installer no longer asks for a language: it follows the Windows display language (English
+  otherwise), so automatic updates of older installs no longer stop at a dialog.
+
+### Fixes
+
+- Short windows and display scaling up to 200 %: the Research start page, the empty downloads list and
+  the category picker fit; Arabic version numbers and plurals read correctly; the update-channel switch is
+  readable in the light theme.
+
 ## [0.1.0-beta.1] - 2026-10-24
 
 The first beta. The features planned for v1 are in; expect rough edges. Updates arrive through the beta
