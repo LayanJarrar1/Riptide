@@ -65,6 +65,24 @@ pub fn confirm_before_close<R: tauri::Runtime>(
     true
 }
 
+/// A quit asked for outside the window (⌘Q in the macOS menu): with the guard on and downloads
+/// running, shows the window and asks like a close does; otherwise quits like the tray's Quit.
+pub fn request_quit<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let enabled = app.try_state::<ExitGuard>().is_some_and(|g| g.enabled());
+    let active = app
+        .try_state::<Engine>()
+        .map(|e| e.running_ids().len())
+        .unwrap_or(0);
+    if needs_confirmation(enabled, active) {
+        crate::show_main_window(app);
+        if app.emit(CONFIRM_EXIT_EVENT, active).is_ok() {
+            return;
+        }
+        tracing::warn!("confirm-exit prompt not delivered; quitting");
+    }
+    crate::tray::quit(app);
+}
+
 /// Mirrors the UI's `confirmOnExit` preference.
 #[tauri::command]
 pub fn set_exit_guard(guard: tauri::State<'_, ExitGuard>, enabled: bool) {

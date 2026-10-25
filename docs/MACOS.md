@@ -20,6 +20,8 @@ the platform integrations. This file is the plan, what is done, and how to build
 | Video pages (yt-dlp) | yt-dlp + ffmpeg | **yt-dlp only** | yt-dlp's universal macOS build, pinned by SHA-256. No ffmpeg yet: formats that need merging fall back to single-file ones. |
 | Browser extension (Chrome, Edge, Firefox) | registry keys to the manifests | **links in `~/Library/Application Support/<browser>/NativeMessagingHosts/`** | Settings → Integration works the same: each browser's `app.riptide.host.json` is a symbolic link to the manifest in Riptide's data folder, pointing at `riptide-host` inside the app. Only our own links are ever removed. |
 | Wording | Windows, Credential Manager | **macOS, Keychain, Open at login** | A `<key>Mac` string replaces `<key>` on a Mac when it exists (`I18nService.t`). |
+| Menu bar | in-window menu | **app menu (About, Hide, Quit ⌘Q), Edit, Window** + the in-window menu | `mac_menu.rs`. Tauri's default Quit ended the process on the spot; ours asks while downloads run (like closing the window) and stops them at a checkpoint. Labels are English for now. |
+| Dock icon | – | **reopens the window** | A click on the Dock icon while the window sits in the menu bar shows it (`RunEvent::Reopen`). |
 | Notifications, autostart, tray, updater check | yes | yes (plugins) | Autostart uses a LaunchAgent. |
 
 ## Remaining phases
@@ -32,8 +34,9 @@ the platform integrations. This file is the plan, what is done, and how to build
    handler through LaunchServices (`LSSetDefaultHandlerForURLScheme`), opt-in like on Windows.
 3. **ffmpeg for video.** Bundle an LGPL-only macOS ffmpeg, or let the user point Riptide at one
    (Homebrew), so best-quality video and audio can be merged.
-4. **Native menu bar.** Mirror File / Downloads / Tools / View / Help in the macOS menu bar
-   (Tauri `Menu`) and drop the in-window one on macOS.
+4. **Full native menu bar.** The app, Edit and Window menus are native now; File / Downloads /
+   Tools / View / Help could move there too (and the in-window menu go away on macOS), with the
+   labels following the app language.
 5. **Linux.** The same work for Secret Service (keys), `xdg` handlers and packaging (AppImage /
    .deb), if wanted.
 
@@ -67,7 +70,8 @@ cargo clippy --target aarch64-apple-darwin -p riptide-desktop --all-targets -- -
 
 - [ ] The `.dmg` opens, drag to Applications works, the app starts (after Open Anyway when unsigned).
 - [ ] Traffic lights sit in the 76 px gap of the title bar, in English and Arabic; dragging the bar moves the window.
-- [ ] ⌘N, ⌘F, ⌘, and ⌘B work; ⌘C / ⌘V work in text fields.
+- [ ] ⌘N, ⌘F, ⌘, and ⌘B work; ⌘C / ⌘V / ⌘A work in text fields.
+- [ ] ⌘Q with a download running asks first (when "Confirm on exit" is on); after Quit, the download resumes on the next start. With the window hidden in the menu bar, clicking the Dock icon shows it.
 - [ ] A download finishes and Finder shows "downloaded from the internet" for a `.dmg` or `.app` inside it.
 - [ ] An AI key entered in Settings is still there after quitting and reopening (Keychain Access shows `Riptide/ai`).
 - [ ] Clicking a `magnet:` link in Safari (after choosing Riptide) and double-clicking a `.torrent` in Finder open the torrent dialog, with the app running and not running.

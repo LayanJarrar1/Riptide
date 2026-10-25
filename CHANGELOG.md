@@ -21,6 +21,8 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 - Files: the Trash (put back from Finder), `/Volumes` as places, Option-drag to copy, Finder wording.
 - The browser extension connects on macOS: Settings → Integration links the host manifest into
   Chrome's, Edge's and Firefox's `NativeMessagingHosts` folders (and removes only those links).
+- A native app menu (About, Hide, Quit ⌘Q), Edit and Window menus; ⌘Q asks first while downloads
+  run and stops them at a checkpoint. Clicking the Dock icon brings back a window hidden in the menu bar.
 - Settings and AI texts name macOS, the Keychain and "Open at login" instead of Windows terms.
 - Video pages use yt-dlp's macOS build (pinned); ffmpeg is not bundled on macOS yet.
 - Plan, status and manual checks: `docs/MACOS.md`.

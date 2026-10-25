@@ -24,6 +24,8 @@ pub mod extension;
 pub mod files;
 pub mod integration;
 pub mod ipc_server;
+#[cfg(target_os = "macos")]
+pub mod mac_menu;
 pub mod media;
 pub mod notify;
 pub mod power;
@@ -309,7 +311,13 @@ pub fn run() {
         build = BUILD_LABEL,
         "starting Riptide desktop"
     );
-    let result = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // macOS: our own menu bar, whose Quit asks first and stops the transfers at a checkpoint
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(mac_menu::build)
+        .on_menu_event(|app, event| mac_menu::on_menu(app, &event));
+    let result = builder
         // first: a second launch hands over to the running instance and exits before it opens
         // the database (its crash recovery would otherwise re-queue the live transfers)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -483,7 +491,8 @@ pub fn run() {
 }
 
 /// Events of the running app. macOS hands `magnet:` links and `.torrent` files to an app that
-/// already runs (or is starting) as an "open" event rather than a command line.
+/// already runs (or is starting) as an "open" event rather than a command line, and reports a
+/// click on the Dock icon as "reopen".
 fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     #[cfg(target_os = "macos")]
     if let tauri::RunEvent::Opened { urls } = &event {
@@ -492,6 +501,15 @@ fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
                 protocol::deliver_open(app, target);
             }
         }
+        show_main_window(app);
+    }
+    // a click on the Dock icon while the window sits in the menu bar brings it back
+    #[cfg(target_os = "macos")]
+    if let tauri::RunEvent::Reopen {
+        has_visible_windows: false,
+        ..
+    } = &event
+    {
         show_main_window(app);
     }
     #[cfg(not(target_os = "macos"))]
