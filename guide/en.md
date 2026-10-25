@@ -212,10 +212,12 @@ or Edge Add-ons yet: open **Settings → Integration** and use the install helpe
 
 ## Updates
 
-Riptide checks for a new version once a day. When one exists you get a system notification (once per
-version) and a badge in **Settings → About**, where you can install it. After an update, a
+Riptide checks for a new version shortly after it starts and then every 6 hours (**Settings → Updates & About**
+lets you choose 1, 6, 12 or 24 hours). When one exists you get a system notification (once per version) and a
+badge on that section, where you can install it. The package is verified before it is installed, and Riptide
+never installs over running downloads unless you choose **Install now**; **Install when downloads finish** waits. After an update, a
 **What's new** link opens the release notes. The check can be turned off, and **Update channel** in
-the same place chooses between stable and beta releases; while Riptide is in alpha, beta is the default.
+the same place chooses between stable and beta releases; while Riptide is in beta, beta is the default.
 
 ## Settings
 

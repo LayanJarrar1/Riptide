@@ -39,8 +39,8 @@
 
 | | File | Notes |
 |---|---|---|
-| **Installer** | [`Riptide_0.1.0-beta.1_x64-setup.exe`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe) | Per-user install, no admin prompt |
-| **Portable** | [`Riptide-0.1.0-beta.1-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip) | Unzip anywhere; data stays next to the app |
+| **Installer** | [`Riptide_0.1.0-beta.2_x64-setup.exe`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.2/Riptide_0.1.0-beta.2_x64-setup.exe) | Per-user install, no admin prompt |
+| **Portable** | [`Riptide-0.1.0-beta.2-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.2/Riptide-0.1.0-beta.2-portable.zip) | Unzip anywhere; data stays next to the app |
 
 Windows 10 or 11, 64-bit. Checksums and older versions are on the [Releases page](https://github.com/LayanJarrar1/Riptide/releases).
 
@@ -56,7 +56,7 @@ Upgrading from an alpha build works in place. The database moves to a new format
 - **Research:** ask in a conversation and Riptide searches open and public sources (papers, books, music, video, software, images, datasets) and shows the licence of each result. Save a research as Markdown, export citations as BibTeX or RIS. An optional AI (your own key) ranks results and says why; it is off until you set it up, and each question sends only itself.
 - **File manager:** two panes, drag and drop, Recycle Bin and folder colours.
 - **Browser extension:** Chrome and Edge send downloads to Riptide, with a "Download this video" button.
-- **Updates:** one check a day (you can turn it off), installed in one click.
+- **Updates:** checks shortly after start and every 6 hours (you can change or turn it off), verifies the signature, and never interrupts running downloads.
 
 ## Screenshots
 
@@ -101,7 +101,7 @@ It takes downloads automatically (with rules for size, file types and sites; hol
 
 ## Privacy
 
-Riptide does not collect anything about you. Its own network calls are your downloads, the local connection to the browser extension, and a daily check for a new version (Settings turns it off). Research and the optional AI contact only the sources and the provider you use, and your API key stays in Windows Credential Manager. See the [privacy page](https://layanjarrar1.github.io/Riptide/privacy/).
+Riptide does not collect anything about you. Its own network calls are your downloads, the local connection to the browser extension, and a check for a new version every few hours (Settings turns it off). Research and the optional AI contact only the sources and the provider you use, and your API key stays in Windows Credential Manager. See the [privacy page](https://layanjarrar1.github.io/Riptide/privacy/).
 
 ## Build from source
 
@@ -137,8 +137,8 @@ More: [User guide](guide/en.md) · [Architecture](ARCHITECTURE.md) · [Contribut
 - **مدير ملفات** بنافذتين، **تورنت**، **فيديو**، **طوابير وجدولة**، و**إضافة للمتصفح**.
 
 **التحميل:**
-[المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe) ·
-[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip) ·
+[المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.2/Riptide_0.1.0-beta.2_x64-setup.exe) ·
+[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.2/Riptide-0.1.0-beta.2-portable.zip) ·
 [دليل الاستخدام](guide/ar.md)
 
 **تثبيت الإضافة في كروم أو إيدج:** ١) في ريبتايد: **الإعدادات ← التكامل ← فتح مجلد الإضافة**. ٢) في المتصفح افتح `chrome://extensions` وفعّل **وضع المطوّر**. ٣) اضغط **Load unpacked** واختر ذلك المجلد.
