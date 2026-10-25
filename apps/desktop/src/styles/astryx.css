@@ -1,0 +1,93 @@
+/*
+ * Chat tokens for the Research conversation (composer, thread, progress steps).
+ *
+ * The values are measured from the Astryx chat components (ChatComposer, ChatLayout, ChatMessage,
+ * ChatToolCalls, ChatTokenizedText; astryx.atmeta.com) so that the Research area matches them to
+ * the pixel: see docs/decisions.md D-astryx-chat-1. Dark is the base, the light block overrides.
+ * Nothing outside the Research area reads these.
+ */
+
+:root {
+  --font-chat: "Figtree", "IBM Plex Sans Arabic", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-chat-mono: ui-monospace, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace, "IBM Plex Sans Arabic";
+
+  --ax-text: #fff;
+  --ax-text-muted: #9e9e9e;
+  --ax-surface: #1b1b1b;
+  --ax-surface-code: #111;
+  --ax-code-text: #e2e2e2;
+  --ax-code-muted: #9e9e9e;
+  --ax-border-code: rgb(255 255 255 / 10%);
+  --ax-divider: rgb(255 255 255 / 10%);
+  --ax-overlay: rgb(255 255 255 / 5%);
+  --ax-bubble: rgb(255 255 255 / 10%);
+  --ax-shadow:
+    0 2px 4px rgb(0 0 0 / 25%),
+    0 4px 8px rgb(0 0 0 / 40%),
+    inset 0 0 0 1px rgb(255 255 255 / 8%);
+  --ax-send-bg: #f1f1f1;
+  --ax-send-fg: #111;
+  --ax-focus: #dfe2e5;
+  --ax-pill-bg: #303030;
+  --ax-pill-fg: #d4d4d4;
+
+  --ax-ok: #a4d6a3;
+  --ax-fail: #ffc4be;
+  --ax-run: #f1f1f1;
+  --ax-pending: #525252;
+
+  --ax-error-bg: rgb(255 152 144 / 24%);
+  --ax-error-fg: #ffaea7;
+  --ax-error-icon: #ffc4be;
+  --ax-warn-bg: rgb(226 182 35 / 24%);
+  --ax-warn-fg: #eec448;
+  --ax-warn-icon: #f8d36a;
+
+  --ax-token-blue-bg: #253c5a;
+  --ax-token-blue-fg: #a1caff;
+  --ax-token-red-bg: #5b2b28;
+  --ax-token-red-fg: #ffaea7;
+  --ax-token-green-bg: #2b422b;
+  --ax-token-green-fg: #90ca90;
+}
+
+:root[data-theme="light"] {
+  --ax-text: #000;
+  --ax-text-muted: #474747;
+  --ax-surface: #fff;
+  --ax-surface-code: #fff;
+  --ax-code-text: #111;
+  --ax-code-muted: #6a6a6a;
+  --ax-border-code: rgb(0 0 0 / 8%);
+  --ax-divider: rgb(0 0 0 / 8%);
+  --ax-overlay: rgb(0 0 0 / 5%);
+  --ax-bubble: rgb(0 0 0 / 6%);
+  --ax-shadow:
+    0 2px 4px rgb(0 0 0 / 5%),
+    0 4px 8px rgb(0 0 0 / 10%),
+    inset 0 0 0 1px transparent;
+  --ax-send-bg: #1b1b1b;
+  --ax-send-fg: #fff;
+  --ax-focus: #15110c;
+  --ax-pill-bg: #e2e2e2;
+  --ax-pill-fg: #1b1b1b;
+
+  --ax-ok: #00490b;
+  --ax-fail: #76000c;
+  --ax-run: #1b1b1b;
+  --ax-pending: #919191;
+
+  --ax-error-bg: #ffc4be;
+  --ax-error-fg: #76000c;
+  --ax-error-icon: #76000c;
+  --ax-warn-bg: #fae19e;
+  --ax-warn-fg: #4b3900;
+  --ax-warn-icon: #4b3900;
+
+  --ax-token-blue-bg: #b9d7ff;
+  --ax-token-blue-fg: #003978;
+  --ax-token-red-bg: #ffc4be;
+  --ax-token-red-fg: #76000c;
+  --ax-token-green-bg: #bce0bb;
+  --ax-token-green-fg: #00490b;
+}
