@@ -17,6 +17,21 @@ from urllib.parse import urljoin, urlparse
 from playwright.sync_api import sync_playwright
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:8124/').rstrip('/') + '/'
+
+# The featured release comes from release.json (what the site is built from), so this check
+# follows each release instead of naming one. RIPTIDE_RELEASE_AHEAD runs use RELEASE_VERSION in build.mjs.
+_SITE = Path(__file__).resolve().parents[1]
+def _featured_version() -> str:
+    if os.environ.get('RIPTIDE_RELEASE_AHEAD') == '1':
+        m = re.search(r"RELEASE_VERSION\s*=\s*'([^']+)'", (_SITE / 'build.mjs').read_text(encoding='utf8'))
+        if m:
+            return m.group(1)
+    latest = json.loads((_SITE / 'release.json').read_text(encoding='utf8'))['latest']
+    return (latest.get('prerelease') or latest.get('stable') or '').lstrip('v')
+VER = _featured_version()
+_N = re.search(r'-(?:alpha|beta|rc)\.(\d+)$', VER)
+STAGE_EN = f"Beta {_N.group(1)}" if _N and '-beta.' in VER else VER
+STAGE_AR = f"بيتا {_N.group(1)}" if _N and '-beta.' in VER else VER
 CHANNEL = os.environ.get('RIPTIDE_E2E_CHANNEL', 'msedge') or None
 VIEWPORTS = [(1920, 1080), (1440, 900), (1366, 768), (1280, 720), (1350, 530), (768, 1024), (390, 844)]
 PAGES = [('en', BASE), ('ar', BASE + 'ar/')]
@@ -71,26 +86,25 @@ with sync_playwright() as p:
         hero_dl = page.eval_on_selector('.hero .btn-primary', 'e => e.href')
         check(f'{tag} hero CTA is the installer', hero_dl.endswith('x64-setup.exe'), hero_dl)
         REL = 'https://github.com/LayanJarrar1/Riptide/releases'
-        check(f'{tag} hero CTA is the beta.1 installer', hero_dl == f'{REL}/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe', hero_dl)
+        check(f'{tag} hero CTA is the {VER} installer', hero_dl == f'{REL}/download/v{VER}/Riptide_{VER}_x64-setup.exe', hero_dl)
         links = page.eval_on_selector_all('a[href]', 'els => els.map(e => e.href)')
-        for want in (f'{REL}/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip', f'{REL}/download/v0.1.0-beta.1/SHA256SUMS.txt', f'{REL}/tag/v0.1.0-beta.1'):
+        for want in (f'{REL}/download/v{VER}/Riptide-{VER}-portable.zip', f'{REL}/download/v{VER}/SHA256SUMS.txt', f'{REL}/tag/v{VER}'):
             check(f'{tag} links to {want.split("/")[-1]}', want in links)
         EXACT = {
-            'installer': f'{REL}/download/v0.1.0-beta.1/Riptide_0.1.0-beta.1_x64-setup.exe',
-            'portable': f'{REL}/download/v0.1.0-beta.1/Riptide-0.1.0-beta.1-portable.zip',
-            'sums': f'{REL}/download/v0.1.0-beta.1/SHA256SUMS.txt',
+            'installer': f'{REL}/download/v{VER}/Riptide_{VER}_x64-setup.exe',
+            'portable': f'{REL}/download/v{VER}/Riptide-{VER}-portable.zip',
+            'sums': f'{REL}/download/v{VER}/SHA256SUMS.txt',
         }
         rel_hrefs = page.eval_on_selector_all('a[href*="/releases"]', 'els => els.map(e => e.href)')
-        allowed = set(EXACT.values()) | {REL, f'{REL}/tag/v0.1.0-beta.1'}
+        allowed = set(EXACT.values()) | {REL, f'{REL}/tag/v{VER}'}
         check(f'{tag} every releases href is exactly an expected release URL', rel_hrefs and all(h in allowed for h in rel_hrefs), str([h for h in rel_hrefs if h not in allowed]))
         main_dl = page.eval_on_selector('#download .dl-main', 'e => e.href'); port = page.eval_on_selector('#download .dl:not(.dl-main)', 'e => e.href')
         check(f'{tag} band installer and portable are the exact asset URLs', main_dl == EXACT['installer'] and port == EXACT['portable'], f'{main_dl} {port}')
         check(f'{tag} header Download button is the installer', page.eval_on_selector('.nav-actions .btn-primary', 'e => e.href') == EXACT['installer'])
         body = page.content()
         check(f'{tag} no leftover alpha 3 or 4', not re.search(r'alpha[ .\-]?[34]|ألفا [34]', body, re.I))
-        check(f'{tag} badges say beta 1', ('Beta 1' in body) if lang == 'en' else ('بيتا 1' in body))
-        check(f'{tag} no store tiles and no soon/coming text', page.locator('.stores, .store').count() == 0 and not re.search(r'coming soon|soon|قريب', page.content(), re.I))
-        VER = '0.1.0-beta.1'
+        check(f'{tag} badges say {STAGE_EN}', (STAGE_EN in body) if lang == 'en' else (STAGE_AR in body))
+        check(f'{tag} no store tiles and no soon/coming text', page.locator('.stores, .store').count() == 0 and not re.search(r'coming soon|\bsoon\b|قريبًا|قريباً', page.content(), re.I))
         check(f'{tag} hero CTA shows the version', VER in page.text_content('.hero .btn-primary'))
         check(f'{tag} footer shows the version', VER in page.text_content('.footer-meta'))
         check(f'{tag} download band has the version', VER in page.text_content('#download .dl-main'))
@@ -108,11 +122,13 @@ with sync_playwright() as p:
         check(f'{tag} new-in-beta-1 block has 4 lazy images with alt, width and height', len(new_imgs) == 4 and all(a and b and c and d and e == 'lazy' for a, b, c, d, e in new_imgs), str(new_imgs)[:200])
         check(f'{tag} new-in-beta-1 images are the {lang} ones', all(f'-{lang}.webp' in a for a, *_ in new_imgs))
         check(f'{tag} open-sources policy note is shown', page.locator('#new .policy').count() == 1 and (('piracy' in page.text_content('#new .policy')) if lang == 'en' else ('القرصنة' in page.text_content('#new .policy'))))
-        check(f'{tag} new block title names the release', ('Beta 1' in page.text_content('#new .new-title')) if lang == 'en' else ('بيتا 1' in page.text_content('#new .new-title')))
+        check(f'{tag} new block title names the release', (STAGE_EN if lang == 'en' else STAGE_AR) in page.text_content('#new .new-title'))
         check(f'{tag} no social-network mentions', not any(w in page.content().lower() for w in ('link' + 'edin', 'twitter.com', 'facebook.com')))
         wn_text = page.text_content('.whats-new')
-        for word in (('BitTorrent', 'Research', 'Optional AI', 'Title bar') if lang == 'en' else ('تورنت', 'البحث', 'ذكاء اصطناعي اختياري', 'قوائم')):
-            check(f'{tag} whats-new mentions {word}', word in wn_text)
+        # every verified feature of the featured release is listed, by its own title
+        feats = json.loads((_SITE / 'src' / 'features.json').read_text(encoding='utf8'))['features']
+        titles = [f['title_' + lang] for f in feats if f.get('verified') and f.get('release') == VER]
+        check(f'{tag} whats-new lists the features of {VER} ({len(titles)})', bool(titles) and all(t in wn_text for t in titles), str([t for t in titles if t not in wn_text]))
 
         # Logo is the unmodified brand-kit file, and no filter or blend is applied to it
         srcs = page.eval_on_selector_all('.brand-logo, .footer-logo', 'els => els.map(e => e.getAttribute("src"))')
@@ -567,7 +583,9 @@ with sync_playwright() as p:
         for f in FEATURES:
             title = f[f'title_{lang}']
             shown = feat['version'] == f['release'] and f['verified']
-            in_list = title in page.text_content('.whats-new')
+            # compare whole item titles (<b>Title.</b>), so 'Research' is not found inside 'Research by category'
+            listed = page.eval_on_selector_all('.whats-new li > b', 'els => els.map(e => e.textContent.trim().replace(/\.$/, ""))')
+            in_list = title in listed
             check(f'{tag} features.json "{f["id"]}" is listed exactly when verified for {feat["version"]}', in_list == shown, f'{title!r} listed={in_list} expected={shown}')
         check(f'{tag} channel badge text', ('Beta' in body) if lang == 'en' else ('بيتا' in body))
         pill = page.locator('.rel-pill')
