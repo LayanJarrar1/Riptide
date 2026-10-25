@@ -2,33 +2,39 @@ import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, input
 
 import { CATEGORY_IDS, CategoryId, MODE_IDS, SearchMode } from '../../ai/research.models';
 import { I18nService } from '../../i18n/i18n.service';
-import { ButtonComponent } from '../../ui/button.component';
-import { IconComponent } from '../../ui/icon.component';
 import { MenuComponent, MenuItem } from '../../ui/menu.component';
+import { AxIconComponent } from './ax-icon.component';
 import { MAX_PROMPT } from './research-history';
 import { CATEGORY_ICONS, MODE_ICONS } from './research-modes';
 import { PickerOption, ResearchPickerComponent } from './research-picker.component';
 
 /**
- * The prompt box: a large multiline field (Enter sends, Shift+Enter adds a line, and Enter while an
- * input method is composing does neither), the mode and category choices as compact pickers, a small
- * provider chip (it turns the AI on or off and opens the AI settings) and the send button. A search
- * needs a category, so Send stays disabled until one is chosen and says so. While a search runs the
- * send button becomes Stop.
+ * The prompt box, drawn like the Astryx ChatComposer ("Footer Actions"): a rounded box with the
+ * message field on top and one footer row, the mode and category triggers on the start side and the
+ * AI button and Send on the end side. Enter sends, Shift+Enter adds a line, and Enter while an input
+ * method is composing does neither. A search needs a category, so Send stays disabled until one is
+ * chosen and a warning says so; while a search runs Send becomes Stop. An error banner joins the box
+ * from above, a warning from below.
  */
 @Component({
   selector: 'app-research-composer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, IconComponent, MenuComponent, ResearchPickerComponent],
+  imports: [AxIconComponent, MenuComponent, ResearchPickerComponent],
   template: `
-    <form class="composer" [class.is-compact]="compact()" (submit)="submit($event)">
+    @if (error(); as message) {
+      <div class="banner is-error" role="alert">
+        <app-ax-icon name="xCircle" [size]="20" />
+        <span dir="auto">{{ message }}</span>
+      </div>
+    }
+    <form class="composer" (submit)="submit($event)">
       <label class="sr-only" for="research-prompt">{{ i18n.t('research.title') }}</label>
       <textarea
         #field
         id="research-prompt"
         class="field"
         dir="auto"
-        [attr.rows]="compact() ? 1 : 2"
+        rows="1"
         [attr.maxlength]="maxPrompt"
         [placeholder]="i18n.t('research.placeholder')"
         [value]="text()"
@@ -36,11 +42,12 @@ import { PickerOption, ResearchPickerComponent } from './research-picker.compone
         (keydown)="onKey($event)"
       ></textarea>
 
-      <div class="row">
-        <div class="choices">
+      <div class="footer">
+        <div class="group">
           <app-research-picker
             [label]="i18n.t('research.modeLabel')"
             [placeholder]="i18n.t('research.modeLabel')"
+            fixedIcon="sparkle"
             [options]="modeOptions()"
             [value]="mode()"
             [placement]="placement()"
@@ -55,170 +62,204 @@ import { PickerOption, ResearchPickerComponent } from './research-picker.compone
             [placement]="placement()"
             (picked)="onCategory($event)"
           />
-          @if (aiReady()) {
-            <button type="button" class="provider" [class.is-dim]="!useAi()" aria-haspopup="menu" [attr.aria-expanded]="chipMenu() !== null" [attr.title]="i18n.t('research.provider.open')" (click)="openChipMenu($event)">
-              <app-icon name="sparkles" [size]="13" />
-              <span dir="auto">{{ useAi() ? providerLabel() : i18n.t('research.aiOff') }}</span>
-            </button>
-          } @else {
-            <button type="button" class="provider is-off" (click)="setupAi.emit()">
-              <app-icon name="sparkles" [size]="13" />
-              <span>{{ i18n.t('research.keywordMode.short') }}</span>
-            </button>
-          }
         </div>
 
-        <div class="send">
-          @if (!category() && !busy()) {
-            <span class="need" id="research-need" role="status">{{ i18n.t('research.needCategory') }}</span>
+        <div class="group">
+          @if (aiReady()) {
+            <button type="button" class="icon-button" [class.is-dim]="!useAi()" aria-haspopup="menu" [attr.aria-expanded]="chipMenu() !== null" [attr.aria-label]="aiTitle()" [attr.title]="aiTitle()" (click)="openChipMenu($event)">
+              <app-ax-icon name="cpu" [size]="16" />
+            </button>
           } @else {
-            <span class="hint">{{ i18n.t('research.composer.hint') }}</span>
+            <button type="button" class="icon-button is-dim" [attr.aria-label]="i18n.t('research.keywordMode.short')" [attr.title]="i18n.t('research.keywordMode.short')" (click)="setupAi.emit()">
+              <app-ax-icon name="cpu" [size]="16" />
+            </button>
           }
           @if (busy()) {
-            <button appButton variant="secondary" icon="stop" type="button" (click)="stop.emit()">{{ i18n.t('research.stop') }}</button>
+            <button type="button" class="send is-stop" [attr.aria-label]="i18n.t('research.stop')" [attr.title]="i18n.t('research.stop')" (click)="stop.emit()">
+              <app-ax-icon name="stop" [size]="16" />
+            </button>
           } @else {
-            <span class="send-wrap" [attr.title]="category() ? null : i18n.t('research.needCategory')">
-              <button appButton variant="primary" icon="arrowUp" type="submit" [disabled]="!canSend()" [attr.aria-describedby]="category() ? null : 'research-need'">{{ i18n.t('research.send') }}</button>
-            </span>
+            <button type="submit" class="send" [disabled]="!canSend()" [attr.aria-label]="i18n.t('research.send')" [attr.title]="category() ? null : i18n.t('research.needCategory')" [attr.aria-describedby]="needCategory() ? 'research-need' : null">
+              <app-ax-icon name="arrowUp" [size]="16" />
+            </button>
           }
         </div>
       </div>
-
-      @if (note()) {
-        <p class="note" role="status"><app-icon name="info" [size]="13" /> {{ note() }}</p>
-      }
     </form>
+    @if (needCategory()) {
+      <div class="banner is-warn" id="research-need" role="status">
+        <app-ax-icon name="alert" [size]="20" />
+        <span>{{ i18n.t('research.needCategory') }}</span>
+      </div>
+    } @else if (note(); as line) {
+      <div class="banner is-warn" role="status">
+        <app-ax-icon name="alert" [size]="20" />
+        <span>{{ line }}</span>
+      </div>
+    }
     <app-menu [open]="chipMenu() !== null" [items]="chipItems()" [x]="chipMenu()?.x ?? 0" [y]="chipMenu()?.y ?? 0" (selected)="onChipItem($event)" (closed)="chipMenu.set(null)" />
   `,
   styles: `
+    /* 450 wide and centred on the empty page, the width of the conversation column once there is one */
     :host {
       display: block;
+      inline-size: 100%;
+      max-inline-size: 450px;
+      margin-inline: auto;
+      font-family: var(--font-chat);
     }
 
+    :host(.is-wide) {
+      max-inline-size: 760px;
+    }
+
+    /* the box: radius 28, padding 12, 8 between the field and the footer, the Astryx surface and shadow */
     .composer {
+      position: relative;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: var(--space-2);
-      padding: var(--space-3) var(--space-4) var(--space-3);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-xl);
-      background: var(--color-surface-2);
-      transition:
-        border-color var(--dur-2) var(--ease-standard),
-        box-shadow var(--dur-2) var(--ease-standard);
+      gap: 8px;
+      box-sizing: border-box;
+      padding: 12px;
+      border-radius: 28px;
+      background: var(--ax-surface);
+      color: var(--ax-text);
+      box-shadow: var(--ax-shadow);
     }
 
-    .composer:focus-within {
-      border-color: var(--color-accent);
-      box-shadow: 0 0 0 4px var(--color-accent-ring);
-    }
-
+    /* the field: 14/22, 4px inset, one line tall until the text needs more */
     .field {
+      display: block;
+      box-sizing: border-box;
       inline-size: 100%;
-      min-block-size: 56px;
+      min-block-size: 22px;
       max-block-size: 200px;
-      padding: var(--space-1) 0;
+      margin: 0;
+      padding: 0 4px;
       border: 0;
       background: transparent;
-      color: var(--color-text);
-      font: inherit;
-      font-size: var(--text-lg);
-      line-height: var(--leading-normal);
+      color: var(--ax-text);
+      font: 400 14px/22px var(--font-chat);
       resize: none;
       outline: none;
-    }
-
-    .is-compact {
-      padding-block: var(--space-2);
-    }
-
-    .is-compact .field {
-      min-block-size: 28px;
-      font-size: var(--text-md);
+      overflow-y: auto;
     }
 
     .field::placeholder {
-      color: var(--color-text-muted);
+      color: var(--ax-text-muted);
+      opacity: 1;
     }
 
-    .row {
+    /* the footer row: 32 high, start group and end group 8 apart, 4 between buttons */
+    .footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
-      gap: var(--space-2) var(--space-3);
+      gap: 8px;
+      min-block-size: 32px;
     }
 
-    .choices,
-    .send {
+    .group {
       display: flex;
       align-items: center;
-      flex-wrap: wrap;
-      gap: var(--space-2);
+      gap: 4px;
       min-inline-size: 0;
     }
 
-    .provider {
+    .icon-button,
+    .send {
       display: inline-flex;
       align-items: center;
-      gap: var(--space-2);
-      max-inline-size: 220px;
-      block-size: 34px;
-      padding-inline: var(--space-3);
-      border: 1px solid transparent;
-      border-radius: var(--radius-full);
-      background: transparent;
-      color: var(--color-text-secondary);
-      font: inherit;
-      font-size: var(--text-xs);
-      cursor: pointer;
-    }
-
-    .provider app-icon {
-      color: var(--color-accent-fg);
+      justify-content: center;
       flex: none;
+      inline-size: 32px;
+      block-size: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: 16px;
+      background-color: transparent;
+      background-image: linear-gradient(transparent, transparent);
+      color: var(--ax-text);
+      cursor: pointer;
+      transition:
+        background-image 125ms cubic-bezier(0.24, 1, 0.4, 1),
+        background-color 125ms cubic-bezier(0.24, 1, 0.4, 1),
+        color 125ms cubic-bezier(0.24, 1, 0.4, 1),
+        opacity 125ms cubic-bezier(0.24, 1, 0.4, 1);
     }
 
-    .provider span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .icon-button:hover,
+    .icon-button[aria-expanded='true'] {
+      background-image: linear-gradient(var(--ax-overlay), var(--ax-overlay));
     }
 
-    .provider:hover {
-      color: var(--color-text);
-      background: var(--color-surface-hover);
+    .icon-button.is-dim {
+      color: var(--ax-text-muted);
     }
 
-    .provider:focus-visible {
-      outline: 2px solid var(--color-focus);
-      outline-offset: 2px;
+    .icon-button:focus-visible,
+    .send:focus-visible {
+      outline: 2px solid var(--ax-focus);
+      outline-offset: 3px;
     }
 
-    .provider.is-dim app-icon {
-      color: var(--color-text-muted);
+    .send {
+      background-color: var(--ax-send-bg);
+      color: var(--ax-send-fg);
     }
 
-    .provider.is-off {
-      border: 1px dashed var(--color-border-strong);
+    .send:disabled {
+      opacity: 0.5;
+      cursor: default;
     }
 
-    .hint,
-    .need {
-      font-size: var(--text-xs);
-      color: var(--color-text-muted);
+    /* while a search runs: the quiet "secondary" fill with the square */
+    .send.is-stop {
+      background-color: var(--ax-bubble);
+      color: var(--ax-text);
     }
 
-    .need {
-      color: var(--color-warning);
-    }
-
-    .note {
+    /* the banners: 12/20, 28 radius, joined to the box (they run 28px under or over it) */
+    .banner {
+      position: relative;
+      z-index: 0;
       display: flex;
       align-items: center;
-      gap: var(--space-2);
-      color: var(--color-text-secondary);
-      font-size: var(--text-xs);
+      gap: 8px;
+      box-sizing: border-box;
+      font: 400 12px/20px var(--font-chat);
+    }
+
+    .banner > span {
+      min-inline-size: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .banner.is-error {
+      padding: 12px 16px 40px;
+      margin-block-end: -28px;
+      border-start-start-radius: 28px;
+      border-start-end-radius: 28px;
+      background: var(--ax-error-bg);
+      color: var(--ax-error-fg);
+    }
+
+    .banner.is-error app-ax-icon {
+      color: var(--ax-error-icon);
+    }
+
+    .banner.is-warn {
+      padding: 40px 16px 12px;
+      margin-block-start: -28px;
+      border-end-start-radius: 28px;
+      border-end-end-radius: 28px;
+      background: var(--ax-warn-bg);
+      color: var(--ax-warn-fg);
+    }
+
+    .banner.is-warn app-ax-icon {
+      color: var(--ax-warn-icon);
     }
 
     .sr-only {
@@ -230,18 +271,14 @@ import { PickerOption, ResearchPickerComponent } from './research-picker.compone
       white-space: nowrap;
     }
 
-    @media (max-width: 760px) {
-      .hint {
-        display: none;
-      }
-    }
-
     @media (prefers-reduced-motion: reduce) {
-      .composer {
+      .icon-button,
+      .send {
         transition: none;
       }
     }
   `,
+  host: { '[class.is-wide]': 'wide()' },
 })
 export class ResearchComposerComponent {
   protected readonly i18n = inject(I18nService);
@@ -258,23 +295,29 @@ export class ResearchComposerComponent {
   readonly busy = input(false);
   /** A line saying what changed when choosing a mode moved the category or the other way round. */
   readonly note = input<string | null>(null);
-  /** The pickers open above the box when it sits at the bottom of the page. */
+  /** An error the box could not recover from; it shows as a banner above the box. */
+  readonly error = input<string | null>(null);
+  /** The menus open above the box when it sits at the bottom of the page. */
   readonly placement = input<'up' | 'down'>('up');
-  /** One line tall, for the box pinned under a conversation. */
-  readonly compact = input(false);
+  /** The width of a conversation (up to 760) instead of the 450 of the empty page. */
+  readonly wide = input(false);
 
   readonly send = output<string>();
   readonly stop = output<void>();
   readonly pickMode = output<SearchMode>();
   readonly pickCategory = output<CategoryId>();
   readonly openAiSettings = output<void>();
-  /** The "Keyword search · Add AI" chip: opens the guided setup. */
+  /** The AI button while no provider is set up: opens the guided setup. */
   readonly setupAi = output<void>();
 
   protected readonly text = signal('');
   protected readonly chipMenu = signal<{ x: number; y: number } | null>(null);
   private readonly field = viewChild.required<ElementRef<HTMLTextAreaElement>>('field');
   protected readonly canSend = computed(() => this.text().trim().length > 0 && this.category() !== null && !this.busy());
+  /** There is something to send but no category yet. */
+  protected readonly needCategory = computed(() => this.category() === null && !this.busy() && this.text().trim().length > 0);
+  /** The AI button's tooltip: the provider and model, or that the AI is off. */
+  protected readonly aiTitle = computed(() => (this.useAi() ? this.providerLabel() || this.i18n.t('research.provider.open') : this.i18n.t('research.aiOff')));
 
   protected readonly modeOptions = computed<readonly PickerOption[]>(() =>
     MODE_IDS.map((id) => ({ id, label: this.i18n.t(`research.mode.${id}`), description: this.i18n.t(`research.modeDesc.${id}`), icon: MODE_ICONS[id] })),
@@ -290,7 +333,11 @@ export class ResearchComposerComponent {
   protected onInput(event: Event): void {
     const el = event.target as HTMLTextAreaElement;
     this.text.set(el.value);
-    // grow with the text, up to the CSS maximum
+    this.grow(el);
+  }
+
+  /** Grows with the text, up to the CSS maximum. */
+  private grow(el: HTMLTextAreaElement): void {
     el.style.blockSize = 'auto';
     el.style.blockSize = `${el.scrollHeight}px`;
   }
@@ -313,8 +360,8 @@ export class ResearchComposerComponent {
   protected openChipMenu(event: MouseEvent): void {
     const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const rtl = this.i18n.dir() === 'rtl';
-    // above the chip: the box usually sits at the bottom of the page
-    this.chipMenu.set({ x: rtl ? r.right : r.left, y: Math.max(8, r.top - 2 * 30 - 20) });
+    const y = this.placement() === 'up' ? Math.max(8, r.top - 2 * 30 - 20) : r.bottom + 4;
+    this.chipMenu.set({ x: rtl ? r.right : r.left, y });
   }
 
   protected onMode(id: string): void {
@@ -352,6 +399,7 @@ export class ResearchComposerComponent {
     this.text.set(text);
     const el = this.field().nativeElement;
     el.value = text;
+    this.grow(el);
     el.focus();
   }
 

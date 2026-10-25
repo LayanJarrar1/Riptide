@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, injec
 
 import { I18nService } from '../../i18n/i18n.service';
 import { IconComponent, IconName } from '../../ui/icon.component';
+import { AxIconComponent, AxIconName } from './ax-icon.component';
 
 /** One entry of the picker: an icon, a name and a one-line description. */
 export interface PickerOption {
@@ -14,15 +15,16 @@ export interface PickerOption {
 let uid = 0;
 
 /**
- * A compact select with a popover list (a WAI-ARIA listbox): the button shows the choice with its
- * icon, the list shows every option with a one-line description. Keyboard: Enter, Space, ArrowDown or
- * ArrowUp on the button open it; arrows, Home and End move; Enter or Space choose; Escape closes and
- * gives the focus back; Tab closes. A click outside closes it.
+ * A footer trigger with a popover menu, drawn like the Astryx ChatComposer's "Auto" / "Settings"
+ * triggers and dropdown menu (a WAI-ARIA menu of radio items): the button shows the choice with its
+ * icon and a chevron, the menu shows every option with a one-line description. Keyboard: Enter,
+ * Space, ArrowDown or ArrowUp on the button open it; arrows, Home and End move; Enter or Space
+ * choose; Escape closes and gives the focus back; Tab closes. A click outside closes it.
  */
 @Component({
   selector: 'app-research-picker',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent],
+  imports: [IconComponent, AxIconComponent],
   host: { '(document:pointerdown)': 'onOutside($event)' },
   template: `
     <button
@@ -30,29 +32,31 @@ let uid = 0;
       type="button"
       class="trigger"
       [class.is-empty]="selected() === null"
-      aria-haspopup="listbox"
+      aria-haspopup="menu"
       [attr.aria-expanded]="open()"
       [attr.aria-controls]="open() ? listId : null"
       [attr.aria-label]="triggerLabel()"
-      [attr.title]="label()"
       (click)="toggle()"
       (keydown)="onTriggerKey($event)"
     >
-      <app-icon [name]="selected()?.icon ?? placeholderIcon()" [size]="15" />
+      @if (fixedIcon(); as fixed) {
+        <app-ax-icon [name]="fixed" [size]="16" />
+      } @else {
+        <app-icon [name]="selected()?.icon ?? placeholderIcon()" [size]="16" />
+      }
       <span class="trigger-value">{{ selected()?.label ?? placeholder() }}</span>
-      <app-icon class="caret" name="chevronDown" [size]="14" />
+      <app-ax-icon name="chevronDown" [size]="16" />
     </button>
 
     @if (open()) {
       <div
         #list
         class="list"
-        [class.is-up]="up()"
         [style.inset-inline-start.px]="startPx()"
         [style.max-block-size.px]="maxPx()"
         [style.--list-top.px]="topPx()"
         [style.--list-bottom.px]="bottomPx()"
-        role="listbox"
+        role="menu"
         tabindex="-1"
         [id]="listId"
         [attr.aria-label]="label()"
@@ -61,21 +65,20 @@ let uid = 0;
         @for (o of options(); track o.id; let n = $index) {
           <button
             type="button"
-            role="option"
+            role="menuitemradio"
             class="option"
             tabindex="-1"
-            [attr.aria-selected]="o.id === value()"
-            [class.is-selected]="o.id === value()"
+            [attr.aria-checked]="o.id === value()"
             (click)="choose(o)"
             (mouseenter)="focusAt(n)"
           >
-            <app-icon [name]="o.icon" [size]="18" />
+            <app-icon class="lead" [name]="o.icon" [size]="16" />
             <span class="option-text">
               <span class="option-name">{{ o.label }}</span>
               <span class="option-desc">{{ o.description }}</span>
             </span>
             @if (o.id === value()) {
-              <app-icon class="tick" name="check" [size]="14" />
+              <app-ax-icon class="tick" name="check" [size]="16" />
             }
           </button>
         }
@@ -86,132 +89,113 @@ let uid = 0;
     :host {
       position: relative;
       display: inline-flex;
+      max-inline-size: 100%;
+      min-inline-size: 0;
     }
 
+    /* the trigger: 32 high, 8px 12px, radius 16, icon / label / chevron 8 apart, label 14/20 medium */
     .trigger {
       display: inline-flex;
       align-items: center;
-      gap: var(--space-2);
+      justify-content: center;
+      gap: 8px;
       max-inline-size: 100%;
-      block-size: 34px;
-      padding-inline: var(--space-3) var(--space-2);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-full);
-      background: transparent;
-      color: var(--color-text);
-      font: inherit;
-      font-size: var(--text-sm);
+      min-inline-size: 0;
+      block-size: 32px;
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 16px;
+      background-color: transparent;
+      background-image: linear-gradient(transparent, transparent);
+      color: var(--ax-text);
+      font: 500 14px/20px var(--font-chat);
       cursor: pointer;
       transition:
-        background-color var(--dur-1) var(--ease-standard),
-        border-color var(--dur-1) var(--ease-standard);
+        background-image 125ms cubic-bezier(0.24, 1, 0.4, 1),
+        background-color 125ms cubic-bezier(0.24, 1, 0.4, 1),
+        color 125ms cubic-bezier(0.24, 1, 0.4, 1);
     }
 
     .trigger:hover,
     .trigger[aria-expanded='true'] {
-      background: var(--color-surface-hover);
-      border-color: var(--color-text-muted);
+      background-image: linear-gradient(var(--ax-overlay), var(--ax-overlay));
     }
 
-    .trigger:focus-visible,
-    .option:focus-visible {
-      outline: 2px solid var(--color-focus);
-      outline-offset: 2px;
-    }
-
-    .trigger.is-empty {
-      border-style: dashed;
-      color: var(--color-text-secondary);
-    }
-
-    .trigger > app-icon:first-child {
-      color: var(--color-accent-fg);
-      flex: none;
-    }
-
-    .trigger.is-empty > app-icon:first-child {
-      color: var(--color-text-muted);
+    .trigger:focus-visible {
+      outline: 2px solid var(--ax-focus);
+      outline-offset: 3px;
     }
 
     .trigger-value {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-weight: var(--weight-medium);
     }
 
-    .caret {
-      color: var(--color-text-muted);
-      flex: none;
-    }
-
-    /* fixed: the page's scroll containers would otherwise clip the list; position and height are set when it opens */
+    /* the popover: 200 wide, 4px padding, radius 12, 2px between items, the composer's surface and shadow */
     .list {
       position: fixed;
       inset-block-start: var(--list-top, auto);
       inset-block-end: var(--list-bottom, auto);
+      z-index: var(--z-overlay);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      box-sizing: border-box;
+      inline-size: 200px;
+      padding: 4px;
       overflow-y: auto;
       overscroll-behavior: contain;
-      scrollbar-gutter: stable;
-      z-index: var(--z-overlay);
-      inline-size: max-content;
-      min-inline-size: 280px;
-      max-inline-size: min(360px, 86vw);
-      padding: var(--space-1);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-2);
-      box-shadow: var(--shadow-3);
-      animation: pop var(--dur-1) var(--ease-emphasized-out) both;
+      border-radius: 12px;
+      background: var(--ax-surface);
+      color: var(--ax-text);
+      box-shadow: var(--ax-shadow);
+      font: 400 14px/20px var(--font-chat);
+      animation: pop 125ms cubic-bezier(0.24, 1, 0.4, 1) both;
     }
-
 
     @keyframes pop {
       from {
         opacity: 0;
-        transform: translateY(2px);
       }
 
       to {
         opacity: 1;
-        transform: none;
       }
     }
 
+    /* an item: 32 high at least, 6px 8px, radius 8, 14/20 regular; a description makes it taller */
     .option {
       display: flex;
-      align-items: flex-start;
-      gap: var(--space-3);
+      align-items: center;
+      gap: 8px;
+      box-sizing: border-box;
       inline-size: 100%;
-      padding: var(--space-2) var(--space-3);
+      min-block-size: 32px;
+      padding: 6px 8px;
       border: 0;
-      border-radius: var(--radius-sm);
-      background: transparent;
-      color: var(--color-text);
+      border-radius: 8px;
+      background-color: transparent;
+      color: var(--ax-text);
       font: inherit;
       text-align: start;
       cursor: pointer;
-    }
-
-    .option > app-icon:first-child {
-      flex: none;
-      margin-block-start: 1px;
-      color: var(--color-text-secondary);
+      transition: background-color 95ms cubic-bezier(0.24, 1, 0.4, 1);
     }
 
     .option:hover,
     .option:focus-visible {
-      background: var(--color-surface-hover);
+      background-color: var(--ax-overlay);
       outline: none;
     }
 
     .option:focus-visible {
-      box-shadow: inset 0 0 0 2px var(--color-focus);
+      box-shadow: inset 0 0 0 2px var(--ax-focus);
     }
 
-    .option.is-selected > app-icon:first-child,
+    .lead,
     .tick {
-      color: var(--color-accent-fg);
+      color: var(--ax-text-muted);
     }
 
     .option-text {
@@ -221,25 +205,20 @@ let uid = 0;
       min-inline-size: 0;
     }
 
-    .option-name {
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-    }
-
     .option-desc {
-      color: var(--color-text-muted);
-      font-size: var(--text-xs);
-      line-height: var(--leading-normal);
-    }
-
-    .tick {
-      flex: none;
-      margin-block-start: 2px;
+      color: var(--ax-text-muted);
+      font-size: 12px;
+      line-height: 16px;
     }
 
     @media (prefers-reduced-motion: reduce) {
       .list {
         animation: none;
+      }
+
+      .trigger,
+      .option {
+        transition: none;
       }
     }
   `,
@@ -254,9 +233,11 @@ export class ResearchPickerComponent {
   readonly label = input.required<string>();
   readonly placeholder = input('');
   readonly placeholderIcon = input<IconName>('search');
+  /** A fixed trigger icon (the mode trigger always shows the sparkle); otherwise the choice's own icon shows. */
+  readonly fixedIcon = input<AxIconName | null>(null);
   readonly options = input.required<readonly PickerOption[]>();
   readonly value = input<string | null>(null);
-  /** Where the list opens: above the button for a control that sits at the bottom of the page. */
+  /** Where the menu opens: above the button for a control that sits at the bottom of the page. */
   readonly placement = input<'up' | 'down'>('down');
 
   readonly picked = output<string>();
@@ -270,7 +251,7 @@ export class ResearchPickerComponent {
     return s === null ? this.label() : `${this.label()}: ${s.label}`;
   });
 
-  /** Where the open list sits, worked out from the button's place in the window when it opens. */
+  /** Where the open menu sits, worked out from the button's place in the window when it opens. */
   protected readonly up = signal(false);
   protected readonly startPx = signal(0);
   protected readonly topPx = signal<number | null>(null);
@@ -280,17 +261,17 @@ export class ResearchPickerComponent {
   private readonly closeOnResize = (): void => this.close(false);
 
   private readonly closeOnScroll = (event: Event): void => {
-    // only a scroller that carries the button moves it away from the (fixed) list
+    // only a scroller that carries the button moves it away from the (fixed) menu
     const target = event.target;
     if (target instanceof Node && target.contains(this.trigger().nativeElement)) {
       this.close(false);
     }
   };
 
-  /** Opens below the button, or above it when there is more room there; the height follows the room. */
+  /** Opens 4px below the button, or above it when there is more room there; the height follows the room. */
   private place(): void {
     const r = this.trigger().nativeElement.getBoundingClientRect();
-    const gap = 6;
+    const gap = 4;
     const edge = 8;
     const below = window.innerHeight - r.bottom - gap - edge;
     const above = r.top - gap - edge;
@@ -303,7 +284,7 @@ export class ResearchPickerComponent {
     this.bottomPx.set(up ? window.innerHeight - r.top + gap : null);
     const rtl = this.i18n.dir() === 'rtl';
     const start = rtl ? window.innerWidth - r.right : r.left;
-    this.startPx.set(Math.max(edge, start));
+    this.startPx.set(Math.max(edge, Math.min(start, window.innerWidth - 200 - edge)));
   }
 
   protected toggle(): void {
@@ -314,7 +295,7 @@ export class ResearchPickerComponent {
     }
   }
 
-  /** The list was just opened: its chosen option takes the focus as soon as it is drawn. */
+  /** The menu was just opened: its chosen option takes the focus as soon as it is drawn. */
   private focusPending = false;
 
   constructor() {
@@ -355,7 +336,7 @@ export class ResearchPickerComponent {
   }
 
   private items(): HTMLElement[] {
-    return Array.from(this.list()?.nativeElement.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    return Array.from(this.list()?.nativeElement.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
   }
 
   protected onTriggerKey(event: KeyboardEvent): void {
