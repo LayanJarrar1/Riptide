@@ -50,7 +50,7 @@ const STREAMS = [
     dur: 1050,
     d: 'M177 268 L177 118 C177 107 187 100.3 199 100.3 C218 100.3 228 110 228 122 C228 134 216 142 208 148 C198 154 194 168 194 185 C194 196 198 205 204 215 L224 262',
   },
-  { id: 'leg', w: 44, delay: 560, dur: 500, d: 'M234 170 L268 270' },
+  { id: 'leg', w: 44, delay: 560, dur: 500, d: 'M230 156 L272 276' },
 ] as const;
 /** The ripple ring starts at the foot of the leg, outside the mark. */
 const RIPPLE = { cx: 258, cy: 236, r: 14 } as const;
@@ -101,7 +101,7 @@ let nextLogoId = 0;
                 fill="none"
                 stroke="#fff"
                 [attr.stroke-width]="s.w"
-                stroke-linecap="round"
+                stroke-linecap="butt"
                 stroke-linejoin="round"
               />
             }
