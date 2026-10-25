@@ -408,3 +408,20 @@ optional extra that cannot change a verdict.
 - **Privacy.** The only requests are those that follow a search the user started, one per result
   card that scrolls into view (3 at a time), to the host that already serves that result. No
   telemetry; the website privacy text lists this under Research.
+
+## D-astryx-chat-1: The Research chat area matches the Astryx chat components; Figtree there, Inter elsewhere
+
+- **Problem.** The owner wants the Research conversation (composer, thread, progress steps) to look
+  exactly like the Astryx chat components (ChatComposer "Footer Actions", ChatLayout, ChatMessage,
+  ChatToolCalls, ChatTokenizedText), not merely similar.
+- **Decision.** Every size, radius, colour, shadow and motion value in that area was measured from the
+  live Astryx pages (computed styles, both themes) and lives as `--ax-*` tokens in
+  `src/styles/astryx.css`. The area uses the typeface Astryx uses, Figtree (SIL OFL 1.1, bundled in
+  `src/assets/fonts/figtree/` with its licence, no CDN), through `--font-chat`; Arabic glyphs are not in
+  Figtree, so the stack falls through to IBM Plex Sans Arabic. The rest of the app stays on Inter.
+- **Deviations that are on purpose.** Logical CSS properties and mirrored layout in RTL (Astryx is LTR
+  only); the category trigger and menus add an icon and a description line (Astryx menus have text
+  only); selected menu items show a check; the AI button takes the microphone's slot; the textbox has
+  no visible focus ring, as in Astryx (the caret and the focus-visible ring of every button remain).
+- **Not copied.** Astryx's diff colouring in the expanded step panel (our panel lists queries and
+  sources as plain code lines).

@@ -72,3 +72,8 @@ Riptide's own license
   (riptide-core, riptide-net, riptide-store, riptide-engine, riptide-media, riptide-crawl,
   riptide-log, riptide-testserver and the other library crates marked MIT OR Apache-2.0 in
   their Cargo.toml) are dual-licensed MIT OR Apache-2.0. Source: https://github.com/LayanJarrar1/Riptide
+
+Figtree (bundled typeface)
+  Home:     https://github.com/erikdkennedy/figtree (Copyright 2022 The Figtree Project Authors)
+  License:  SIL Open Font License 1.1 (src/assets/fonts/figtree/OFL.txt), the same licence as Inter
+            and IBM Plex Sans Arabic. Used for the Research conversation only.
