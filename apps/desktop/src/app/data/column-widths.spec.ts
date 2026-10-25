@@ -31,7 +31,7 @@ describe('column widths', () => {
     const fit = fitGrid(1300, {});
     expect(fit.visible).toEqual(['name', 'size', 'progress', 'speed', 'eta', 'status', 'added']);
     expect(fit.autoHidden).toEqual([]);
-    expect(fit.template).toBe('minmax(160px, 2.2fr) 120px minmax(120px, 1.6fr) 96px 112px 160px 104px 60px');
+    expect(fit.template).toBe('minmax(160px, 2.2fr) 150px minmax(120px, 1.6fr) 96px 112px 160px 104px 60px');
   });
 
   it('the default columns fit a 1024px list without hiding anything', () => {
@@ -42,14 +42,14 @@ describe('column widths', () => {
   });
 
   it('a user width becomes a fixed track while it fits', () => {
-    expect(fitGrid(1300, { name: 420, speed: 130 }).template).toBe('420px 120px minmax(120px, 1.6fr) 130px 112px 160px 104px 60px');
+    expect(fitGrid(1300, { name: 420, speed: 130 }).template).toBe('420px 150px minmax(120px, 1.6fr) 130px 112px 160px 104px 60px');
   });
 
   it('shrinks the flexible columns first, down to their minimum, before touching the others', () => {
     const fit = nums(fitGrid(1500, { name: 700, progress: 400 }).template);
     const [name, size, progress, speed, eta, status, added] = fit;
-    expect([size, speed, eta, status, added]).toEqual([120, 96, 112, 160, 104]);
-    expect(name + progress + 120 + 96 + 112 + 160 + 104 + ACTIONS_PX).toBeLessThanOrEqual(1500);
+    expect([size, speed, eta, status, added]).toEqual([150, 96, 112, 160, 104]);
+    expect(name + progress + 150 + 96 + 112 + 160 + 104 + ACTIONS_PX).toBeLessThanOrEqual(1500);
     expect(name).toBeGreaterThanOrEqual(160);
     expect(progress).toBeGreaterThanOrEqual(120);
     expect(name).toBeLessThan(700);

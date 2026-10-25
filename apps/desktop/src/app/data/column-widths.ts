@@ -21,7 +21,7 @@ interface Track {
  */
 const TRACKS: Readonly<Record<ColumnKey, Track>> = {
   name: { min: 160, base: 160, fr: 2.2 },
-  size: { min: 96, base: 120 },
+  size: { min: 96, base: 150 },
   progress: { min: 120, base: 120, fr: 1.6 },
   speed: { min: 80, base: 96 },
   avgSpeed: { min: 88, base: 104 },
