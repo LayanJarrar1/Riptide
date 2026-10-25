@@ -96,6 +96,38 @@ describe('AddDownloadDialogComponent video mode', () => {
     expect(request.checksum).toBeUndefined();
   });
 
+  it('probes a pasted video link at once and offers Best before the list arrives', async () => {
+    const original = engine.probeMedia.bind(engine);
+    let release: (() => void) | undefined;
+    const probe = spyOn(engine, 'probeMedia').and.callFake(
+      (url: string) =>
+        new Promise((resolve, reject) => {
+          release = () => original(url).then(resolve, reject);
+        }),
+    );
+    const add = spyOn(engine, 'add').and.callThrough();
+    const input = el().querySelector<HTMLInputElement>('input[name="url"]') as HTMLInputElement;
+    input.dispatchEvent(new Event('paste'));
+    input.value = 'https://www.youtube.com/watch?v=abc';
+    input.dispatchEvent(new Event('input'));
+    await flush(); // no timer ticked: a paste skips the typing pause
+    fixture.detectChanges();
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // the list has not arrived, yet Best is there and the form can be submitted
+    const quality = el().querySelector<HTMLSelectElement>('select[name="quality"]') as HTMLSelectElement;
+    expect(quality.options.length).toBe(1);
+    expect(quality.value).toBe('best');
+    const submit = Array.from(el().querySelectorAll<HTMLButtonElement>('button')).find((b) => b.className.includes('primary'));
+    expect(submit?.disabled).toBeFalse();
+    submit?.click();
+    await flush();
+    const request = add.calls.mostRecent().args[0] as DownloadRequest;
+    expect(request.kind).toBe('media');
+    expect(request.mediaFormat).toBe('best');
+    release?.();
+  });
+
   it('stays a plain link for an ordinary file: no quality choice at all', async () => {
     await typeUrl('https://example.com/files/a.zip');
     expect(el().querySelector('.media')).toBeNull();

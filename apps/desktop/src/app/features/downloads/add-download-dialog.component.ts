@@ -184,6 +184,17 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
                 </select>
               </span>
             </label>
+          } @else if (pendingVideo()) {
+            <!-- a known video site still being probed: Best is already a valid choice -->
+            <label class="field grow">
+              <span class="label">{{ i18n.t('add.quality') }}</span>
+              <span class="select-wrap">
+                <app-icon class="input-icon" name="fileVideo" [size]="16" />
+                <select class="input select" name="quality" [attr.aria-busy]="true">
+                  <option value="best" selected>{{ i18n.t('add.qualityBest') }}</option>
+                </select>
+              </span>
+            </label>
           } @else {
             <label class="field grow">
               <span class="label">{{ i18n.t('add.filename') }}</span>
@@ -782,6 +793,8 @@ export class AddDownloadDialogComponent {
   protected readonly media = signal<MediaProbe | null>(null);
   /** The picked quality's key (a [`MediaChoice`] key). */
   protected readonly choiceKey = signal('best');
+  /** A known video site whose quality list has not arrived yet: Best can be downloaded already. */
+  protected readonly pendingVideo = computed(() => this.probe() === 'probing' && this.media() === null && isMediaUrl(this.url().trim()));
   /** Kind of the chosen quality, for the field's icon. */
   protected readonly choiceKind = computed(() => this.media()?.choices.find((c) => c.key === this.choiceKey())?.kind ?? 'best');
   /** i18n key of why the page is not a downloadable video; `null` when there is no problem. */
@@ -794,6 +807,8 @@ export class AddDownloadDialogComponent {
   /** `true` once the user typed a name, so a quality change no longer rewrites it. */
   private filenameEdited = false;
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the last paste happened; the `input` event that follows it skips the typing pause. */
+  private pastedAt = 0;
   private diskToken = 0;
   /** The request waiting for the duplicate prompt's answer. */
   private pending: DownloadRequest | null = null;
@@ -815,7 +830,7 @@ export class AddDownloadDialogComponent {
   protected readonly magnets = signal<readonly string[]>([]);
   /** "Add all with default selection" in progress. */
   protected readonly bulk = signal<{ readonly done: number; readonly total: number } | null>(null);
-  protected readonly canSubmit = computed(() => (this.magnets().length > 1 && this.bulk() === null) || (this.isMagnet() || (isHttpUrl(this.url()) && this.probe() !== 'probing' && !this.checksumError())) && !this.submitting());
+  protected readonly canSubmit = computed(() => (this.magnets().length > 1 && this.bulk() === null) || (this.isMagnet() || (isHttpUrl(this.url()) && (this.probe() !== 'probing' || this.pendingVideo()) && !this.checksumError())) && !this.submitting());
 
   constructor() {
     effect(() => {
@@ -901,6 +916,8 @@ export class AddDownloadDialogComponent {
   }
 
   protected onPaste(event: ClipboardEvent): void {
+    // a pasted link is final: probe it at once instead of after the typing pause
+    this.pastedAt = Date.now();
     // a single-line field would glue several lines together: several magnet links get their own list
     const links = magnetLinesOf(event.clipboardData?.getData('text') ?? '');
     if (links.length > 1) {
@@ -1006,7 +1023,7 @@ export class AddDownloadDialogComponent {
     }
     const hex = this.checksum().trim().toLowerCase();
     const algo = hex.length === 32 ? 'md5' : hex.length === 40 ? 'sha1' : 'sha256';
-    const isMedia = this.media() !== null;
+    const isMedia = this.media() !== null || this.pendingVideo();
     const request: DownloadRequest = {
       url: this.url().trim(),
       filename: this.filename().trim() || undefined,
@@ -1151,7 +1168,18 @@ export class AddDownloadDialogComponent {
       return;
     }
     this.probe.set('probing');
-    this.probeTimer = setTimeout(() => void this.runProbe(trimmed, token), 250);
+    if (isMediaUrl(trimmed)) {
+      // Best is downloadable before the list arrives, as a video
+      this.category.set('video');
+      this.dir.set(this.settingsService.dirFor('video'));
+    }
+    // typing waits for a pause; a paste (its `input` event follows within a few ms) goes now
+    const pasted = Date.now() - this.pastedAt < 500;
+    if (pasted) {
+      void this.runProbe(trimmed, token);
+    } else {
+      this.probeTimer = setTimeout(() => void this.runProbe(trimmed, token), 250);
+    }
   }
 
   /**

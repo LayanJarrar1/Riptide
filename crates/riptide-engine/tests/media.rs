@@ -240,3 +240,24 @@ async fn probe_media_needs_the_tool_and_returns_the_menu() {
         .is_err());
     engine.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn parallel_and_repeated_probes_of_one_page_agree() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = engine(&dir).await;
+    let url = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
+    let probes: Vec<_> = (0..4)
+        .map(|_| {
+            let e = engine.clone();
+            tokio::spawn(async move { e.probe_media(url, None).await.unwrap() })
+        })
+        .collect();
+    let first = engine
+        .probe_media(&format!("{url}#t=3"), None)
+        .await
+        .unwrap();
+    for p in probes {
+        assert_eq!(p.await.unwrap(), first);
+    }
+    engine.shutdown().await;
+}
