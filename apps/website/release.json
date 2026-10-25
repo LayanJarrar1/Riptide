@@ -3,9 +3,33 @@
   "repo": "LayanJarrar1/Riptide",
   "latest": {
     "stable": null,
-    "prerelease": "v0.1.0-beta.2"
+    "prerelease": "v0.1.0-beta.3"
   },
   "releases": [
+    {
+      "tag": "v0.1.0-beta.3",
+      "version": "0.1.0-beta.3",
+      "channel": "beta",
+      "prerelease": true,
+      "publishedAt": "2026-10-25T19:34:32Z",
+      "notesUrl": "https://github.com/LayanJarrar1/Riptide/releases/tag/v0.1.0-beta.3",
+      "installer": {
+        "name": "Riptide_0.1.0-beta.3_x64-setup.exe",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide_0.1.0-beta.3_x64-setup.exe",
+        "size": 73806439,
+        "sha256": "3a388c832a83894d36b3173346e1ed96fda3f9e9c11be99f133149abd99b15a5"
+      },
+      "portable": {
+        "name": "Riptide-0.1.0-beta.3-portable.zip",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide-0.1.0-beta.3-portable.zip",
+        "size": 90609476,
+        "sha256": "cd36ae4e75c79cfdebe8b45b5b2600aa4e32524025556c9eb9a844bedb0991c9"
+      },
+      "sums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/SHA256SUMS.txt"
+      }
+    },
     {
       "tag": "v0.1.0-beta.2",
       "version": "0.1.0-beta.2",
