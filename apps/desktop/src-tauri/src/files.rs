@@ -9,6 +9,7 @@
 //! | command | does |
 //! |---|---|
 //! | `fs_places` | Downloads, the category root, the profile folders and the drives |
+//! | `fs_capabilities` | whether Recycle Bin items can be listed and restored here |
 //! | `fs_list` / `fs_entry` | a folder's contents / one item |
 //! | `fs_create_folder` / `fs_rename` | new folder / rename in place |
 //! | `fs_trash` / `fs_trashed` / `fs_restore` | Recycle Bin |
@@ -134,9 +135,42 @@ fn drives() -> Vec<PathBuf> {
         .collect()
 }
 
-#[cfg(not(windows))]
+/// macOS: the start-up disk and every mounted volume (external drives, disk images, shares).
+#[cfg(target_os = "macos")]
+fn drives() -> Vec<PathBuf> {
+    let mut out = vec![PathBuf::from("/")];
+    if let Ok(items) = std::fs::read_dir("/Volumes") {
+        let mut volumes: Vec<PathBuf> = items
+            .flatten()
+            .map(|e| e.path())
+            // the start-up disk also appears here as a link to `/`
+            .filter(|p| p.is_dir() && std::fs::read_link(p).is_err())
+            .collect();
+        volumes.sort();
+        out.extend(volumes);
+    }
+    out
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn drives() -> Vec<PathBuf> {
     vec![PathBuf::from("/")]
+}
+
+/// What the file manager can do on this system.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FsCapabilities {
+    /// Recycle Bin items can be listed and restored (not on macOS, where Finder does it).
+    pub can_restore: bool,
+}
+
+/// What the file manager can do here.
+#[tauri::command]
+pub fn fs_capabilities() -> FsCapabilities {
+    FsCapabilities {
+        can_restore: riptide_fs::CAN_RESTORE,
+    }
 }
 
 /// A folder's contents.

@@ -296,34 +296,68 @@ pub fn open_target(args: &[String]) -> Option<TorrentSourceRequest> {
 
 /// A torrent that came with the first launch, waiting for the webview to ask for it.
 #[derive(Default)]
-pub struct PendingOpen(Mutex<Option<TorrentSourceRequest>>);
+pub struct PendingOpen {
+    slot: Mutex<Option<TorrentSourceRequest>>,
+    /// The webview has asked once ([`take_pending_open`]): from then on it listens for
+    /// [`OPEN_EVENT`], and a torrent goes to it directly.
+    ready: std::sync::atomic::AtomicBool,
+}
 
 impl PendingOpen {
     /// Remembers a torrent for [`take_pending_open`].
     pub fn set(&self, target: TorrentSourceRequest) {
-        if let Ok(mut slot) = self.0.lock() {
+        if let Ok(mut slot) = self.slot.lock() {
             *slot = Some(target);
         }
     }
 
-    /// Hands the remembered torrent over once.
+    /// Hands the remembered torrent over once; the webview is listening from now on.
     pub fn take(&self) -> Option<TorrentSourceRequest> {
-        self.0.lock().ok().and_then(|mut slot| slot.take())
+        self.ready.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.slot.lock().ok().and_then(|mut slot| slot.take())
+    }
+
+    fn is_ready(&self) -> bool {
+        self.ready.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Gives a torrent to the webview: as an event when it is listening, else kept for its first
+/// [`take_pending_open`] (a link that arrives while the window is still loading is not lost).
+pub fn deliver_open<R: Runtime>(app: &AppHandle<R>, target: TorrentSourceRequest) {
+    let Some(pending) = app.try_state::<PendingOpen>() else {
+        return;
+    };
+    if !pending.is_ready() {
+        pending.set(target);
+        return;
+    }
+    if let Err(e) = app.emit(OPEN_EVENT, &target) {
+        tracing::warn!(error = %e, "torrent hand-over not delivered");
+        pending.set(target);
     }
 }
 
 /// A second launch (the user double-clicked a `.torrent` or clicked a magnet link while Riptide
 /// runs): the running window opens the torrent dialog.
 pub fn handle_second_launch<R: Runtime>(app: &AppHandle<R>, args: &[String]) {
-    let Some(target) = open_target(args) else {
-        return;
-    };
-    if let Err(e) = app.emit(OPEN_EVENT, &target) {
-        tracing::warn!(error = %e, "torrent hand-over not delivered");
-        if let Some(pending) = app.try_state::<PendingOpen>() {
-            pending.set(target);
-        }
+    if let Some(target) = open_target(args) {
+        deliver_open(app, target);
     }
+}
+
+/// What macOS hands over with an "open" Apple event (`RunEvent::Opened`): a `magnet:` link the
+/// app is registered for (Info.plist), or a `file://` URL of a `.torrent` opened in Finder. Both
+/// go through the same checks as a command line.
+pub fn opened_target(url: &url::Url) -> Option<TorrentSourceRequest> {
+    let data = if url.scheme().eq_ignore_ascii_case("magnet") {
+        url.as_str().to_owned()
+    } else if url.scheme() == "file" {
+        url.to_file_path().ok()?.to_string_lossy().into_owned()
+    } else {
+        return None;
+    };
+    open_target(&["riptide".to_owned(), data])
 }
 
 fn current_exe() -> Result<PathBuf, String> {
@@ -773,5 +807,41 @@ mod tests {
         });
         assert!(p.take().is_some());
         assert!(p.take().is_none());
+    }
+
+    #[test]
+    fn the_webview_counts_as_listening_once_it_has_asked() {
+        let p = PendingOpen::default();
+        assert!(!p.is_ready());
+        let _ = p.take();
+        assert!(p.is_ready());
+    }
+
+    #[test]
+    fn macos_open_events_go_through_the_command_line_checks() {
+        let magnet =
+            url::Url::parse("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")
+                .unwrap();
+        assert!(matches!(
+            opened_target(&magnet),
+            Some(TorrentSourceRequest::Magnet { .. })
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("ubuntu.torrent");
+        std::fs::write(&file, b"d4:infod4:name1:xee").unwrap();
+        let file_url = url::Url::from_file_path(&file).unwrap();
+        assert_eq!(
+            opened_target(&file_url),
+            Some(TorrentSourceRequest::File { path: file.clone() })
+        );
+        // anything else macOS might hand over is ignored
+        let other = url::Url::from_file_path(dir.path().join("notes.txt")).unwrap();
+        assert_eq!(opened_target(&other), None);
+        assert_eq!(
+            opened_target(&url::Url::parse("https://example.com/a.torrent").unwrap()),
+            None
+        );
+        let missing = url::Url::from_file_path(dir.path().join("gone.torrent")).unwrap();
+        assert_eq!(opened_target(&missing), None);
     }
 }

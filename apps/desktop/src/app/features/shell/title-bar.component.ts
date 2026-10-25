@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal } from '@angular/core';
 
+import { IS_MAC } from '../../core/platform';
 import { WindowService } from '../../core/window.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { TranslatePipe } from '../../i18n/translate.pipe';
@@ -96,7 +97,7 @@ interface Top {
 
       <div class="drag" data-tauri-drag-region></div>
 
-      @if (win.available) {
+      @if (win.available && !isMac) {
         <div class="controls">
           <button type="button" class="ctl" [attr.aria-label]="'window.minimize' | t" [attr.title]="'window.minimize' | t" (click)="win.minimize()">
             <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M0 5.5h10" stroke="currentColor" stroke-width="1" fill="none" /></svg>
@@ -128,6 +129,8 @@ interface Top {
 export class TitleBarComponent {
   protected readonly i18n = inject(I18nService);
   protected readonly win = inject(WindowService);
+  /** macOS draws its own traffic lights (the window keeps its native frame there). */
+  protected readonly isMac = inject(IS_MAC);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** The top-level items. The Window menu needs a native window, so it is absent in a browser. */

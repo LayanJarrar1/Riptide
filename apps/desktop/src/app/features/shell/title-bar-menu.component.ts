@@ -1,6 +1,7 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output } from '@angular/core';
 
 import { NavRailService } from '../../core/nav-rail.service';
+import { IS_MAC, shortcutLabel } from '../../core/platform';
 import { WindowService } from '../../core/window.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { ThemeService } from '../../theme/theme.service';
@@ -54,7 +55,7 @@ import { ActionEntry, buildMenus, isEnabled, MenuFocus, MenuId } from './title-b
             </span>
             <span class="label">{{ e.label }}</span>
             @if (e.kind !== 'radio' && e.shortcut) {
-              <kbd class="key" dir="ltr">{{ e.shortcut }}</kbd>
+              <kbd class="key" dir="ltr">{{ keys(e.shortcut) }}</kbd>
             }
           </button>
         }
@@ -70,6 +71,12 @@ export class TitleBarMenuComponent {
   private readonly theme = inject(ThemeService);
   private readonly settings = inject(SettingsService);
   private readonly navRail = inject(NavRailService);
+  private readonly isMac = inject(IS_MAC);
+
+  /** A shortcut hint as the platform writes it (`Ctrl+N` / `⌘N`). */
+  protected keys(shortcut: string): string {
+    return shortcutLabel(shortcut, this.isMac);
+  }
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** Which menu this is. */

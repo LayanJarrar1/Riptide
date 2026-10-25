@@ -98,7 +98,7 @@ const MAX_SPLIT = 0.8;
             <li class="more">{{ i18n.t('files.andMore').replace('{n}', format.int(q.plan.conflicts.length - 5)) }}</li>
           }
         </ul>
-        <p class="conflict-note">{{ i18n.t('files.replaceNote') }}</p>
+        <p class="conflict-note">{{ i18n.t(ops.platformKey('files.replaceNote')) }}</p>
       }
       <ng-container dialogActions>
         <button appButton variant="ghost" type="button" (click)="answer(null)">{{ i18n.t('action.cancel') }}</button>

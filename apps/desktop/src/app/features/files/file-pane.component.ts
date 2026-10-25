@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, Eleme
 
 import { FORMAT_PIPES } from '../../core/format.pipes';
 import { FormatService } from '../../core/format.service';
+import { IS_MAC } from '../../core/platform';
 import { scrollToReveal } from '../../data/list-nav';
 import { I18nService } from '../../i18n/i18n.service';
 import { categoryOf } from '../../model/download';
@@ -105,7 +106,7 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
     <div class="actions">
       <button appButton size="sm" variant="ghost" icon="plus" type="button" (click)="startNewFolder()">{{ i18n.t('files.newFolder') }}</button>
       <button appButton size="sm" variant="ghost" icon="copy" type="button" [disabled]="ops.clipboard() === null" (click)="paste()">{{ i18n.t('files.paste') }}</button>
-      <button appButton size="sm" variant="ghost" icon="trash" type="button" (click)="openBin()">{{ i18n.t('files.recycleBin') }}</button>
+      <button appButton size="sm" variant="ghost" icon="trash" type="button" (click)="openBin()">{{ i18n.t(ops.platformKey('files.recycleBin')) }}</button>
       <span class="spacer"></span>
       @if (searchResults() !== null) {
         <span class="hint">{{ i18n.t('files.searchResults').replace('{n}', format.int(rows().length)) }}</span>
@@ -234,10 +235,12 @@ export function compareEntries(a: Entry, b: Entry, key: FileSortKey): number {
       }
     </app-dialog>
 
-    <app-dialog [open]="bin() !== null" [title]="i18n.t('files.recycleBin')" (closed)="bin.set(null)">
+    <app-dialog [open]="bin() !== null" [title]="i18n.t(ops.platformKey('files.recycleBin'))" (closed)="bin.set(null)">
       @if (bin(); as items) {
-        @if (items.length === 0) {
-          <p class="bin-empty">{{ i18n.t('files.binEmpty') }}</p>
+        @if (!ops.canRestore()) {
+          <p class="bin-empty">{{ i18n.t('files.trashInFinder') }}</p>
+        } @else if (items.length === 0) {
+          <p class="bin-empty">{{ i18n.t(ops.platformKey('files.binEmpty')) }}</p>
         } @else {
           <ul class="bin">
             @for (t of items; track t.id) {
@@ -735,6 +738,7 @@ export class FilePaneComponent {
   protected readonly ops = inject(FileOpsService);
   private readonly backend = inject(FILE_BACKEND);
   private readonly folderColors = inject(FolderColorsService);
+  private readonly isMac = inject(IS_MAC);
   private readonly zone = inject(NgZone);
   private readonly destroyRef = inject(DestroyRef);
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
@@ -875,7 +879,7 @@ export class FilePaneComponent {
         { id: 'newFolder', label: t('files.newFolder'), icon: 'plus', shortcut: 'Ctrl+Shift+N' },
         { id: 'paste', label: t('files.paste'), shortcut: 'Ctrl+V', disabled: this.ops.clipboard() === null },
         { id: 'refresh', label: t('files.refresh'), icon: 'retry', shortcut: 'F5', separator: true },
-        { id: 'reveal', label: t('files.showInExplorer'), icon: 'external' },
+        { id: 'reveal', label: t(this.ops.platformKey('files.showInExplorer')), icon: 'external' },
       ];
     }
     const many = this.selected().size > 1;
@@ -883,7 +887,7 @@ export class FilePaneComponent {
     if (this.searchResults() !== null) {
       items.push({ id: 'openLocation', label: t('files.openLocation'), icon: 'folder', disabled: many });
     }
-    items.push({ id: 'reveal', label: t('files.showInExplorer'), icon: 'external', disabled: many });
+    items.push({ id: 'reveal', label: t(this.ops.platformKey('files.showInExplorer')), icon: 'external', disabled: many });
     items.push({ id: 'copy', label: t('files.copy'), icon: 'copy', shortcut: 'Ctrl+C', separator: true });
     items.push({ id: 'cut', label: t('files.cut'), shortcut: 'Ctrl+X' });
     if (e.kind === 'folder') {
@@ -1385,8 +1389,8 @@ export class FilePaneComponent {
     }
     event.preventDefault();
     event.stopPropagation();
-    // Ctrl copies, otherwise move (Explorer's rule within a volume)
-    event.dataTransfer.dropEffect = event.ctrlKey ? 'copy' : 'move';
+    // the copy modifier (Ctrl, or Option on a Mac) copies, otherwise move (Explorer's and Finder's rule within a volume)
+    event.dataTransfer.dropEffect = this.copies(event) ? 'copy' : 'move';
     const here = target === this.currentPath();
     this.dropTarget.set(here ? null : target);
     this.dropHere.set(here);
@@ -1419,8 +1423,13 @@ export class FilePaneComponent {
     // dropping items on themselves or their own folder does nothing
     paths = paths.filter((p) => p !== target);
     if (paths.length > 0) {
-      void this.ops.transfer(paths, target, event.ctrlKey ? 'copy' : 'move');
+      void this.ops.transfer(paths, target, this.copies(event) ? 'copy' : 'move');
     }
+  }
+
+  /** Whether a drop copies: Ctrl held on Windows, Option on a Mac (as in Finder). */
+  private copies(event: DragEvent): boolean {
+    return this.isMac ? event.altKey : event.ctrlKey;
   }
 
   protected iconOf(e: Entry): IconName {

@@ -11,7 +11,8 @@
     "media-tools": "node scripts/fetch-media-tools.mjs",
     "tauri": "tauri",
     "bundle": "tauri build --config src-tauri/tauri.bundle.conf.json",
-    "bundle:portable": "tauri build --no-bundle --config src-tauri/tauri.bundle.conf.json && node scripts/portable.mjs"
+    "bundle:portable": "tauri build --no-bundle --config src-tauri/tauri.bundle.conf.json && node scripts/portable.mjs",
+    "bundle:mac": "tauri build --config src-tauri/tauri.bundle.macos.conf.json"
   },
   "prettier": {
     "printWidth": 100,

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
+import { IS_MAC, keyLabel } from '../../core/platform';
 import { I18nService } from '../../i18n/i18n.service';
 import { DialogComponent } from '../../ui/dialog.component';
 
@@ -36,7 +37,7 @@ interface ShortcutGroup {
                     @for (chord of item.chords; track $index; let last = $last) {
                       <span class="chord">
                         @for (key of chord; track $index; let lastKey = $last) {
-                          <kbd class="key">{{ key }}</kbd>
+                          <kbd class="key">{{ keyName(key) }}</kbd>
                           @if (!lastKey) {
                             <span class="plus" aria-hidden="true">+</span>
                           }
@@ -173,6 +174,12 @@ interface ShortcutGroup {
 })
 export class ShortcutsDialogComponent {
   protected readonly i18n = inject(I18nService);
+  private readonly isMac = inject(IS_MAC);
+
+  /** `Ctrl` is `⌘` on a Mac, `Alt` is `⌥`, `Shift` is `⇧`. */
+  protected keyName(key: string): string {
+    return keyLabel(key, this.isMac);
+  }
 
   readonly open = input.required<boolean>();
   readonly closed = output<void>();

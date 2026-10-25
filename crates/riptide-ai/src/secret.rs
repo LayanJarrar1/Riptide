@@ -1,5 +1,6 @@
 //! API-key storage. Keys never go into the config file or the database: on Windows they live in
-//! the Credential Manager (per user, DPAPI-protected); elsewhere, and in tests, in memory only.
+//! the Credential Manager (per user, DPAPI-protected), on macOS in the login Keychain; elsewhere,
+//! and in tests, in memory only.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -39,9 +40,8 @@ fn check_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Volatile store: tests, and the fallback on platforms without a native backend yet
-/// (macOS Keychain / Secret Service come with the cross-platform milestone; until then keys
-/// on those platforms are not persisted and the user re-enters them each run).
+/// Volatile store: tests, and the fallback on platforms without a native backend yet (Linux's
+/// Secret Service is not wired; keys there are not persisted and are entered again each run).
 #[derive(Default)]
 pub struct MemorySecretStore(
     Mutex<HashMap<ProviderKind, ApiKey>>,
@@ -116,13 +116,18 @@ impl SecretStore for MemorySecretStore {
 /// Default credential target prefix: entries are named `Riptide/ai/<provider>`.
 pub const DEFAULT_TARGET_PREFIX: &str = "Riptide/ai";
 
-/// The best store for this platform: Credential Manager on Windows, memory elsewhere.
+/// The best store for this platform: Credential Manager on Windows, the Keychain on macOS,
+/// memory elsewhere.
 pub fn platform_store() -> Box<dyn SecretStore> {
     #[cfg(windows)]
     {
         Box::new(windows::CredentialManagerStore::new(DEFAULT_TARGET_PREFIX))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        Box::new(keychain::KeychainStore::new(DEFAULT_TARGET_PREFIX))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         tracing::warn!("no native secret store on this platform yet; API keys are kept in memory");
         Box::new(MemorySecretStore::new())
@@ -131,6 +136,112 @@ pub fn platform_store() -> Box<dyn SecretStore> {
 
 #[cfg(windows)]
 pub use windows::CredentialManagerStore;
+
+#[cfg(target_os = "macos")]
+pub use keychain::KeychainStore;
+
+/// Keychain account of a provider key or a named secret (`<provider-id>` / `ext-<name>`), the
+/// same leaf names the Windows store uses, so no provider id can equal a named secret.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn account_of(provider: Option<ProviderKind>, name: Option<&str>) -> Result<String> {
+    match (provider, name) {
+        (Some(p), _) => Ok(p.id().to_owned()),
+        (None, Some(n)) => {
+            check_name(n)?;
+            Ok(format!("ext-{n}"))
+        }
+        (None, None) => Err(AiError::Store("no secret named".into())),
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod keychain {
+    use security_framework::passwords::{
+        delete_generic_password, get_generic_password, set_generic_password,
+    };
+
+    use super::{account_of, SecretStore};
+    use crate::error::{AiError, Result};
+    use crate::key::ApiKey;
+    use crate::types::ProviderKind;
+
+    /// `errSecItemNotFound`: there is no such item, which reads as "no key".
+    const NOT_FOUND: i32 = -25300;
+
+    /// The user's login Keychain: generic passwords whose service is the prefix
+    /// (`Riptide/ai`) and whose account is the provider id or `ext-<name>`. Keychain Access shows
+    /// them under that service, and only this app reads them without asking.
+    #[derive(Debug, Clone)]
+    pub struct KeychainStore {
+        service: String,
+    }
+
+    impl KeychainStore {
+        /// `service` is normally [`super::DEFAULT_TARGET_PREFIX`]; tests pass a throwaway one.
+        pub fn new(service: impl Into<String>) -> Self {
+            Self {
+                service: service.into(),
+            }
+        }
+
+        fn read(&self, account: &str) -> Result<Option<ApiKey>> {
+            match get_generic_password(&self.service, account) {
+                Ok(bytes) => {
+                    let text = String::from_utf8(bytes)
+                        .map_err(|_| AiError::Store("stored key is not valid text".into()))?;
+                    ApiKey::new(text).map(Some)
+                }
+                Err(e) if e.code() == NOT_FOUND => Ok(None),
+                Err(e) => Err(AiError::Store(format!(
+                    "Keychain read failed (code {})",
+                    e.code()
+                ))),
+            }
+        }
+
+        fn write(&self, account: &str, key: &ApiKey) -> Result<()> {
+            set_generic_password(&self.service, account, key.expose().as_bytes())
+                .map_err(|e| AiError::Store(format!("Keychain write failed (code {})", e.code())))
+        }
+
+        fn remove(&self, account: &str) -> Result<()> {
+            match delete_generic_password(&self.service, account) {
+                Ok(()) => Ok(()),
+                Err(e) if e.code() == NOT_FOUND => Ok(()),
+                Err(e) => Err(AiError::Store(format!(
+                    "Keychain delete failed (code {})",
+                    e.code()
+                ))),
+            }
+        }
+    }
+
+    impl SecretStore for KeychainStore {
+        fn get(&self, provider: ProviderKind) -> Result<Option<ApiKey>> {
+            self.read(&account_of(Some(provider), None)?)
+        }
+
+        fn set(&self, provider: ProviderKind, key: &ApiKey) -> Result<()> {
+            self.write(&account_of(Some(provider), None)?, key)
+        }
+
+        fn delete(&self, provider: ProviderKind) -> Result<()> {
+            self.remove(&account_of(Some(provider), None)?)
+        }
+
+        fn get_named(&self, name: &str) -> Result<Option<ApiKey>> {
+            self.read(&account_of(None, Some(name))?)
+        }
+
+        fn set_named(&self, name: &str, key: &ApiKey) -> Result<()> {
+            self.write(&account_of(None, Some(name))?, key)
+        }
+
+        fn delete_named(&self, name: &str) -> Result<()> {
+            self.remove(&account_of(None, Some(name))?)
+        }
+    }
+}
 
 #[cfg(windows)]
 mod windows {
@@ -317,6 +428,41 @@ mod tests {
         assert!(s.get_named("").is_err());
         s.delete_named("brave").unwrap();
         s.delete_named("brave").unwrap();
+        assert!(s.get_named("brave").unwrap().is_none());
+    }
+
+    #[test]
+    fn keychain_accounts_cannot_collide_or_escape() {
+        assert_eq!(
+            account_of(Some(ProviderKind::Groq), None).unwrap(),
+            ProviderKind::Groq.id()
+        );
+        assert_eq!(account_of(None, Some("brave")).unwrap(), "ext-brave");
+        assert!(account_of(None, Some("../x")).is_err());
+        assert!(account_of(None, Some("")).is_err());
+        assert!(account_of(None, None).is_err());
+    }
+
+    /// Writes to the real login Keychain under a throwaway service: run by hand on a Mac
+    /// (`cargo test -p riptide-ai -- --ignored keychain`), not in CI, where a locked keychain
+    /// would block.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "touches the user's login Keychain"]
+    fn keychain_round_trip() {
+        let s = KeychainStore::new("Riptide/test-keychain-round-trip");
+        let k = ApiKey::new("sk-test-keychain-123456").unwrap();
+        s.set(ProviderKind::Groq, &k).unwrap();
+        assert_eq!(
+            s.get(ProviderKind::Groq).unwrap().unwrap().expose(),
+            k.expose()
+        );
+        s.set_named("brave", &k).unwrap();
+        assert!(s.get_named("brave").unwrap().is_some());
+        s.delete(ProviderKind::Groq).unwrap();
+        s.delete(ProviderKind::Groq).unwrap();
+        s.delete_named("brave").unwrap();
+        assert!(s.get(ProviderKind::Groq).unwrap().is_none());
         assert!(s.get_named("brave").unwrap().is_none());
     }
 }

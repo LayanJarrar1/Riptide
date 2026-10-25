@@ -9,7 +9,7 @@
         aria-controls="main-nav"
         [attr.aria-expanded]="navRail.expanded()"
         [attr.aria-label]="toggleLabel() | t"
-        [attr.title]="(toggleLabel() | t) + ' (Ctrl+B)'"
+        [attr.title]="(toggleLabel() | t) + ' (' + keys.sidebar + ')'"
         (click)="navRail.toggle()"
       >
         <app-icon name="sidebar" [size]="18" />
@@ -36,7 +36,7 @@
         (input)="onSearch($event)"
         (keydown.escape)="clearSearch()"
       />
-      <kbd class="search-key" aria-hidden="true">Ctrl F</kbd>
+      <kbd class="search-key" aria-hidden="true">{{ keys.search }}</kbd>
       @if (store.query().length > 0) {
         <button
           appButton
@@ -143,7 +143,7 @@
         @if (updates.badgeVersion(); as version) {
           <span class="nav-badge" role="img" [attr.aria-label]="('settings.updateAvailable' | t).replace('{version}', version)" [attr.title]="('settings.updateAvailable' | t).replace('{version}', version)"></span>
         }
-        <kbd class="nav-key" aria-hidden="true">Ctrl ,</kbd>
+        <kbd class="nav-key" aria-hidden="true">{{ keys.settings }}</kbd>
       </a>
     </div>
   </nav>

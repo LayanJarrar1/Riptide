@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 
 import { NOW } from '../../core/clock';
+import { IS_MAC } from '../../core/platform';
 import { QueuesService } from '../../data/queues.service';
 import { I18nService } from '../../i18n/i18n.service';
 import {
@@ -192,7 +193,8 @@ export class QueueDialogComponent {
   /** The dialog should close (saved, cancelled, Escape). */
   readonly closed = output<void>();
 
-  protected readonly kinds = POST_ACTION_KINDS;
+  /** macOS has no separate hibernate (it decides itself): the choice is not offered there. */
+  protected readonly kinds = inject(IS_MAC) ? POST_ACTION_KINDS.filter((k) => k !== 'hibernate') : POST_ACTION_KINDS;
   protected readonly maxName = MAX_QUEUE_NAME_CHARS;
   protected readonly maxConcurrent = MAX_QUEUE_CONCURRENT;
 

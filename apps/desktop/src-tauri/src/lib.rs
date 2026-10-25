@@ -417,6 +417,7 @@ pub fn run() {
             commands::show_in_folder,
             commands::pick_folder,
             files::fs_places,
+            files::fs_capabilities,
             files::fs_list,
             files::fs_entry,
             files::fs_create_folder,
@@ -470,7 +471,8 @@ pub fn run() {
             shell::autostart_enabled,
             shell::set_autostart,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!())
+        .map(|app| app.run(on_run_event));
     if let Err(e) = result {
         // Tauri itself failed (no WebView2, unreadable configuration): no window and no dialog
         // plugin to tell the user, so the log and the exit code are all there is
@@ -478,6 +480,22 @@ pub fn run() {
         eprintln!("riptide: {e}");
         std::process::exit(1);
     }
+}
+
+/// Events of the running app. macOS hands `magnet:` links and `.torrent` files to an app that
+/// already runs (or is starting) as an "open" event rather than a command line.
+fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+    #[cfg(target_os = "macos")]
+    if let tauri::RunEvent::Opened { urls } = &event {
+        for url in urls {
+            if let Some(target) = protocol::opened_target(url) {
+                protocol::deliver_open(app, target);
+            }
+        }
+        show_main_window(app);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, event);
 }
 
 #[cfg(test)]

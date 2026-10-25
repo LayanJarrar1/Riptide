@@ -24,6 +24,12 @@
   transition: opacity var(--dur-2) var(--ease-standard);
 }
 
+/* macOS: the native traffic lights sit at the left edge (in Arabic too, like every Mac app),
+   over the start of the bar; leave them their room */
+:host-context(.is-mac) .bar {
+  padding-left: 76px;
+}
+
 /* another window has focus: the bar steps back, like a native one */
 .bar.is-inactive .start,
 .bar.is-inactive .ctl {

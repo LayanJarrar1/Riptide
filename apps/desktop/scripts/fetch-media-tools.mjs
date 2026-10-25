@@ -26,6 +26,18 @@ import { fileURLToPath } from 'node:url';
 const YT_DLP_VERSION = '2026.08.19';
 const FFMPEG_DIR = 'ffmpeg-n9.0.2-28-g669f5ab083-win64-lgpl-9.0';
 
+/**
+ * macOS: yt-dlp's own universal build (Apple Silicon and Intel), pinned like the Windows one. No
+ * ffmpeg is bundled on macOS yet (there is no LGPL-only macOS build to pin), so video pages fall
+ * back to the formats that need no merging; see docs/MACOS.md.
+ */
+const MAC_DOWNLOADS = {
+  ytDlp: {
+    url: `https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp_macos`,
+    sha256: '0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202',
+  },
+};
+
 const DOWNLOADS = {
   ytDlp: {
     url: `https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp.exe`,
@@ -49,8 +61,8 @@ const printHashes = process.env.RIPTIDE_MEDIA_PRINT_HASHES === '1';
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const binaries = join(desktop, 'src-tauri', 'binaries');
 
-if (process.platform !== 'win32') {
-  console.log('fetch-media-tools: only Windows builds bundle video support for now; skipping');
+if (process.platform !== 'win32' && process.platform !== 'darwin') {
+  console.log('fetch-media-tools: only Windows and macOS builds bundle video support; skipping');
   process.exit(0);
 }
 
@@ -62,6 +74,11 @@ if (!target) {
 }
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+if (process.platform === 'darwin') {
+  await stageMac();
+  process.exit(0);
+}
 
 /** Downloads `entry.url` and returns its bytes after checking the pinned hash. */
 async function fetchPinned(name, entry) {
@@ -152,4 +169,35 @@ try {
 } catch (error) {
   console.error(`fetch-media-tools: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
+}
+
+/** Stages `yt-dlp-<target>` (executable) and its licence text for a macOS bundle. */
+async function stageMac() {
+  const exe = join(binaries, `yt-dlp-${target}`);
+  const license = join(binaries, 'yt-dlp-LICENSE.txt');
+  const macStamp = join(binaries, 'media-tools.json');
+  const want = JSON.stringify({ ytDlp: MAC_DOWNLOADS.ytDlp.sha256, target });
+  if (!printHashes && existsSync(macStamp) && readFileSync(macStamp, 'utf8') === want && staged(exe, MAC_DOWNLOADS.ytDlp.sha256) && existsSync(license)) {
+    console.log(`fetch-media-tools: yt-dlp ${YT_DLP_VERSION} (macOS) already staged`);
+    return;
+  }
+  mkdirSync(binaries, { recursive: true });
+  const bytes = await fetchPinned('yt-dlp_macos', MAC_DOWNLOADS.ytDlp);
+  const text = await fetchPinned('yt-dlp LICENSE', DOWNLOADS.ytDlpLicense);
+  const thirdParty = await fetchPinned('yt-dlp THIRD_PARTY_LICENSES', DOWNLOADS.ytDlpThirdParty);
+  if (printHashes) {
+    return;
+  }
+  writeFileSync(exe, bytes, { mode: 0o755 });
+  writeFileSync(
+    license,
+    Buffer.concat([
+      Buffer.from(`yt-dlp ${YT_DLP_VERSION} - https://github.com/yt-dlp/yt-dlp\n\n`),
+      text,
+      Buffer.from('\n\n---- THIRD_PARTY_LICENSES.txt (bundled in yt-dlp_macos) ----\n\n'),
+      thirdParty,
+    ]),
+  );
+  writeFileSync(macStamp, want);
+  console.log(`fetch-media-tools: staged ${exe}`);
 }

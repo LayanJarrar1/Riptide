@@ -8,6 +8,20 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+### macOS (preview)
+
+- Riptide builds for macOS 11+ (Apple Silicon): `npm run bundle:mac` makes `Riptide.app` and a
+  `.dmg`; a `macos` workflow checks and bundles it on a Mac runner (on main and on demand), and
+  signs and notarizes when the Apple secrets are set.
+- Native window frame with the traffic lights; shortcut labels in ⌘ form.
+- API keys are kept in the macOS Keychain (they were kept in memory only off Windows).
+- Finished downloads get the `com.apple.quarantine` mark, so Gatekeeper checks downloaded apps.
+- `magnet:` links and `.torrent` files opened from other apps reach Riptide (Apple "open" events).
+- After a queue: Sleep and Shut down work on macOS; Hibernate is not offered there.
+- Files: the Trash (put back from Finder), `/Volumes` as places, Option-drag to copy, Finder wording.
+- Video pages use yt-dlp's macOS build (pinned); ffmpeg is not bundled on macOS yet.
+- Plan, status and manual checks: `docs/MACOS.md`.
+
 ## [0.1.0-beta.3] - 2026-10-25
 
 A calmer Research page, a downloads list that always fits, and faster video quality options.

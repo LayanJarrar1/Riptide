@@ -23,6 +23,11 @@ export interface Place {
   readonly path: string;
 }
 
+/** What the file manager can do on this system (`FsCapabilities` in `files.rs`). */
+export interface FsCapabilities {
+  readonly canRestore: boolean;
+}
+
 /** A plan plus the destination's free bytes (`TransferPlan` in `files.rs`). */
 export interface TransferPlan extends Plan {
   readonly free: number | null;
@@ -35,6 +40,8 @@ export interface TransferPlan extends Plan {
  */
 export interface FileBackend {
   places(): Promise<readonly Place[]>;
+  /** What this system supports (restoring from the Recycle Bin is not possible on macOS). */
+  capabilities(): Promise<FsCapabilities>;
   list(path: string): Promise<Listing>;
   createFolder(parent: string, name: string): Promise<Entry>;
   rename(path: string, name: string): Promise<Entry>;
@@ -67,6 +74,10 @@ export class TauriFileBackend implements FileBackend {
 
   places(): Promise<readonly Place[]> {
     return this.invoke<Place[]>('fs_places');
+  }
+
+  capabilities(): Promise<FsCapabilities> {
+    return this.invoke<FsCapabilities>('fs_capabilities');
   }
 
   list(path: string): Promise<Listing> {
@@ -223,6 +234,13 @@ export class MemoryFileBackend implements FileBackend {
 
   exists(path: string): boolean {
     return this.find(path) !== null;
+  }
+
+  /** Whether this disk can restore from its bin; specs turn it off to act like macOS. */
+  canRestore = true;
+
+  capabilities(): Promise<FsCapabilities> {
+    return Promise.resolve({ canRestore: this.canRestore });
   }
 
   places(): Promise<readonly Place[]> {

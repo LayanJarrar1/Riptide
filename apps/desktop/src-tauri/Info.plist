@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into Riptide.app's Info.plist by the Tauri bundler (macOS builds only).
+  Declares the magnet: links Riptide can open. macOS lists Riptide as an app for them; the user
+  makes it the default in their browser or with a tool of their choice, nothing is changed
+  silently. The link reaches the app as an "open" event (see on_run_event in src/lib.rs).
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>app.riptide.desktop.magnet</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>magnet</string>
+      </array>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+    </dict>
+  </array>
+</dict>
+</plist>

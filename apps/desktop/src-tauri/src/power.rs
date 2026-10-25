@@ -9,12 +9,13 @@
 //! lives in the small `sys` module at the bottom of this file. Tests drive [`perform`] with a
 //! fake [`Power`] and never touch the machine.
 //!
-//! | Action | Windows |
-//! |---|---|
-//! | Exit | `AppHandle::exit` (after the transfers stopped at a checkpoint) |
-//! | Sleep / Hibernate | `SetSuspendState` |
-//! | Shut down | `%SystemRoot%\System32\shutdown.exe /s /t 0` (no elevation for the interactive user) |
-//! | Run a command | the saved program path, **no arguments**, never through a shell |
+//! | Action | Windows | macOS |
+//! |---|---|---|
+//! | Exit | `AppHandle::exit` (after the transfers stopped at a checkpoint) | same |
+//! | Sleep | `SetSuspendState` | `/usr/bin/pmset sleepnow` |
+//! | Hibernate | `SetSuspendState` | not offered (macOS decides itself when to hibernate) |
+//! | Shut down | `%SystemRoot%\System32\shutdown.exe /s /t 0` (no elevation for the interactive user) | System Events "shut down" through `/usr/bin/osascript` (macOS asks once to allow it) |
+//! | Run a command | the saved program path, **no arguments**, never through a shell | same |
 //!
 //! Other platforms answer "not supported" for everything but Exit and Run.
 
@@ -203,8 +204,43 @@ mod sys {
     }
 }
 
+/// The macOS commands, with fixed absolute paths and fixed arguments: nothing user-supplied.
+pub const MAC_SLEEP: (&str, &[&str]) = ("/usr/bin/pmset", &["sleepnow"]);
+/// A normal shutdown that lets apps save, like the Apple menu's "Shut Down".
+pub const MAC_SHUTDOWN: (&str, &[&str]) = (
+    "/usr/bin/osascript",
+    &["-e", "tell application \"System Events\" to shut down"],
+);
+
+/// macOS: `pmset` and System Events.
+#[cfg(target_os = "macos")]
+mod sys {
+    fn run(cmd: (&str, &[&str]), what: &str) -> Result<(), String> {
+        let status = std::process::Command::new(cmd.0)
+            .args(cmd.1)
+            .status()
+            .map_err(|e| format!("could not {what}: {e}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("could not {what} ({status})"))
+        }
+    }
+
+    pub(super) fn suspend(hibernate: bool) -> Result<(), String> {
+        if hibernate {
+            return Err("macOS has no separate hibernate; choose Sleep instead".into());
+        }
+        run(super::MAC_SLEEP, "go to sleep")
+    }
+
+    pub(super) fn shutdown() -> Result<(), String> {
+        run(super::MAC_SHUTDOWN, "shut down")
+    }
+}
+
 /// Everywhere else: not supported yet.
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 mod sys {
     pub(super) fn suspend(_hibernate: bool) -> Result<(), String> {
         Err("sleep and hibernate are not supported on this system".into())

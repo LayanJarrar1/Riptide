@@ -166,6 +166,19 @@ pub struct TrashedItem {
     pub deleted_at: i64,
 }
 
+/// Whether this system can list and restore Recycle Bin items ([`trashed_items`],
+/// [`restore_from_trash`]): Windows and freedesktop systems can; macOS can only move items to
+/// the Trash (Finder puts them back).
+pub const CAN_RESTORE: bool = cfg!(any(
+    windows,
+    all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )
+));
+
 /// Most items a properties count or a search walks before it stops.
 pub const PROPERTIES_LIMIT: u64 = 200_000;
 

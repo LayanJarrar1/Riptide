@@ -1,0 +1,93 @@
+name: macos
+
+# The macOS build: the same checks as check.ps1 where they apply, then Riptide.app and a .dmg
+# as a workflow artifact. Runs on pushes to main and on demand (Actions -> macos -> Run
+# workflow), not on every pull request: macOS runners cost several times a Linux or Windows one.
+#
+# Signing and notarization happen only when these secrets exist (tauri-cli reads them):
+#   APPLE_CERTIFICATE           base64 of the "Developer ID Application" .p12
+#   APPLE_CERTIFICATE_PASSWORD  its password
+#   APPLE_SIGNING_IDENTITY      e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID, APPLE_PASSWORD    Apple ID and an app-specific password, for notarization
+#   APPLE_TEAM_ID               the team id
+# Without them the app is only ad-hoc signed: it runs, but macOS asks the user to allow it
+# (System Settings -> Privacy & Security -> Open Anyway). See docs/MACOS.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: check and bundle (macos, Apple Silicon)
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+
+      - name: Desktop UI (install, i18n lint, lint, build, tests)
+        working-directory: apps/desktop
+        run: |
+          npm ci --no-audit --no-fund
+          npm run --silent i18n:lint
+          npm run --silent lint
+          npm run --silent build
+          npm run --silent test
+
+      - name: Rust (clippy, tests)
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace --exclude riptide-desktop
+          cargo test -p riptide-desktop
+
+      - name: Bundle Riptide.app and the .dmg
+        working-directory: apps/desktop
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # a secret that is not set arrives as an empty variable; tauri-cli must not see those
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          npm run bundle:mac
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: riptide-macos-aarch64
+          path: |
+            target/release/bundle/dmg/*.dmg
+            target/release/bundle/macos/*.app
+          if-no-files-found: error
+          retention-days: 14

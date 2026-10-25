@@ -32,6 +32,10 @@ ts-rs = { workspace = true, optional = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# com.apple.quarantine on finished downloads (src/motw.rs)
+xattr = "1"
+
 [features]
 ts = ["dep:ts-rs", "riptide-core/ts"]
 

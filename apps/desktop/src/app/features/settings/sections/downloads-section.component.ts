@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
+import { IS_MAC } from '../../../core/platform';
 import { I18nService } from '../../../i18n/i18n.service';
 import { CATEGORY_KEYS, CategoryKey } from '../../../model/download';
 import { TAURI_AVAILABLE, TAURI_INVOKE } from '../../../tauri/tauri-bridge';
@@ -86,7 +87,7 @@ export interface MediaToolsInfo {
     </app-setting-group>
 
     <app-setting-group [heading]="i18n.t('set.g.safety')">
-      <app-setting-row [clickable]="true" [label]="i18n.t('settings.markDownloads')" [description]="i18n.t('settings.markDownloadsDesc')">
+      <app-setting-row [clickable]="true" [label]="i18n.t('settings.markDownloads')" [description]="i18n.t(isMac ? 'settings.markDownloadsDescMac' : 'settings.markDownloadsDesc')">
         <app-switch [checked]="s().markDownloads" [label]="i18n.t('settings.markDownloads')" (checkedChange)="patch({ markDownloads: $event })" />
       </app-setting-row>
     </app-setting-group>
@@ -123,6 +124,8 @@ export interface MediaToolsInfo {
 })
 export class DownloadsSectionComponent {
   protected readonly i18n = inject(I18nService);
+  /** macOS marks downloads with the quarantine attribute instead of Windows' stream. */
+  protected readonly isMac = inject(IS_MAC);
   protected readonly settings = inject(SettingsService);
   private readonly toasts = inject(ToastService);
   protected readonly tauriAvailable = inject(TAURI_AVAILABLE);

@@ -5,8 +5,12 @@
 //! from the internet" warnings before an `.exe`, `.msi` or macro document is opened. A download
 //! manager that skips it silently removes that protection.
 //!
-//! Writing is best effort and Windows only (a no-op elsewhere): FAT, exFAT and many network
-//! shares have no streams, and that must never fail a download. The URLs in the stream are
+//! On macOS the same protection is the `com.apple.quarantine` extended attribute browsers set:
+//! Gatekeeper then checks an app's signature and asks before it first opens, and Finder shows
+//! where it came from. It holds no URL ([`quarantine_value`]).
+//!
+//! Writing is best effort (a no-op on other systems): FAT, exFAT and many network shares have
+//! no streams or attributes, and that must never fail a download. The URLs in the stream are
 //! reduced to scheme, host, port and path: no credentials, query string or fragment (rule 4),
 //! http(s) only, no control characters, length capped.
 
@@ -71,14 +75,64 @@ pub fn mark_from_internet(path: &Path, referrer: Option<&str>, host_url: Option<
     }
 }
 
-/// Mark-of-the-Web is a Windows (NTFS) feature; nothing to do here.
-#[cfg(not(windows))]
+/// The `com.apple.quarantine` value: flags `0081` (downloaded from the web, as browsers set),
+/// the time in hex seconds, the agent name and an empty event id. No URL is recorded.
+pub fn quarantine_value(unix_secs: u64) -> String {
+    format!("0081;{unix_secs:08x};Riptide;")
+}
+
+/// Marks the finished file at `path` as downloaded from the internet (macOS quarantine). Best
+/// effort: returns whether the attribute was written.
+#[cfg(target_os = "macos")]
+pub fn mark_from_internet(path: &Path, _referrer: Option<&str>, _host_url: Option<&str>) -> bool {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    match xattr::set(
+        path,
+        "com.apple.quarantine",
+        quarantine_value(now).as_bytes(),
+    ) {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::debug!(error = %e, "could not set the quarantine attribute");
+            false
+        }
+    }
+}
+
+/// No download marking on this system.
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn mark_from_internet(_path: &Path, _referrer: Option<&str>, _host_url: Option<&str>) -> bool {
     false
 }
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_quarantine_value_has_the_browser_layout_and_no_url() {
+        assert_eq!(quarantine_value(0x6718_0a2b), "0081;67180a2b;Riptide;");
+        assert_eq!(quarantine_value(5), "0081;00000005;Riptide;");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_quarantine_attribute_is_set_and_the_content_is_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("setup.dmg");
+        std::fs::write(&file, b"payload").unwrap();
+        assert!(mark_from_internet(
+            &file,
+            Some("https://example.com/"),
+            None
+        ));
+        let value = xattr::get(&file, "com.apple.quarantine").unwrap().unwrap();
+        assert!(String::from_utf8(value).unwrap().starts_with("0081;"));
+        assert_eq!(std::fs::read(&file).unwrap(), b"payload");
+    }
+
     use super::*;
 
     #[test]

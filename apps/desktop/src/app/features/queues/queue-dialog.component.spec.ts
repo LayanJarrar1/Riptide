@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NOW } from '../../core/clock';
+import { IS_MAC } from '../../core/platform';
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../../core/preferences';
 import { MemoryQueueBackend, QUEUE_BACKEND } from '../../data/queue-backend';
 import { QueuesService } from '../../data/queues.service';
@@ -72,6 +73,30 @@ describe('QueueDialogComponent', () => {
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('offers Hibernate after a queue on Windows', () => {
+    const options = Array.from(q<HTMLSelectElement>('select[name="after"]').options).map((o) => o.value);
+    expect(options).toContain('hibernate');
+  });
+
+  it('does not offer Hibernate on a Mac, where the system decides it', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: TAURI_AVAILABLE, useValue: false },
+        { provide: QUEUE_BACKEND, useValue: new TestBackend() },
+        { provide: PREFERENCE_STORE, useValue: new MemoryPreferenceStore() },
+        { provide: NAVIGATOR_LANGUAGES, useValue: ['en-US'] },
+        { provide: NOW, useValue: () => Date.UTC(2026, 9, 19, 12, 0) },
+        { provide: IS_MAC, useValue: true },
+      ],
+    });
+    const mac = TestBed.createComponent(HostComponent);
+    mac.detectChanges();
+    const options = Array.from((mac.nativeElement as HTMLElement).querySelector<HTMLSelectElement>('select[name="after"]')?.options ?? []).map((o) => o.value);
+    expect(options).toContain('sleep');
+    expect(options).not.toContain('hibernate');
   });
 
   it('opens as "New queue" with a blank form', () => {

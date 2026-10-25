@@ -25,6 +25,10 @@ zeroize = "1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Security_Credentials"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# the login Keychain for API keys (generic passwords)
+security-framework = "3"
+
 [dev-dependencies]
 wiremock = "0.6"
 tracing-subscriber = { workspace = true }

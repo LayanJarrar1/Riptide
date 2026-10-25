@@ -21,6 +21,7 @@ import { filter } from 'rxjs';
 import { DiskSpaceService } from './core/disk-space.service';
 import { FormatService } from './core/format.service';
 import { NavRailService } from './core/nav-rail.service';
+import { IS_MAC, shortcutLabel } from './core/platform';
 import { TickerDirective } from './core/ticker.directive';
 import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
@@ -118,6 +119,13 @@ export class AppComponent implements OnInit {
   protected readonly categoryIcons = CATEGORY_ICONS;
   /** Real free space under Tauri (polled), the demo figure in a plain browser. */
   protected readonly disk = inject(DiskSpaceService);
+  protected readonly isMac = inject(IS_MAC);
+  /** Shortcut hints as the platform writes them (`Ctrl F` / `⌘F`). */
+  protected readonly keys = {
+    search: shortcutLabel('Ctrl+F', this.isMac).replace('+', ' '),
+    settings: shortcutLabel('Ctrl+,', this.isMac).replace('+', ' '),
+    sidebar: shortcutLabel('Ctrl+B', this.isMac),
+  };
 
   /** Stable formatters for the number tickers (they follow the language through the service). */
   protected readonly intFormat = (n: number): string => this.format.int(n);
@@ -159,6 +167,10 @@ export class AppComponent implements OnInit {
   });
 
   constructor() {
+    // styles that depend on the platform (room for the macOS traffic lights) key off this class
+    if (this.isMac) {
+      globalThis.document?.documentElement.classList.add('is-mac');
+    }
     // starts watching the engine for completions (it shows the "is complete" toast)
     inject(CompletionToastService);
     inject(DesktopShellService);

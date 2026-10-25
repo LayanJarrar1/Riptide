@@ -1,6 +1,7 @@
 import { inject, Injectable, signal } from '@angular/core';
 
 import { FormatService } from '../../core/format.service';
+import { IS_MAC } from '../../core/platform';
 import { I18nService } from '../../i18n/i18n.service';
 import { ToastService } from '../../ui/toast.service';
 import { ConflictChoice, FILE_BACKEND, Progress, TransferKind, TransferPlan, TransferReport } from './file-backend';
@@ -57,6 +58,10 @@ export class FileOpsService {
   private readonly i18n = inject(I18nService);
   private readonly format = inject(FormatService);
   private readonly colors = inject(FolderColorsService);
+  private readonly isMac = inject(IS_MAC);
+
+  /** Items can be put back from the Recycle Bin here (not on macOS, where Finder does it). */
+  readonly canRestore = signal(true);
 
   readonly clipboard = signal<FileClipboard | null>(null);
   readonly running = signal<RunningTransfer | null>(null);
@@ -64,6 +69,32 @@ export class FileOpsService {
   /** Ticks after anything changed on disk; panes reload when it moves. */
   readonly version = signal(0);
   private nextId = 1;
+
+  constructor() {
+    this.backend
+      .capabilities()
+      .then((c) => this.canRestore.set(c.canRestore))
+      .catch(() => this.canRestore.set(false));
+  }
+
+  /**
+   * The words the platform uses: Trash and Finder on macOS, Recycle Bin and Explorer on Windows.
+   * Takes the Windows key and returns the key to show.
+   */
+  platformKey(key: string): string {
+    if (!this.isMac) {
+      return key;
+    }
+    const mac: Readonly<Record<string, string>> = {
+      'files.recycleBin': 'files.trash',
+      'files.binEmpty': 'files.trashEmpty',
+      'files.trashedOne': 'files.trashedOneMac',
+      'files.trashedMany': 'files.trashedManyMac',
+      'files.replaceNote': 'files.replaceNoteMac',
+      'files.showInExplorer': 'files.showInFinder',
+    };
+    return mac[key] ?? key;
+  }
 
   /** A fresh id for a cancellable backend call. */
   newId(): number {
@@ -183,7 +214,7 @@ export class FileOpsService {
     }
   }
 
-  /** Sends items to the Recycle Bin; Undo brings them back. */
+  /** Sends items to the Recycle Bin; Undo brings them back where the system can restore. */
   async trash(paths: readonly string[]): Promise<boolean> {
     if (paths.length === 0) {
       return false;
@@ -195,8 +226,12 @@ export class FileOpsService {
       return false;
     }
     this.bump();
-    const text = paths.length === 1 ? this.i18n.t('files.trashedOne').replace('{name}', baseName(paths[0])) : this.i18n.t('files.trashedMany').replace('{n}', this.format.int(paths.length));
-    this.toasts.show('success', text, { label: this.i18n.t('files.undo'), icon: 'retry', run: () => void this.untrash(paths) });
+    const text =
+      paths.length === 1
+        ? this.i18n.t(this.platformKey('files.trashedOne')).replace('{name}', baseName(paths[0]))
+        : this.i18n.t(this.platformKey('files.trashedMany')).replace('{n}', this.format.int(paths.length));
+    const undo = this.canRestore() ? { label: this.i18n.t('files.undo'), icon: 'retry' as const, run: () => void this.untrash(paths) } : undefined;
+    this.toasts.show('success', text, undo);
     return true;
   }
 

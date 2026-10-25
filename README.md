@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img alt="Platform: Windows 10 / 11" src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078d4?style=flat-square">
+  <img alt="Platform: Windows 10 / 11, macOS 11+ (preview)" src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011%20%7C%20macOS%2011%2B%20(preview)-0078d4?style=flat-square">
   <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-19c6b5?style=flat-square">
   <img alt="Arabic and English" src="https://img.shields.io/badge/%D8%B9%D8%B1%D8%A8%D9%8A%20%2B%20English-RTL%20ready-071a26?style=flat-square">
   <a href="#license"><img alt="License: GPL-3.0 app, MIT or Apache-2.0 engine" src="https://img.shields.io/badge/license-GPL--3.0%20%C2%B7%20MIT%20%2F%20Apache--2.0-6b8683?style=flat-square"></a>
@@ -43,6 +43,8 @@
 | **Portable** | [`Riptide-0.1.0-beta.3-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide-0.1.0-beta.3-portable.zip) | Unzip anywhere; data stays next to the app |
 
 Windows 10 or 11, 64-bit. Checksums and older versions are on the [Releases page](https://github.com/LayanJarrar1/Riptide/releases).
+
+macOS 11 or later (Apple Silicon) is in preview: there are no published Mac downloads yet, but the app builds with `npm run bundle:mac` (see [docs/MACOS.md](docs/MACOS.md) for the status, what differs from Windows and the manual checks).
 
 The installer is not code-signed yet, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**. You can check the download against `SHA256SUMS.txt` on the release page.
 
