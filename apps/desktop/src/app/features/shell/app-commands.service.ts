@@ -1,6 +1,7 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { NavRailService } from '../../core/nav-rail.service';
 import { UpdateService } from '../../core/update.service';
 import { WindowService } from '../../core/window.service';
 import { finalPath } from '../../data/bridge-mapping';
@@ -36,6 +37,7 @@ export class AppCommands {
   private readonly updates = inject(UpdateService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly navRail = inject(NavRailService);
   private readonly invoke = inject(TAURI_INVOKE);
   private readonly win = inject(WindowService);
   /** Whether the Tauri shell is around (some commands only exist there). */
@@ -170,9 +172,7 @@ export class AppCommands {
 
   /** Opens the queue editor on a new queue (the queues list lives in the sidebar, so it is shown). */
   newQueue(): void {
-    if (!this.settings.settings().sidebarVisible) {
-      this.settings.patch({ sidebarVisible: true });
-    }
+    this.navRail.reveal();
     this.ui.requestNewQueue();
   }
 
@@ -211,7 +211,7 @@ export class AppCommands {
   }
 
   toggleSidebar(): void {
-    this.settings.patch({ sidebarVisible: !this.settings.settings().sidebarVisible });
+    this.navRail.toggle();
   }
 
   setDensity(density: Settings['density']): void {

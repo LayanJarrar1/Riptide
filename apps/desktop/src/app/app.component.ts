@@ -20,7 +20,7 @@ import { filter } from 'rxjs';
 
 import { DiskSpaceService } from './core/disk-space.service';
 import { FormatService } from './core/format.service';
-import { NavRailService, prefersRail } from './core/nav-rail.service';
+import { NavRailService } from './core/nav-rail.service';
 import { TickerDirective } from './core/ticker.directive';
 import { UpdateService } from './core/update.service';
 import { DownloadsStore, LIST_VIEWS, ListView } from './data/downloads.store';
@@ -135,9 +135,13 @@ export class AppComponent implements OnInit {
     return this.categories.filter((c) => (counts.get(c) ?? 0) > 0);
   });
 
-  /** Research and Files give the width to their content: the navigation is an icon rail there (unless expanded). */
-  protected readonly railPage = computed(() => prefersRail(this.url()));
-  protected readonly rail = computed(() => this.navRail.isRail(this.url()));
+  /** The navigation is the compact icon rail (collapsed, or any narrow window); the toggle in the top bar flips it. */
+  protected readonly rail = this.navRail.rail;
+  protected readonly navOverlay = this.navRail.overlay;
+  /** The icon names/tooltips show whenever the labels are not visible. */
+  protected readonly iconsOnly = computed(() => this.navRail.rail() && !this.navRail.overlay());
+  protected readonly toggleLabel = computed(() => (this.navRail.expanded() ? 'nav.hide' : 'nav.show'));
+  private readonly toggleRef = viewChild<ElementRef<HTMLButtonElement>>('navToggle');
 
   /** Whether the list page is showing (sidebar highlights follow the view only then). */
   protected readonly onDownloads = computed(() => /^\/?(?:[?#].*)?$/.test(this.url()));
@@ -261,6 +265,12 @@ export class AppComponent implements OnInit {
       (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
     const mod = event.ctrlKey || event.metaKey;
     if (!mod) {
+      if (event.key === 'Escape' && this.navRail.overlay()) {
+        event.preventDefault();
+        this.navRail.closeOverlay();
+        this.toggleRef()?.nativeElement.focus();
+        return;
+      }
       // "?" on a Latin layout, "؟" on an Arabic one
       if (!typing && (event.key === '?' || event.key === '؟')) {
         event.preventDefault();
@@ -280,7 +290,7 @@ export class AppComponent implements OnInit {
       void this.router.navigateByUrl('/').then(() => this.ui.focusSearch());
     } else if (event.key === 'b' || event.key === 'B') {
       event.preventDefault();
-      this.settings.patch({ sidebarVisible: !this.settings.settings().sidebarVisible });
+      this.navRail.toggle();
     } else if (event.key === ',') {
       event.preventDefault();
       void this.router.navigateByUrl('/settings');

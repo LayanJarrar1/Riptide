@@ -15,24 +15,12 @@
   height: 100%;
   background: var(--color-bg);
   color: var(--color-text);
+  transition: grid-template-columns var(--dur-3) var(--ease-standard);
 }
 
 /* ---- First paint: the frame assembles once, part by part, --stagger-step apart ---------- */
 .titlebar {
   grid-area: titlebar;
-}
-
-/* View > Sidebar: hidden. The brand keeps its logo at its own width. */
-.frame.no-sidebar {
-  grid-template-columns: 0 minmax(0, 1fr);
-}
-
-.frame.no-sidebar .sidebar {
-  display: none;
-}
-
-.frame.no-sidebar .topbar {
-  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .frame.is-booting .topbar {
@@ -89,12 +77,66 @@
 .topbar {
   grid-area: topbar;
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
+  grid-template-columns: var(--sidebar-width) auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-4);
   padding-inline-end: var(--space-4);
+  transition: grid-template-columns var(--dur-3) var(--ease-standard);
   border-block-end: 1px solid var(--color-border);
   background: var(--color-surface-1);
+}
+
+/* The sidebar toggle sits first at the inline-start edge, at the same spot expanded or collapsed
+   (11px in on a 34px button centres it in the 56px rail), then the wordmark. */
+.topbar-start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  block-size: 100%;
+  min-inline-size: 0;
+  padding-inline: 11px;
+  overflow: hidden;
+  border-inline-end: 1px solid var(--color-border);
+}
+
+.nav-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: 34px;
+  block-size: 34px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease-standard),
+    border-color var(--dur-1) var(--ease-standard),
+    color var(--dur-1) var(--ease-standard);
+}
+
+.nav-toggle:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong, var(--color-border));
+  color: var(--color-text);
+}
+
+.nav-toggle:active {
+  background: var(--color-surface-active);
+}
+
+/* open: the accent says the full navigation is showing */
+.nav-toggle[aria-expanded='true'] {
+  border-color: var(--color-accent-ring);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-fg);
+}
+
+.nav-toggle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .brand {
@@ -102,10 +144,32 @@
   align-items: center;
   gap: var(--space-3);
   block-size: 100%;
-  padding-inline: var(--space-4);
   color: inherit;
   text-decoration: none;
-  border-inline-end: 1px solid var(--color-border);
+}
+
+/* The "R" mark stands in for the wordmark beside the rail; it takes no room when expanded. */
+.brand-compact {
+  display: flex;
+  align-items: center;
+  inline-size: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: inline-size var(--dur-3) var(--ease-standard);
+}
+
+.frame.is-rail .brand-compact {
+  inline-size: 52px;
+  padding-inline-start: var(--space-3);
+  visibility: visible;
+}
+
+.search {
+  margin-inline-start: var(--space-4);
+}
+
+.topbar-actions {
+  margin-inline-start: var(--space-4);
 }
 
 /* The brand-kit wordmark: the light-background variant by default, the dark-background one in
@@ -117,8 +181,7 @@
   flex: none;
 }
 
-.brand-logo-dark,
-.brand-mark {
+.brand-logo-dark {
   display: none;
 }
 
@@ -456,23 +519,65 @@
   line-height: 1.2;
 }
 
-/* ---- Icon rail: Research and Files shrink the navigation to icons (tooltips carry the names) ---- */
+/* ---- Icon rail: the collapsed navigation (tooltips carry the names) ---- */
 .frame.is-rail,
 .frame.is-rail .topbar {
   --sidebar-width: 56px;
 }
 
-.frame.is-rail :is(.brand-name, .nav-heading, .nav-text, .nav-count, .nav-key, .queues-group, .brand-logo) {
+.frame.is-rail .brand {
   display: none;
 }
 
-.frame.is-rail :is(.nav-item, .brand) {
+.frame.is-rail:not(.is-overlay) :is(.nav-heading, .nav-text, .nav-count, .nav-key, .queues-group) {
+  display: none;
+}
+
+.frame.is-rail:not(.is-overlay) .nav-item {
   justify-content: center;
   padding-inline: 0;
 }
 
-.frame.is-rail .brand-mark {
-  display: block;
+/* ---- Narrow windows: the expanded navigation floats over the page, with a scrim ---- */
+.frame.is-overlay .sidebar {
+  position: fixed;
+  inset-block: calc(var(--titlebar-height) + var(--topbar-height)) var(--statusbar-height);
+  inset-inline-start: 0;
+  inline-size: 224px;
+  z-index: var(--z-overlay);
+  box-shadow: var(--shadow-3);
+  animation: nav-in var(--dur-2) var(--ease-emphasized-out) both;
+}
+
+.nav-scrim {
+  position: fixed;
+  inset-block: calc(var(--titlebar-height) + var(--topbar-height)) var(--statusbar-height);
+  inset-inline: 0;
+  z-index: calc(var(--z-overlay) - 1);
+  background: rgb(0 0 0 / 45%);
+  animation: scrim-in var(--dur-2) var(--ease-standard) both;
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes nav-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--dir-sign) * -16px));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ---- Medium windows: the shortcut hint goes first so the placeholder keeps its room ---- */
@@ -486,44 +591,23 @@
   }
 }
 
-/* ---- Narrow windows: the sidebar collapses to icons ----------------------------------- */
 @media (max-width: 900px) {
-  .frame,
-  .topbar {
-    --sidebar-width: 56px;
-  }
-
-  .brand-name,
-  .nav-heading,
-  .nav-text,
-  .nav-count,
-  .nav-key,
   .search-key,
-  .status-help-key,
-  .rail-toggle {
+  .status-help-key {
     display: none;
-  }
-
-  .nav-item {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
-  .brand {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
-  .brand .brand-logo {
-    display: none;
-  }
-
-  .brand .brand-mark {
-    display: block;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .frame,
+  .topbar,
+  .brand-compact,
+  .frame.is-overlay .sidebar,
+  .nav-scrim {
+    transition: none;
+    animation: none;
+  }
+
   .frame.is-booting .topbar,
   .frame.is-booting .sidebar,
   .frame.is-booting .statusbar {

@@ -9,6 +9,7 @@ import {
   NAVIGATOR_LANGUAGES,
   PREFERENCE_STORE,
 } from './core/preferences';
+import { NARROW_QUERY } from './core/nav-rail.service';
 import { DownloadsStore } from './data/downloads.store';
 import { provideDownloadEngine } from './data/engine.provider';
 import { MOCK_ENGINE_AUTOSTART } from './data/mock-engine.service';
@@ -165,5 +166,138 @@ describe('AppComponent (shell)', () => {
     expect(el().querySelector('.frame')?.classList).not.toContain('is-booting');
     expect(el().querySelectorAll('app-download-row.is-staggered').length).toBe(0);
     expect(el().querySelector('.status-help')?.getAttribute('title')).toBe('Keyboard shortcuts');
+  });
+});
+
+describe('AppComponent sidebar toggle', () => {
+  let fixture: ComponentFixture<AppComponent>;
+  let store: MemoryPreferenceStore;
+  let narrowListeners: ((e: { matches: boolean }) => void)[];
+
+  function el(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function toggle(): HTMLButtonElement {
+    const button = el().querySelector<HTMLButtonElement>('.nav-toggle');
+    expect(button).withContext('toggle').toBeTruthy();
+    return button as HTMLButtonElement;
+  }
+
+  async function settle(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  async function open(url: string): Promise<void> {
+    await TestBed.inject(Router).navigateByUrl(url);
+    await settle();
+  }
+
+  async function setup(narrow = false, lang: 'en' | 'ar' = 'en'): Promise<void> {
+    narrowListeners = [];
+    store = new MemoryPreferenceStore();
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [
+        provideRouter(routes),
+        provideDownloadEngine(),
+        { provide: NAVIGATOR_LANGUAGES, useValue: [lang === 'ar' ? 'ar-SA' : 'en-US'] },
+        { provide: PREFERENCE_STORE, useValue: store },
+        { provide: MOCK_ENGINE_AUTOSTART, useValue: false },
+        {
+          provide: NARROW_QUERY,
+          useValue: { matches: narrow, addEventListener: (_: string, l: (e: { matches: boolean }) => void) => narrowListeners.push(l) },
+        },
+        { provide: DARK_SCHEME_QUERY, useValue: { matches: true, addEventListener: (): void => undefined } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(AppComponent);
+    await settle();
+    await open('/');
+  }
+
+  afterEach(() => {
+    document.documentElement.lang = 'en';
+    document.documentElement.dir = 'ltr';
+  });
+
+  it('is present on Downloads, Files, Research and Settings, with the same label and state rules', async () => {
+    await setup();
+    for (const [url, expanded] of [['/', true], ['/files', false], ['/research', false], ['/settings', true]] as const) {
+      await open(url);
+      expect(el().querySelectorAll('.nav-toggle').length).withContext(url).toBe(1);
+      expect(toggle().getAttribute('aria-expanded')).withContext(url).toBe(String(expanded));
+      expect(toggle().getAttribute('aria-label')).withContext(url).toBe(expanded ? 'Hide sidebar' : 'Show sidebar');
+      expect(toggle().title).toContain('Ctrl+B');
+      expect(el().querySelector('.frame')?.classList.contains('is-rail')).withContext(url).toBe(!expanded);
+    }
+  });
+
+  it('labels the toggle in Arabic', async () => {
+    await setup(false, 'ar');
+    expect(toggle().getAttribute('aria-label')).toBe('إخفاء الشريط الجانبي');
+    toggle().click();
+    await settle();
+    expect(toggle().getAttribute('aria-label')).toBe('إظهار الشريط الجانبي');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('collapses and expands on click and on Ctrl+B, and keeps focus on the toggle', async () => {
+    await setup();
+    toggle().focus();
+    toggle().click();
+    await settle();
+    expect(el().querySelector('.frame')?.classList.contains('is-rail')).toBeTrue();
+    expect(document.activeElement).toBe(toggle());
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true }));
+    await settle();
+    expect(el().querySelector('.frame')?.classList.contains('is-rail')).toBeFalse();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('remembers the choice per page group', async () => {
+    await setup();
+    toggle().click(); // Downloads: collapse
+    await settle();
+    await open('/settings');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    await open('/research');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false'); // its own default, untouched
+    toggle().click();
+    await settle();
+    await open('/files');
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    await open('/');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('no longer has the old toggle at the bottom of the rail', async () => {
+    await setup();
+    await open('/research');
+    expect(el().querySelector('.rail-toggle')).toBeNull();
+    expect(el().querySelector('.nav-foot [aria-expanded]')).toBeNull();
+  });
+
+  it('under 900px the full navigation overlays the page with a scrim and closes on Escape or an outside click', async () => {
+    await setup(true);
+    expect(el().querySelector('.nav-scrim')).toBeNull();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    toggle().click();
+    await settle();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(el().querySelector('.frame')?.classList.contains('is-overlay')).toBeTrue();
+    expect(el().querySelector('.nav-scrim')).toBeTruthy();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle();
+    expect(el().querySelector('.nav-scrim')).toBeNull();
+    expect(document.activeElement).toBe(toggle());
+    toggle().click();
+    await settle();
+    el().querySelector<HTMLElement>('.nav-scrim')?.click();
+    await settle();
+    expect(el().querySelector('.nav-scrim')).toBeNull();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
   });
 });

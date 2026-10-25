@@ -275,22 +275,6 @@ interface DropMark {
       line-height: var(--leading-relaxed);
     }
 
-    /* Narrow windows: the sidebar is icons only, so the queue list shows just the dots. */
-    @media (max-width: 900px) {
-      .heading,
-      .name,
-      .count,
-      .clock,
-      .mini {
-        display: none;
-      }
-
-      .select {
-        justify-content: center;
-        padding-inline: 0;
-      }
-    }
-
     @media (prefers-reduced-motion: reduce) {
       .item.is-dragging {
         opacity: 0.6;

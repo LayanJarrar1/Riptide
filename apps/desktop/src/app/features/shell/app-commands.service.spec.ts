@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../../core/preferences';
+import { NARROW_QUERY, NavRailService } from '../../core/nav-rail.service';
 import { DownloadEngine } from '../../data/download-engine';
 import { DownloadsStore } from '../../data/downloads.store';
 import { MOCK_ENGINE_AUTOSTART, MockEngineService } from '../../data/mock-engine.service';
@@ -31,6 +32,7 @@ describe('AppCommands', () => {
         { provide: MOCK_ENGINE_AUTOSTART, useValue: false },
         { provide: NAVIGATOR_LANGUAGES, useValue: ['en-US'] },
         { provide: PREFERENCE_STORE, useValue: new MemoryPreferenceStore() },
+        { provide: NARROW_QUERY, useValue: { matches: false, addEventListener: (): void => undefined } },
         { provide: TAURI_AVAILABLE, useValue: tauri },
         {
           provide: TAURI_INVOKE,
@@ -124,28 +126,31 @@ describe('AppCommands', () => {
       expect(ui.removeRequests()).toBe(before + 1);
     });
 
-    it('New queue shows a hidden sidebar and asks the queues list to open its dialog', () => {
-      settings.patch({ sidebarVisible: false });
+    it('New queue expands a collapsed sidebar and asks the queues list to open its dialog', () => {
+      const rail = TestBed.inject(NavRailService);
+      rail.toggle();
+      expect(rail.expanded()).toBeFalse();
       const before = ui.newQueueRequests();
       cmd.newQueue();
-      expect(settings.settings().sidebarVisible).toBeTrue();
+      expect(rail.expanded()).toBeTrue();
       expect(ui.newQueueRequests()).toBe(before + 1);
     });
 
-    it('View: theme, density and the sidebar switch are saved settings', () => {
+    it('View: theme and density are saved settings, the sidebar switch flips the navigation', () => {
       cmd.setTheme('dark');
       expect(TestBed.inject(ThemeService).theme()).toBe('dark');
       cmd.setDensity('compact');
       expect(settings.settings().density).toBe('compact');
+      const rail = TestBed.inject(NavRailService);
       cmd.toggleSidebar();
-      expect(settings.settings().sidebarVisible).toBeFalse();
+      expect(rail.expanded()).toBeFalse();
       cmd.toggleSidebar();
-      expect(settings.settings().sidebarVisible).toBeTrue();
+      expect(rail.expanded()).toBeTrue();
     });
 
     it('density and sidebar defaults: comfortable rows, sidebar shown', () => {
       expect(settings.settings().density).toBe('comfortable');
-      expect(settings.settings().sidebarVisible).toBeTrue();
+      expect(TestBed.inject(NavRailService).expanded()).toBeTrue();
     });
 
     it('opens the documentation and the repository through the opener command, nothing else', () => {

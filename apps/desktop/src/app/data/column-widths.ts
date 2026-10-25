@@ -4,94 +4,52 @@ import type { SortKey } from './row-index';
 /** A data column of the downloads table (the actions column is not resizable). */
 export type ColumnKey = Exclude<SortKey, 'queue'>;
 
-/** User-chosen widths in px; a missing key keeps the layout's default track. */
+/** User-chosen widths in px, kept as preferences; a missing key keeps the column's default track. */
 export type ColumnWidths = Partial<Readonly<Record<ColumnKey, number>>>;
 
-/** The table's four responsive layouts, widest first (see the container queries in the page and row). */
-export type GridLayout = 'full' | 'compact' | 'narrow' | 'tiny';
-
-/** A default track: `min` px, growing by `fr` when set. */
+/** A column's track: its hard `min` px, the `base` px it takes by default, and `fr` when it grows. */
 interface Track {
   readonly min: number;
+  readonly base: number;
   readonly fr?: number;
 }
 
-interface LayoutSpec {
-  readonly columns: readonly (readonly [ColumnKey, Track])[];
-  readonly actions: number;
-}
-
 /**
- * Default tracks per layout. The narrower layouts drop columns in order of usefulness: time left,
- * added and the optional columns, then speed, then size and status (which the details drawer
- * still shows). The default full set needs 1038px, so it fits a 1280px window with the sidebar
- * open; turning on optional columns can make the list scroll sideways.
+ * Every column's track. The name and progress grow into spare room; the rest take their base
+ * width and give way (down to `min`) when the window is narrow. The list never scrolls
+ * sideways: see `fitGrid`.
  */
-export const GRID_LAYOUTS: Readonly<Record<GridLayout, LayoutSpec>> = {
-  full: {
-    columns: [
-      ['name', { min: 190, fr: 2.2 }],
-      ['size', { min: 150 }],
-      ['progress', { min: 150, fr: 1.6 }],
-      ['speed', { min: 96 }],
-      ['avgSpeed', { min: 104 }],
-      ['eta', { min: 112 }],
-      ['duration', { min: 96 }],
-      ['status', { min: 172 }],
-      ['category', { min: 112 }],
-      ['added', { min: 104 }],
-    ],
-    actions: 64,
-  },
-  compact: {
-    columns: [
-      ['name', { min: 180, fr: 2 }],
-      ['size', { min: 128 }],
-      ['progress', { min: 120, fr: 1.4 }],
-      ['speed', { min: 92 }],
-      ['status', { min: 150 }],
-    ],
-    actions: 60,
-  },
-  narrow: {
-    columns: [
-      ['name', { min: 160, fr: 2 }],
-      ['size', { min: 110 }],
-      ['progress', { min: 100, fr: 1.4 }],
-      ['status', { min: 140 }],
-    ],
-    actions: 52,
-  },
-  tiny: {
-    columns: [
-      ['name', { min: 140, fr: 1 }],
-      ['progress', { min: 90, fr: 1 }],
-    ],
-    actions: 44,
-  },
+const TRACKS: Readonly<Record<ColumnKey, Track>> = {
+  name: { min: 200, base: 280, fr: 3 },
+  size: { min: 96, base: 150 },
+  progress: { min: 120, base: 120, fr: 1 },
+  speed: { min: 80, base: 96 },
+  avgSpeed: { min: 88, base: 104 },
+  eta: { min: 84, base: 112 },
+  duration: { min: 80, base: 96 },
+  status: { min: 132, base: 160 },
+  category: { min: 96, base: 112 },
+  added: { min: 96, base: 104 },
 };
+
+/** Width of the trailing actions column. */
+export const ACTIONS_PX = 60;
 
 /** Every resizable column, in table order. */
-export const COLUMN_KEYS: readonly ColumnKey[] = GRID_LAYOUTS.full.columns.map(([k]) => k);
+export const COLUMN_KEYS: readonly ColumnKey[] = ['name', 'size', 'progress', 'speed', 'avgSpeed', 'eta', 'duration', 'status', 'category', 'added'];
 
-/** Narrowest a user can drag a column: the name and progress need room for their content. */
-const MIN_WIDTH: Readonly<Record<ColumnKey, number>> = {
-  name: 120,
-  size: 64,
-  progress: 80,
-  speed: 64,
-  eta: 56,
-  status: 88,
-  added: 72,
-  avgSpeed: 64,
-  duration: 56,
-  category: 72,
-};
+/** Columns dropped first when even the minimums do not fit; the name, progress and status stay. */
+export const AUTO_HIDE_ORDER: readonly ColumnKey[] = ['duration', 'avgSpeed', 'added', 'category', 'eta', 'speed', 'size'];
+
+/** Narrowest a column can be: its track's minimum (also the narrowest a user can drag it). */
+function minOf(key: ColumnKey): number {
+  return TRACKS[key].min;
+}
 
 /** Columns that can be turned off (the name always shows). */
 export const OPTIONAL_COLUMNS: readonly ColumnKey[] = COLUMN_KEYS.filter((k) => k !== 'name');
 
-/** Off until the user turns them on, so the default table still fits a 1280px window. */
+/** Off until the user turns them on. */
 export const DEFAULT_HIDDEN: ReadonlySet<ColumnKey> = new Set<ColumnKey>(['avgSpeed', 'duration', 'category']);
 
 /** Preference key the hidden columns are saved under. */
@@ -105,50 +63,81 @@ export const COLUMN_WIDTHS_KEY = 'riptide.columnWidths';
 
 /** A width clamped to the column's limits and rounded to whole pixels. */
 export function clampWidth(key: ColumnKey, px: number): number {
-  return Math.round(Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_WIDTH[key], px)));
+  return Math.round(Math.min(MAX_COLUMN_WIDTH, Math.max(minOf(key), px)));
 }
 
-/** The `grid-template-columns` value for one layout with the user's widths applied. */
-export function gridTracks(layout: GridLayout, widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): string {
-  const spec = GRID_LAYOUTS[layout];
-  const tracks = shown(spec, hidden).map(([key, t]) => {
-    const w = widths[key];
-    if (w !== undefined) {
-      return `${w}px`;
-    }
-    return t.fr === undefined ? `${t.min}px` : `minmax(${t.min}px, ${t.fr}fr)`;
-  });
-  return [...tracks, `${spec.actions}px`].join(' ');
-}
-
-/** The narrowest the layout's tracks can get, in px (without the row's inline padding). */
-export function gridMinWidth(layout: GridLayout, widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): number {
-  const spec = GRID_LAYOUTS[layout];
-  return shown(spec, hidden).reduce((sum, [key, t]) => sum + (widths[key] ?? t.min), spec.actions);
-}
-
-function shown(spec: LayoutSpec, hidden: ReadonlySet<ColumnKey>): LayoutSpec['columns'] {
-  return spec.columns.filter(([key]) => key === 'name' || !hidden.has(key));
-}
-
-/** Whether a layout shows a column at all (the narrower layouts drop some). */
-export function inLayout(layout: GridLayout, key: ColumnKey): boolean {
-  return GRID_LAYOUTS[layout].columns.some(([k]) => k === key);
+/** The result of fitting the columns into a width. */
+export interface GridFit {
+  /** Columns shown, in table order (the user's choice minus the auto-hidden ones). */
+  readonly visible: readonly ColumnKey[];
+  /** Columns the user wants but that are hidden for now because they do not fit. */
+  readonly autoHidden: readonly ColumnKey[];
+  /** The `grid-template-columns` value; never wider than the available width. */
+  readonly template: string;
 }
 
 /**
- * The CSS custom properties the header, skeleton and rows read: one track list and one minimum
- * width per layout. The rows overflow (and the viewport scrolls sideways) only when the user has
- * widened columns past what the window holds.
+ * Fits the columns into `available` px (the width inside the rows' padding). User widths are
+ * preferences: over budget, the flexible columns (name, progress) shrink first down to their
+ * minimum, then the other columns scale down proportionally to theirs. If the minimums alone do
+ * not fit, low-priority columns are hidden (not forgotten) in `AUTO_HIDE_ORDER`.
  */
-export function gridVars(widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): Record<string, string> {
-  const vars: Record<string, string> = {};
-  for (const layout of Object.keys(GRID_LAYOUTS) as GridLayout[]) {
-    const suffix = layout === 'full' ? '' : `-${layout}`;
-    vars[`--grid-columns${suffix}`] = gridTracks(layout, widths, hidden);
-    vars[`--grid-min${suffix}`] = `calc(${gridMinWidth(layout, widths, hidden)}px + 2 * var(--space-3))`;
+export function fitGrid(available: number, widths: ColumnWidths, hidden: ReadonlySet<ColumnKey> = DEFAULT_HIDDEN): GridFit {
+  const wanted = COLUMN_KEYS.filter((k) => k === 'name' || !hidden.has(k));
+  let visible = wanted;
+  for (const key of AUTO_HIDE_ORDER) {
+    if (visible.reduce((sum, k) => sum + minOf(k), ACTIONS_PX) <= available) {
+      break;
+    }
+    visible = visible.filter((k) => k !== key);
   }
-  return vars;
+  const autoHidden = wanted.filter((k) => !visible.includes(k));
+
+  const flex = (k: ColumnKey): boolean => TRACKS[k].fr !== undefined;
+  const pref = new Map<ColumnKey, number>();
+  for (const key of visible) {
+    const t = TRACKS[key];
+    const w = widths[key];
+    pref.set(key, w !== undefined ? Math.max(t.min, w) : t.base);
+  }
+  let deficit = [...pref.values()].reduce((a, b) => a + b, ACTIONS_PX) - available;
+  const shrink = (keys: readonly ColumnKey[]): void => {
+    const slack = keys.reduce((sum, k) => sum + ((pref.get(k) ?? 0) - minOf(k)), 0);
+    if (deficit <= 0 || slack <= 0) {
+      return;
+    }
+    const take = Math.min(deficit, slack);
+    for (const k of keys) {
+      const w = pref.get(k) ?? 0;
+      pref.set(k, Math.floor(w - (take * (w - minOf(k))) / slack));
+    }
+    deficit -= take;
+  };
+  // the name keeps the most room: every other column gives way first, then the progress, then the name
+  shrink(visible.filter((k) => !flex(k)));
+  shrink(visible.filter((k) => k === 'progress'));
+  shrink(visible.filter((k) => k === 'name'));
+
+  // Spare room goes to the name first, then the progress. A width the user set stays exact (the
+  // other flexible column takes the spare); only when both are set does the name absorb it.
+  const grows = (key: ColumnKey): boolean =>
+    flex(key) && (widths[key] === undefined || (key === 'name' && widths.progress !== undefined));
+  const tracks = visible.map((key) => (grows(key) ? `minmax(${pref.get(key)}px, ${TRACKS[key].fr}fr)` : `${pref.get(key)}px`));
+  return { visible, autoHidden, template: [...tracks, `${ACTIONS_PX}px`].join(' ') };
+}
+
+/**
+ * The widest `key` can be dragged without the row outgrowing `available`: every other visible
+ * column keeps at least its minimum, so the neighbouring flexible columns give way.
+ */
+export function maxDragWidth(key: ColumnKey, available: number, visible: readonly ColumnKey[]): number {
+  const others = visible.filter((k) => k !== key).reduce((sum, k) => sum + minOf(k), ACTIONS_PX);
+  return Math.max(minOf(key), Math.min(MAX_COLUMN_WIDTH, Math.floor(available - others)));
+}
+
+/** The CSS custom properties the header, skeleton and rows read. */
+export function gridVars(fit: GridFit): Record<string, string> {
+  return { '--grid-columns': fit.template };
 }
 
 /** Saved widths; anything malformed or out of range is dropped rather than trusted. */

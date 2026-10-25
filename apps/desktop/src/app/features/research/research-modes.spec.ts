@@ -1,6 +1,7 @@
 import { MemoryPreferenceStore, PREFERENCE_STORE } from '../../core/preferences';
-import { NAV_RAIL_KEY, NavRailService, prefersRail } from '../../core/nav-rail.service';
+import { NARROW_QUERY, NAV_MAIN_KEY, NAV_RAIL_KEY, NarrowQuery, NavRailService, prefersRail } from '../../core/nav-rail.service';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 
 import { chooseCategory, chooseMode, durationText, platformOf, reasonLines } from './research-modes';
 import { clampSide, LAST_CATEGORY_KEY, ResearchLayoutService, SIDE_KEY } from './research-layout.service';
@@ -97,26 +98,74 @@ describe('research layout preferences', () => {
 });
 
 describe('navigation rail', () => {
+  const never: NarrowQuery = { matches: false, addEventListener: (): void => undefined };
+
+  function make(store: MemoryPreferenceStore, narrow: NarrowQuery = never): NavRailService {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: '**', children: [] }]),
+        { provide: PREFERENCE_STORE, useValue: store },
+        { provide: NARROW_QUERY, useValue: narrow },
+      ],
+    });
+    return TestBed.inject(NavRailService);
+  }
+
+  async function at(url: string): Promise<void> {
+    await TestBed.inject(Router).navigateByUrl(url);
+  }
+
   it('applies on Research and Files only', () => {
     expect(['/research', '/research?x=1', '/files', '/files/a'].every(prefersRail)).toBe(true);
     expect(['/', '/settings', '/researchers', '/#/research'].some(prefersRail)).toBe(false);
   });
 
-  it('is the default there, can be expanded, and the choice is remembered', () => {
-    const store = new MemoryPreferenceStore();
-    TestBed.configureTestingModule({ providers: [{ provide: PREFERENCE_STORE, useValue: store }] });
-    const rail = TestBed.inject(NavRailService);
-    expect(rail.isRail('/research')).toBe(true);
-    expect(rail.isRail('/')).toBe(false);
+  it('starts compact on Research and Files, expanded on Downloads and Settings', async () => {
+    const rail = make(new MemoryPreferenceStore());
+    for (const [url, expanded] of [['/', true], ['/settings', true], ['/research', false], ['/files', false]] as const) {
+      await at(url);
+      expect(rail.expanded()).withContext(url).toBe(expanded);
+      expect(rail.rail()).withContext(url).toBe(!expanded);
+    }
+  });
+
+  it('remembers the choice per page group, without losing the old stored value', async () => {
+    const store = new MemoryPreferenceStore({ [NAV_RAIL_KEY]: 'expanded' });
+    let rail = make(store);
+    await at('/research');
+    expect(rail.expanded()).toBe(true); // the value stored by the previous version still applies
     rail.toggle();
-    expect(rail.isRail('/research')).toBe(false);
-    expect(store.get(NAV_RAIL_KEY)).toBe('expanded');
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: [{ provide: PREFERENCE_STORE, useValue: store }] });
-    const again = TestBed.inject(NavRailService);
-    expect(again.isRail('/files')).toBe(false);
-    again.toggle();
     expect(store.get(NAV_RAIL_KEY)).toBe('rail');
-    expect(again.isRail('/files')).toBe(true);
+    await at('/settings');
+    expect(rail.expanded()).toBe(true); // the other group is untouched
+    rail.toggle();
+    expect(store.get(NAV_MAIN_KEY)).toBe('rail');
+    expect(store.get(NAV_RAIL_KEY)).toBe('rail');
+    rail = make(store);
+    await at('/');
+    expect(rail.expanded()).toBe(false);
+    await at('/files');
+    expect(rail.expanded()).toBe(false);
+    rail.toggle();
+    expect(store.get(NAV_RAIL_KEY)).toBe('expanded');
+    expect(store.get(NAV_MAIN_KEY)).toBe('rail');
+  });
+
+  it('under 900px it is always a rail; the toggle opens a temporary overlay that is not remembered', async () => {
+    const store = new MemoryPreferenceStore();
+    const rail = make(store, { matches: true, addEventListener: (): void => undefined });
+    await at('/');
+    expect(rail.rail()).toBe(true);
+    expect(rail.overlay()).toBe(false);
+    rail.toggle();
+    expect(rail.overlay()).toBe(true);
+    expect(rail.expanded()).toBe(true);
+    expect(store.get(NAV_MAIN_KEY)).toBeNull();
+    rail.closeOverlay();
+    expect(rail.overlay()).toBe(false);
+    rail.toggle();
+    await at('/files');
+    expect(rail.overlay()).toBe(false); // navigating closes it
   });
 });
