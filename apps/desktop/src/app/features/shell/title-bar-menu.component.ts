@@ -1,5 +1,6 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output } from '@angular/core';
 
+import { NavRailService } from '../../core/nav-rail.service';
 import { WindowService } from '../../core/window.service';
 import { I18nService } from '../../i18n/i18n.service';
 import { ThemeService } from '../../theme/theme.service';
@@ -68,6 +69,7 @@ export class TitleBarMenuComponent {
   private readonly cmd = inject(AppCommands);
   private readonly theme = inject(ThemeService);
   private readonly settings = inject(SettingsService);
+  private readonly navRail = inject(NavRailService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** Which menu this is. */
@@ -85,7 +87,7 @@ export class TitleBarMenuComponent {
         lang: this.i18n.lang(),
         theme: this.theme.theme(),
         density: this.settings.settings().density,
-        sidebarVisible: this.settings.settings().sidebarVisible,
+        sidebarVisible: this.navRail.expanded(),
         maximized: this.win.maximized(),
         canResume: this.cmd.canResume(),
         canPause: this.cmd.canPause(),

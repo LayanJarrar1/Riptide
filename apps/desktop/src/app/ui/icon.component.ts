@@ -59,13 +59,14 @@ const PATHS: Readonly<Record<string, string>> = {
   book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7M8 11h5',
   code: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16',
   panelStart: 'M3 5h18v14H3zM9 5v14',
+  sidebar: 'M3 5h18v14H3zM9 5v14M5.2 9h1.6M5.2 12h1.6M5.2 15h1.6',
 };
 
 /** Icon names available to templates. */
 export type IconName = keyof typeof PATHS;
 
 /** Icons that point along the reading direction and must mirror in RTL. */
-const DIRECTIONAL = new Set<IconName>(['chevronEnd', 'chevronStart', 'external', 'folderOpen', 'panelStart']);
+const DIRECTIONAL = new Set<IconName>(['chevronEnd', 'chevronStart', 'external', 'folderOpen', 'panelStart', 'sidebar']);
 
 @Component({
   selector: 'app-icon',
