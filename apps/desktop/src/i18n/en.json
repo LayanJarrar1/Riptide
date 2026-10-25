@@ -142,6 +142,7 @@
   "column.unrecorded": "Not recorded: this download was added before Riptide tracked download time",
   "column.resize": "Resize the {column} column",
   "column.resizeHint": "Drag to resize, double-click to reset",
+  "column.hiddenToFit": "hidden to fit",
   "column.resetWidths": "Reset column widths",
 
   "state.queued": "Waiting",

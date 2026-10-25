@@ -45,7 +45,7 @@ describe('DownloadsPageComponent layout and scale', () => {
     await settle();
   }
 
-  async function setup(count: number, width: number, saved: Record<string, string> = {}): Promise<void> {
+  async function setup(count: number, width: number, saved: Record<string, string> = {}, lang = 'en-US'): Promise<void> {
     prefs = new MemoryPreferenceStore(saved);
     await TestBed.configureTestingModule({
       imports: [DownloadsPageComponent],
@@ -53,7 +53,7 @@ describe('DownloadsPageComponent layout and scale', () => {
         provideDownloadEngine(),
         { provide: MOCK_ENGINE_AUTOSTART, useValue: false },
         { provide: MOCK_LIST_SIZE, useValue: { count, active: Math.min(count, 30), tickMs: 100 } },
-        { provide: NAVIGATOR_LANGUAGES, useValue: ['en-US'] },
+        { provide: NAVIGATOR_LANGUAGES, useValue: [lang] },
         { provide: PREFERENCE_STORE, useValue: prefs },
         { provide: FRAME_SCHEDULER, useValue: NO_FRAMES },
         { provide: REDUCED_MOTION_QUERY, useValue: { matches: true, addEventListener: (): void => undefined } },
@@ -202,18 +202,70 @@ describe('DownloadsPageComponent layout and scale', () => {
       expect(store.sortKey()).not.toBe('status');
     });
 
-    it('applies saved widths on start, scrolls sideways when they overflow, and the header follows', async () => {
+    it('applies a saved width on start when it fits', async () => {
+      await setup(200, 1600, { [COLUMN_WIDTHS_KEY]: JSON.stringify({ name: 600 }) });
+      expect(Math.round(cell('name').getBoundingClientRect().width)).toBe(600);
+      expect(viewport().scrollWidth).toBe(viewport().clientWidth);
+    });
+
+    it('treats a saved width wider than the window as a preference: it shrinks, nothing scrolls', async () => {
       await setup(200, 1100, { [COLUMN_WIDTHS_KEY]: JSON.stringify({ name: 900 }) });
-      expect(Math.round(cell('name').getBoundingClientRect().width)).toBe(900);
-      expect(viewport().scrollWidth).toBeGreaterThan(viewport().clientWidth);
-      viewport().scrollLeft = 150;
-      viewport().dispatchEvent(new Event('scroll'));
+      expect(cell('name').getBoundingClientRect().width).toBeLessThan(900);
+      expect(viewport().scrollWidth).toBe(viewport().clientWidth);
+    });
+
+    it('clamps a drag so the columns never outgrow the list', async () => {
+      await setup(200, 1100);
+      const g = grip('status');
+      const x = g.getBoundingClientRect().left + 5;
+      g.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: x, pointerId: 1, bubbles: true }));
+      g.dispatchEvent(new PointerEvent('pointermove', { clientX: x + 2000, pointerId: 1, bubbles: true }));
+      g.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 2000, pointerId: 1, bubbles: true }));
       await settle();
-      expect(header().scrollLeft).toBe(viewport().scrollLeft);
+      expect(viewport().scrollWidth).toBe(viewport().clientWidth);
+      expect(header().scrollWidth).toBeLessThanOrEqual(header().clientWidth);
+      expect(cell('status').getBoundingClientRect().width).toBeLessThan(700);
+    });
+
+    for (const lang of ['en-US', 'ar']) {
+      for (const width of [1024, 1280, 1366, 1920]) {
+        it(`never overflows sideways at ${width}px (${lang}), with every column on and a very wide name`, async () => {
+          await setup(300, width, { [HIDDEN_COLUMNS_KEY]: '[]', [COLUMN_WIDTHS_KEY]: JSON.stringify({ name: 1400, eta: 400 }) }, lang);
+          const box = viewport().getBoundingClientRect();
+          expect(viewport().scrollWidth).toBe(viewport().clientWidth);
+          expect(header().scrollWidth).toBeLessThanOrEqual(header().clientWidth);
+          const edge = (e: Element): void => {
+            const r = e.getBoundingClientRect();
+            expect(r.left).toBeGreaterThanOrEqual(box.left - 1);
+            expect(r.right).toBeLessThanOrEqual(box.right + 1);
+          };
+          edge(header());
+          Array.from(header().children).forEach(edge);
+          rows().forEach((r) => {
+            expect(r.scrollWidth).toBeLessThanOrEqual(r.clientWidth);
+            edge(r);
+            Array.from(r.querySelectorAll('.cell')).forEach(edge);
+          });
+          expect(rows().length).toBeGreaterThan(0);
+        });
+      }
+    }
+
+    it('hides low-priority columns to fit and brings them back when the window widens', async () => {
+      await setup(100, 700, { [HIDDEN_COLUMNS_KEY]: '[]' });
+      expect(el().querySelector('.hc-duration')).toBeNull();
+      expect(el().querySelector('.hc-name')).not.toBeNull();
+      expect(el().querySelector('.hc-progress')).not.toBeNull();
+      expect(el().querySelector('.hc-status')).not.toBeNull();
+      expect(JSON.parse(prefs.get(HIDDEN_COLUMNS_KEY) ?? '[]')).toEqual([]);
+      fixture.nativeElement.style.width = '1920px';
+      await frame();
+      await settle();
+      expect(el().querySelector('.hc-duration')).not.toBeNull();
     });
 
     it('keeps the widths while the details drawer is open, and the header menu resets them all', async () => {
-      await setup(200, 1400, { [COLUMN_WIDTHS_KEY]: JSON.stringify({ name: 320, size: 90 }) });
+      await setup(200, 1900, { [COLUMN_WIDTHS_KEY]: JSON.stringify({ name: 320, size: 110 }) });
       store.openDetails(store.rows()[0].d.id);
       await settle();
       await frame();

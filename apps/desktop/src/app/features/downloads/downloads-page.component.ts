@@ -21,7 +21,9 @@ import {
   clampWidth,
   ColumnKey,
   ColumnWidths,
+  fitGrid,
   gridVars,
+  maxDragWidth,
   loadColumnWidths,
   loadHiddenColumns,
   MAX_COLUMN_WIDTH,
@@ -166,7 +168,7 @@ const FRESH_MS = 600;
         [attr.aria-multiselectable]="true"
         [attr.aria-activedescendant]="activeRowId()"
       >
-        <div #header class="header" role="row" [class.boot]="ui.booting()" [class.is-resizing]="resizing() !== null" (contextmenu)="onHeaderContext($event)">
+        <div class="header" role="row" [class.boot]="ui.booting()" [class.is-resizing]="resizing() !== null" (contextmenu)="onHeaderContext($event)">
           @for (c of visibleColumns(); track c.key) {
             <div
               role="columnheader"
@@ -212,12 +214,15 @@ const FRESH_MS = 600;
                   <span class="sk-type bone"></span>
                   <span class="sk-lines"><span class="bone sk-line"></span><span class="bone sk-line is-short"></span></span>
                 </span>
-                <span class="sk-cell sk-size"><span class="bone sk-num"></span></span>
-                <span class="sk-cell sk-progress"><span class="bone sk-bar"></span></span>
-                <span class="sk-cell sk-speed"><span class="bone sk-num"></span></span>
-                <span class="sk-cell sk-eta"><span class="bone sk-num is-short"></span></span>
-                <span class="sk-cell sk-status"><span class="bone sk-pill"></span></span>
-                <span class="sk-cell sk-added"><span class="bone sk-num is-short"></span></span>
+                @for (c of visibleColumns(); track c.key) {
+                  @if (c.key === 'progress') {
+                    <span class="sk-cell sk-progress"><span class="bone sk-bar"></span></span>
+                  } @else if (c.key === 'status') {
+                    <span class="sk-cell sk-status"><span class="bone sk-pill"></span></span>
+                  } @else if (c.key !== 'name') {
+                    <span class="sk-cell" [class.is-end]="c.align === 'end'"><span class="bone sk-num" [class.is-short]="c.key === 'eta' || c.key === 'added'"></span></span>
+                  }
+                }
               </div>
             }
           </div>
@@ -247,7 +252,7 @@ const FRESH_MS = 600;
                 [attr.aria-rowindex]="window().start + i + 2"
                 [class.is-active]="store.cursor() === row.d.id"
                 [row]="row"
-                [hidden]="hiddenColumns()"
+                [hidden]="effectiveHidden()"
                 [selected]="store.selected().has(row.d.id)"
                 [open]="store.detailsId() === row.d.id"
                 [staggerIndex]="ui.booting() && window().top === 0 && i < staggerRows ? i : null"
@@ -444,11 +449,8 @@ const FRESH_MS = 600;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       min-block-size: 0;
-      /* rows, skeleton and header read --grid-columns(-compact|-narrow|-tiny) and --grid-min(...)
-         from the [style] binding (see data/column-widths.ts: the defaults plus the user's widths);
-         the rows switch set in the same container queries as the header (see download-row). */
-      container-type: inline-size;
-      container-name: grid;
+      /* rows, skeleton and header read --grid-columns from the [style] binding: the tracks
+         fitted to the measured width (see fitGrid in data/column-widths.ts) */
     }
 
     .header {
@@ -581,63 +583,6 @@ const FRESH_MS = 600;
       cursor: default;
     }
 
-    /* Narrower lists (details drawer open, small window) drop columns in order of usefulness:
-       time left and added, then speed, then size and status (which the drawer still shows). */
-    @container grid (max-width: 1050px) {
-      .header,
-      .sk-row {
-        grid-template-columns: var(--grid-columns-compact);
-      }
-
-      .sk-row {
-        min-inline-size: var(--grid-min-compact);
-      }
-
-      .hc-eta,
-      .hc-added,
-      .hc-avgSpeed,
-      .hc-duration,
-      .hc-category,
-      .sk-eta,
-      .sk-added {
-        display: none;
-      }
-    }
-
-    @container grid (max-width: 780px) {
-      .header,
-      .sk-row {
-        grid-template-columns: var(--grid-columns-narrow);
-      }
-
-      .sk-row {
-        min-inline-size: var(--grid-min-narrow);
-      }
-
-      .hc-speed,
-      .sk-speed {
-        display: none;
-      }
-    }
-
-    @container grid (max-width: 600px) {
-      .header,
-      .sk-row {
-        grid-template-columns: var(--grid-columns-tiny);
-      }
-
-      .sk-row {
-        min-inline-size: var(--grid-min-tiny);
-      }
-
-      .hc-size,
-      .hc-status,
-      .sk-size,
-      .sk-status {
-        display: none;
-      }
-    }
-
     .grid:focus {
       outline: none;
     }
@@ -648,11 +593,10 @@ const FRESH_MS = 600;
       outline-offset: -2px;
     }
 
-    /* Sideways scrolling only appears when the user has widened columns past the window; the
-       header follows the viewport's scrollLeft (see the scroll listener). */
+    /* The columns always fit the width (see fitGrid), so the list never scrolls sideways. */
     .viewport {
       overflow-y: auto;
-      overflow-x: auto;
+      overflow-x: hidden;
       outline-offset: -2px;
       scrollbar-gutter: stable;
     }
@@ -665,7 +609,6 @@ const FRESH_MS = 600;
     .sk-row {
       display: grid;
       grid-template-columns: var(--grid-columns);
-      min-inline-size: var(--grid-min);
       align-items: center;
       block-size: var(--row-height);
       padding-inline: var(--space-3);
@@ -696,10 +639,7 @@ const FRESH_MS = 600;
       padding-inline-start: 0;
     }
 
-    .sk-size,
-    .sk-speed,
-    .sk-eta,
-    .sk-added {
+    .sk-cell.is-end {
       justify-content: flex-end;
     }
 
@@ -870,7 +810,6 @@ export class DownloadsPageComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly viewportRef = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly gridRef = viewChild<ElementRef<HTMLElement>>('grid');
-  private readonly headerRef = viewChild<ElementRef<HTMLElement>>('header');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly prefs = inject(PREFERENCE_STORE);
   private readonly zone = inject(NgZone);
@@ -894,12 +833,21 @@ export class DownloadsPageComponent {
   protected readonly columnWidths = signal<ColumnWidths>({});
   /** Columns the user turned off (persisted); the optional new ones start off. */
   protected readonly hiddenColumns = signal<ReadonlySet<ColumnKey>>(new Set());
+  /** Width the tracks may use (the grid minus the rows' padding); unbounded until measured. */
+  private readonly trackWidth = signal(Number.POSITIVE_INFINITY);
+  /** The columns fitted to the measured width: widths are preferences, never overflow. */
+  protected readonly fit = computed(() => fitGrid(this.trackWidth(), this.columnWidths(), this.hiddenColumns()));
   protected readonly visibleColumns = computed(() => {
-    const hidden = this.hiddenColumns();
-    return COLUMNS.filter((c) => !hidden.has(c.key));
+    const shown = this.fit().visible;
+    return COLUMNS.filter((c) => shown.includes(c.key));
   });
-  /** Track lists and minimum widths for the header, skeleton and rows. */
-  protected readonly gridStyle = computed(() => gridVars(this.columnWidths(), this.hiddenColumns()));
+  /** What the rows leave out: the user's hidden columns plus those hidden to fit. */
+  protected readonly effectiveHidden = computed<ReadonlySet<ColumnKey>>(() => {
+    const auto = this.fit().autoHidden;
+    return auto.length === 0 ? this.hiddenColumns() : new Set([...this.hiddenColumns(), ...auto]);
+  });
+  /** Track list for the header, skeleton and rows. */
+  protected readonly gridStyle = computed(() => gridVars(this.fit()));
   /** The column being dragged, for the grip's active look. */
   protected readonly resizing = signal<ColumnKey | null>(null);
   /** The header's context menu (reset widths), at a viewport point. */
@@ -908,7 +856,9 @@ export class DownloadsPageComponent {
     const hidden = this.hiddenColumns();
     const toggles = OPTIONAL_COLUMNS.map((key): MenuItem => {
       const column = COLUMNS.find((c) => c.key === key);
-      return { id: `toggle:${key}`, label: this.i18n.t(column?.labelKey ?? key), ...(hidden.has(key) ? {} : { icon: 'check' }) };
+      const label = this.i18n.t(column?.labelKey ?? key);
+      const squeezed = !hidden.has(key) && this.fit().autoHidden.includes(key);
+      return { id: `toggle:${key}`, label: squeezed ? `${label} (${this.i18n.t('column.hiddenToFit')})` : label, ...(hidden.has(key) ? {} : { icon: 'check' }) };
     });
     return [...toggles, { id: 'resetWidths', label: this.i18n.t('column.resetWidths'), icon: 'retry', separator: true, disabled: Object.keys(this.columnWidths()).length === 0 }];
   });
@@ -1100,9 +1050,24 @@ export class DownloadsPageComponent {
         this.drawerWidth.set(drawer);
       }
       this.hostWidth.set(el.clientWidth);
+      const grid = this.gridRef()?.nativeElement;
+      const measureTracks = (): void => {
+        const header = grid?.querySelector<HTMLElement>('.header');
+        if (header) {
+          const pad = getComputedStyle(header);
+          this.trackWidth.set(header.clientWidth - Number.parseFloat(pad.paddingInlineStart) - Number.parseFloat(pad.paddingInlineEnd));
+        }
+      };
+      measureTracks();
       if (typeof ResizeObserver !== 'undefined') {
-        const ro = new ResizeObserver(() => this.hostWidth.set(el.clientWidth));
+        const ro = new ResizeObserver(() => {
+          this.hostWidth.set(el.clientWidth);
+          measureTracks();
+        });
         ro.observe(el);
+        if (grid) {
+          ro.observe(grid);
+        }
         this.destroyRef.onDestroy(() => ro.disconnect());
       }
     });
@@ -1139,11 +1104,6 @@ export class DownloadsPageComponent {
       }
       const onScroll = (): void => {
         this.scrollTop.set(el.scrollTop);
-        // widened columns scroll sideways: the header follows the rows
-        const header = this.headerRef()?.nativeElement;
-        if (header && header.scrollLeft !== el.scrollLeft) {
-          header.scrollLeft = el.scrollLeft;
-        }
       };
       this.zone.runOutsideAngular(() => el.addEventListener('scroll', onScroll, { passive: true }));
       onCleanup(() => el.removeEventListener('scroll', onScroll));
@@ -1543,7 +1503,8 @@ export class DownloadsPageComponent {
   }
 
   private setColumnWidth(key: ColumnKey, px: number): void {
-    const width = clampWidth(key, px);
+    // never wider than what leaves the other columns their minimums: the neighbours give way
+    const width = Math.min(clampWidth(key, px), maxDragWidth(key, this.trackWidth(), this.fit().visible));
     if (this.columnWidths()[key] !== width) {
       this.columnWidths.update((w) => ({ ...w, [key]: width }));
     }

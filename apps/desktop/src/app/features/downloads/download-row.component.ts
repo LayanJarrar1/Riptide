@@ -166,7 +166,6 @@ export function hostOf(url: string): string {
     :host {
       display: grid;
       grid-template-columns: var(--grid-columns);
-      min-inline-size: var(--grid-min, 0);
       align-items: center;
       block-size: var(--row-height);
       padding-inline: var(--space-3);
@@ -386,6 +385,8 @@ export function hostOf(url: string): string {
     .c-avgSpeed,
     .c-eta,
     .c-duration {
+      overflow: hidden;
+      text-overflow: ellipsis;
       text-align: end;
       color: var(--color-text-secondary);
       white-space: nowrap;
@@ -453,45 +454,6 @@ export function hostOf(url: string): string {
     :host(:focus-within) .c-actions,
     :host(.is-selected) .c-actions {
       opacity: 1;
-    }
-
-    /* Mirrors the header's container queries in the page: same breakpoints, same columns. */
-    @container grid (max-width: 1050px) {
-      :host {
-        grid-template-columns: var(--grid-columns-compact);
-        min-inline-size: var(--grid-min-compact, 0);
-      }
-
-      .c-eta,
-      .c-added,
-      .c-avgSpeed,
-      .c-duration,
-      .c-category {
-        display: none;
-      }
-    }
-
-    @container grid (max-width: 780px) {
-      :host {
-        grid-template-columns: var(--grid-columns-narrow);
-        min-inline-size: var(--grid-min-narrow, 0);
-      }
-
-      .c-speed {
-        display: none;
-      }
-    }
-
-    @container grid (max-width: 600px) {
-      :host {
-        grid-template-columns: var(--grid-columns-tiny);
-        min-inline-size: var(--grid-min-tiny, 0);
-      }
-
-      .c-size,
-      .c-status {
-        display: none;
-      }
     }
 
     @media (prefers-reduced-motion: reduce) {
