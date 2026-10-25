@@ -1,6 +1,7 @@
 import { computed, DOCUMENT, effect, inject, Injectable, signal } from '@angular/core';
 
 import type en from '../../i18n/en.json';
+import { IS_MAC } from '../core/platform';
 import { NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 
 /** Supported UI languages. */
@@ -74,6 +75,8 @@ export function dirOf(lang: Lang): Dir {
 export class I18nService {
   private readonly document = inject(DOCUMENT);
   private readonly store = inject(PREFERENCE_STORE);
+  /** On a Mac, `<key>Mac` wins over `<key>` where it exists (Keychain, not Credential Manager). */
+  private readonly isMac = inject(IS_MAC);
 
   /** The active language. */
   readonly lang = signal<Lang>(
@@ -121,7 +124,7 @@ export class I18nService {
    */
   t(key: string): string {
     const table: Table = TABLES[this.lang()] ?? TABLES['en'] ?? {};
-    const value: string | undefined = table[key];
+    const value: string | undefined = (this.isMac ? table[`${key}Mac`] : undefined) ?? table[key];
     if (value === undefined) {
       console.warn(`[i18n] missing key "${key}" for language "${this.lang()}"`);
       return key;

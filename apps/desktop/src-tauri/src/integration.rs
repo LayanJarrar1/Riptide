@@ -20,6 +20,12 @@
 //!   before any window or the single-instance lock, so they work while the app is running.
 //!   Unregistering only touches what points at *this* install (see [`remove_ours`]).
 //!
+//! * macOS has no registry: each browser looks for `app.riptide.host.json` in its own folder
+//!   under `~/Library/Application Support` (`Google/Chrome`, `Microsoft Edge`, `Mozilla`, each
+//!   with `NativeMessagingHosts/`). [`LinkedManifests`] puts a symbolic link there that points at
+//!   the manifest in the data folder, so registering, the status and "is it ours" work the same
+//!   way. The host is `riptide-host` in `Riptide.app/Contents/MacOS`.
+//!
 //! The registry sits behind [`Registry`] so the logic is tested against memory; the Windows
 //! implementation uses the `winreg` crate (a safe wrapper over the Win32 registry API, already
 //! in the dependency graph), which keeps `unsafe` out of the app crate.
@@ -145,8 +151,8 @@ impl Registry for CurrentUserRegistry {
     }
 }
 
-/// The registry of this platform: `HKCU` on Windows, none elsewhere (the integration is
-/// Windows-only in v1).
+/// The registry of this platform for the `magnet:` / `.torrent` handlers: `HKCU` on Windows,
+/// none elsewhere.
 pub fn platform_registry() -> Option<Box<dyn Registry + Send>> {
     #[cfg(windows)]
     {
@@ -155,6 +161,110 @@ pub fn platform_registry() -> Option<Box<dyn Registry + Send>> {
     #[cfg(not(windows))]
     {
         None
+    }
+}
+
+/// The registry the browser host is registered in: `HKCU` on Windows, [`LinkedManifests`] on
+/// macOS, none elsewhere. (The `magnet:` handler keeps using [`platform_registry`].)
+pub fn browser_registry() -> Option<Box<dyn Registry + Send>> {
+    #[cfg(windows)]
+    {
+        Some(Box::new(CurrentUserRegistry::from_env()))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        LinkedManifests::from_env().map(|r| Box::new(r) as Box<dyn Registry + Send>)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        None
+    }
+}
+
+/// macOS (and the tests on any Unix): Chrome, Edge and Firefox have no registry; each looks for
+/// `app.riptide.host.json` in its own per-user folder under `~/Library/Application Support`.
+/// "Setting a key" puts a symbolic link there that points at our manifest, so the logic above
+/// (and what counts as ours) stays the same as on Windows: the link target is the key's value.
+/// Only the link is ever written or removed, never a file another program put there.
+#[cfg(all(unix, any(target_os = "macos", test)))]
+#[derive(Debug, Clone)]
+pub struct LinkedManifests {
+    base: PathBuf,
+}
+
+#[cfg(all(unix, any(target_os = "macos", test)))]
+impl LinkedManifests {
+    /// Browser folders live under `base` (normally `~/Library/Application Support`).
+    pub fn new(base: PathBuf) -> LinkedManifests {
+        LinkedManifests { base }
+    }
+
+    /// `~/Library/Application Support`, or [`REGISTRY_ROOT_ENV`] when set (tests). `None`
+    /// without a home folder.
+    pub fn from_env() -> Option<LinkedManifests> {
+        if let Some(root) = std::env::var_os(REGISTRY_ROOT_ENV).filter(|r| !r.is_empty()) {
+            return Some(LinkedManifests::new(PathBuf::from(root)));
+        }
+        let home = std::env::var_os("HOME").filter(|h| !h.is_empty())?;
+        Some(LinkedManifests::new(
+            Path::new(&home).join("Library").join("Application Support"),
+        ))
+    }
+
+    /// Where the browser of `key` (a [`Browser::registry_key`]) looks for the manifest.
+    pub fn link(&self, key: &str) -> Option<PathBuf> {
+        let browser = Browser::ALL.into_iter().find(|b| b.registry_key() == key)?;
+        let vendor = match browser {
+            Browser::Chrome => Path::new("Google").join("Chrome"),
+            Browser::Edge => PathBuf::from("Microsoft Edge"),
+            Browser::Firefox => PathBuf::from("Mozilla"),
+        };
+        Some(
+            self.base
+                .join(vendor)
+                .join("NativeMessagingHosts")
+                .join(format!("{HOST_NAME}.json")),
+        )
+    }
+}
+
+#[cfg(all(unix, any(target_os = "macos", test)))]
+impl Registry for LinkedManifests {
+    fn default_value(&self, key: &str) -> Option<String> {
+        let link = self.link(key)?;
+        let target = std::fs::read_link(&link).ok()?;
+        let target = match link.parent() {
+            Some(dir) if target.is_relative() => dir.join(target),
+            _ => target,
+        };
+        Some(target.to_string_lossy().into_owned())
+    }
+
+    fn set_default_value(&mut self, key: &str, value: &str) -> std::io::Result<()> {
+        let link = self
+            .link(key)
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        let dir = link
+            .parent()
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        std::fs::create_dir_all(dir)?;
+        // a fresh link moved over the old one: the browser never sees the name missing
+        let tmp = link.with_extension("json.tmp");
+        let _ = std::fs::remove_file(&tmp);
+        std::os::unix::fs::symlink(value, &tmp)?;
+        std::fs::rename(&tmp, &link)
+    }
+
+    fn delete_key(&mut self, key: &str) -> std::io::Result<()> {
+        let Some(link) = self.link(key) else {
+            return Ok(());
+        };
+        match std::fs::symlink_metadata(&link) {
+            Ok(meta) if meta.file_type().is_symlink() => std::fs::remove_file(&link),
+            Ok(_) => Ok(()), // a real file: not something we wrote
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -526,7 +636,7 @@ pub fn run_cli(args: &[String]) -> Option<i32> {
     if register == unregister {
         return None;
     }
-    let (Some(mut registry), Ok(layout)) = (platform_registry(), Layout::for_this_app()) else {
+    let (Some(mut registry), Ok(layout)) = (browser_registry(), Layout::for_this_app()) else {
         return Some(1);
     };
     let result = if register {
@@ -835,6 +945,58 @@ mod tests {
             run_cli(&args(&["--register-host", "--unregister-host"])),
             None
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mac_browsers_find_the_manifests_through_links_in_their_own_folders() {
+        let (dir, layout) = setup();
+        std::fs::write(&layout.host_exe, b"exe").unwrap();
+        let support = dir.path().join("Application Support");
+        let mut reg = LinkedManifests::new(support.clone());
+        let chrome = support.join("Google/Chrome/NativeMessagingHosts/app.riptide.host.json");
+        let edge = support.join("Microsoft Edge/NativeMessagingHosts/app.riptide.host.json");
+        let firefox = support.join("Mozilla/NativeMessagingHosts/app.riptide.host.json");
+        assert_eq!(
+            reg.link(&Browser::Chrome.registry_key()),
+            Some(chrome.clone())
+        );
+        assert_eq!(reg.link(r"Software\Other"), None);
+
+        let s = register(&layout, &mut reg).unwrap();
+        assert!(s.registered, "{s:?}");
+        // the browser reads the link like the file itself
+        assert_eq!(read(&chrome), read(&layout.chromium_manifest()));
+        assert_eq!(read(&edge), read(&layout.chromium_manifest()));
+        assert_eq!(read(&firefox), read(&layout.firefox_manifest()));
+        assert_eq!(
+            read(&firefox)["path"],
+            layout.host_exe.to_string_lossy().as_ref()
+        );
+
+        let s = unregister(&layout, &mut reg).unwrap();
+        assert!(!s.registered && !s.enabled);
+        for link in [&chrome, &edge, &firefox] {
+            assert!(
+                std::fs::symlink_metadata(link).is_err(),
+                "{} removed",
+                link.display()
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_real_manifest_file_someone_else_wrote_is_never_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut reg = LinkedManifests::new(dir.path().to_path_buf());
+        let key = Browser::Firefox.registry_key();
+        let file = reg.link(&key).unwrap();
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, b"{}").unwrap();
+        assert_eq!(reg.default_value(&key), None, "not a link of ours");
+        reg.delete_key(&key).unwrap();
+        assert!(file.is_file());
     }
 
     #[cfg(windows)]

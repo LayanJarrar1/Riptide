@@ -18,6 +18,8 @@ the platform integrations. This file is the plan, what is done, and how to build
 | After-queue actions | sleep, hibernate, shut down | **sleep, shut down** | `pmset sleepnow`; System Events "shut down" (macOS asks once to allow it). Hibernate is not offered. |
 | File manager | Recycle Bin with restore | **Trash, no restore** | macOS has no API to put items back; the UI says "use Finder's Put Back" and offers no Undo for a delete. Drives = `/` and `/Volumes/*`. Option-drag copies. Finder wording. |
 | Video pages (yt-dlp) | yt-dlp + ffmpeg | **yt-dlp only** | yt-dlp's universal macOS build, pinned by SHA-256. No ffmpeg yet: formats that need merging fall back to single-file ones. |
+| Browser extension (Chrome, Edge, Firefox) | registry keys to the manifests | **links in `~/Library/Application Support/<browser>/NativeMessagingHosts/`** | Settings → Integration works the same: each browser's `app.riptide.host.json` is a symbolic link to the manifest in Riptide's data folder, pointing at `riptide-host` inside the app. Only our own links are ever removed. |
+| Wording | Windows, Credential Manager | **macOS, Keychain, Open at login** | A `<key>Mac` string replaces `<key>` on a Mac when it exists (`I18nService.t`). |
 | Notifications, autostart, tray, updater check | yes | yes (plugins) | Autostart uses a LaunchAgent. |
 
 ## Remaining phases
@@ -26,16 +28,13 @@ the platform integrations. This file is the plan, what is done, and how to build
    Developer ID signing, notarization, `.app.tar.gz` updater artifacts, and `darwin-aarch64` /
    `darwin-x86_64` entries in `latest.json`. Needs an Apple Developer account (the secrets listed
    in `.github/workflows/macos.yml`).
-2. **Browser extension on macOS.** Native messaging manifests in
-   `~/Library/Application Support/<browser>/NativeMessagingHosts/` pointing at the bundled
-   `riptide-host`, and a macOS path for Settings → Integration (today: "not supported").
-3. **Default handler switch.** Settings → Integration could set Riptide as the default `magnet:`
+2. **Default handler switch.** Settings → Integration could set Riptide as the default `magnet:`
    handler through LaunchServices (`LSSetDefaultHandlerForURLScheme`), opt-in like on Windows.
-4. **ffmpeg for video.** Bundle an LGPL-only macOS ffmpeg, or let the user point Riptide at one
+3. **ffmpeg for video.** Bundle an LGPL-only macOS ffmpeg, or let the user point Riptide at one
    (Homebrew), so best-quality video and audio can be merged.
-5. **Native menu bar.** Mirror File / Downloads / Tools / View / Help in the macOS menu bar
+4. **Native menu bar.** Mirror File / Downloads / Tools / View / Help in the macOS menu bar
    (Tauri `Menu`) and drop the in-window one on macOS.
-6. **Linux.** The same work for Secret Service (keys), `xdg` handlers and packaging (AppImage /
+5. **Linux.** The same work for Secret Service (keys), `xdg` handlers and packaging (AppImage /
    .deb), if wanted.
 
 ## Building on a Mac
@@ -74,4 +73,5 @@ cargo clippy --target aarch64-apple-darwin -p riptide-desktop --all-targets -- -
 - [ ] Clicking a `magnet:` link in Safari (after choosing Riptide) and double-clicking a `.torrent` in Finder open the torrent dialog, with the app running and not running.
 - [ ] A queue set to "Sleep" puts the Mac to sleep; "Shut down" asks once for permission, then shuts down.
 - [ ] Files: browse `/Volumes`, copy between two volumes, delete to the Trash, Option-drag copies.
+- [ ] Settings → Integration → Set up: Chrome, Edge and Firefox each get `app.riptide.host.json` under `~/Library/Application Support/…/NativeMessagingHosts/`, and a download clicked in the browser arrives in Riptide (with the app running and not running). Turn off removes the links.
 - [ ] A YouTube page downloads with yt-dlp (single-file formats without ffmpeg).

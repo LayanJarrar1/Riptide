@@ -205,7 +205,7 @@ fn startup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // register the browser host (idempotent; skipped once the user turned it off)
     tauri::async_runtime::spawn_blocking(|| {
         if let (Some(mut registry), Ok(layout)) = (
-            integration::platform_registry(),
+            integration::browser_registry(),
             integration::Layout::for_this_app(),
         ) {
             integration::register_on_start(&layout, registry.as_mut());

@@ -1,14 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 
+import { IS_MAC } from '../core/platform';
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../core/preferences';
 import { detectLang, I18nService, LANG_STORAGE_KEY } from './i18n.service';
 
-function setup(navigatorLanguages: readonly string[], saved: Record<string, string> = {}) {
+function setup(navigatorLanguages: readonly string[], saved: Record<string, string> = {}, mac = false) {
   const store = new MemoryPreferenceStore(saved);
   TestBed.configureTestingModule({
     providers: [
       { provide: NAVIGATOR_LANGUAGES, useValue: navigatorLanguages },
       { provide: PREFERENCE_STORE, useValue: store },
+      { provide: IS_MAC, useValue: mac },
     ],
   });
   return { service: TestBed.inject(I18nService), store };
@@ -71,6 +73,15 @@ describe('I18nService', () => {
     expect(document.documentElement.lang).toBe('ar');
     expect(document.documentElement.dir).toBe('rtl');
     expect(store.get(LANG_STORAGE_KEY)).toBe('ar');
+  });
+
+  it('t() prefers the Mac wording on a Mac, and only where one exists', () => {
+    const { service } = setup(['en-US'], {}, true);
+    expect(service.t('ai.keyDesc')).toContain('Keychain');
+    expect(service.t('settings.startWithWindows')).toBe('Open at login');
+    expect(service.t('app.tagline')).toBe('Riptide — a download manager');
+    TestBed.resetTestingModule();
+    expect(setup(['en-US']).service.t('ai.keyDesc')).toContain('Credential Manager');
   });
 
   it('t() returns the Arabic and the English string for the same key', () => {

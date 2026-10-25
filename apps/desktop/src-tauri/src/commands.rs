@@ -42,7 +42,7 @@ use riptide_engine::{BatchOutcome, Engine, EngineSettings, ProbeInfo};
 use serde::Serialize;
 use tauri::State;
 
-use crate::integration::{self, platform_registry, IntegrationStatus, Layout, Registry};
+use crate::integration::{self, browser_registry, IntegrationStatus, Layout, Registry};
 
 /// Build label embedded in the binary: `release` for optimised builds (what ships), `dev` for
 /// debug builds. The version is reported separately.
@@ -383,7 +383,7 @@ where
     F: FnOnce(&Layout, &mut dyn Registry) -> CmdResult<IntegrationStatus> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(move || {
-        let Some(mut registry) = platform_registry() else {
+        let Some(mut registry) = browser_registry() else {
             return Ok(IntegrationStatus::unsupported());
         };
         let layout = Layout::for_this_app()?;
