@@ -1,6 +1,7 @@
 /* Global stylesheet: tokens first, then fonts, then a small reset. */
 @import "./styles/tokens.css";
 @import "./styles/fonts.css";
+@import "./styles/astryx.css";
 
 *,
 *::before,
