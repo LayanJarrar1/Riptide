@@ -5,8 +5,10 @@ import { AiSetupDialogComponent } from '../../ai/ai-setup-dialog.component';
 import { AiService } from '../../ai/ai.service';
 import { CATEGORY_IDS, CategoryId, SearchMode, SourceId } from '../../ai/research.models';
 import { ResearchSession } from '../../ai/research.session';
+import { FormatService } from '../../core/format.service';
 import { MotionService } from '../../core/motion.service';
 import { I18nService } from '../../i18n/i18n.service';
+import { BrandLogoAnimatedComponent } from '../../ui/brand-logo-animated.component';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
@@ -43,7 +45,8 @@ interface LiveRef {
 @Component({
   selector: 'app-research-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AiSetupDialogComponent, ButtonComponent, IconComponent, ResearchComposerComponent, ResearchSidebarComponent, ResearchTurnComponent],
+  imports: [AiSetupDialogComponent, BrandLogoAnimatedComponent, ButtonComponent, IconComponent, ResearchComposerComponent, ResearchSidebarComponent, ResearchTurnComponent],
+  host: { '(window:resize)': 'onResize($event)' },
   providers: [ResearchSession],
   template: `
     @if (!ai.available) {
@@ -97,28 +100,35 @@ interface LiveRef {
             <div class="thread" #thread>
               @if (empty()) {
                 <div class="hello" [class.is-animated]="animate()">
-                  <div class="mark-wrap">
-                    @if (animate()) {
-                      <span class="ripple r1" aria-hidden="true"></span>
-                      <span class="ripple r2" aria-hidden="true"></span>
-                    }
-                    <img class="mark" src="brand-mark.svg" alt="" width="64" height="64" />
-                  </div>
+                  @if (logoSize() > 0) {
+                    <div class="mark-wrap">
+                      <app-brand-logo-animated [size]="logoSize()" [showWordmark]="false" />
+                    </div>
+                  }
                   <h2 class="hello-title">{{ i18n.t('research.hello') }}</h2>
                   <p class="muted">{{ i18n.t('research.hello.sub') }}</p>
                 </div>
               } @else {
                 <div class="column">
-                  @for (t of turns(); track t.id) {
-                    <app-research-turn
-                      [turn]="t"
-                      [live]="liveRef()?.turnId === t.id"
-                      [addable]="history.isLive(t.id)"
-                      (stopSearch)="cancel()"
-                      (retrySource)="retrySource($event)"
-                      (rerun)="rerun(t, $event)"
-                      (added)="recheckSeen(t.id)"
-                    />
+                  @for (t of turns(); track t.id; let i = $index) {
+                    <div class="entry">
+                      @if (dayLabel(t, i); as day) {
+                        <div class="divider" role="separator">
+                          <span class="rule"></span>
+                          <span class="day">{{ day }}</span>
+                          <span class="rule"></span>
+                        </div>
+                      }
+                      <app-research-turn
+                        [turn]="t"
+                        [live]="liveRef()?.turnId === t.id"
+                        [addable]="history.isLive(t.id)"
+                        (stopSearch)="cancel()"
+                        (retrySource)="retrySource($event)"
+                        (rerun)="rerun(t, $event)"
+                        (added)="recheckSeen(t.id)"
+                      />
+                    </div>
                   }
                 </div>
               }
@@ -135,8 +145,9 @@ interface LiveRef {
                   [providerLabel]="providerLabel()"
                   [busy]="session.busy()"
                   [note]="noteText()"
+                  [error]="composerError()"
                   [placement]="empty() ? 'down' : 'up'"
-                  [compact]="!empty()"
+                  [wide]="!empty()"
                   (send)="send($event)"
                   (stop)="cancel()"
                   (pickMode)="pickMode($event)"
@@ -319,13 +330,40 @@ interface LiveRef {
       margin-block-start: auto;
     }
 
+    /* the conversation column: Astryx keeps a chat between 450 and 760 wide */
     .column {
-      max-inline-size: 900px;
+      max-inline-size: 760px;
       margin-inline: auto;
       inline-size: 100%;
       display: flex;
       flex-direction: column;
       gap: var(--space-8, 32px);
+    }
+
+    .entry {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-family: var(--font-chat);
+    }
+
+    /* the day divider: a 1px rule each side of a 12/20 label (Astryx ChatLayout) */
+    .divider {
+      display: flex;
+      align-items: center;
+      min-block-size: 20px;
+    }
+
+    .rule {
+      flex: 1;
+      block-size: 1px;
+      background: var(--ax-divider);
+    }
+
+    .day {
+      padding-inline: 12px;
+      color: var(--ax-text-muted);
+      font: 400 12px/20px var(--font-chat);
     }
 
     .dock {
@@ -374,66 +412,9 @@ interface LiveRef {
     }
 
     .mark-wrap {
-      position: relative;
       display: grid;
       place-items: center;
-      inline-size: 64px;
-      block-size: 64px;
       margin-block-end: var(--space-2);
-    }
-
-    .mark {
-      position: relative;
-      display: block;
-      inline-size: 64px;
-      block-size: 64px;
-    }
-
-    /* the logo is shown exactly as the brand kit draws it; only its position and opacity move */
-    .is-animated .mark {
-      animation: mark-in var(--dur-4) var(--ease-emphasized-out) both;
-    }
-
-    /* a ripple behind the mark, played once: it spreads out like a wave and fades */
-    .ripple {
-      position: absolute;
-      inset: 0;
-      border-radius: 22px;
-      border: 1.5px solid var(--color-accent);
-      opacity: 0;
-      animation: ripple 1400ms var(--ease-emphasized-out) both;
-    }
-
-    .ripple.r1 {
-      animation-delay: 220ms;
-    }
-
-    .ripple.r2 {
-      animation-delay: 520ms;
-    }
-
-    @keyframes mark-in {
-      from {
-        opacity: 0;
-        transform: translateY(8px) scale(0.92);
-      }
-
-      to {
-        opacity: 1;
-        transform: none;
-      }
-    }
-
-    @keyframes ripple {
-      from {
-        opacity: 0.5;
-        transform: scale(0.95);
-      }
-
-      to {
-        opacity: 0;
-        transform: scale(1.7);
-      }
     }
 
     .is-animated .hello-title,
@@ -569,18 +550,8 @@ interface LiveRef {
         gap: var(--space-1);
       }
 
-      .mark-wrap,
-      .mark {
-        inline-size: 44px;
-        block-size: 44px;
-      }
-
       .mark-wrap {
         margin-block-end: 0;
-      }
-
-      .ripple {
-        border-radius: 15px;
       }
 
       .hello-title {
@@ -601,10 +572,6 @@ interface LiveRef {
     }
 
     @media (max-height: 620px) {
-      .mark-wrap {
-        display: none;
-      }
-
       .stage.is-empty .dock {
         padding-block-start: var(--space-2);
       }
@@ -673,6 +640,7 @@ export class ResearchPageComponent implements OnInit {
   protected readonly history = inject(ResearchHistoryService);
   protected readonly layout = inject(ResearchLayoutService);
   protected readonly session = inject(ResearchSession);
+  protected readonly fmt = inject(FormatService);
   private readonly motion = inject(MotionService);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
@@ -696,12 +664,22 @@ export class ResearchPageComponent implements OnInit {
     return key === null ? null : this.i18n.t(key);
   });
   protected readonly useAi = signal(true);
+  /** A search that could not even start: shown as the banner above the box until the next send. */
+  protected readonly composerError = signal<string | null>(null);
   protected readonly drawerOpen = signal(false);
   protected readonly setupOpen = signal(false);
   protected readonly liveRef = signal<LiveRef | null>(null);
 
   /** The entrance of the empty page plays unless the user asked for reduced motion. */
   protected readonly animate = computed(() => !this.motion.reduced());
+  protected readonly viewHeight = signal(typeof window === 'undefined' ? 900 : window.innerHeight);
+
+  protected onResize(event: Event): void {
+    const win = event.target as Window;
+    this.viewHeight.set(win.innerHeight);
+  }
+  /** The mark above the greeting: 64 px on a tall window, 44 px below 800 px, gone below 620 px. */
+  protected readonly logoSize = computed(() => (this.viewHeight() >= 800 ? 64 : this.viewHeight() > 620 ? 44 : 0));
 
   /** The AI is set up (provider + key + model). */
   protected readonly aiOn = computed(() => this.ai.status()?.configured === true);
@@ -936,6 +914,7 @@ export class ResearchPageComponent implements OnInit {
     const reusable = this.findReusable(conv.turns, prompt, category, useAi, mode);
     this.layout.rememberCategory(category);
     this.noteKey.set(null);
+    this.composerError.set(null);
     if (reusable !== null) {
       // the copy keeps the original's time, so repeating a prompt never stretches the reuse window
       this.history.addTurn(conv.id, { ...emptyTurn(prompt, category, useAi, reusable.createdAt, mode), ...pickResults(reusable), reused: true, status: 'done', phase: 'done' });
@@ -975,8 +954,25 @@ export class ResearchPageComponent implements OnInit {
       await this.session.start({ topic: turn.prompt, useAi: turn.useAi, lang: this.i18n.lang(), category: turn.category, mode: turn.mode });
     } catch (e: unknown) {
       this.liveRef.set(null);
-      this.history.patchTurn(conversationId, turn.id, { status: 'error', error: this.ai.errorText(e) });
+      const message = this.ai.errorText(e);
+      this.composerError.set(message);
+      this.history.patchTurn(conversationId, turn.id, { status: 'error', error: message });
     }
+  }
+
+  /** "Today", "Yesterday" or the date, above the first turn of each day; `null` when the day continues. */
+  protected dayLabel(turn: Turn, index: number): string | null {
+    const day = (ts: number): number => new Date(ts).setHours(0, 0, 0, 0);
+    const turns = this.turns();
+    if (index > 0 && day(turns[index - 1].createdAt) === day(turn.createdAt)) {
+      return null;
+    }
+    const today = day(Date.now());
+    const mine = day(turn.createdAt);
+    if (mine === today) {
+      return this.i18n.t('research.today');
+    }
+    return mine === day(today - 1) ? this.i18n.t('research.yesterday') : this.fmt.day(turn.createdAt);
   }
 
   /** After adding, the cards of what was just added are not "downloaded" yet; refresh the badges. */

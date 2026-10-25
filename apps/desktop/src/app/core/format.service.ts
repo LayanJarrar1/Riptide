@@ -22,6 +22,8 @@ export class FormatService {
     percent: new Intl.NumberFormat(this.locale(), { style: 'percent', maximumFractionDigits: 0 }),
     relative: new Intl.RelativeTimeFormat(this.locale(), { numeric: 'auto' }),
     dateTime: new Intl.DateTimeFormat(this.locale(), { dateStyle: 'medium', timeStyle: 'short' }),
+    time: new Intl.DateTimeFormat(this.locale(), { hour: 'numeric', minute: '2-digit' }),
+    day: new Intl.DateTimeFormat(this.locale(), { dateStyle: 'medium' }),
   }));
 
   /** Active language (for callers that branch on it). */
@@ -105,6 +107,16 @@ export class FormatService {
   /** `12 Oct 2026, 14:03`. */
   dateTime(timestamp: number): string {
     return this.numbers().dateTime.format(new Date(timestamp));
+  }
+
+  /** `2:03 PM`: the time of day. */
+  time(timestamp: number): string {
+    return this.numbers().time.format(new Date(timestamp));
+  }
+
+  /** `12 Oct 2026`: the date. */
+  day(timestamp: number): string {
+    return this.numbers().day.format(new Date(timestamp));
   }
 
   /** Plain integer with grouping. */

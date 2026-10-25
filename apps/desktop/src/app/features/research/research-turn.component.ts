@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 
 import { AiService } from '../../ai/ai.service';
@@ -16,8 +17,9 @@ import { ToastService } from '../../ui/toast.service';
 import { UiState } from '../shell/ui-state.service';
 import { exportName, ExportContext, isCitable, responseText, summaryLines, toBibtex, toMarkdown, toRis } from './research-export';
 import { Turn, TurnItem } from './research-history';
+import { AxIconComponent } from './ax-icon.component';
 import { ResearchCardComponent } from './research-result-card.component';
-import { deriveSteps, isAddable } from './research-turn';
+import { deriveSteps, isAddable, Step, StepId } from './research-turn';
 
 /** Cards shown per group before "Show more"; a turn keeps at most 60. */
 const FIRST_PAGE = 20;
@@ -47,13 +49,23 @@ interface Group {
 @Component({
   selector: 'app-research-turn',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonComponent, IconComponent, MenuComponent, ResearchCardComponent],
+  imports: [NgTemplateOutlet, AxIconComponent, ButtonComponent, IconComponent, MenuComponent, ResearchCardComponent],
   template: `
     @let t = turn();
     <section class="turn" [attr.aria-label]="t.prompt">
       <div class="user">
         <p class="bubble" dir="auto">{{ t.prompt }}</p>
-        <span class="kind">{{ i18n.t('research.cat.' + t.category) }} · {{ i18n.t('research.mode.' + t.mode) }}{{ t.useAi ? ' · ' + i18n.t('research.aiBadge') : '' }}</span>
+        <p class="meta is-end">
+          <time [attr.datetime]="iso()">{{ fmt.time(t.createdAt) }}</time>
+          <span aria-hidden="true">·</span>
+          <span>{{ i18n.t('research.cat.' + t.category) }}</span>
+          <span aria-hidden="true">·</span>
+          <span>{{ i18n.t('research.mode.' + t.mode) }}</span>
+          @if (t.useAi) {
+            <span aria-hidden="true">·</span>
+            <span>{{ i18n.t('research.aiBadge') }}</span>
+          }
+        </p>
       </div>
 
       <div class="assistant">
@@ -89,51 +101,79 @@ interface Group {
           </p>
         }
 
-        <details class="info" [open]="running()">
-          <summary>{{ i18n.t('research.steps') }}</summary>
-          <ol class="steps" [attr.aria-label]="i18n.t('research.steps')" aria-live="polite">
+        <div class="tools">
+          <button type="button" class="tools-head" [attr.aria-expanded]="stepsOpen()" [attr.aria-controls]="'steps-' + t.id" (click)="stepsOpen.set(!stepsOpen())">
+            <app-ax-icon name="wrench" [size]="16" />
+            <span class="tools-label">{{ i18n.plural('research.stepsCount', steps().length).replace('{n}', fmt.int(steps().length)) }}</span>
+            <span class="chev" [class.is-open]="stepsOpen()"><app-ax-icon name="chevronDown" [size]="12" /></span>
+          </button>
+          <ol class="steps" [id]="'steps-' + t.id" [attr.aria-label]="i18n.t('research.steps')" aria-live="polite" [hidden]="!stepsOpen()">
             @for (s of steps(); track s.id) {
               <li class="step" [class]="'is-' + s.state">
-                <span class="mark" aria-hidden="true">
-                  @switch (s.state) {
-                    @case ('done') {
-                      <app-icon name="check" [size]="12" />
-                    }
-                    @case ('failed') {
-                      <app-icon name="alert" [size]="12" />
-                    }
-                    @case ('active') {
-                      <span class="spin"></span>
-                    }
-                    @case ('skipped') {
-                      <span class="dash"></span>
-                    }
-                    @case ('stopped') {
-                      <app-icon name="stop" [size]="10" />
-                    }
-                    @default {
-                      <span class="dot"></span>
-                    }
+                @if (panels()[s.id]; as panel) {
+                  <button type="button" class="row is-button" [attr.aria-expanded]="openRow() === s.id" [attr.aria-controls]="'panel-' + t.id + '-' + s.id" (click)="toggleRow(s.id)">
+                    <ng-container *ngTemplateOutlet="rowBody; context: { $implicit: s, expandable: true }" />
+                  </button>
+                  @if (openRow() === s.id) {
+                    <div class="panel" [id]="'panel-' + t.id + '-' + s.id">
+                      <div class="code">
+                        <div class="code-head">
+                          <span class="code-label">{{ panel.label }}</span>
+                          <button type="button" class="code-copy" [attr.aria-label]="i18n.t('research.copy')" [attr.title]="i18n.t('research.copy')" (click)="copyLines(panel.lines)">
+                            <app-ax-icon name="copy" [size]="16" />
+                          </button>
+                        </div>
+                        <div class="code-body">
+                          @for (line of panel.lines; track $index) {
+                            <div class="code-line" dir="auto">{{ line }}</div>
+                          }
+                        </div>
+                      </div>
+                    </div>
                   }
-                </span>
-                <span class="label">{{ stepLabel(s.id, s.state) }}</span>
-                @if (s.count !== null && s.state !== 'skipped') {
-                  <span class="count num">{{ fmt.int(s.count) }}</span>
+                } @else {
+                  <div class="row">
+                    <ng-container *ngTemplateOutlet="rowBody; context: { $implicit: s, expandable: false }" />
+                  </div>
                 }
-                <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
               </li>
             }
           </ol>
-          @if (searched().length > 0) {
-            <p class="plan">
-              <app-icon name="sparkles" [size]="14" />
-              <span>{{ i18n.t('research.queries') }}:</span>
-              @for (q of searched(); track q) {
-                <span class="query" dir="auto">{{ q }}</span>
+        </div>
+
+        <ng-template #rowBody let-s let-expandable="expandable">
+          <span class="mark" aria-hidden="true">
+            @switch (s.state) {
+              @case ('done') {
+                <app-ax-icon name="checkCircle" [size]="12" />
               }
-            </p>
+              @case ('failed') {
+                <app-ax-icon name="xCircle" [size]="12" />
+              }
+              @case ('active') {
+                <app-ax-icon name="spinner" [size]="14" />
+              }
+              @case ('skipped') {
+                <app-ax-icon name="minusCircle" [size]="12" />
+              }
+              @case ('stopped') {
+                <app-ax-icon name="stopCircle" [size]="12" />
+              }
+              @default {
+                <app-ax-icon class="is-still" name="spinner" [size]="14" />
+              }
+            }
+          </span>
+          <span class="token" aria-hidden="true">{{ stepToken(s.id) }}</span>
+          <span class="name">{{ stepLabel(s.id, s.state) }}</span>
+          @if (stepDetail(s); as detail) {
+            <span class="detail" dir="auto">{{ detail }}</span>
           }
-        </details>
+          <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
+          @if (expandable) {
+            <span class="chev" [class.is-open]="openRow() === s.id"><app-ax-icon name="chevronDown" [size]="12" /></span>
+          }
+        </ng-template>
 
 
 
@@ -171,6 +211,13 @@ interface Group {
             @for (line of lines(); track $index) {
               <p dir="auto">{{ line }}</p>
             }
+            <p class="meta">
+              <time [attr.datetime]="iso()">{{ fmt.time(t.createdAt) }}</time>
+              <span aria-hidden="true">·</span>
+              <span>{{ i18n.t(t.useAi ? 'research.aiBadge' : 'research.keyword') }}</span>
+              <span aria-hidden="true">·</span>
+              <span>{{ i18n.plural('research.state.done', t.items.length).replace('{n}', fmt.int(t.items.length)) }}</span>
+            </p>
           </div>
         }
 
@@ -309,147 +356,254 @@ interface Group {
   styles: `
     :host {
       display: block;
+      font-family: var(--font-chat);
     }
 
+    /* the thread: messages are 16 apart (Astryx ChatLayout) */
     .turn {
       display: flex;
       flex-direction: column;
-      gap: var(--space-4);
+      gap: 16px;
     }
 
+    /* the user message: an end-aligned bubble (radius 28, 12px 16px, 14/20) at most 80% of the column */
     .user {
-      align-self: flex-end;
-      max-inline-size: min(640px, 90%);
+      align-self: stretch;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 2px;
+      gap: 4px;
     }
 
     .bubble {
-      padding: var(--space-2) var(--space-4);
-      border-radius: var(--radius-lg, 14px);
-      background: var(--color-accent-soft, var(--color-surface-3));
-      border: 1px solid var(--color-accent);
+      margin: 0;
+      box-sizing: border-box;
+      max-inline-size: max(80%, 280px);
+      padding: 12px 16px;
+      border-radius: 28px;
+      background: var(--ax-bubble);
+      color: var(--ax-text);
+      font: 400 14px/20px var(--font-chat);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
-    .kind {
-      font-size: var(--text-xs);
-      color: var(--color-text-muted);
+    /* the meta line: 12/20, 16px in from the edge of the bubble, 2px under it (-6 + 4 as Astryx has it) */
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: -2px 0 0;
+      padding-inline: 16px;
+      color: var(--ax-text-muted);
+      font: 400 12px/20px var(--font-chat);
     }
 
     .assistant {
       display: flex;
       flex-direction: column;
-      gap: var(--space-3);
+      gap: 12px;
       min-inline-size: 0;
     }
 
-    .info summary {
+    /* the progress steps: Astryx ChatToolCalls (a header, then one 24px row per step) */
+    .tools {
+      display: flex;
+      flex-direction: column;
+      align-self: flex-start;
+      max-inline-size: 100%;
+      color: var(--ax-text-muted);
+    }
+
+    .tools-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-block-size: 24px;
+      padding: 2px 0;
+      border: 0;
+      background: transparent;
+      color: var(--ax-text-muted);
+      font: 500 12px/20px var(--font-chat);
+      text-align: start;
       cursor: pointer;
-      color: var(--color-text-secondary);
-      font-size: var(--text-xs);
+      align-self: flex-start;
     }
 
-    .info[open] summary {
-      margin-block-end: var(--space-2);
+    .tools-head:focus-visible,
+    .row.is-button:focus-visible,
+    .code-copy:focus-visible {
+      outline: 2px solid var(--ax-focus);
+      outline-offset: 3px;
+      border-radius: 10px;
     }
 
-    .info > .plan {
-      margin-block-start: var(--space-2);
+    .chev {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      inline-size: 14px;
+      block-size: 14px;
+      color: var(--ax-text-muted);
+      transition: transform 125ms cubic-bezier(0.24, 1, 0.4, 1);
+    }
+
+    .chev.is-open {
+      transform: rotate(180deg);
     }
 
     .steps {
       list-style: none;
       margin: 0;
-      padding: var(--space-2) var(--space-3);
+      padding: 0;
       display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-1) var(--space-4);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-1, var(--color-surface-2));
-      font-size: var(--text-sm);
+      flex-direction: column;
     }
 
+    .steps[hidden] {
+      display: none;
+    }
+
+    /* rows hug their content (the chevron follows the text); only an opened panel gives the group a width */
     .step {
-      display: inline-flex;
+      display: flex;
+      flex-direction: column;
+      align-self: flex-start;
+      max-inline-size: 100%;
+      min-inline-size: 0;
+    }
+
+    .row {
+      display: flex;
       align-items: center;
-      gap: var(--space-2);
-      color: var(--color-text-muted);
+      gap: 6px;
+      box-sizing: border-box;
+      max-inline-size: 100%;
+      min-block-size: 24px;
+      padding: 2px 0;
+      color: var(--ax-text-muted);
+      font: 400 12px/20px var(--font-chat);
+      text-align: start;
     }
 
-    .step.is-active,
-    .step.is-done {
-      color: var(--color-text);
+    /* an expandable row: a button that reaches 4px past the column so its hover wash has room */
+    .row.is-button {
+      margin-inline: -4px;
+      max-inline-size: calc(100% + 8px);
+      padding-inline: 4px;
+      border: 0;
+      border-radius: 10px;
+      background-color: transparent;
+      cursor: pointer;
+      transition: background-color 125ms cubic-bezier(0.24, 1, 0.4, 1);
     }
 
-    .step.is-failed {
-      color: var(--color-danger);
+    .row.is-button:hover {
+      background-color: var(--ax-overlay);
     }
 
     .mark {
-      display: inline-grid;
-      place-items: center;
-      inline-size: 18px;
-      block-size: 18px;
-      border-radius: 50%;
-      border: 1px solid var(--color-border-strong);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      inline-size: 16px;
+      block-size: 16px;
+      border-radius: 9999px;
+      color: var(--ax-pending);
     }
 
     .is-done .mark {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-      color: var(--color-on-accent, #04201d);
+      color: var(--ax-ok);
     }
 
     .is-failed .mark {
-      border-color: var(--color-danger);
+      color: var(--ax-fail);
     }
 
-    .dot,
-    .dash {
-      background: var(--color-text-muted);
-      border-radius: 2px;
+    .is-active .mark {
+      color: var(--ax-run);
     }
 
-    .dot {
-      inline-size: 4px;
-      block-size: 4px;
-      border-radius: 50%;
+    /* the short id in the mono style (Astryx puts the tool name there); the step's name follows in the regular sans */
+    .token {
+      font: 500 12px/20px var(--font-chat-mono);
+      white-space: nowrap;
     }
 
-    .dash {
-      inline-size: 8px;
-      block-size: 2px;
+    .name {
+      font: 400 12px/20px var(--font-chat);
+      white-space: nowrap;
     }
 
-    .spin {
-      inline-size: 10px;
-      block-size: 10px;
-      border-radius: 50%;
-      border: 2px solid var(--color-accent);
-      border-inline-end-color: transparent;
-      animation: turn 0.8s linear infinite;
+    .detail {
+      min-inline-size: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    @keyframes turn {
-      to {
-        transform: rotate(360deg);
-      }
+    /* the expanded panel: indented under the label, a bordered code surface with a header bar */
+    .panel {
+      box-sizing: border-box;
+      inline-size: min(560px, 100%);
+      padding-block-end: 8px;
+      padding-inline-start: 22px;
+      min-inline-size: 320px;
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      .spin {
-        animation-duration: 3s;
-      }
+    .code {
+      box-sizing: border-box;
+      overflow: hidden;
+      border: 1px solid var(--ax-border-code);
+      border-radius: 10px;
+      background: var(--ax-surface-code);
+      color: var(--ax-code-text);
+      font: 400 14px/20px var(--font-chat-mono);
     }
 
-    .count {
-      font-size: var(--text-xs);
-      color: var(--color-text-muted);
+    .code-head {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--ax-surface-code);
+    }
+
+    .code-label {
+      color: var(--ax-code-muted);
+      font: 500 12px/20px var(--font-chat-mono);
+    }
+
+    .code-copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      inline-size: 28px;
+      block-size: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background-color: transparent;
+      color: var(--ax-code-muted);
+      cursor: pointer;
+      transition: background-color 125ms cubic-bezier(0.24, 1, 0.4, 1);
+    }
+
+    .code-copy:hover {
+      background-color: var(--ax-overlay);
+    }
+
+    .code-body {
+      margin-block-start: -8px;
+      padding: 12px 16px;
+    }
+
+    .code-line {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .sr-only {
@@ -465,40 +619,38 @@ interface Group {
       align-self: flex-start;
     }
 
+    /* source chips: Astryx pills (radius 9999, 12/20 medium); a dot says how the source did */
     .chips {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-2);
+      gap: 8px;
     }
 
     .chip {
       display: inline-flex;
       align-items: center;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-full);
-      font-size: var(--text-xs);
-      color: var(--color-text-secondary);
+      border-radius: 9999px;
+      background: var(--ax-pill-bg);
+      color: var(--ax-pill-fg);
+      font: 500 12px/20px var(--font-chat);
       overflow: hidden;
     }
 
     .chip.is-active {
-      border-color: var(--color-accent);
-    }
-
-    .chip.is-failed {
-      border-color: var(--color-danger);
+      box-shadow: inset 0 0 0 1px var(--ax-focus);
     }
 
     .chip.is-stopped {
-      border-style: dashed;
+      opacity: 0.7;
     }
 
     .chip-main,
     .chip-retry {
       display: inline-flex;
       align-items: center;
-      gap: var(--space-2);
-      padding: 3px 10px;
+      gap: 6px;
+      min-block-size: 24px;
+      padding: 2px 8px;
       border: 0;
       background: transparent;
       color: inherit;
@@ -510,109 +662,131 @@ interface Group {
       cursor: default;
     }
 
-    .optional-note {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-      color: var(--color-text-muted);
-      font-size: var(--text-xs);
-      line-height: var(--leading-normal);
-    }
-
-    .note-link {
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: var(--color-text-secondary);
-      font: inherit;
-      text-decoration: underline;
-      cursor: pointer;
-    }
-
-    .note-link:hover {
-      color: var(--color-text);
-    }
-
-    .note-link:focus-visible {
-      outline: 2px solid var(--color-accent);
-      outline-offset: 2px;
-    }
-
     .chip-retry {
       padding-inline: 8px;
-      border-inline-start: 1px solid var(--color-border);
+      border-inline-start: 1px solid var(--ax-border-code);
     }
 
     .chip-dot {
       inline-size: 6px;
       block-size: 6px;
       border-radius: 50%;
-      background: var(--color-success);
+      background: var(--ax-ok);
     }
 
     .is-busy .chip-dot {
-      background: var(--color-accent);
+      background: var(--ax-run);
     }
 
     .is-failed .chip-dot {
-      background: var(--color-danger);
+      background: var(--ax-fail);
     }
 
     .is-stopped .chip-dot {
-      background: var(--color-text-muted);
+      background: var(--ax-pending);
     }
 
     .chip-state {
-      color: var(--color-text-muted);
+      font-weight: 400;
+      opacity: 0.8;
     }
 
     .chip button:focus-visible {
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--ax-focus);
       outline-offset: -2px;
     }
 
-    .plan,
+    .optional-note {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0;
+      color: var(--ax-text-muted);
+      font: 400 12px/20px var(--font-chat);
+    }
+
+    .note-link {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--ax-text);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .note-link:focus-visible {
+      outline: 2px solid var(--ax-focus);
+      outline-offset: 2px;
+    }
+
     .note {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: var(--space-2);
-      font-size: var(--text-sm);
-      color: var(--color-text-secondary);
+      gap: 8px;
+      margin: 0;
+      color: var(--ax-text-muted);
+      font: 400 12px/20px var(--font-chat);
     }
 
-    .plan app-icon {
-      color: var(--color-accent);
-    }
-
+    /* a quoted query: the ChatTokenizedText pill (radius 9999, 12/20 medium, 0 8px) */
     .query {
-      padding: 1px 8px;
-      border-radius: var(--radius-full);
-      background: var(--color-surface-3);
+      display: inline-flex;
+      align-items: center;
+      padding: 0 8px;
+      border-radius: 9999px;
+      background: var(--ax-token-blue-bg);
+      color: var(--ax-token-blue-fg);
+      font: 500 12px/20px var(--font-chat);
     }
 
+    /* an error or a warning in the thread: the Astryx banner colours */
     .warn {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: var(--space-2);
-      padding: var(--space-2) var(--space-3);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-sm);
-      font-size: var(--text-sm);
-      color: var(--color-text-secondary);
+      gap: 8px;
+      margin: 0;
+      padding: 12px 16px;
+      border-radius: 16px;
+      background: var(--ax-warn-bg);
+      color: var(--ax-warn-fg);
+      font: 400 12px/20px var(--font-chat);
+    }
+
+    .warn app-icon {
+      color: var(--ax-warn-icon);
     }
 
     .warn.is-error {
-      border-color: var(--color-danger);
+      background: var(--ax-error-bg);
+      color: var(--ax-error-fg);
     }
 
+    .warn.is-error app-icon {
+      color: var(--ax-error-icon);
+    }
+
+    /* the answer: plain 14/20 text, no bubble (Astryx ghost layout), paragraphs 4px apart */
     .answer {
       display: flex;
       flex-direction: column;
-      gap: var(--space-2);
-      line-height: var(--leading-normal);
+      gap: 0;
+      color: var(--ax-text);
+      font: 400 14px/20px var(--font-chat);
+    }
+
+    .answer p {
+      max-inline-size: 680px;
+      margin: 4px 0;
+    }
+
+    .answer p.meta {
+      max-inline-size: none;
+      margin: 4px 0 0;
+      padding-inline: 0;
     }
 
     .noexact {
@@ -813,6 +987,23 @@ export class ResearchTurnComponent {
   protected readonly running = computed(() => this.turn().status === 'running');
   protected readonly canAdd = computed(() => this.addable() && this.turn().items.some(isAddable));
   protected readonly steps = computed(() => deriveSteps(this.turn()));
+  /** The steps list is open while the search runs and folds away once it is done; a click overrides that until the state changes. */
+  protected readonly stepsOpen = linkedSignal(() => this.running());
+  /** The step whose details are open (at most one). */
+  protected readonly openRow = signal<StepId | null>(null);
+  /** What a step shows when it is opened: the phrasings that were searched, the sources and how each did. */
+  protected readonly panels = computed<Partial<Record<StepId, { readonly label: string; readonly lines: readonly string[] }>>>(() => {
+    const t = this.turn();
+    const out: Partial<Record<StepId, { readonly label: string; readonly lines: readonly string[] }>> = {};
+    const queries = this.searched();
+    if (t.useAi && t.plan.length > 0 && queries.length > 0) {
+      out.understand = { label: this.i18n.t('research.queries'), lines: queries };
+    }
+    if (t.sources.length > 0) {
+      out.search = { label: this.i18n.t('research.sources'), lines: t.sources.map((s) => `${this.i18n.t(`research.source.${s.id}`)} · ${this.chipState(s)}`) };
+    }
+    return out;
+  });
   protected readonly lines = computed(() => {
     const t = this.turn();
     return (this.running() && t.items.length === 0) || t.items.length === 0 ? [] : summaryLines(t, this.exportContext());
@@ -879,6 +1070,43 @@ export class ResearchTurnComponent {
   /** The same prompt in Deep Research mode. */
   protected deeper(): void {
     this.rerun.emit({ useAi: this.turn().useAi, mode: 'deep-research' });
+  }
+
+  protected iso(): string {
+    return new Date(this.turn().createdAt).toISOString();
+  }
+
+  /** The short fact next to a step's name (how many phrasings, results, ranked, seen before), or nothing. */
+  protected stepDetail(s: Step): string | null {
+    if (s.count === null || s.state === 'skipped' || s.state === 'pending') {
+      return null;
+    }
+    const n = this.fmt.int(s.count);
+    switch (s.id) {
+      case 'understand':
+        return this.i18n.plural('research.stepDetail.queries', s.count).replace('{n}', n);
+      case 'search':
+        return this.i18n.plural('research.state.done', s.count).replace('{n}', n);
+      case 'evaluate':
+        return this.i18n.plural('research.stepDetail.ranked', s.count).replace('{n}', n);
+      case 'seen':
+        return s.count > 0 ? this.i18n.plural('research.stepDetail.seen', s.count).replace('{n}', n) : null;
+      default:
+        return null;
+    }
+  }
+
+  protected toggleRow(id: StepId): void {
+    this.openRow.set(this.openRow() === id ? null : id);
+  }
+
+  protected copyLines(lines: readonly string[]): void {
+    this.copy(lines.join('\n'), 'research.copied');
+  }
+
+  /** The short id shown in the mono style before a step's name. */
+  protected stepToken(id: StepId): string {
+    return { understand: 'plan', search: 'search', evaluate: 'rank', seen: 'seen', prepare: 'done' }[id];
   }
 
   protected stepLabel(id: string, state: string): string {
