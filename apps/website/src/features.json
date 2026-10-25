@@ -100,6 +100,33 @@
       "text_ar": "في البحث والملفات يتقلص الشريط الجانبي إلى شريط أيقونات رفيع يتذكر إن كنت قد وسّعته.",
       "verified": true,
       "release": "0.1.0-beta.2"
+    },
+    {
+      "id": "research-astryx",
+      "title_en": "A calmer Research page",
+      "title_ar": "صفحة بحث أهدأ",
+      "text_en": "A cleaner prompt box and conversation, search steps you can fold, and the Riptide logo drawn on the start page.",
+      "text_ar": "مربع كتابة ومحادثة أنظف، وخطوات بحث يمكن طيّها، وشعار ريبتايد يُرسم في صفحة البداية.",
+      "verified": false,
+      "release": null
+    },
+    {
+      "id": "downloads-fit",
+      "title_en": "Downloads always fit the window",
+      "title_ar": "قائمة التنزيلات تناسب النافذة دائمًا",
+      "text_en": "No sideways scrolling: the file name keeps the most room, and less important columns step aside on narrow windows.",
+      "text_ar": "بلا تمرير جانبي: يأخذ اسم الملف المساحة الأكبر، وتتنحّى الأعمدة الأقل أهمية في النوافذ الضيقة.",
+      "verified": false,
+      "release": null
+    },
+    {
+      "id": "faster-quality",
+      "title_en": "Faster video quality options",
+      "title_ar": "خيارات جودة الفيديو أسرع",
+      "text_en": "The extension reads the qualities as soon as it sees a video page, and Best can be downloaded at once while the list loads.",
+      "text_ar": "تقرأ الإضافة الجودات فور ظهور صفحة الفيديو، ويمكن تنزيل أفضل جودة مباشرة بينما تُحمَّل القائمة.",
+      "verified": false,
+      "release": null
     }
   ]
 }

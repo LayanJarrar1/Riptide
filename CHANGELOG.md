@@ -8,6 +8,25 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-10-25
+
+A calmer Research page, a downloads list that always fits, and faster video quality options.
+
+- **Research, redesigned:** the prompt box, menus, conversation and search steps follow the Astryx chat
+  design (Figtree type in the chat area), with an animated Riptide logo on the start page (the official
+  logo, drawn the way the brand sting draws it; it stays still when Windows asks for less motion). Quick
+  search is selected by default; you still choose the kind of result before sending.
+- **No sideways scrolling in Downloads:** columns fit the window. The file name keeps the most room, number
+  columns give way first, and less important columns hide when the window is narrow and come back when it
+  is wider. Words no longer break in the middle.
+- **Sidebar button at the top** of every screen (Downloads, Files, Research, Settings), also on **Ctrl+B**;
+  each screen remembers whether you left it open. On narrow windows the sidebar opens over the content.
+- **Faster video quality options:** the browser extension starts reading the qualities as soon as it sees a
+  video page, a pasted link is read at once, and "Best" can be chosen and downloaded immediately while the
+  list loads. The same page asked twice within ten minutes answers from memory.
+- **Clearer update messages:** a check that cannot reach the update server now says so ("Could not check
+  for updates", with the time of the last failed check) instead of "The update did not finish".
+
 ## [0.1.0-beta.2] - 2026-10-25
 
 Research is rebuilt around what you are looking for, Settings are reorganised, and updates now check and

@@ -4824,7 +4824,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-ai"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "async-trait",
  "rand 0.9.5",
@@ -4844,7 +4844,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-cli"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -4870,7 +4870,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-core"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "proptest",
  "regex",
@@ -4884,7 +4884,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-crawl"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "futures",
  "html5ever",
@@ -4904,7 +4904,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-desktop"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4952,7 +4952,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-engine"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "chrono",
  "hex",
@@ -4981,7 +4981,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-fs"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "riptide-core",
  "serde",
@@ -4993,7 +4993,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-host"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "dirs 6.0.0",
  "riptide-core",
@@ -5010,7 +5010,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-ipc"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "riptide-core",
  "serde",
@@ -5024,7 +5024,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-log"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "dirs 6.0.0",
  "regex",
@@ -5037,7 +5037,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-media"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "hex",
  "riptide-core",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-net"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -5082,7 +5082,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-research"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "async-trait",
  "futures",
@@ -5102,7 +5102,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-store"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "riptide-core",
  "rusqlite",
@@ -5114,7 +5114,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-testserver"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -5138,7 +5138,7 @@ dependencies = [
 
 [[package]]
 name = "riptide-torrent"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "anyhow",
  "librqbit",
