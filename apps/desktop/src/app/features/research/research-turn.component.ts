@@ -164,13 +164,14 @@ interface Group {
               }
             }
           </span>
+          <span class="token" aria-hidden="true">{{ stepToken(s.id) }}</span>
           <span class="name">{{ stepLabel(s.id, s.state) }}</span>
           @if (stepDetail(s); as detail) {
             <span class="detail" dir="auto">{{ detail }}</span>
           }
           <span class="sr-only">{{ i18n.t('research.stepState.' + s.state) }}</span>
           @if (expandable) {
-            <span class="chev is-end" [class.is-open]="openRow() === s.id"><app-ax-icon name="chevronDown" [size]="12" /></span>
+            <span class="chev" [class.is-open]="openRow() === s.id"><app-ax-icon name="chevronDown" [size]="12" /></span>
           }
         </ng-template>
 
@@ -409,6 +410,8 @@ interface Group {
     .tools {
       display: flex;
       flex-direction: column;
+      align-self: flex-start;
+      max-inline-size: 100%;
       color: var(--ax-text-muted);
     }
 
@@ -449,10 +452,6 @@ interface Group {
       transform: rotate(180deg);
     }
 
-    .chev.is-end {
-      margin-inline-start: auto;
-    }
-
     .steps {
       list-style: none;
       margin: 0;
@@ -465,9 +464,12 @@ interface Group {
       display: none;
     }
 
+    /* rows hug their content (the chevron follows the text); only an opened panel gives the group a width */
     .step {
       display: flex;
       flex-direction: column;
+      align-self: flex-start;
+      max-inline-size: 100%;
       min-inline-size: 0;
     }
 
@@ -476,7 +478,7 @@ interface Group {
       align-items: center;
       gap: 6px;
       box-sizing: border-box;
-      inline-size: 100%;
+      max-inline-size: 100%;
       min-block-size: 24px;
       padding: 2px 0;
       color: var(--ax-text-muted);
@@ -486,8 +488,8 @@ interface Group {
 
     /* an expandable row: a button that reaches 4px past the column so its hover wash has room */
     .row.is-button {
-      inline-size: calc(100% + 8px);
       margin-inline: -4px;
+      max-inline-size: calc(100% + 8px);
       padding-inline: 4px;
       border: 0;
       border-radius: 10px;
@@ -523,8 +525,14 @@ interface Group {
       color: var(--ax-run);
     }
 
-    .name {
+    /* the short id in the mono style (Astryx puts the tool name there); the step's name follows in the regular sans */
+    .token {
       font: 500 12px/20px var(--font-chat-mono);
+      white-space: nowrap;
+    }
+
+    .name {
+      font: 400 12px/20px var(--font-chat);
       white-space: nowrap;
     }
 
@@ -537,8 +545,11 @@ interface Group {
 
     /* the expanded panel: indented under the label, a bordered code surface with a header bar */
     .panel {
+      box-sizing: border-box;
+      inline-size: min(560px, 100%);
       padding-block-end: 8px;
       padding-inline-start: 22px;
+      min-inline-size: 320px;
     }
 
     .code {
@@ -1091,6 +1102,11 @@ export class ResearchTurnComponent {
 
   protected copyLines(lines: readonly string[]): void {
     this.copy(lines.join('\n'), 'research.copied');
+  }
+
+  /** The short id shown in the mono style before a step's name. */
+  protected stepToken(id: StepId): string {
+    return { understand: 'plan', search: 'search', evaluate: 'rank', seen: 'seen', prepare: 'done' }[id];
   }
 
   protected stepLabel(id: string, state: string): string {

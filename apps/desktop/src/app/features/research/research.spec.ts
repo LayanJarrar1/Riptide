@@ -332,7 +332,8 @@ describe('ResearchPageComponent', () => {
     // no "All": the user picks what to look for
     expect(cards).toEqual(['Videos', 'Software & apps', 'Documents & PDFs', 'Images', 'Academic research', 'Open-source projects', 'General web']);
     expect([...el.querySelectorAll('.cat .cat-desc')].every((d) => (d.textContent ?? '').trim().length > 0)).toBe(true);
-    expect(el.querySelector('img.mark')?.getAttribute('src')).toBe('brand-mark.svg');
+    // the animated brand logo sits above the greeting (it is left out of very short windows)
+    expect(el.querySelector('.hello app-brand-logo-animated') !== null).toBe(window.innerHeight > 620);
     expect(el.textContent).toContain('Only download what you have the right to download.');
     expect(el.textContent).toContain('does not search torrent indexes, piracy or paywall-bypass sites');
     expect(el.textContent).toContain('What do you want to find?');
@@ -390,7 +391,8 @@ describe('ResearchPageComponent', () => {
     fixture.detectChanges();
     const options = [...el.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
     expect(options.map((o) => o.querySelector('.option-name')?.textContent?.trim())).toEqual(['Quick Search', 'Deep Research', 'Video Search', 'Source Finder']);
-    expect(options.every((o) => (o.querySelector('.option-desc')?.textContent ?? '').trim().length > 0)).toBe(true);
+    // the description is the tooltip and the accessible description, not visible text
+    expect(options.every((o) => (o.getAttribute('title') ?? '').trim().length > 0 && o.getAttribute('aria-describedby') !== null)).toBe(true);
     options[2].click();
     await settle(fixture);
     expect(trigger(el, 'Mode').textContent).toContain('Video Search');
@@ -447,14 +449,10 @@ describe('ResearchPageComponent', () => {
     setup({ reducedMotion: false });
     const first = await mount();
     expect(first.el.querySelector('.hello.is-animated')).not.toBeNull();
-    expect(first.el.querySelectorAll('.ripple').length).toBe(2);
     TestBed.resetTestingModule();
     setup({ reducedMotion: true });
     const second = await mount();
     expect(second.el.querySelector('.hello.is-animated')).toBeNull();
-    expect(second.el.querySelector('.ripple')).toBeNull();
-    // the logo itself is the brand-kit file, unfiltered
-    expect(second.el.querySelector('img.mark')?.getAttribute('src')).toBe('brand-mark.svg');
   });
 
   it('shows Web search as a calm optional note with a link to Settings, not a setup warning', async () => {

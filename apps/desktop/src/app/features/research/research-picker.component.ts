@@ -17,7 +17,7 @@ let uid = 0;
 /**
  * A footer trigger with a popover menu, drawn like the Astryx ChatComposer's "Auto" / "Settings"
  * triggers and dropdown menu (a WAI-ARIA menu of radio items): the button shows the choice with its
- * icon and a chevron, the menu shows every option with a one-line description. Keyboard: Enter,
+ * icon and a chevron, the menu shows every option as one line of text (its description is the tooltip and the accessible description). Keyboard: Enter,
  * Space, ArrowDown or ArrowUp on the button open it; arrows, Home and End move; Enter or Space
  * choose; Escape closes and gives the focus back; Tab closes. A click outside closes it.
  */
@@ -69,17 +69,13 @@ let uid = 0;
             class="option"
             tabindex="-1"
             [attr.aria-checked]="o.id === value()"
+            [attr.aria-describedby]="listId + '-d' + n"
+            [attr.title]="o.description"
             (click)="choose(o)"
             (mouseenter)="focusAt(n)"
           >
-            <app-icon class="lead" [name]="o.icon" [size]="16" />
-            <span class="option-text">
-              <span class="option-name">{{ o.label }}</span>
-              <span class="option-desc">{{ o.description }}</span>
-            </span>
-            @if (o.id === value()) {
-              <app-ax-icon class="tick" name="check" [size]="16" />
-            }
+            <span class="option-name">{{ o.label }}</span>
+            <span class="sr-only" [id]="listId + '-d' + n">{{ o.description }}</span>
           </button>
         }
       </div>
@@ -164,14 +160,14 @@ let uid = 0;
       }
     }
 
-    /* an item: 32 high at least, 6px 8px, radius 8, 14/20 regular; a description makes it taller */
+    /* an item: one line of text, 32 high, 6px 8px, radius 8, 14/20 regular (the description is its tooltip) */
     .option {
       display: flex;
       align-items: center;
       gap: 8px;
       box-sizing: border-box;
       inline-size: 100%;
-      min-block-size: 32px;
+      block-size: 32px;
       padding: 6px 8px;
       border: 0;
       border-radius: 8px;
@@ -193,22 +189,17 @@ let uid = 0;
       box-shadow: inset 0 0 0 2px var(--ax-focus);
     }
 
-    .lead,
-    .tick {
-      color: var(--ax-text-muted);
-    }
-
-    .option-text {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
+    .option-name {
       min-inline-size: 0;
     }
 
-    .option-desc {
-      color: var(--ax-text-muted);
-      font-size: 12px;
-      line-height: 16px;
+    .sr-only {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
 
     @media (prefers-reduced-motion: reduce) {

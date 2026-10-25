@@ -8,6 +8,7 @@ import { ResearchSession } from '../../ai/research.session';
 import { FormatService } from '../../core/format.service';
 import { MotionService } from '../../core/motion.service';
 import { I18nService } from '../../i18n/i18n.service';
+import { BrandLogoAnimatedComponent } from '../../ui/brand-logo-animated.component';
 import { ButtonComponent } from '../../ui/button.component';
 import { IconComponent } from '../../ui/icon.component';
 import { ToastService } from '../../ui/toast.service';
@@ -44,7 +45,8 @@ interface LiveRef {
 @Component({
   selector: 'app-research-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AiSetupDialogComponent, ButtonComponent, IconComponent, ResearchComposerComponent, ResearchSidebarComponent, ResearchTurnComponent],
+  imports: [AiSetupDialogComponent, BrandLogoAnimatedComponent, ButtonComponent, IconComponent, ResearchComposerComponent, ResearchSidebarComponent, ResearchTurnComponent],
+  host: { '(window:resize)': 'onResize($event)' },
   providers: [ResearchSession],
   template: `
     @if (!ai.available) {
@@ -98,13 +100,11 @@ interface LiveRef {
             <div class="thread" #thread>
               @if (empty()) {
                 <div class="hello" [class.is-animated]="animate()">
-                  <div class="mark-wrap">
-                    @if (animate()) {
-                      <span class="ripple r1" aria-hidden="true"></span>
-                      <span class="ripple r2" aria-hidden="true"></span>
-                    }
-                    <img class="mark" src="brand-mark.svg" alt="" width="64" height="64" />
-                  </div>
+                  @if (logoSize() > 0) {
+                    <div class="mark-wrap">
+                      <app-brand-logo-animated [size]="logoSize()" [showWordmark]="false" />
+                    </div>
+                  }
                   <h2 class="hello-title">{{ i18n.t('research.hello') }}</h2>
                   <p class="muted">{{ i18n.t('research.hello.sub') }}</p>
                 </div>
@@ -412,66 +412,9 @@ interface LiveRef {
     }
 
     .mark-wrap {
-      position: relative;
       display: grid;
       place-items: center;
-      inline-size: 64px;
-      block-size: 64px;
       margin-block-end: var(--space-2);
-    }
-
-    .mark {
-      position: relative;
-      display: block;
-      inline-size: 64px;
-      block-size: 64px;
-    }
-
-    /* the logo is shown exactly as the brand kit draws it; only its position and opacity move */
-    .is-animated .mark {
-      animation: mark-in var(--dur-4) var(--ease-emphasized-out) both;
-    }
-
-    /* a ripple behind the mark, played once: it spreads out like a wave and fades */
-    .ripple {
-      position: absolute;
-      inset: 0;
-      border-radius: 22px;
-      border: 1.5px solid var(--color-accent);
-      opacity: 0;
-      animation: ripple 1400ms var(--ease-emphasized-out) both;
-    }
-
-    .ripple.r1 {
-      animation-delay: 220ms;
-    }
-
-    .ripple.r2 {
-      animation-delay: 520ms;
-    }
-
-    @keyframes mark-in {
-      from {
-        opacity: 0;
-        transform: translateY(8px) scale(0.92);
-      }
-
-      to {
-        opacity: 1;
-        transform: none;
-      }
-    }
-
-    @keyframes ripple {
-      from {
-        opacity: 0.5;
-        transform: scale(0.95);
-      }
-
-      to {
-        opacity: 0;
-        transform: scale(1.7);
-      }
     }
 
     .is-animated .hello-title,
@@ -607,18 +550,8 @@ interface LiveRef {
         gap: var(--space-1);
       }
 
-      .mark-wrap,
-      .mark {
-        inline-size: 44px;
-        block-size: 44px;
-      }
-
       .mark-wrap {
         margin-block-end: 0;
-      }
-
-      .ripple {
-        border-radius: 15px;
       }
 
       .hello-title {
@@ -639,10 +572,6 @@ interface LiveRef {
     }
 
     @media (max-height: 620px) {
-      .mark-wrap {
-        display: none;
-      }
-
       .stage.is-empty .dock {
         padding-block-start: var(--space-2);
       }
@@ -743,6 +672,14 @@ export class ResearchPageComponent implements OnInit {
 
   /** The entrance of the empty page plays unless the user asked for reduced motion. */
   protected readonly animate = computed(() => !this.motion.reduced());
+  protected readonly viewHeight = signal(typeof window === 'undefined' ? 900 : window.innerHeight);
+
+  protected onResize(event: Event): void {
+    const win = event.target as Window;
+    this.viewHeight.set(win.innerHeight);
+  }
+  /** The mark above the greeting: 64 px on a tall window, 44 px below 800 px, gone below 620 px. */
+  protected readonly logoSize = computed(() => (this.viewHeight() >= 800 ? 64 : this.viewHeight() > 620 ? 44 : 0));
 
   /** The AI is set up (provider + key + model). */
   protected readonly aiOn = computed(() => this.ai.status()?.configured === true);
