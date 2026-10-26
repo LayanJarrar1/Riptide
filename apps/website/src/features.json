@@ -127,6 +127,24 @@
       "text_ar": "تقرأ الإضافة الجودات فور ظهور صفحة الفيديو، ويمكن تنزيل أفضل جودة مباشرة بينما تُحمَّل القائمة.",
       "verified": true,
       "release": "0.1.0-beta.3"
+    },
+    {
+      "id": "sidebar-toggle",
+      "title_en": "Sidebar button on every screen",
+      "title_ar": "زر الشريط الجانبي في كل شاشة",
+      "text_en": "Open or fold the sidebar from the top of Downloads, Files, Research and Settings, or press Ctrl+B. Each screen remembers how you left it.",
+      "text_ar": "افتح الشريط الجانبي أو اطوِه من أعلى التنزيلات والملفات والبحث والإعدادات، أو اضغط Ctrl+B. وتتذكر كل شاشة كيف تركتها.",
+      "verified": true,
+      "release": "0.1.0-beta.3"
+    },
+    {
+      "id": "update-messages",
+      "title_en": "Clearer update messages",
+      "title_ar": "رسائل تحديث أوضح",
+      "text_en": "When the update server cannot be reached, Riptide says so and shows the time of the last failed check.",
+      "text_ar": "حين يتعذر الوصول إلى خادم التحديثات يقول ريبتايد ذلك ويعرض وقت آخر فحص فاشل.",
+      "verified": true,
+      "release": "0.1.0-beta.3"
     }
   ]
 }

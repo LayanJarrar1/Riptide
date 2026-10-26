@@ -196,5 +196,5 @@ light or dark logo according to the theme (`.logo-light` / `.logo-dark` in `site
   reveals them through masks whose strokes follow the centre line of each stream, so what shows is always the original
   artwork in its original fill (light-logo colours on light, dark-logo colours on dark). Light effects belong to the
   background flow lines, never to the logo.
-- The "New in {channel}" block (`#new`, strings under `features.new`, images `assets/screenshots/new-<topic>-<lang>.webp`) shows real captures of the app (English light, Arabic dark); anything personal in them is blurred. It also carries the "open sources only" policy note, which must stay true of the product.
+- The "Inside {channel}" block (`#new`, strings under `features.new`, images `assets/screenshots/new-<topic>-<lang>.webp`) shows real captures of the app (English light, Arabic dark); anything personal in them is blurred. It also carries the "open sources only" policy note, which must stay true of the product.
 - Feature copy comes from the repository `README.md`. If the README changes, change the site.
