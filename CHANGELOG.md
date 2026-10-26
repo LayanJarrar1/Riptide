@@ -8,6 +8,15 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+### Fixed
+
+- **Uninstall:** uninstalling (silent or not) removes the `magnet:` and `.torrent` handlers you enabled in
+  Settings, Integration (including the empty shared `.torrent` key), gives back another app's `magnet:`
+  handler, and never touches keys that point at another program. HKCU only. Registrations made by
+  earlier previews keep working and are moved to the current form at the next start.
+- **Torrents:** the details drawer shows 100% for the finished files of a torrent after the torrent
+  engine stopped (it showed 0%).
+
 ## [0.1.0-beta.4] - 2026-10-26
 
 Small fixes for narrow windows and Arabic.
@@ -225,13 +234,6 @@ Windows 10 and 11.
     one stops (a finished torrent with seeding off, a paused one, a seeding limit reached); it
     starts again when you add, resume or re-check a torrent. Nothing stays open after a finished
     download.
-  - Uninstalling (silent or not) removes the `magnet:` and `.torrent` handlers you enabled in
-    Settings, Integration, gives back another app's `magnet:` handler, and never touches keys that
-    point at another program. Registrations made by earlier previews keep working and are moved
-    to the current form at the next start.
-  - The details drawer shows 100% for the finished files of a torrent after the torrent engine
-    stopped (it showed 0%).
-  - *Forget everything* stays armed for five seconds (it was three) after the first click.
   - Files you did not select no longer stay behind as full-size empty files: the bytes of a piece
     shared with a selected file are dropped when the engine stops, and the file is created again
     if you select it later. Files with real data, files you added yourself and files of other
