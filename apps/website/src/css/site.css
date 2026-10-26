@@ -802,9 +802,7 @@ html.anim .rel-pill { animation: fade-soft var(--dur-3) var(--ease-out) both; }
    explicit height, so offsets stay exact; the unpinned blocks remember their last size). */
 .ch, .block, .site-footer { content-visibility: auto; contain-intrinsic-size: auto 900px; }
 
-/* ---- Launch page: hero trust line, proof strip, Research and extension sections, mid call to action ----------------- */
-.trust { max-width: 52ch; font-size: .8125rem; line-height: 1.5; color: var(--fg2); }
-.trust .text-link { white-space: nowrap; }
+/* ---- Launch page: proof strip, Research and extension sections ----------------- */
 .hero .win-shot img { border-radius: 0; }
 .proof { padding-block: clamp(18px, 2.4vw, 30px); border-block: 1px solid var(--line); }
 .proof-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 2vw, 28px); }
@@ -850,4 +848,3 @@ html.anim .rel-pill { animation: fade-soft var(--dur-3) var(--ease-out) both; }
 .midcta .lead { margin-top: 8px; max-width: 46ch; }
 @media (min-width: 800px) { .midcta-inner { grid-template-columns: minmax(0, 1fr) auto; } }
 .privacy-sec .footnote { margin-top: 18px; }
-@media (max-width: 560px) { .trust { font-size: .8125rem; } }
