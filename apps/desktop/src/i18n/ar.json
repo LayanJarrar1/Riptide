@@ -138,6 +138,7 @@
   "column.progress": "التقدّم",
   "column.speed": "السرعة",
   "column.eta": "الوقت المتبقي",
+  "column.eta.short": "المتبقي",
   "column.status": "الحالة",
   "column.added": "أُضيف",
   "column.avgSpeed": "متوسط السرعة",

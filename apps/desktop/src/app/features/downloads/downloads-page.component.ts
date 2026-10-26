@@ -58,6 +58,8 @@ import { RestartDialogComponent } from './restart-dialog.component';
 interface Column {
   readonly key: ColumnKey;
   readonly labelKey: string;
+  /** A shorter header label for a narrow column; the full one stays in the title and aria-label. */
+  readonly shortKey?: string;
   readonly align: 'start' | 'end';
 }
 
@@ -67,7 +69,7 @@ const COLUMNS: readonly Column[] = [
   { key: 'progress', labelKey: 'column.progress', align: 'start' },
   { key: 'speed', labelKey: 'column.speed', align: 'end' },
   { key: 'avgSpeed', labelKey: 'column.avgSpeed', align: 'end' },
-  { key: 'eta', labelKey: 'column.eta', align: 'end' },
+  { key: 'eta', labelKey: 'column.eta', shortKey: 'column.eta.short', align: 'end' },
   { key: 'duration', labelKey: 'column.duration', align: 'end' },
   { key: 'status', labelKey: 'column.status', align: 'start' },
   { key: 'category', labelKey: 'column.category', align: 'start' },
@@ -180,10 +182,11 @@ const FRESH_MS = 600;
                 [class]="'th th-' + c.key"
                 [class.is-end]="c.align === 'end'"
                 [class.is-sorted]="store.sortKey() === c.key"
+                [attr.aria-label]="c.shortKey ? i18n.t(c.labelKey) : null"
                 [attr.title]="store.sortKey() === c.key ? i18n.t(store.sortDir() === 'asc' ? 'sort.asc' : 'sort.desc') : i18n.t('sort.by').replace('{column}', i18n.t(c.labelKey))"
                 (click)="store.sortBy(c.key)"
               >
-                <span class="th-label">{{ i18n.t(c.labelKey) }}</span>
+                <span class="th-label">{{ i18n.t(c.shortKey ?? c.labelKey) }}</span>
                 <app-icon class="sort-icon" name="arrowDown" [size]="12" [class.is-asc]="store.sortDir() === 'asc'" />
               </button>
               <span

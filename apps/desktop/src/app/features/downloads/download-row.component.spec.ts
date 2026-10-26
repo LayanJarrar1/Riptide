@@ -57,6 +57,16 @@ describe('DownloadRowComponent failure text and fix', () => {
     expect(text(el, '.reason-action')).toBe('Retry');
   });
 
+  it('labels the pill just "Failed" with the cause in its tooltip, and keeps the reason on one line', () => {
+    const el = render('network');
+    const pill = el.querySelector('app-status-pill');
+    expect(pill?.textContent?.trim()).toBe('Failed');
+    expect(pill?.getAttribute('title')).toBe('Connection lost');
+    const t = el.querySelector<HTMLElement>('.reason-text');
+    expect(t ? getComputedStyle(t).whiteSpace : '').toBe('nowrap');
+    expect(t ? getComputedStyle(t).textOverflow : '').toBe('ellipsis');
+  });
+
   it('is translated to Arabic', () => {
     const el = render('notfound', 'ar-SA');
     expect(text(el, '.reason-text')).toBe('الملف غير موجود على الخادم');

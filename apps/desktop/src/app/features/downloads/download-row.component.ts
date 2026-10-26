@@ -139,7 +139,7 @@ export function hostOf(url: string): string {
 
     @if (!hidden().has('status')) {
       <div class="cell c-status" role="gridcell">
-        <app-status-pill [state]="row().d.state" [failure]="row().d.failure" [compact]="true" />
+        <app-status-pill [state]="row().d.state" [failure]="row().d.failure" [summary]="true" [compact]="true" />
       </div>
     }
 
@@ -346,15 +346,14 @@ export function hostOf(url: string): string {
       }
     }
 
-    /* two lines at most: the full text is in the tooltip, and the row keeps its fixed height */
+    /* one line: the end is cut with an ellipsis and the full text is in the tooltip; the fix stays visible */
     .reason-text {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      line-clamp: 2;
+      flex: 0 1 auto;
+      min-inline-size: 0;
       overflow: hidden;
-      white-space: normal;
-      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.3;
       overflow-wrap: normal;
       word-break: normal;
     }
@@ -363,7 +362,13 @@ export function hostOf(url: string): string {
       color: var(--color-text-muted);
     }
 
+    .reason-sep {
+      flex: none;
+    }
+
     .reason-action {
+      flex: none;
+      white-space: nowrap;
       padding: 0;
       border: 0;
       background: none;

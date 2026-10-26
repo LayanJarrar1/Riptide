@@ -8,11 +8,12 @@ import { StatusPillComponent } from './status-pill.component';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [StatusPillComponent],
-  template: `<app-status-pill [state]="state()" [failure]="failure()" />`,
+  template: `<app-status-pill [state]="state()" [failure]="failure()" [summary]="summary()" />`,
 })
 class HostComponent {
   readonly state = signal<DownloadState>('downloading');
   readonly failure = signal<FailureKind | null>(null);
+  readonly summary = signal(false);
 }
 
 describe('StatusPillComponent', () => {
@@ -64,6 +65,15 @@ describe('StatusPillComponent', () => {
     fixture.detectChanges();
     expect(pill().classList).not.toContain('m-draw');
     expect(pill().querySelector('svg')?.classList).not.toContain('is-drawing');
+  });
+
+  it('in summary mode says "Failed" and keeps the cause as the tooltip', () => {
+    host.state.set('failed');
+    host.failure.set('network');
+    host.summary.set(true);
+    fixture.detectChanges();
+    expect(pill().textContent?.trim()).toBe('Failed');
+    expect(pill().getAttribute('title')).toBe('Connection lost');
   });
 
   it('shakes once on failure, names the cause, and ignores the icon\'s own animationend', () => {
