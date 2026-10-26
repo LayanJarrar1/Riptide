@@ -132,7 +132,6 @@
             <a class="btn btn-primary btn-lg" href="{{installerUrl}}">{{{svg download}}}<span>{{hero.ctaDownload}}</span><span class="ver" dir="ltr">{{version}}</span></a>
             <a class="btn btn-ghost btn-lg" href="{{portableUrl}}">{{{svg box}}}<span>{{hero.ctaPortable}}</span></a>
           </div>
-          <p class="trust rise" style="--d:.86s">{{hero.trust}} <a class="text-link" href="{{repo}}" rel="noopener">{{hero.ctaGithub}}</a></p>
           <ul class="chips">
             {{#each hero.chips}}<li class="chip rise" style="--d:calc(.95s + {{@index}} * .16s)">{{.}}</li>
             {{/each}}

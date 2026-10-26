@@ -189,7 +189,6 @@
       ]
     },
     "ctaPortable": "Portable zip",
-    "trust": "Open source (GPL-3.0 app, MIT / Apache-2.0 engine). Installs for your user only: no admin prompt. Every release has SHA-256 checksums.",
     "shotAltLight": "The Riptide downloads list in the light theme: segmented progress bars, speed and status for each file",
     "shotAltDark": "The Riptide downloads list in the dark theme: segmented progress bars, speed and status for each file"
   },
