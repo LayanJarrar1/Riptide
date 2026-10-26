@@ -82,7 +82,7 @@
     if (!pill) return;
     const version = pill.dataset.version;
     const hint = document.querySelector('.mo-hint');
-    if (!version || store.get('riptide-release-seen') === version) return;
+    if (!version || store.get('riptide-release-seen') === version) { pill.hidden = true; return; }
     // When the motion hint is open (reduced-motion visitors, first visit) the pill sits below it instead of beside it.
     const place = () => { pill.style.marginBlockStart = hint && !hint.hidden ? 'calc(var(--hh) + 16px + ' + hint.offsetHeight + 'px)' : ''; };
     place();
@@ -135,7 +135,7 @@
     // Eight connections with different speeds; the file is done when the slowest one finishes.
     const rates = [1, 0.78, 0.9, 0.66, 0.97, 0.72, 0.84, 0.6];
     const DL = isLite() ? 5.5 : 9, VERIFY = 1.1, HOLD = isLite() ? 2.4 : 4.2;
-    let t0 = performance.now() + 1500;
+    let t0 = performance.now() + 600;
     let first = true;
     let running = false;
     let raf = 0;
@@ -343,7 +343,7 @@
 
   // ---- 2. The engine ----------------------------------------------------------------------
   const END = 0.85;          // a pinned stage reaches its end state at 85 % of its scroll, then rests
-  const LERP = 0.15;         // per-frame (at 60 fps) easing of the progress VALUE toward the scroll position
+  const LERP = 0.3;          // per-frame (at 60 fps) easing of the progress VALUE toward the scroll position
   const sections = Array.from(main.children).filter((el) => el.tagName === 'SECTION');
   const navLinks = Array.from(header.querySelectorAll('.nav-links a'));
   const navTargets = navLinks.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
