@@ -134,6 +134,7 @@
   "column.progress": "Progress",
   "column.speed": "Speed",
   "column.eta": "Time left",
+  "column.eta.short": "Left",
   "column.status": "Status",
   "column.added": "Added",
   "column.avgSpeed": "Avg. speed",

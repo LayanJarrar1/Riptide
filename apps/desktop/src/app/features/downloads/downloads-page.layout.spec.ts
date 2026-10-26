@@ -264,6 +264,15 @@ describe('DownloadsPageComponent layout and scale', () => {
       }
     });
 
+    it('shortens the time-left header but keeps the full label for assistive tech', async () => {
+      await setup(100, 1040);
+      const th = el().querySelector<HTMLElement>('.th-eta');
+      expect(th?.getAttribute('aria-label')).toBe('Time left');
+      expect(th?.querySelector('.th-label')?.textContent?.trim()).toBe('Left');
+      const label = th?.querySelector<HTMLElement>('.th-label');
+      expect(label ? label.scrollWidth <= label.clientWidth : false).toBeTrue();
+    });
+
     it('hides low-priority columns to fit and brings them back when the window widens', async () => {
       await setup(100, 700, { [HIDDEN_COLUMNS_KEY]: '[]' });
       expect(el().querySelector('.hc-duration')).toBeNull();

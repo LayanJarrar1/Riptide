@@ -43,6 +43,7 @@ type Morph = 'none' | 'pop' | 'draw' | 'shake';
   host: {
     '[attr.data-state]': 'state()',
     '[class.is-compact]': 'compact()',
+    '[attr.title]': 'tip()',
     '[class.m-pop]': 'morph() === "pop"',
     '[class.m-draw]': 'morph() === "draw"',
     '[class.m-shake]': 'morph() === "shake"',
@@ -221,6 +222,9 @@ export class StatusPillComponent {
   /** Names the cause for failed downloads. */
   readonly failure = input<FailureKind | null>(null);
 
+  /** Label a failure just "Failed" and keep the cause in the tooltip (where the row names it elsewhere). */
+  readonly summary = input(false);
+
   /** 20px tall for dense rows. */
   readonly compact = input(false);
 
@@ -234,10 +238,16 @@ export class StatusPillComponent {
   protected readonly label = computed(() => {
     const state = this.state();
     const failure = this.failure();
-    if (state === 'failed' && failure !== null) {
+    if (state === 'failed' && failure !== null && !this.summary()) {
       return this.i18n.t(`failure.${failure}`);
     }
     return this.i18n.t(`state.${state}`);
+  });
+
+  /** The cause of a summarised failure, as a tooltip. */
+  protected readonly tip = computed(() => {
+    const failure = this.failure();
+    return this.summary() && this.state() === 'failed' && failure !== null ? this.i18n.t(`failure.${failure}`) : null;
   });
 
   constructor() {
