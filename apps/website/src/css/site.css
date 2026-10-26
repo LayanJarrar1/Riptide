@@ -795,3 +795,53 @@ html.anim .rel-pill { animation: fade-soft var(--dur-3) var(--ease-out) both; }
 /* Off-screen chapters skip style, layout and paint until they come near (pinned chapters have an
    explicit height, so offsets stay exact; the unpinned blocks remember their last size). */
 .ch, .block, .site-footer { content-visibility: auto; contain-intrinsic-size: auto 900px; }
+
+/* ---- Launch page: hero trust line, proof strip, Research and extension sections, mid call to action ----------------- */
+.trust { max-width: 52ch; font-size: .8125rem; line-height: 1.5; color: var(--fg2); }
+.trust .text-link { white-space: nowrap; }
+.hero .win-shot img { border-radius: 0; }
+.proof { padding-block: clamp(18px, 2.4vw, 30px); border-block: 1px solid var(--line); }
+.proof-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 2vw, 28px); }
+.proof-list li { display: grid; gap: 4px; align-content: start; padding-inline-start: 14px; border-inline-start: 3px solid var(--cyan); }
+.proof-list b { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.25rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; color: var(--acc); font-variant-numeric: tabular-nums; }
+.proof-list span { font-size: .875rem; line-height: 1.4; color: var(--fg2); max-width: 28ch; }
+@media (min-width: 800px) { .proof-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.split-grid { display: grid; gap: clamp(24px, 4vw, 56px); align-items: center; }
+@media (min-width: 960px) {
+  .split-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+  .split-rev .split-grid { grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); }
+}
+.split-copy { display: grid; gap: clamp(12px, 1.6vw, 18px); justify-items: start; align-content: center; }
+.split-copy .lead { max-width: 44ch; }
+.ticks { display: grid; gap: 10px; max-width: 52ch; }
+.ticks li { position: relative; padding-inline-start: 26px; color: var(--fg2); line-height: 1.5; }
+.ticks li::before { content: ""; position: absolute; inset-inline-start: 0; top: .5em; width: 12px; height: 12px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 0 4px rgba(0, 213, 232, .18); }
+.points { display: grid; gap: 14px; max-width: 52ch; }
+.points li { display: grid; gap: 2px; padding-inline-start: 14px; border-inline-start: 3px solid var(--cyan); }
+.points .h3 { font-size: 1.0625rem; letter-spacing: -.02em; }
+.points p { color: var(--fg2); font-size: .9375rem; }
+.install-line, .privacy-line { max-width: 52ch; font-size: .9375rem; color: var(--fg2); }
+.privacy-line { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.privacy-line svg { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--acc); }
+.split-shots { display: grid; gap: clamp(10px, 1.4vw, 18px); align-content: center; min-width: 0; }
+.split-shots img { width: 100%; height: auto; border-radius: 14px; box-shadow: 0 0 0 1px var(--line), 0 40px 70px -44px rgba(7, 26, 38, .55); background: var(--card); }
+.split-shots .shot-small { width: 78%; justify-self: end; margin-top: -8%; box-shadow: 0 0 0 1px var(--line), 0 30px 60px -30px rgba(7, 26, 38, .6); }
+.ext-pair { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(10px, 1.4vw, 18px); align-items: start; }
+.ext-pair img { width: 100%; }
+@media (max-width: 959px) { .split-shots .shot-small { margin-top: 0; width: 100%; } }
+@media (max-width: 560px) { .ext-pair { grid-template-columns: minmax(0, 1fr); } .ext-pair img:first-child { max-width: 320px; } }
+
+.features-new .new-title { margin-bottom: clamp(6px, 1vw, 12px); }
+.features-new .bento.new { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.features-new .bp-new { grid-column: span 6; }
+@media (min-width: 800px) {
+  .features-new .bp-new { grid-column: span 3; }
+  .features-new .bp-settings { grid-column: span 6; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); align-items: end; }
+  .features-new .bp-settings .bp-copy { align-self: center; }
+}
+.midcta-inner { display: grid; gap: 20px; align-items: center; }
+.midcta .lead { margin-top: 8px; max-width: 46ch; }
+@media (min-width: 800px) { .midcta-inner { grid-template-columns: minmax(0, 1fr) auto; } }
+.privacy-sec .footnote { margin-top: 18px; }
+@media (max-width: 560px) { .trust { font-size: .8125rem; } }

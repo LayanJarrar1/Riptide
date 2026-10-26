@@ -24,8 +24,8 @@ serving the site under load.
 The build fails (exit code 1) when a page still contains a `{{ }}` token, a local `href`/`src`
 does not resolve to a file, an `<img>` is missing `alt`, `width` or `height`, a font referenced
 from the stylesheet is missing, a structural tag is left unclosed, a page loads an image, script,
-stylesheet or frame from another origin, or a size budget is exceeded (HTML 80 KiB, CSS 76 KiB, JS
-40 KiB, images 260 KiB, fonts 110 KiB, whole `dist/` 3 MiB).
+stylesheet or frame from another origin, or a size budget is exceeded (HTML 100 KiB, CSS 96 KiB, JS
+40 KiB, images 260 KiB, fonts 110 KiB, whole `dist/` 4 MiB).
 
 `SITE_URL` sets the public origin used for canonical, `hreflang` and Open Graph URLs (default:
 the GitHub Pages URL of the repository). Every in-page link is relative, so the site also works
@@ -196,5 +196,5 @@ light or dark logo according to the theme (`.logo-light` / `.logo-dark` in `site
   reveals them through masks whose strokes follow the centre line of each stream, so what shows is always the original
   artwork in its original fill (light-logo colours on light, dark-logo colours on dark). Light effects belong to the
   background flow lines, never to the logo.
-- The "Inside {channel}" block (`#new`, strings under `features.new`, images `assets/screenshots/new-<topic>-<lang>.webp`) shows real captures of the app (English light, Arabic dark); anything personal in them is blurred. It also carries the "open sources only" policy note, which must stay true of the product.
+- Launch page structure: hero (real app screenshot, one primary download, portable zip, trust line) → proof strip (`proof.items`: only facts the product backs up) → the scroll chapters → feature panels → `#research` and `#browser` (extension) sections with real captures (`new-research-*`, `ext-*`) → "Inside {channel}" (`#new`, strings under `features.new`, images `new-<topic>-<lang>.webp`, English light and Arabic dark) → repeated download call to action → comparison → privacy → open source → FAQ → download band. The extension captures were taken from the built `apps/extension` in Edge with the native host stubbed (sample data only). Anything personal in a capture is absent or blurred. `#new` also carries the "open sources only" policy note, which must stay true of the product.
 - Feature copy comes from the repository `README.md`. If the README changes, change the site.

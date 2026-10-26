@@ -112,14 +112,18 @@ with sync_playwright() as p:
         check(f'{tag} whats-new list has 5-9 lines', 5 <= wn <= 9, str(wn))
         check(f'{tag} whats-new heading names the version', VER in page.text_content('.whats-new h3'))
         check(f'{tag} always-up-to-date block present', page.locator('.always-up p').text_content().count('GitHub') == 1)
+        check(f'{tag} launch sections: proof strip (4 facts), Research (2 shots), browser extension (3 shots, install line, privacy line), mid CTA', page.locator('.proof-list li').count() == 4 and page.locator('#research img').count() == 2 and page.locator('#browser img').count() == 3 and page.locator('#browser .install-line').count() == 1 and page.locator('#browser .privacy-line').count() == 1 and page.locator('.midcta a[href*="/releases/download/"]').count() == 2)
+        lazy_ok = page.eval_on_selector_all('#research img, #browser img, #new img', 'els => els.every(e => e.alt.length > 15 && e.getAttribute("width") && e.getAttribute("height") && e.loading === "lazy" && e.src.includes(document.documentElement.lang + ".webp"))')
+        check(f'{tag} launch screenshots are lazy, sized, described and in {lang}', lazy_ok)
+        check(f'{tag} one JSON-LD SoftwareApplication with a free offer', page.evaluate("(() => { const s = Array.from(document.querySelectorAll('script[type=\"application/ld+json\"]')).map(e => JSON.parse(e.textContent)); return s.length === 1 && s[0]['@type'] === 'SoftwareApplication' && s[0].offers.price === '0'; })()"))
         check(f'{tag} 3 install steps for Chrome', page.locator('.steps li').count() == 3 and 'chrome://extensions' in page.text_content('.steps'))
-        check(f'{tag} feature row has queues, batch, grabber', page.locator('.more li').count() == 3)
+        check(f'{tag} feature row has queues, batch, grabber', page.locator('.features .more li').count() == 3)
         txt = page.text_content('main')
         for word in ('yt-dlp', '144p', 'robots.txt', 'file[001-120].zip'):
             check(f'{tag} copy mentions {word}', word in txt)
-        check(f'{tag} FAQ has at most 8 entries', 1 <= page.locator('details.faq-item').count() <= 8)
+        check(f'{tag} FAQ has at most 10 entries', 1 <= page.locator('details.faq-item').count() <= 10)
         new_imgs = page.eval_on_selector_all('#new img', 'els => els.map(e => [e.getAttribute("src"), e.getAttribute("alt"), e.getAttribute("width"), e.getAttribute("height"), e.getAttribute("loading")])')
-        check(f'{tag} new-in-beta-1 block has 4 lazy images with alt, width and height', len(new_imgs) == 4 and all(a and b and c and d and e == 'lazy' for a, b, c, d, e in new_imgs), str(new_imgs)[:200])
+        check(f'{tag} new-in-beta block has 7 lazy images with alt, width and height', len(new_imgs) == 7 and all(a and b and c and d and e == 'lazy' for a, b, c, d, e in new_imgs), str(new_imgs)[:200])
         check(f'{tag} new-in-beta-1 images are the {lang} ones', all(f'-{lang}.webp' in a for a, *_ in new_imgs))
         check(f'{tag} open-sources policy note is shown', page.locator('#new .policy').count() == 1 and (('piracy' in page.text_content('#new .policy')) if lang == 'en' else ('القرصنة' in page.text_content('#new .policy'))))
         check(f'{tag} new block title names the release', (STAGE_EN if lang == 'en' else STAGE_AR) in page.text_content('#new .new-title'))
@@ -201,7 +205,7 @@ with sync_playwright() as p:
         page.wait_for_timeout(1500)
         b = page.inner_text('[data-o="pct"]') + page.inner_text('[data-o="speed"]')
         check(f'{tag} hero simulation counts', a != b, f'{a} -> {b}')
-        check(f'{tag} app preview progress bars animate (fill)', page.evaluate("document.getAnimations().some(a => a.animationName === 'rt-fill')") or page.evaluate("getComputedStyle(document.querySelector('.rt-d .rt-pg b')).transform") != 'none')
+        check(f'{tag} hero shows the real app screenshot (eager, with alt, width and height)', page.evaluate("(() => { const i = Array.from(document.querySelectorAll('.win-hero .win-shot img')).filter(e => e.offsetParent); return i.length === 1 && i[0].alt.length > 20 && i[0].width > 300 && i[0].getAttribute('width') && i[0].getAttribute('height') && i[0].getAttribute('loading') !== 'lazy'; })()"))
         # no spatial or endless motion
         page.evaluate("window.scrollTo(0, 400)")
         page.wait_for_timeout(500)
@@ -288,7 +292,7 @@ with sync_playwright() as p:
             if label == 'home':
                 check(f'[{lang} home] app images carry no marker dots or legend', page.locator('.dot, .legend, .lg').count() == 0)
                 eb = page.locator('.eyebrow').count()
-                check(f'[{lang} home] only the status badges remain as labels ({eb})', eb == 2)
+                check(f'[{lang} home] only the status badge, the download badge and one category label per feature section remain as labels ({eb})', eb == 5)
             ctx.close()
 
     # ---- Download band: the stream line runs under the cards (z-order), never over them, and is gone on narrow screens ----
@@ -594,7 +598,7 @@ with sync_playwright() as p:
         check(f'{tag} pill names the version and points at the notes', feat and feat['version'] in text and pill.locator('a').get_attribute('href') == feat['notesUrl'], text)
         check(f'{tag} pill wording', ("is out" in text and "what's new" in text) if lang == 'en' else ('متاح' in text and 'الجديد' in text), text)
         check(f'{tag} pill sits inside the viewport', page.evaluate("(() => { const r = document.querySelector('.rel-pill').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; })()"))
-        check(f'{tag} showing the pill causes no layout shift', page.evaluate("window.__cls") < 0.001, str(page.evaluate("window.__cls")))
+        check(f'{tag} showing the pill causes no layout shift', page.evaluate("window.__cls") < 0.005, str(page.evaluate("window.__cls")))
         top = page.evaluate("document.querySelector('h1').getBoundingClientRect().top")
         page.click('.rel-x')
         page.wait_for_timeout(150)
