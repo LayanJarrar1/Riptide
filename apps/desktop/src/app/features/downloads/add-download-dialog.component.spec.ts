@@ -176,4 +176,35 @@ describe('AddDownloadDialogComponent video mode', () => {
       document.documentElement.dir = '';
     }
   });
+
+  it('in RTL keeps the checking spinner clear of the first character of the URL', async () => {
+    const original = engine.probeMedia.bind(engine);
+    let release: (() => void) | undefined;
+    spyOn(engine, 'probeMedia').and.callFake(
+      (url: string) =>
+        new Promise((resolve, reject) => {
+          release = () => original(url).then(resolve, reject);
+        }),
+    );
+    document.documentElement.dir = 'rtl';
+    try {
+      const input = el().querySelector<HTMLInputElement>('input[name="url"]') as HTMLInputElement;
+      input.dispatchEvent(new Event('paste'));
+      input.value = 'https://www.youtube.com/watch?v=abc';
+      input.dispatchEvent(new Event('input'));
+      await flush();
+      fixture.detectChanges();
+      const spinner = el().querySelector<HTMLElement>('.probe-spinner') as HTMLElement;
+      expect(spinner).not.toBeNull();
+      const box = input.getBoundingClientRect();
+      const s = spinner.getBoundingClientRect();
+      const textStart = box.left + parseFloat(getComputedStyle(input).paddingLeft);
+      const textEnd = box.right - parseFloat(getComputedStyle(input).paddingRight);
+      // the spinner overlaps neither end of the (left to right) text area
+      expect(s.right <= textStart + 0.5 || s.left >= textEnd - 0.5).toBeTrue();
+    } finally {
+      document.documentElement.dir = '';
+      release?.();
+    }
+  });
 });

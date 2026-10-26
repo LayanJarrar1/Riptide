@@ -164,7 +164,9 @@ interface Group {
               }
             }
           </span>
-          <span class="token" aria-hidden="true">{{ stepToken(s.id) }}</span>
+          @if (i18n.lang() !== 'ar') {
+            <span class="token" aria-hidden="true">{{ stepToken(s.id) }}</span>
+          }
           <span class="name">{{ stepLabel(s.id, s.state) }}</span>
           @if (stepDetail(s); as detail) {
             <span class="detail" dir="auto">{{ detail }}</span>

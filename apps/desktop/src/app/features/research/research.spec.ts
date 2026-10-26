@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AiStatus } from '../../ai/ai.models';
 import { ResearchBatch, ResearchEvent, StartResponse, WireItem } from '../../ai/research.models';
 import { RESEARCH_EVENT, ResearchSession } from '../../ai/research.session';
-import { loadTable } from '../../i18n/i18n.service';
+import { I18nService, loadTable } from '../../i18n/i18n.service';
 import { REDUCED_MOTION_QUERY } from '../../core/motion.service';
 import { MemoryPreferenceStore, NAVIGATOR_LANGUAGES, PREFERENCE_STORE } from '../../core/preferences';
 import { InvokeFn, ListenFn, TAURI_AVAILABLE, TAURI_INVOKE, TAURI_LISTEN } from '../../tauri/tauri-bridge';
@@ -659,12 +659,32 @@ describe('ResearchPageComponent', () => {
     expect(card.textContent).toContain('Ocean Films');
     expect(card.textContent).toContain('Exact match');
     expect(card.textContent).toContain('Open video page');
+    expect(card.querySelector('.badge.rights-unknown')?.textContent?.trim()).toBe('Licence unknown');
     expect(card.textContent).not.toContain('Find files on this page');
     const dl = [...card.querySelectorAll('button')].find((b) => b.textContent?.includes('Download')) as HTMLButtonElement;
     expect(dl.disabled).toBe(false);
     dl.click();
     await flush(fixture);
     expect(h.calls.find((c) => c.cmd === 'research_add')?.args).toEqual({ request: { ids: ['y1'], queueId: null, category: null, startPaused: false, allowDuplicates: true } });
+  });
+
+  it('shows the mono step tokens in English and hides them in the Arabic UI', async () => {
+    const h = setup({ start: { ...START_EXTRA, category: 'documents', searchId: 5, sources: ['arxiv'], unavailable: [], ai: false } });
+    const { fixture, el } = await mount();
+    await ask(fixture, el, 'frogs');
+    h.emit(batch(5, { t: 'hits', source: 'arxiv', items: [item('a1', 'arxiv', {})] }, { t: 'phase', phase: 'done' }));
+    await settle(fixture);
+    expect(el.querySelectorAll('.token').length).toBeGreaterThan(0);
+    const i18n = TestBed.inject(I18nService);
+    const before = i18n.lang();
+    i18n.lang.set('ar');
+    try {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(el.querySelectorAll('.token').length).toBe(0);
+    } finally {
+      i18n.lang.set(before);
+    }
   });
 
   it('keeps the icon when the backend has no thumbnail for a card', async () => {

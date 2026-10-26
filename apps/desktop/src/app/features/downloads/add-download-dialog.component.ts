@@ -40,7 +40,7 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
       <form class="form" (submit)="submit($event)">
         <label class="field">
           <span class="label">{{ i18n.t('add.url') }}</span>
-          <span class="input-wrap" [class.is-invalid]="probe() === 'invalid'">
+          <span class="input-wrap" [class.is-invalid]="probe() === 'invalid'" [class.is-probing]="probe() === 'probing'">
             <app-icon class="input-icon" name="link" [size]="16" />
             <input
               class="input"
@@ -409,6 +409,16 @@ const CONNECTION_PRESETS = [1, 4, 8, 16, 32] as const;
 
     :host-context([dir='rtl']) .input-wrap:has(.input-action) .input[dir='ltr'] {
       padding-inline-start: 96px;
+    }
+
+    /* The spinner sits at the inline-end of the wrap; the URL input is forced LTR, so reserve room on the matching physical side. */
+    .input-wrap.is-probing .input[dir='ltr'] {
+      padding-inline-end: 34px;
+    }
+
+    :host-context([dir='rtl']) .input-wrap.is-probing .input[dir='ltr'] {
+      padding-inline-start: 34px;
+      padding-inline-end: 34px;
     }
 
     .probe-spinner {
