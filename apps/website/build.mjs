@@ -111,7 +111,9 @@ const SITE_URL = (process.env.SITE_URL || 'https://layanjarrar1.github.io/Riptid
 const BASE_PATH = new URL(SITE_URL).pathname;
 
 // Size budgets in bytes (uncompressed). The build fails when something grows past them.
-const BUDGET = { html: 80 * 1024, css: 76 * 1024, js: 40 * 1024, image: 260 * 1024, font: 110 * 1024, total: 3 * 1024 * 1024 };
+// Launch page: two more feature sections (Research, browser extension), a proof strip and 12 more lazy screenshots per language
+// (lazy, so a first visit does not pay for them) raised html 80 to 100 KiB, css 76 to 96 KiB and the whole dist 3 to 4 MiB.
+const BUDGET = { html: 100 * 1024, css: 96 * 1024, js: 40 * 1024, image: 260 * 1024, font: 110 * 1024, total: 4 * 1024 * 1024 };
 
 const LANGUAGES = [
   { code: 'en', out: '', root: '' },

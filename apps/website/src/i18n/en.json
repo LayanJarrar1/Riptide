@@ -4,8 +4,8 @@
   "locale": "en_US",
   "fontClass": "font-latin",
   "meta": {
-    "title": "Riptide: free, open-source download manager for Windows",
-    "description": "A free, open-source download manager for Windows. Parallel connections, exact resume, SHA-256 verified, BitTorrent. No ads, no telemetry, no accounts. English and Arabic.",
+    "title": "Riptide: free, fast download manager for Windows. Open source, verified downloads",
+    "description": "Free, open-source download manager for Windows. Up to 32 connections per file, exact resume, SHA-256 verified, browser extension for Chrome and Edge, torrents, video. English and Arabic. No ads, no accounts.",
     "ogAlt": "Riptide: download faster, every byte verified"
   },
   "nav": {
@@ -27,7 +27,10 @@
     "motionHintLabel": "Animation setting",
     "motionHint": "Animations are reduced because your system asks for less motion. Turn them on?",
     "motionOn": "On",
-    "motionDismiss": "Dismiss"
+    "motionDismiss": "Dismiss",
+    "research": "Research",
+    "extension": "Browser extension",
+    "privacy": "Privacy"
   },
   "release": {
     "label": "Latest release",
@@ -39,13 +42,14 @@
     "status": "{channel} for Windows 10 and 11",
     "titleA": "Download faster.",
     "titleB": "Every byte verified.",
-    "lead": "A free, open-source download manager. Parallel connections, exact resume, SHA‑256 checks.",
-    "ctaDownload": "Download the latest version",
+    "lead": "The free, open-source download manager for Windows. Up to 32 connections per file, exact resume and SHA‑256 checks, in English and Arabic. No ads, no accounts.",
+    "ctaDownload": "Download for Windows",
     "ctaGithub": "View source",
     "chips": [
-      "Open source",
-      "No telemetry",
-      "No admin rights"
+      "Free, open source",
+      "No ads, accounts or telemetry",
+      "Per-user install, no admin",
+      "SHA-256 for every release"
     ],
     "winTitle": "Riptide",
     "scroll": "Scroll",
@@ -183,7 +187,11 @@
           "stl": "Waiting"
         }
       ]
-    }
+    },
+    "ctaPortable": "Portable zip",
+    "trust": "Open source (GPL-3.0 app, MIT / Apache-2.0 engine). Installs for your user only: no admin prompt. Every release has SHA-256 checksums.",
+    "shotAltLight": "The Riptide downloads list in the light theme: segmented progress bars, speed and status for each file",
+    "shotAltDark": "The Riptide downloads list in the dark theme: segmented progress bars, speed and status for each file"
   },
   "streams": {
     "titleA": "Streams in.",
@@ -291,11 +299,6 @@
     ],
     "new": {
       "title": "Inside {channel}",
-      "research": {
-        "h": "Research, by what you are looking for.",
-        "p": "Pick a category and a mode, then ask. Exact matches come first, each card says what was confirmed, and every result shows its licence. The search steps fold away when you do not need them.",
-        "alt": "The Research page in the light theme: results grouped under Exact matches and Likely matches, each card with a source badge, a licence badge and what was confirmed, and an Add selected bar below"
-      },
       "torrent": {
         "h": "Torrents, with a choice.",
         "p": "Paste a magnet link or open a .torrent file, then pick the files before anything downloads. Seeding stays off unless you turn it on.",
@@ -311,7 +314,28 @@
         "p": "Bring your own key. It stays in Windows Credential Manager, and your download history is shared only if you switch that on.",
         "alt": "The AI privacy settings: sharing the download history and suggesting names are both switched off"
       },
-      "policy": "Research searches open and public sources. It does not search piracy sites or torrent indexes. Only download what you have the right to download."
+      "policy": "Research searches open and public sources. It does not search piracy sites or torrent indexes. Only download what you have the right to download.",
+      "intro": "What changed in the last two releases.",
+      "fit": {
+        "h": "A downloads list that always fits.",
+        "p": "No sideways scrolling. The file name keeps the most room and less important columns step aside as the window narrows.",
+        "alt": "The downloads list in a narrow window: name, size, progress, speed and status all fit with no sideways scroll"
+      },
+      "sidebar": {
+        "h": "Sidebar on one button.",
+        "p": "Open or hide it from the top of any screen, or press Ctrl+B. On narrow windows it opens over the content.",
+        "alt": "The sidebar toggle at the top of the window with the sidebar open over a narrow downloads list"
+      },
+      "quality": {
+        "h": "Video quality, faster.",
+        "p": "Paste a video link and Best is ready at once while the full list of qualities loads.",
+        "alt": "The Add download dialog with a video link still being checked and the Quality field already offering Best"
+      },
+      "settings": {
+        "h": "Settings in seven sections.",
+        "p": "General, Downloads, Browser integration, Network, AI and Research, Privacy and data, Updates and About.",
+        "alt": "Settings with its seven sections listed and the Downloads section open"
+      }
     }
   },
   "vs": {
@@ -396,7 +420,11 @@
       },
       {
         "q": "Does it work with my browser?",
-        "a": "Chrome and Edge: install the extension in three steps from Settings → Integration. A Firefox build is on GitHub."
+        "a": "Chrome and Edge, through the extension: Settings → Integration → Open extension folder, then Load unpacked in your browser. It sends downloads to Riptide by your rules and adds a Download this video button. A Firefox build is on GitHub."
+      },
+      {
+        "q": "Does the extension collect anything?",
+        "a": "No. It talks only to the Riptide app on your computer, has no network access of its own, loads no remote code and has no analytics. Cookies are read only for a download that needs a sign-in, and go only to that site."
       },
       {
         "q": "Can it download videos?",
@@ -550,5 +578,95 @@
     "title": "Page not found",
     "text": "There is nothing at this address.",
     "home": "Back to Riptide"
+  },
+  "proof": {
+    "label": "Riptide in numbers",
+    "items": [
+      {
+        "n": "32",
+        "l": "connections per download, at most, with work stealing"
+      },
+      {
+        "n": "SHA-256",
+        "l": "checked before a file is called complete"
+      },
+      {
+        "n": "16+",
+        "l": "open and public sources in Research"
+      },
+      {
+        "n": "EN · عربي",
+        "l": "both native, switch live"
+      }
+    ]
+  },
+  "research": {
+    "eyebrow": "Research",
+    "title": "Find the file, not just a page.",
+    "lead": "Say what you are looking for. Riptide searches open and public sources and checks every result against your request.",
+    "points": [
+      "Pick the kind of result first: videos, software, documents, images, papers, open-source projects or the web.",
+      "Exact matches come first. Each card says what was confirmed: episode, version, year, file type.",
+      "Results that contradict you are never shown, and the page tells you how many weaker ones it hid.",
+      "Every result shows its licence. No piracy sites, no torrent indexes."
+    ],
+    "altStart": "The Research start page: the Riptide logo, a prompt box with Quick search and a category picker, and cards for each kind of result",
+    "altResults": "Research results for a video search: the search steps, then Exact matches with source badges and green chips for what was confirmed",
+    "cta": "Try it in Riptide"
+  },
+  "extension": {
+    "eyebrow": "Browser extension",
+    "title": "Your browser hands downloads to Riptide.",
+    "lead": "Chrome and Edge. Click a link as usual and the file lands in Riptide, with all its connections and checks.",
+    "points": [
+      {
+        "h": "Automatic, by your rules",
+        "p": "Choose which file types and minimum size Riptide takes. Everything else stays with the browser."
+      },
+      {
+        "h": "Right-click, Download with Riptide",
+        "p": "On links, images, audio and video."
+      },
+      {
+        "h": "Download this video",
+        "p": "A button on the player opens a quality list, with the size of each option and audio-only as M4A or MP3."
+      },
+      {
+        "h": "Grab it all",
+        "p": "Send every link on a page, only the ones you select, or every image."
+      }
+    ],
+    "install": "Install: Settings → Integration → Open extension folder, then Load unpacked in your browser.",
+    "installLink": "Step by step",
+    "privacy": "No data collection. The extension talks only to the Riptide app on your computer, loads no remote code and has no analytics.",
+    "altVideo": "A video page with the Download this video button on the player and its quality list open: Best quality, 1080p, 720p, 480p, 360p and audio only as M4A or MP3",
+    "altPopup": "The extension popup: Connected to Riptide, Capturing downloads, Open Riptide and Options buttons, and a list of recent downloads handed to Riptide",
+    "altRules": "The extension options: capture downloads with Riptide, a minimum size and ticks for archives, video, audio, programs and documents",
+    "popupH": "650",
+    "rulesH": "822"
+  },
+  "midcta": {
+    "title": "Free, with nothing held back.",
+    "lead": "No trial, no licence key, no account.",
+    "note": "Windows 10 and 11, 64-bit."
+  },
+  "privacySec": {
+    "eyebrow": "Privacy",
+    "title": "It does what you ask. Nothing else.",
+    "points": [
+      {
+        "h": "No telemetry, no accounts",
+        "p": "Riptide has no server of its own. Nothing about you or your downloads is collected."
+      },
+      {
+        "h": "Secrets stay local",
+        "p": "Cookies and sign-ins are kept only while a download runs and are sent only to the site they belong to. API keys live in Windows Credential Manager."
+      },
+      {
+        "h": "One call of its own",
+        "p": "An optional update check against GitHub Releases. Turn it off in Settings."
+      }
+    ],
+    "link": "Read the privacy policy"
   }
 }
