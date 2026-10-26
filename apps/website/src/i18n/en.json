@@ -427,7 +427,7 @@
       },
       {
         "q": "Does it work with my browser?",
-        "a": "Chrome and Edge, through the extension: Settings → Integration → Open extension folder, then Load unpacked in your browser. It sends downloads to Riptide by your rules and adds a Download this video button. A Firefox build is on GitHub."
+        "a": "Chrome and Edge, through the extension: Settings → Integration → Open extension folder, then Load unpacked in your browser. It sends downloads to Riptide by your rules and adds a Download this video button. For Firefox, the extension source on GitHub builds for it; there is no published Firefox add-on yet."
       },
       {
         "q": "Does the extension collect anything?",

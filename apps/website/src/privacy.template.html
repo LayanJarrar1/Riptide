@@ -27,7 +27,7 @@
     // switches to dark.
     (function () {
       var d = document.documentElement;
-      d.classList.add('js');
+      d.classList.add('js', 'ready'); // no opening choreography here: release the header logo's entrance at once
       var q = null, mo = null, full;
       try {
         q = /[?&]motion=(on|off)(&|$)/.exec(location.search);
