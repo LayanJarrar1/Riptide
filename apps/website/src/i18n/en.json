@@ -477,8 +477,10 @@
       "title": "What's new in",
       "notes": "Full release notes",
       "items": [
-        "Research by category and mode, with results grouped by how well they match (since beta.2)",
-        "Settings in seven sections, and update checks that wait until active downloads finish (since beta.2)"
+        "A calmer Research page with the animated Riptide logo (since beta.3)",
+        "A downloads list that always fits the window, and a sidebar button at the top of every screen (since beta.3)",
+        "Faster video quality options from the browser extension and when you paste a link (since beta.3)",
+        "Research by category and mode, with results grouped by how well they match (since beta.2)"
       ]
     },
     "upd": {

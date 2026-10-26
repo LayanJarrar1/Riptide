@@ -152,8 +152,8 @@
       "title_ar": "أرتب في النوافذ الصغيرة",
       "text_en": "Failed downloads show a short status with the reason on one line, and Arabic headers and fields no longer get cut.",
       "text_ar": "تظهر التنزيلات الفاشلة بحالة قصيرة وسبب في سطر واحد، ولم تعد العناوين والحقول العربية تُقطع.",
-      "verified": false,
-      "release": null
+      "verified": true,
+      "release": "0.1.0-beta.4"
     }
   ]
 }
