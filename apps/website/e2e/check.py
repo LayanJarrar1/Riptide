@@ -285,6 +285,10 @@ with sync_playwright() as p:
             check(f'[{lang} {label}] no "NN /" numbered labels', not bad, str(bad))
             nxt = re.findall(r'Next release|الإصدار القادم', html)
             check(f'[{lang} {label}] no "Next release" tags', not nxt, str(nxt))
+            if label == 'privacy':
+                page.wait_for_timeout(1200)
+                logo = page.evaluate("(() => { const e = Array.from(document.querySelectorAll('.site-header .brand-logo')).find(x => x.getClientRects().length); if (!e) return null; const c = getComputedStyle(e); return [c.clipPath, c.animationPlayState, e.getBoundingClientRect().width > 40]; })()")
+                check(f'[{lang} privacy] header logo is visible (its entrance is not left paused)', logo and logo[1] != 'paused' and logo[2] and (logo[0] == 'none' or logo[0].startswith('inset(0')), str(logo))
             if label == 'home':
                 check(f'[{lang} home] app images carry no marker dots or legend', page.locator('.dot, .legend, .lg').count() == 0)
                 eb = page.locator('.eyebrow').count()
