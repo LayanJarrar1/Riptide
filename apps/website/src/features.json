@@ -145,6 +145,15 @@
       "text_ar": "حين يتعذر الوصول إلى خادم التحديثات يقول ريبتايد ذلك ويعرض وقت آخر فحص فاشل.",
       "verified": true,
       "release": "0.1.0-beta.3"
+    },
+    {
+      "id": "narrow-polish",
+      "title_en": "Tidier on small windows",
+      "title_ar": "أرتب في النوافذ الصغيرة",
+      "text_en": "Failed downloads show a short status with the reason on one line, and Arabic headers and fields no longer get cut.",
+      "text_ar": "تظهر التنزيلات الفاشلة بحالة قصيرة وسبب في سطر واحد، ولم تعد العناوين والحقول العربية تُقطع.",
+      "verified": false,
+      "release": null
     }
   ]
 }
