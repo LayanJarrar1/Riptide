@@ -39,8 +39,8 @@
 
 | | File | Notes |
 |---|---|---|
-| **Installer** | [`Riptide_0.1.0-beta.3_x64-setup.exe`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide_0.1.0-beta.3_x64-setup.exe) | Per-user install, no admin prompt |
-| **Portable** | [`Riptide-0.1.0-beta.3-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide-0.1.0-beta.3-portable.zip) | Unzip anywhere; data stays next to the app |
+| **Installer** | [`Riptide_0.1.0-beta.4_x64-setup.exe`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.4/Riptide_0.1.0-beta.4_x64-setup.exe) | Per-user install, no admin prompt |
+| **Portable** | [`Riptide-0.1.0-beta.4-portable.zip`](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.4/Riptide-0.1.0-beta.4-portable.zip) | Unzip anywhere; data stays next to the app |
 
 Windows 10 or 11, 64-bit. Checksums and older versions are on the [Releases page](https://github.com/LayanJarrar1/Riptide/releases).
 
@@ -137,8 +137,8 @@ More: [User guide](guide/en.md) · [Architecture](ARCHITECTURE.md) · [Contribut
 - **مدير ملفات** بنافذتين، **تورنت**، **فيديو**، **طوابير وجدولة**، و**إضافة للمتصفح**.
 
 **التحميل:**
-[المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide_0.1.0-beta.3_x64-setup.exe) ·
-[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.3/Riptide-0.1.0-beta.3-portable.zip) ·
+[المثبّت](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.4/Riptide_0.1.0-beta.4_x64-setup.exe) ·
+[النسخة المحمولة](https://github.com/LayanJarrar1/Riptide/releases/download/v0.1.0-beta.4/Riptide-0.1.0-beta.4-portable.zip) ·
 [دليل الاستخدام](guide/ar.md)
 
 **تثبيت الإضافة في كروم أو إيدج:** ١) في ريبتايد: **الإعدادات ← التكامل ← فتح مجلد الإضافة**. ٢) في المتصفح افتح `chrome://extensions` وفعّل **وضع المطوّر**. ٣) اضغط **Load unpacked** واختر ذلك المجلد.

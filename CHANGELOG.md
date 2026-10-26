@@ -8,6 +8,17 @@ Pre-releases are on [GitHub Releases](https://github.com/LayanJarrar1/Riptide/re
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-10-26
+
+Small fixes for narrow windows and Arabic.
+
+- **Downloads list on small windows:** a failed download shows a short "Failed" status with the reason in
+  its tooltip and on one line under the file name, with Retry always visible; the time-left column reads
+  "المتبقي" in Arabic so it is never cut.
+- **Add download in Arabic:** the "checking the link" spinner no longer covers the start of the address.
+- **Research:** video results show "Licence unknown" when the source states no licence, like every other
+  result; the English step codes are hidden in the Arabic interface.
+
 ## [0.1.0-beta.3] - 2026-10-25
 
 A calmer Research page, a downloads list that always fits, and faster video quality options.
