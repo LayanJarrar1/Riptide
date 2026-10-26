@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme/demo.gif" alt="Riptide downloading several files at once: segmented progress bars fill, speeds change, and a completion notice appears">
+  <img src="assets/readme/demo.gif" alt="Riptide downloading a file: the details drawer shows its segments filling, the live speed and the last minute of the speed graph">
 </p>
 
 > [!NOTE]
@@ -60,7 +60,7 @@ Upgrading from an alpha build works in place. The database moves to a new format
 
 ## Screenshots
 
-<p align="center"><sub>The real interface with sample data, captured from 0.1.0-beta.3.</sub></p>
+<p align="center"><sub>The real interface with sample data, captured from 0.1.0-beta.4.</sub></p>
 
 <table>
   <tr>
