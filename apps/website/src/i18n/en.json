@@ -12,17 +12,25 @@
     "brand": "Riptide",
     "skip": "Skip to content",
     "download": "Download",
+    "app": "The app",
+    "speed": "Speed",
+    "integrity": "Integrity",
+    "compare": "Compare",
     "faq": "FAQ",
     "switchLang": "العربية",
     "switchLangLabel": "Switch to Arabic",
+    "motion": "Animations",
     "theme": "Switch between light and dark",
     "menu": "Menu",
     "source": "GitHub",
     "githubLabel": "Riptide on GitHub",
+    "motionHintLabel": "Animation setting",
+    "motionHint": "Animations are reduced because your system asks for less motion. Turn them on?",
+    "motionOn": "On",
+    "motionDismiss": "Dismiss",
     "research": "Research",
     "extension": "Browser extension",
-    "privacy": "Privacy",
-    "features": "Features"
+    "privacy": "Privacy"
   },
   "release": {
     "label": "Latest release",
@@ -44,20 +52,162 @@
       "SHA-256 for every release"
     ],
     "winTitle": "Riptide",
+    "scroll": "Scroll",
     "sim": {
       "tag": "Simulation",
       "label": "Simulation of a download in progress. An illustration, not a measurement.",
       "file": "ubuntu-24.04.2-desktop-amd64.iso",
       "host": "releases.ubuntu.com",
       "conns": "8 connections",
+      "eta": "left",
       "done": "Completed",
+      "speed": "Speed",
+      "unit": "MB/s",
       "verified": "SHA-256 verified",
       "hash": "7a0550bc…a14a51d0"
+    },
+    "mock": {
+      "label": "A simplified preview of the Riptide desktop app with sample downloads. An illustration, not the real window.",
+      "search": "Search downloads",
+      "add": "Add download",
+      "title": "All downloads",
+      "count": "16",
+      "nav": [
+        {
+          "t": "All downloads",
+          "n": "16"
+        },
+        {
+          "t": "Active",
+          "n": "4"
+        },
+        {
+          "t": "Waiting",
+          "n": "4"
+        },
+        {
+          "t": "Completed",
+          "n": "6"
+        },
+        {
+          "t": "Needs attention",
+          "n": "2"
+        }
+      ],
+      "cat": "Categories",
+      "cats": [
+        {
+          "t": "Archives",
+          "n": "6"
+        },
+        {
+          "t": "Documents",
+          "n": "2"
+        },
+        {
+          "t": "Music",
+          "n": "1"
+        },
+        {
+          "t": "Video",
+          "n": "3"
+        }
+      ],
+      "cols": [
+        "Name",
+        "Size",
+        "Progress",
+        "Speed",
+        "Status"
+      ],
+      "foot": "47.2 MB/s",
+      "foot2": "4 active, 3 waiting",
+      "rows": [
+        {
+          "name": "ubuntu-24.04.2-desktop-amd64.iso",
+          "host": "releases.ubuntu.com",
+          "size": "3.49 / 5.80 GB",
+          "speed": "29.9 MB/s",
+          "pct": 60,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "blender-4.3.2-windows-x64.msi",
+          "host": "download.blender.org",
+          "size": "307 / 330 MB",
+          "speed": "8.25 MB/s",
+          "pct": 93,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "محاضرة-الفيزياء-الحديثة-07.mp4",
+          "host": "cdn.example.org",
+          "size": "7.91 MB / 1.40 GB",
+          "speed": "6.64 MB/s",
+          "pct": 1,
+          "st": "d",
+          "stl": "Downloading"
+        },
+        {
+          "name": "riptide-sdk-0.1.0-win64.zip",
+          "host": "static.example.com",
+          "size": "212 MB",
+          "speed": "—",
+          "pct": 100,
+          "st": "c",
+          "stl": "Completed"
+        },
+        {
+          "name": "router-ax6000-v2.3.1.bin",
+          "host": "cdn.example.org",
+          "size": "96.0 MB",
+          "speed": "—",
+          "pct": 0,
+          "st": "w",
+          "stl": "Waiting"
+        },
+        {
+          "name": "debian-12.9.0-amd64-netinst.iso",
+          "host": "mirror.example.net",
+          "size": "631 MB",
+          "speed": "—",
+          "pct": 100,
+          "st": "f",
+          "stl": "Checksum mismatch"
+        },
+        {
+          "name": "city-sounds-2025-flac.zip",
+          "host": "mirror.example.net",
+          "size": "2.10 GB",
+          "speed": "—",
+          "pct": 0,
+          "st": "w",
+          "stl": "Waiting"
+        }
+      ]
     },
     "ctaPortable": "Portable zip",
     "trust": "Open source (GPL-3.0 app, MIT / Apache-2.0 engine). Installs for your user only: no admin prompt. Every release has SHA-256 checksums.",
     "shotAltLight": "The Riptide downloads list in the light theme: segmented progress bars, speed and status for each file",
     "shotAltDark": "The Riptide downloads list in the dark theme: segmented progress bars, speed and status for each file"
+  },
+  "streams": {
+    "titleA": "Streams in.",
+    "titleB": "One exact file out.",
+    "lead": "Riptide pulls a file down several lanes at once, then rebuilds it byte for byte.",
+    "label": "The Riptide logo is drawn by three streams, which then run down parallel lanes into one file.",
+    "file": "ubuntu-24.04.2.iso",
+    "fileSub": "1 file · SHA-256 verified"
+  },
+  "app": {
+    "titleA": "A list that",
+    "titleB": "stays fast.",
+    "lead": "Dense, calm, keyboard-friendly. Light and dark, English and Arabic.",
+    "altLight": "The Riptide downloads list in the light theme: segmented progress bars, speed and status for each file",
+    "altDark": "The Riptide downloads list in the dark theme: segmented progress bars, speed and status for each file",
+    "winLabel": "The Riptide desktop app."
   },
   "speed": {
     "titleA": "Eight connections.",
@@ -145,16 +295,96 @@
       {
         "h": "Site grabber",
         "p": "Crawl a page to a chosen depth and tick the files you want. Respects robots.txt."
+      },
+      {
+        "h": "File manager",
+        "p": "Two panes, drag and drop, the Recycle Bin with Undo, and folder colours."
+      },
+      {
+        "h": "BitTorrent",
+        "p": "Magnet links and .torrent files, with a file choice before anything starts."
       }
     ],
-    "files": {
-      "h": "File manager",
-      "p": "Two panes, drag and drop, the Recycle Bin with Undo, and folder colours."
-    },
-    "torrent": {
-      "h": "BitTorrent",
-      "p": "Magnet links and .torrent files, with a file choice before anything starts."
+    "new": {
+      "title": "Inside {channel}",
+      "torrent": {
+        "h": "Torrents, with a choice.",
+        "p": "Paste a magnet link or open a .torrent file, then pick the files before anything downloads. Seeding stays off unless you turn it on.",
+        "alt": "The Add torrent dialog: three files with their sizes, two ticked, a folder and a Download button"
+      },
+      "menus": {
+        "h": "Menus in the title bar.",
+        "p": "File, Downloads, Tools, View, Window and Help. They work from the keyboard.",
+        "alt": "The title bar with the File menu open: Add download, Batch download, Site grabber, Import link list and Open torrent file"
+      },
+      "privacy": {
+        "h": "AI only if you ask.",
+        "p": "Bring your own key. It stays in Windows Credential Manager, and your download history is shared only if you switch that on.",
+        "alt": "The AI privacy settings: sharing the download history and suggesting names are both switched off"
+      },
+      "policy": "Research searches open and public sources. It does not search piracy sites or torrent indexes. Only download what you have the right to download.",
+      "intro": "What changed in the last two releases.",
+      "fit": {
+        "h": "A downloads list that always fits.",
+        "p": "No sideways scrolling. The file name keeps the most room and less important columns step aside as the window narrows.",
+        "alt": "The downloads list in a narrow window: name, size, progress, speed and status all fit with no sideways scroll"
+      },
+      "sidebar": {
+        "h": "Sidebar on one button.",
+        "p": "Open or hide it from the top of any screen, or press Ctrl+B. On narrow windows it opens over the content.",
+        "alt": "The sidebar toggle at the top of the window with the sidebar open over a narrow downloads list"
+      },
+      "quality": {
+        "h": "Video quality, faster.",
+        "p": "Paste a video link and Best is ready at once while the full list of qualities loads.",
+        "alt": "The Add download dialog with a video link still being checked and the Quality field already offering Best"
+      },
+      "settings": {
+        "h": "Settings in seven sections.",
+        "p": "General, Downloads, Browser integration, Network, AI and Research, Privacy and data, Updates and About.",
+        "alt": "Settings with its seven sections listed and the Downloads section open"
+      }
     }
+  },
+  "vs": {
+    "title": "Versus paid managers.",
+    "lead": "Plain facts about Riptide next to what is generally true of paid products.",
+    "colFeature": "Feature",
+    "colRiptide": "Riptide",
+    "colPaid": "Paid managers",
+    "rows": [
+      {
+        "f": "Price",
+        "r": "Free",
+        "p": "Licence or subscription"
+      },
+      {
+        "f": "Source code",
+        "r": "Open: GPL-3.0, MIT, Apache-2.0",
+        "p": "Usually closed"
+      },
+      {
+        "f": "Trials and nag screens",
+        "r": "None",
+        "p": "Common in trials"
+      },
+      {
+        "f": "Telemetry and accounts",
+        "r": "None",
+        "p": "Check each vendor"
+      },
+      {
+        "f": "Integrity",
+        "r": "SHA-256 and server validators",
+        "p": "Varies by product"
+      },
+      {
+        "f": "Arabic interface",
+        "r": "Native, fully mirrored",
+        "p": "Varies by product"
+      }
+    ],
+    "footnote": "We name no product. Check any vendor's own documentation before you decide."
   },
   "oss": {
     "title": "Built in the open.",
@@ -264,8 +494,7 @@
     "upd": {
       "h": "Always up to date",
       "p": "Riptide checks GitHub Releases shortly after it starts and then every few hours, and shows a notification when a new version exists. One click installs it; updates are signed and verified, and never interrupt running downloads. You can turn the check off in Settings. It is the only call Riptide makes on its own; everything else happens when you start it (downloads, torrents, search, video support updates). See the privacy page for the full list."
-    },
-    "ssTitle": "Windows SmartScreen warning?"
+    }
   },
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
@@ -393,11 +622,7 @@
     ],
     "altStart": "The Research start page: the Riptide logo, a prompt box with Quick search and a category picker, and cards for each kind of result",
     "altResults": "Research results for a video search: the search steps, then Exact matches with source badges and green chips for what was confirmed",
-    "cta": "Try it in Riptide",
-    "ai": {
-      "h": "Optional AI",
-      "p": "Bring your own key to rank results and see why each one fits. Off until you set it up."
-    }
+    "cta": "Try it in Riptide"
   },
   "extension": {
     "eyebrow": "Browser extension",
@@ -430,6 +655,11 @@
     "popupH": "650",
     "rulesH": "822"
   },
+  "midcta": {
+    "title": "Free, with nothing held back.",
+    "lead": "No trial, no licence key, no account.",
+    "note": "Windows 10 and 11, 64-bit."
+  },
   "privacySec": {
     "eyebrow": "Privacy",
     "title": "It does what you ask. Nothing else.",
@@ -448,8 +678,5 @@
       }
     ],
     "link": "Read the privacy policy"
-  },
-  "how": {
-    "title": "Fast, and exact."
   }
 }
