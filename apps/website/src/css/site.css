@@ -218,7 +218,7 @@ html.calm.js-ready .rv:not(.in) .ln > span { opacity: 0; }
    (and every chapter on phones or with calm motion) is a normal block whose animation plays once when it comes into view. */
 .pin { --p: 1; position: relative; overflow: hidden; }
 .ch .pin { display: grid; align-items: center; padding-block: clamp(48px, 6vw, 88px); }
-#streams { --len: 1; } #app { --len: .6; }
+#streams { --len: .7; } #app { --len: .45; }
 @media (min-width: 900px) {
   html.anim #streams, html.anim #app { height: calc(100vh * (1 + var(--len))); }
   html.anim #streams .pin, html.anim #app .pin { position: sticky; top: 0; height: 100vh; height: 100svh; padding-block: calc(var(--hh) + 12px) 16px; }
@@ -283,7 +283,7 @@ html.calm.js-ready .rv:not(.in) .ln > span { opacity: 0; }
 .win { position: relative; margin: 0; border-radius: 12px; overflow: hidden; background: var(--card, #fff);
   box-shadow: 0 0 0 1px var(--line), 0 50px 90px -40px rgba(7, 26, 38, .55), 0 18px 36px -24px rgba(7, 26, 38, .4); }
 :root[data-theme="dark"] .win { box-shadow: 0 0 0 1px rgba(217, 248, 250, .16), 0 50px 100px -40px rgba(0, 213, 232, .3), 0 24px 40px -24px rgba(0, 0, 0, .8); }
-.win-hero { animation: win-in .7s var(--ease-out) .3s both; }
+.win-hero { animation: win-in .7s var(--ease-out) .12s both; }
 @media (min-width: 900px) { .hero-stage .fl-speed { inset-inline-end: 4%; top: -13%; } .hero-stage .fl-sha { inset-inline-end: 4%; bottom: -9%; } .win-hero { width: max(360px, min(100%, calc((100svh - var(--hh) - 130px) * 1.6))); width: round(down, max(360px, min(100%, calc((100svh - var(--hh) - 130px) * 1.6))), 2px); } .fl-speed { inset-inline-end: 4%; top: -13%; } .fl-sha { inset-inline-end: 4%; bottom: -9%; } }
 @keyframes win-in { from { opacity: 0; transform: translate3d(0, 40px, 0) rotateY(calc(var(--dir) * -10deg)) rotateX(8deg); } to { opacity: 1; transform: none; } }
 .win img { width: 100%; height: auto; aspect-ratio: 1040 / 660; }
@@ -779,9 +779,9 @@ html.tab-hidden *, html.tab-hidden *::before, html.tab-hidden *::after { animati
 .mo-hint p { margin: 0; font-size: .8125rem; line-height: 1.4; }
 .mo-hint .btn { flex: none; }
 .rel-pill { position: relative; z-index: 2; margin-block-start: calc(var(--hh) + 10px); margin-inline-start: var(--gutter); inline-size: fit-content; display: flex; align-items: center; gap: 2px; max-width: calc(100vw - 2 * var(--gutter)); padding: 3px; padding-inline-start: 14px; border-radius: 999px; background: var(--card, #fff); color: var(--fg); font-size: .8125rem; line-height: 1.3; box-shadow: 0 0 0 1px var(--line), 0 10px 26px -16px rgba(7, 26, 38, .4); }
-.rel-pill[hidden] { display: none; }
+.rel-pill[hidden], html.rel-seen .rel-pill, html:not(.js) .rel-pill { display: none; }
 /* the pill takes its own row above the hero, so the hero only needs its normal breathing room under it */
-.rel-pill:not([hidden]) + .hero { padding-block-start: clamp(14px, 3vh, 32px); }
+html.js:not(.rel-seen) .rel-pill:not([hidden]) + .hero { padding-block-start: clamp(14px, 3vh, 32px); }
 .rel-link { color: inherit; text-decoration: none; padding-block: 4px; }
 .rel-link b { font-weight: 600; color: var(--acc, #075C69); }
 .rel-link:hover b { text-decoration: underline; }

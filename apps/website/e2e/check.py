@@ -267,7 +267,7 @@ with sync_playwright() as p:
     ch = page.evaluate("Array.from(document.querySelectorAll('main > section.ch')).map(s => [s.id, getComputedStyle(s.querySelector('.pin')).position, (s.offsetHeight - innerHeight) / innerHeight])")
     pinned = {c[0]: c[2] for c in ch if c[1] == 'sticky'}
     check('[stages] only the logo and app chapters are pinned', set(pinned) == {'streams', 'app'}, str(ch))
-    check('[stages] streams stage scrolls <= 1.3 viewport heights', 0.8 <= pinned.get('streams', 9) <= 1.3, str(pinned))
+    check('[stages] streams stage scrolls 0.6-1.3 viewport heights', 0.6 <= pinned.get('streams', 9) <= 1.3, str(pinned))
     check('[stages] app stage scrolls <= 0.8 viewport heights', pinned.get('app', 9) <= 0.8, str(pinned))
     ctx.close()
     ctx, page = new_page(browser, 390, 844)
