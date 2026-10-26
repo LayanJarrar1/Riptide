@@ -109,7 +109,7 @@ const VARIANT_ICON: Readonly<Record<CardVariant, IconName>> = {
               <span class="badge">{{ i18n.t('research.platform.' + p) }}</span>
             }
           }
-          @if (variant() !== 'software' && variant() !== 'video') {
+          @if (variant() !== 'software') {
             <span class="badge rights" [class]="'badge rights rights-' + it.rights.kind" dir="auto">{{ rightsText() }}</span>
           }
           @if (it.seen || it.wasSeen) {
