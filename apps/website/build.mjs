@@ -86,10 +86,13 @@ function loadFeatures(manifest, release, lang, unpublished) {
   const { features } = JSON.parse(readFileSync(FEATURES_PATH, 'utf8'));
   const known = new Set((manifest?.releases ?? [release]).map((r) => r.version));
   if (unpublished) known.add(release.version);
+  // Older versions whose GitHub release was removed still count when CHANGELOG.md has their section.
+  const changelog = join(SRC, '..', '..', '..', 'CHANGELOG.md');
+  if (existsSync(changelog)) for (const m of readFileSync(changelog, 'utf8').matchAll(/^## \[(\d+\.\d+\.\d+[^\]]*)\]/gm)) known.add(m[1]);
   const out = [];
   for (const f of features) {
     if (f.verified !== (f.release !== null)) throw new Error(`features.json: "${f.id}" must have verified:true together with a release, or verified:false with release:null`);
-    if (f.release !== null && !known.has(f.release)) throw new Error(`features.json: "${f.id}" names release ${f.release}, which is not in release.json`);
+    if (f.release !== null && !known.has(f.release)) throw new Error(`features.json: "${f.id}" names release ${f.release}, which is neither in release.json nor in CHANGELOG.md`);
     if (f.verified && f.release === release.version) out.push({ id: f.id, title: f[`title_${lang}`], text: f[`text_${lang}`] });
   }
   return out;
