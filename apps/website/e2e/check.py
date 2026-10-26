@@ -122,7 +122,7 @@ with sync_playwright() as p:
         txt = page.text_content('main')
         for word in ('yt-dlp', '144p', 'robots.txt', 'file[001-120].zip'):
             check(f'{tag} copy mentions {word}', word in txt)
-        check(f'{tag} FAQ has at most 10 entries', 1 <= page.locator('details.faq-item').count() <= 10)
+        check(f'{tag} FAQ has at most 10 entries', 1 <= page.locator('#faq details.faq-item').count() <= 10)
         check(f'{tag} no social-network mentions', not any(w in page.content().lower() for w in ('link' + 'edin', 'twitter.com', 'facebook.com')))
         wn_text = page.text_content('.whats-new')
         # every verified feature of the featured release is listed, by its own title

@@ -91,6 +91,13 @@
     pill.querySelector('.rel-x').addEventListener('click', () => { pill.hidden = true; store.set('riptide-release-seen', version); });
     pill.addEventListener('keydown', (e) => { if (e.key === 'Escape') { pill.hidden = true; store.set('riptide-release-seen', version); } });
   });
+  safe('folds', () => {
+    // A link to a folded block (#extension, #whats-new) opens it.
+    const open = () => { const t = location.hash && document.getElementById(location.hash.slice(1)); if (t && t.tagName === 'DETAILS') t.open = true; };
+    open();
+    window.addEventListener('hashchange', open);
+    document.addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[href^="#"]'); const t = a && document.getElementById(a.getAttribute('href').slice(1)); if (t && t.tagName === 'DETAILS') t.open = true; });
+  });
   const header = document.querySelector('.site-header');
   safe('menu', () => {
     const navToggle = document.querySelector('.nav-toggle');

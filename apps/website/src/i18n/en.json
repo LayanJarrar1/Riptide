@@ -284,24 +284,24 @@
     "more": [
       {
         "h": "Queues with schedules",
-        "p": "Several queues, each with its own limit. Run one at night or on chosen days; when it finishes: exit, sleep, hibernate, shut down or run a program."
+        "p": "Run at night or on chosen days, then sleep or shut down."
       },
       {
         "h": "Batch downloads",
         "code": "file[001-120].zip",
-        "p": "Patterns with a preview of every address, or a pasted list of links. Import and export lists."
+        "p": "Patterns or a pasted list, with a preview of every address."
       },
       {
         "h": "Site grabber",
-        "p": "Crawl a page to a chosen depth and tick the files you want. Respects robots.txt."
+        "p": "Crawl a site and tick the files you want. Respects robots.txt."
       },
       {
         "h": "File manager",
-        "p": "Two panes, drag and drop, the Recycle Bin with Undo, and folder colours."
+        "p": "Two panes, drag and drop, Recycle Bin with Undo."
       },
       {
         "h": "BitTorrent",
-        "p": "Magnet links and .torrent files, with a file choice before anything starts."
+        "p": "Magnets and .torrent files, you choose the files."
       }
     ],
     "new": {
@@ -493,7 +493,8 @@
     "upd": {
       "h": "Always up to date",
       "p": "Riptide checks GitHub Releases shortly after it starts and then every few hours, and shows a notification when a new version exists. One click installs it; updates are signed and verified, and never interrupt running downloads. You can turn the check off in Settings. It is the only call Riptide makes on its own; everything else happens when you start it (downloads, torrents, search, video support updates). See the privacy page for the full list."
-    }
+    },
+    "ssTitle": "Windows SmartScreen warning?"
   },
   "footer": {
     "tagline": "A free, open-source download manager for Windows.",
@@ -612,12 +613,12 @@
   "research": {
     "eyebrow": "Research",
     "title": "Find the file, not just a page.",
-    "lead": "Say what you are looking for. Riptide searches open and public sources and checks every result against your request.",
+    "lead": "Say what you want. Riptide searches open sources and checks every result.",
     "points": [
-      "Pick the kind of result first: videos, software, documents, images, papers, open-source projects or the web.",
-      "Exact matches come first. Each card says what was confirmed: episode, version, year, file type.",
-      "Results that contradict you are never shown, and the page tells you how many weaker ones it hid.",
-      "Every result shows its licence. No piracy sites, no torrent indexes."
+      "Videos, software, documents, images, papers, open source or the web.",
+      "Exact matches first, with what was confirmed.",
+      "Wrong matches are hidden, never mixed in.",
+      "Every result shows its licence. No piracy sites."
     ],
     "altStart": "The Research start page: the Riptide logo, a prompt box with Quick search and a category picker, and cards for each kind of result",
     "altResults": "Research results for a video search: the search steps, then Exact matches with source badges and green chips for what was confirmed",
@@ -626,11 +627,11 @@
   "extension": {
     "eyebrow": "Browser extension",
     "title": "Your browser hands downloads to Riptide.",
-    "lead": "Chrome and Edge. Click a link as usual and the file lands in Riptide, with all its connections and checks.",
+    "lead": "Chrome and Edge. Click a link as usual and it lands in Riptide.",
     "points": [
       {
         "h": "Automatic, by your rules",
-        "p": "Choose which file types and minimum size Riptide takes. Everything else stays with the browser."
+        "p": "Pick the file types and sizes Riptide takes."
       },
       {
         "h": "Right-click, Download with Riptide",
@@ -638,16 +639,16 @@
       },
       {
         "h": "Download this video",
-        "p": "A button on the player opens a quality list, with the size of each option and audio-only as M4A or MP3."
+        "p": "Every quality with its size, or audio only."
       },
       {
         "h": "Grab it all",
-        "p": "Send every link on a page, only the ones you select, or every image."
+        "p": "Every link, the ones you pick, or every image."
       }
     ],
     "install": "Install: Settings → Integration → Open extension folder, then Load unpacked in your browser.",
     "installLink": "Step by step",
-    "privacy": "No data collection. The extension talks only to the Riptide app on your computer, loads no remote code and has no analytics.",
+    "privacy": "No data collection, no remote code, no analytics.",
     "altVideo": "A video page with the Download this video button on the player and its quality list open: Best quality, 1080p, 720p, 480p, 360p and audio only as M4A or MP3",
     "altPopup": "The extension popup: Connected to Riptide, Capturing downloads, Open Riptide and Options buttons, and a list of recent downloads handed to Riptide",
     "altRules": "The extension options: capture downloads with Riptide, a minimum size and ticks for archives, video, audio, programs and documents",
@@ -665,15 +666,15 @@
     "points": [
       {
         "h": "No telemetry, no accounts",
-        "p": "Riptide has no server of its own. Nothing about you or your downloads is collected."
+        "p": "Nothing about you or your downloads is collected."
       },
       {
         "h": "Secrets stay local",
-        "p": "Cookies and sign-ins are kept only while a download runs and are sent only to the site they belong to. API keys live in Windows Credential Manager."
+        "p": "Sign-ins go only to their own site; API keys stay in Windows Credential Manager."
       },
       {
         "h": "One call of its own",
-        "p": "An optional update check against GitHub Releases. Turn it off in Settings."
+        "p": "An optional update check. Turn it off in Settings."
       }
     ],
     "link": "Read the privacy policy"

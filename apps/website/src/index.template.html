@@ -502,34 +502,32 @@
           <a class="text-link" href="{{releaseUrl}}" rel="noopener">{{download.allReleases}}</a>
         </p>
         <p class="note">{{download.note}}</p>
-        <p class="note">{{download.smartscreen}}</p>
-
-        <div class="upd-grid">
-          <div class="whats-new">
-            <h3 class="h3">{{download.new.title}} <bdi dir="ltr">{{version}}</bdi></h3>
+        <div class="dl-folds faq-list">
+          <details class="faq-item whats-new" id="whats-new">
+            <summary><h3 class="h3">{{download.new.title}} <bdi dir="ltr">{{version}}</bdi></h3>{{{svg chevron}}}</summary>
             <ul>
               {{#each features}}<li><b>{{title}}.</b> {{text}}</li>
               {{/each}}{{#each download.new.items}}<li>{{.}}</li>
               {{/each}}
             </ul>
+            <div class="always-up"><p><b>{{download.upd.h}}.</b> {{download.upd.p}}</p></div>
             <a class="text-link" href="{{releaseUrl}}" rel="noopener">{{download.new.notes}}</a>
-          </div>
-          <div class="always-up">
-            <h3 class="h3">{{download.upd.h}}</h3>
-            <p>{{download.upd.p}}</p>
-          </div>
-        </div>
-
-        <div class="ext" id="extension">
-          <div class="ext-copy"><h3 class="h3">{{download.ext.title}}</h3><p>{{download.ext.lead}}</p></div>
-          <div class="steps">
-            
-            <ol>
-              {{#each download.ext.steps.items}}<li>{{.}}</li>
-              {{/each}}
-            </ol>
-          </div>
-          <a class="text-link" href="{{extensionUrl}}" rel="noopener">{{download.ext.github}}</a>
+          </details>
+          <details class="faq-item ext" id="extension">
+            <summary><h3 class="h3">{{download.ext.title}}</h3>{{{svg chevron}}}</summary>
+            <p>{{download.ext.lead}}</p>
+            <div class="steps">
+              <ol>
+                {{#each download.ext.steps.items}}<li>{{.}}</li>
+                {{/each}}
+              </ol>
+            </div>
+            <a class="text-link" href="{{extensionUrl}}" rel="noopener">{{download.ext.github}}</a>
+          </details>
+          <details class="faq-item">
+            <summary><h3 class="h3">{{download.ssTitle}}</h3>{{{svg chevron}}}</summary>
+            <p>{{download.smartscreen}}</p>
+          </details>
         </div>
       </div>
     </section>
