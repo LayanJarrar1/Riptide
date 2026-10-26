@@ -60,11 +60,11 @@ Upgrading from an alpha build works in place. The database moves to a new format
 
 ## Screenshots
 
-<p align="center"><sub>The real interface with sample data. These captures come from the current development build, so some of what they show (Research categories and modes, the redesigned Settings) arrives in the next beta, not in the 0.1.0-beta.1 download.</sub></p>
+<p align="center"><sub>The real interface with sample data, captured from 0.1.0-beta.3.</sub></p>
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/readme/app-downloads-en-dark.webp" alt="The downloads list in the dark theme: segmented progress bars, status badges and a sidebar of categories"></td>
+    <td width="50%"><img src="assets/readme/app-downloads-en-dark.webp" alt="The downloads list in the dark theme with the sidebar button at the top: segmented progress bars, speeds, status badges and a sidebar of categories"></td>
     <td width="50%"><img src="assets/readme/app-files-en.webp" alt="The file manager with two panes, a folder tree and a Copy to other pane button"></td>
   </tr>
   <tr>
@@ -80,7 +80,7 @@ Upgrading from an alpha build works in place. The database moves to a new format
     <td align="center"><sub><b>بالعربية.</b> الواجهة تنعكس بالكامل.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/readme/app-research-deep-en.webp" alt="Deep Research results in groups: Exact matches, Likely matches and a collapsed Related group"></td>
+    <td width="50%"><img src="assets/readme/app-research-deep-en.webp" alt="Deep Research with the search steps unfolded, then the results grouped as Exact matches and Likely matches"></td>
     <td width="50%"><img src="assets/readme/app-settings-ai-en.webp" alt="Settings with a section list and the AI and Research page: connection test and daily usage"></td>
   </tr>
   <tr>

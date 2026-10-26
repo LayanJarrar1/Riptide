@@ -290,11 +290,11 @@
       }
     ],
     "new": {
-      "title": "New in {channel}",
+      "title": "Inside {channel}",
       "research": {
-        "h": "Research, from open sources.",
-        "p": "Search papers, books, music, video, games, software, images and datasets. Results arrive as each source answers, and every one shows its licence.",
-        "alt": "The Research page in the light theme: result cards with a source badge, a licence badge, a match score and one line saying why each result matches"
+        "h": "Research, by what you are looking for.",
+        "p": "Pick a category and a mode, then ask. Exact matches come first, each card says what was confirmed, and every result shows its licence. The search steps fold away when you do not need them.",
+        "alt": "The Research page in the light theme: results grouped under Exact matches and Likely matches, each card with a source badge, a licence badge and what was confirmed, and an Add selected bar below"
       },
       "torrent": {
         "h": "Torrents, with a choice.",
@@ -449,9 +449,8 @@
       "title": "What's new in",
       "notes": "Full release notes",
       "items": [
-        "A downloads list with resizable columns, duration and average speed, and a list that stays smooth with tens of thousands of items",
-        "Category folders for new installations and a smaller, calmer Add dialog",
-        "Updates arrive through the beta channel"
+        "Research by category and mode, with results grouped by how well they match (since beta.2)",
+        "Settings in seven sections, and update checks that wait until active downloads finish (since beta.2)"
       ]
     },
     "upd": {
