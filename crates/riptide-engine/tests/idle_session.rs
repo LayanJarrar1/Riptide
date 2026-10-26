@@ -162,6 +162,9 @@ async fn a_finished_torrent_leaves_no_socket_and_the_engine_comes_back_when_need
         DownloadState::Completed,
         "the finished row survives"
     );
+    // the details drawer: with the engine stopped a completed file shows 100%, not 0%
+    let live = e.torrent_live(id1).await.unwrap();
+    assert_eq!(live.file_progress, vec![16 * 1024 * 3, 16 * 1024 * 2]);
 
     // 2. adding again after the stop starts the engine again (same settings) and completes
     let two = make("two", 20).await;

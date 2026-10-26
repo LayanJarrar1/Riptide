@@ -77,6 +77,35 @@ fn same_command(found: &str, expected: &str) -> bool {
     found.trim().eq_ignore_ascii_case(expected)
 }
 
+/// The command an earlier preview registered: the link as the only argument, no marker.
+fn legacy_command_line(exe: &Path) -> String {
+    format!("\"{}\" \"%1\"", exe.display())
+}
+
+/// Whether `found` is the command Riptide registers for `exe`, in the current form or in the one
+/// of the earlier preview. A command that starts any other program never matches.
+fn is_ours(found: &str, exe: &Path) -> bool {
+    same_command(found, &command_line(exe)) || same_command(found, &legacy_command_line(exe))
+}
+
+/// Rewrites a registration of the earlier form (`"exe" "%1"`) for this executable to the current
+/// one (`"exe" --open-link -- "%1"`). Run at start-up, also after an upgrade; touches nothing
+/// that is not exactly the old command of this executable.
+pub fn migrate_legacy(exe: &Path, registry: &mut dyn Registry) {
+    let legacy = legacy_command_line(exe);
+    let current = command_line(exe);
+    for key in [command_key(MAGNET_KEY), command_key(&prog_id_key())] {
+        if registry
+            .default_value(&key)
+            .is_some_and(|c| same_command(&c, &legacy))
+        {
+            if let Err(e) = registry.set_default_value(&key, &current) {
+                tracing::warn!(error = %e, "could not update an old handler registration");
+            }
+        }
+    }
+}
+
 /// What Settings shows.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProtocolStatus {
@@ -102,13 +131,12 @@ impl ProtocolStatus {
 
 /// Which of the handlers point at `exe`.
 pub fn status(exe: &Path, registry: &dyn Registry) -> ProtocolStatus {
-    let cmd = command_line(exe);
     let magnet = registry
         .default_value(&command_key(MAGNET_KEY))
-        .is_some_and(|c| same_command(&c, &cmd));
+        .is_some_and(|c| is_ours(&c, exe));
     let torrent = registry
         .default_value(&command_key(&prog_id_key()))
-        .is_some_and(|c| same_command(&c, &cmd));
+        .is_some_and(|c| is_ours(&c, exe));
     ProtocolStatus {
         supported: true,
         magnet,
@@ -194,7 +222,7 @@ pub fn unregister(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolSta
     if current.magnet {
         let previous = registry
             .named_value(MAGNET_KEY, PREVIOUS_COMMAND_VALUE)
-            .filter(|c| !c.trim().is_empty() && !same_command(c, &command_line(exe)));
+            .filter(|c| !c.trim().is_empty() && !is_ours(c, exe));
         registry
             .delete_key(MAGNET_KEY)
             .map_err(|e| io("cannot remove the magnet key", &e))?;
@@ -225,6 +253,11 @@ pub fn unregister(exe: &Path, registry: &mut dyn Registry) -> Result<ProtocolSta
                 .delete_named_value(TORRENT_EXT_KEY, "")
                 .map_err(|e| io("cannot remove the torrent key", &e))?;
         }
+        // what is left of the shared `.torrent` key goes when nothing else is in it
+        registry
+            .delete_key_if_empty(&format!(r"{TORRENT_EXT_KEY}\OpenWithProgids"))
+            .and_then(|_| registry.delete_key_if_empty(TORRENT_EXT_KEY))
+            .map_err(|e| io("cannot remove the torrent key", &e))?;
     }
     tracing::info!("magnet and .torrent handlers removed");
     Ok(status(exe, registry))

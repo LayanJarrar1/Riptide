@@ -56,6 +56,12 @@ pub trait Registry {
     fn delete_named_value(&mut self, _key: &str, _name: &str) -> std::io::Result<()> {
         Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
     }
+    /// Deletes `key` only when it holds no value and every key under it is empty too (what is
+    /// left once everything of ours is gone from a key other apps share). Returns whether it was
+    /// deleted; a registry that cannot tell leaves it alone.
+    fn delete_key_if_empty(&mut self, _key: &str) -> std::io::Result<bool> {
+        Ok(false)
+    }
 }
 
 /// Test knob: moves every registry key under `HKCU\<value>` (an installer test run must not
@@ -130,6 +136,28 @@ impl Registry for CurrentUserRegistry {
         let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
         let (k, _) = hkcu.create_subkey(self.path(key))?;
         k.set_value(name, &value)
+    }
+
+    fn delete_key_if_empty(&mut self, key: &str) -> std::io::Result<bool> {
+        fn empty(k: &winreg::RegKey) -> bool {
+            k.enum_values().next().is_none()
+                && k.enum_keys()
+                    .flatten()
+                    .all(|name| k.open_subkey(&name).map(|sub| empty(&sub)).unwrap_or(false))
+        }
+        let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+        let Ok(k) = hkcu.open_subkey(self.path(key)) else {
+            return Ok(false);
+        };
+        if !empty(&k) {
+            return Ok(false);
+        }
+        drop(k);
+        match hkcu.delete_subkey_all(self.path(key)) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
     fn delete_named_value(&mut self, key: &str, name: &str) -> std::io::Result<()> {
@@ -511,7 +539,8 @@ pub fn register_for_installer(
     register(layout, registry).map(|_| true)
 }
 
-/// Handles `--register-host` / `--unregister-host` (the installer hooks). `None` when `args`
+/// Handles `--register-host` / `--unregister-host` / `--unregister-handlers` (the installer
+/// hooks). `None` when `args`
 /// (without the program name) holds neither: the app starts normally. `Some(code)` is the
 /// process exit code; nothing is printed (the release build has no console).
 pub fn run_cli(args: &[String]) -> Option<i32> {
@@ -523,8 +552,28 @@ pub fn run_cli(args: &[String]) -> Option<i32> {
     }
     let register = args.iter().any(|a| a == "--register-host");
     let unregister = args.iter().any(|a| a == "--unregister-host");
-    if register == unregister {
+    let handlers = args.iter().any(|a| a == "--unregister-handlers");
+    if [register, unregister, handlers]
+        .iter()
+        .filter(|f| **f)
+        .count()
+        != 1
+    {
         return None;
+    }
+    if handlers {
+        // the uninstaller: take the magnet / .torrent handlers of this executable out of HKCU
+        // (and give back what another app had), before the files are deleted
+        let (Some(mut registry), Ok(exe)) = (platform_registry(), std::env::current_exe()) else {
+            return Some(1);
+        };
+        return match crate::protocol::unregister(&exe, registry.as_mut()) {
+            Ok(_) => Some(0),
+            Err(e) => {
+                tracing::warn!(error = %e, "handler removal failed");
+                Some(1)
+            }
+        };
     }
     let (Some(mut registry), Ok(layout)) = (platform_registry(), Layout::for_this_app()) else {
         return Some(1);
@@ -835,6 +884,10 @@ mod tests {
             run_cli(&args(&["--register-host", "--unregister-host"])),
             None
         );
+        assert_eq!(
+            run_cli(&args(&["--unregister-host", "--unregister-handlers"])),
+            None
+        );
     }
 
     #[cfg(windows)]
@@ -873,6 +926,10 @@ mod tests {
         );
         let text = String::from_utf8_lossy(hooks);
         assert!(text.contains("--register-host") && text.contains("--unregister-host"));
+        assert!(
+            text.contains("--unregister-handlers"),
+            "the uninstaller must remove the magnet and .torrent handlers"
+        );
         assert!(!text.contains(CHROMIUM_EXTENSION_ID));
         assert!(!text.contains(FIREFOX_EXTENSION_ID));
         assert!(

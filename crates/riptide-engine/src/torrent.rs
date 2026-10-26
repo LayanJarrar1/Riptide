@@ -942,8 +942,8 @@ impl Engine {
                 info,
             },
             None => TorrentLive {
+                file_progress: self.stored_file_progress(&info, id).await,
                 info,
-                file_progress: Vec::new(),
                 peers: 0,
                 peers_seen: 0,
                 down_bps: 0,
@@ -951,6 +951,46 @@ impl Engine {
                 ratio,
             },
         })
+    }
+
+    /// Per-file progress of a torrent the torrent engine is not running (stopped for being idle,
+    /// or not started): from the stored state, and for a finished torrent from its row, so a
+    /// completed file shows 100% and not 0%.
+    async fn stored_file_progress(&self, info: &TorrentInfo, id: DownloadId) -> Vec<u64> {
+        let dir = self.inner.data_dir.join("torrents");
+        let hash = info.info_hash.clone();
+        let stored = tokio::task::spawn_blocking(move || {
+            riptide_torrent::offline::snapshot_for(&dir, &hash)
+                .map(|s| s.file_progress)
+                .unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default();
+        if !stored.is_empty() {
+            return stored;
+        }
+        let done = self
+            .get(id)
+            .await
+            .ok()
+            .flatten()
+            .is_some_and(|d| d.state == DownloadState::Completed);
+        if !done {
+            return Vec::new();
+        }
+        let n = info
+            .files
+            .iter()
+            .map(|f| f.index as usize + 1)
+            .max()
+            .unwrap_or(0);
+        let mut out = vec![0u64; n];
+        for f in &info.files {
+            if info.selected.as_ref().is_none_or(|s| s.contains(&f.index)) {
+                out[f.index as usize] = f.len;
+            }
+        }
+        out
     }
 
     fn live_uploaded(&self, info: &TorrentInfo, session: u64) -> u64 {

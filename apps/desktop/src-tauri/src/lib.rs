@@ -209,6 +209,11 @@ fn startup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             integration::Layout::for_this_app(),
         ) {
             integration::register_on_start(&layout, registry.as_mut());
+            // an upgrade keeps working registrations of the earlier form, and moves
+            // them to the current one
+            if let Ok(exe) = std::env::current_exe() {
+                protocol::migrate_legacy(&exe, registry.as_mut());
+            }
         }
     });
 

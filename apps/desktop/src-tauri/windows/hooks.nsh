@@ -10,6 +10,13 @@
 ;   * on uninstall `--unregister-host` removes only the keys and manifests that point at THIS
 ;     install's riptide-host.exe; another install's registration is left alone.
 ;
+; Magnet and .torrent handlers (Settings, Integration), per user, no elevation:
+;   * on uninstall `--unregister-handlers` removes the keys that point at THIS executable under
+;     HKCU\Software\Classes (magnet, Riptide.Torrent, the .torrent entries) and gives back the
+;     magnet handler another app had before Riptide took it over. Keys that point at another
+;     program are never touched. It runs before the files are deleted, for silent (/S) and normal
+;     uninstalls alike; nothing is removed during an update.
+;
 ; Clean uninstall, per user, no elevation:
 ;   * the manifest folder is removed only when it is empty;
 ;   * the autostart Run value is removed (Tauri's own uninstaller does this too; kept here so it
@@ -39,6 +46,10 @@
     SetShellVarContext current
     ; conditional: keys and manifests of another install are not touched
     ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-host' $0
+    ; the app is absent or half installed: nothing to ask, and nothing to fail
+    ${If} ${FileExists} "$INSTDIR\${MAINBINARYNAME}.exe"
+      ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-handlers' $0
+    ${EndIf}
   ${EndIf}
 !macroend
 
