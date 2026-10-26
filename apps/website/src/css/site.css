@@ -848,3 +848,11 @@ html.anim .rel-pill { animation: fade-soft var(--dur-3) var(--ease-out) both; }
 .midcta .lead { margin-top: 8px; max-width: 46ch; }
 @media (min-width: 800px) { .midcta-inner { grid-template-columns: minmax(0, 1fr) auto; } }
 .privacy-sec .footnote { margin-top: 18px; }
+
+/* Download section: the release details fold away like the FAQ (same item style). */
+.dl-folds { width: 100%; max-width: 860px; margin-top: clamp(14px, 2vw, 24px); text-align: start; }
+.dl-folds .faq-item { display: block; justify-items: normal; max-width: none; margin: 0; padding: 0; border-top: 0; }
+.dl-folds summary .h3 { font: inherit; letter-spacing: inherit; line-height: inherit; }
+.dl-folds .faq-item > :not(summary) { margin-bottom: 14px; }
+.dl-folds .faq-item[open] > :not(summary) { animation: faq-in var(--dur-3) var(--ease-out) both; }
+.dl-folds .always-up p { max-width: 60ch; }
