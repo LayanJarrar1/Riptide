@@ -1,0 +1,9 @@
+# Netlify builds the website from main on every push (the repository is connected in the Netlify UI).
+# $URL is the site's primary address that Netlify sets for each build (the custom domain once it is added),
+# so canonical links, the sitemap and asset paths follow the domain without a hard-coded name.
+[build]
+  command = "SITE_URL=\"$URL/\" node apps/website/build.mjs"
+  publish = "apps/website/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
